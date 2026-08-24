@@ -2,9 +2,13 @@ package com.robsartin.segue.port;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.EdgeRecord;
+import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.PathRanking;
 import com.robsartin.segue.domain.PathResult;
+import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.fixture.Fixture;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -147,6 +151,33 @@ public abstract class GraphStoreContract {
 
     assertThat(corroborated).hasSize(3);
     assertThat(corroborated).noneMatch(EdgeRecord::isUncorroboratedHypothesis);
+  }
+
+  @Test
+  @DisplayName("an assertedAt instant survives the round trip at full precision")
+  void provenanceTimestampSurvivesFullPrecision() {
+    // Issue #6: ProvenanceCodec truncated to epoch millis while Jena kept ISO precision,
+    // so the two engines disagreed on any Instant finer than a millisecond. Invisible
+    // until the SQLite log started storing real ingest timestamps.
+    Instant precise = Instant.parse("2026-08-24T09:15:30.123456789Z");
+    store.upsertNode(new NodeRecord("Q100001", NodeKind.PERSON, "Precision Probe"));
+    store.upsertNode(new NodeRecord("Q100002", NodeKind.WORK, "Probe Work"));
+    store.record(
+        new AssertionRecord(
+            "Q100001",
+            "Q100002",
+            "AUTHORED",
+            null,
+            null,
+            new Provenance("wikidata", "S-precision", precise, 1.0)));
+
+    List<EdgeRecord> edges = store.edges("Q100001");
+    assertThat(edges).isNotEmpty();
+    assertThat(edges)
+        .anySatisfy(
+            e ->
+                assertThat(e.sources())
+                    .anySatisfy(p -> assertThat(p.assertedAt()).isEqualTo(precise)));
   }
 
   /**
