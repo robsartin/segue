@@ -1,0 +1,68 @@
+---
+status: Accepted
+date: "2026-08-24"
+topic: taste-layer-separation
+tags: [project, domain, modelling]
+supersedes: []
+related: [assertion-log-source-of-truth, sqlite-assertion-log, mcp-tool-surface, privacy-and-data-handling, bitemporal-time-model]
+---
+# 33. Keep the taste layer separate from the world-facts layer
+
+## Context
+
+Segue holds two kinds of claim that look superficially alike and behave nothing alike.
+
+"Blixa Bargeld was a Bad Seed from 1983 to 2003" is a claim about the world. Sources
+assert it, sources can corroborate or contradict it, it has a validity period, and it
+is true or false independently of anyone's opinion.
+
+"I love this record, and I first heard it in a shop in Glasgow" is a claim about the
+user. It has no external source to corroborate, it cannot be wrong, its dimensions are
+different — a rating, a memory, a context — and it is personal data in a way that a
+band's lineup is not.
+
+Modelling the second as an edge in the graph would put both in one namespace, give
+affinity a `Provenance` and a corroboration count that mean nothing, and mix personal
+data into a structure whose whole purpose is to be traversed and cited.
+
+## Decision
+
+- **Two layers, two stores.** World facts live in the assertion log and its graph
+  projection. Affinity lives in its own tables behind an `AffinityStore` port.
+- **`note_affinity` is the only tool that writes affinity**, and it never writes to
+  the graph. `IngestService` never sees a rating.
+- **Recommendations are derived by traversing the world graph and filtering through
+  affinity**, not by storing preference as graph structure. The route between two
+  things you like is a world-graph question; which things you like is a taste question.
+- **Affinity is not an assertion.** It carries no `Provenance`, no corroboration count,
+  and no `llm:` prefix, because none of those concepts apply to a first-person statement.
+- **Affinity is personal data** under ADR 16: never logged, and the repository is private.
+- **v1 is a rating and a free-text note.** `CLAUDE.md` floats first-heard-where and
+  seen-live-when; the note absorbs them until a real need argues for columns.
+
+## Alternatives considered
+
+- **Affinity as an edge from a "me" node** — elegant on paper, one traversal for
+  everything, and it makes every path query walk personal data, gives affinity a
+  provenance and corroboration count that are meaningless, and entangles the two
+  retention and privacy regimes.
+- **Affinity as an assertion with `sourceId: "me"`** — reuses the whole log machinery,
+  and it claims the user is a source that can be corroborated or contradicted, which
+  inverts what a first-person preference is.
+- **Full dimensional schema now** (rating, first-heard-where, seen-live-when)
+  — matches the eventual shape, and it is speculative structure ahead of a real need;
+  the note field is the honest placeholder until the shape is known.
+- **A separate database file entirely** — stronger isolation for personal data, at the
+  cost of two connection lifecycles and no transactional relationship, for a boundary
+  that separate tables and a separate port already express.
+
+## Consequences
+
+- The world graph can be shared, exported or made public without carrying personal data.
+- Affinity can be deleted wholesale without touching a single world fact.
+- The two layers evolve independently: adding a taste dimension never touches ingest,
+  and adding a source never touches the taste layer.
+- A recommendation query has to join across the two rather than reading one structure.
+  That is the intended cost, and at personal scale it is a filter, not a join problem.
+- Nothing in the graph records that you like anything, so any future export of "my
+  interests" has to compose both layers deliberately.

@@ -1,0 +1,67 @@
+---
+status: Accepted
+date: "2026-08-24"
+topic: mcp-tool-surface
+tags: [project, mcp, interface]
+supersedes: []
+related: [mcp-protocol-conformance, mcp-transports, taste-layer-separation, quarantine-model-generated-assertions, path-ranking-by-confidence]
+---
+# 26. Expose six MCP tools, and hold back assert_edge
+
+## Context
+
+The open risk this project is built to test is whether MCP is a pleasant *authoring*
+interface or whether a UI is wanted within ten minutes. That question is only
+answerable if the tool surface is small enough to learn in one conversation and
+complete enough to seed a real graph.
+
+A model is also very good at proposing plausible relationships it cannot distinguish
+from ones it knows. Giving it a direct write tool before corroboration is visible
+would let hypotheses accumulate as facts.
+
+## Decision
+
+Six tools, no more:
+
+| Tool | Effect |
+|---|---|
+| `search_entities(query, kind?)` | candidates with QIDs and disambiguation; writes nothing |
+| `add_entity(qid)` | upsert, returns id |
+| `expand_entity(entityId, sources?, maxNew?)` | runs adapters, returns new edges |
+| `get_entity(entityId)` | node plus neighbours grouped by edge type |
+| `find_paths(from, to, maxHops)` | ranked routes with per-hop citations |
+| `note_affinity(entityId, rating, note)` | taste layer, its own tables |
+
+- **`assert_edge` is deliberately absent** until corroboration is visibly working.
+  When it arrives its assertions carry the `llm:` prefix of ADR 23.
+- **Every tool declares an `outputSchema` and returns `structuredContent`**, with the
+  JSON also serialized into a text block for compatibility.
+- **Tool names follow MCP's naming rules** — ASCII letters, digits, underscore, hyphen
+  and dot, within the length bound. ArchUnit asserts it.
+- **All tool inputs are validated** before reaching the domain, and `expand_entity`
+  carries a call budget, satisfying the specification's rate-limiting requirement.
+- **`note_affinity` is the only tool touching the taste layer**, and it never writes
+  to the graph.
+
+## Alternatives considered
+
+- **A general `query` tool taking Gremlin** — maximally capable in one tool, and it
+  exposes the engine choice ADR 18 exists to keep reversible, hands the model an
+  unbounded execution surface, and abandons per-tool schemas.
+- **Including `assert_edge` from the start** — would make authoring faster immediately,
+  and would let uncorroborated guesses enter the graph before there is any visible
+  signal separating them from sourced facts.
+- **Splitting `expand_entity` per source** — clearer provenance at call time, and it
+  makes the tool list grow with every adapter, which is exactly what the SPI exists to
+  avoid.
+- **Returning prose rather than structured content** — simpler, and it discards
+  machine-readable structure the protocol supports for precisely this case.
+
+## Consequences
+
+- The surface is learnable in one sitting and stable as sources are added.
+- Structured results mean the model gets typed data rather than text it must reparse.
+- Seeding is conversational and therefore possibly slow. That is the risk under test,
+  not a defect to design around in advance.
+- Nothing in the surface can currently retract a claim; retraction is expressible
+  against the log but deliberately unexposed.
