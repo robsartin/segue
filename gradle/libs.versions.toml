@@ -1,5 +1,5 @@
 [versions]
-tinkerpop = "3.7.3"
+tinkerpop = "3.8.1"
 jena = "6.2.0"
 slf4j = "2.0.18"
 junit = "6.1.3"
