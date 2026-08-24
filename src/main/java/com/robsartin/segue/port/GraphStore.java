@@ -49,12 +49,16 @@ public interface GraphStore extends AutoCloseable {
   // ---- the four bake-off queries ---------------------------------------
 
   /**
-   * Q1 - EXPLANATION. Shortest paths between two entities, each hop citing its sources. The payoff
-   * feature, and the query that decides the bake-off: property graphs answer it in one traversal,
-   * RDF makes you hand-roll BFS because SPARQL property paths test connectivity without returning
-   * the path.
+   * Q1 - EXPLANATION. Every route between two entities up to {@code maxHops}, each hop citing its
+   * sources. The payoff feature, and the query that decides the bake-off: property graphs answer it
+   * in one traversal, RDF makes you hand-roll BFS because SPARQL property paths test connectivity
+   * without returning the path.
+   *
+   * <p>Adapters return all routes they found, in no particular order and untruncated. Ordering and
+   * bounding are {@link com.robsartin.segue.domain.PathRanking}'s job, applied once above the port
+   * so both engines rank identically and neither can drift (ADR 31).
    */
-  List<PathResult> shortestPaths(String fromQid, String toQid, int maxHops, int limit);
+  List<PathResult> paths(String fromQid, String toQid, int maxHops);
 
   /**
    * Q2 - AUDIT. Everything a given source told you after a given time. The query you run when a

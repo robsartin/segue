@@ -11,7 +11,6 @@ import com.robsartin.segue.port.GraphStore;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import org.apache.tinkerpop.gremlin.process.traversal.P;
@@ -144,13 +143,11 @@ public final class TinkerGraphStore implements GraphStore {
    * graph: "walk outward until you hit the target, never revisiting a node, and hand me the paths"
    * is a direct statement of the intent.
    *
-   * <p>TinkerPop's repeat/until is not breadth-first, so shortest-first ordering is imposed
-   * afterwards by sorting - cheap at this scale, and worth replacing with a proper shortest-path
-   * algorithm (or Gremlin's {@code shortestPath()} step on engines that support it) if it ever
-   * matters.
+   * <p>Every route up to {@code maxHops} is returned, unordered and untruncated; ranking and
+   * bounding are {@link com.robsartin.segue.domain.PathRanking}'s job above the port (ADR 31).
    */
   @Override
-  public List<PathResult> shortestPaths(String fromQid, String toQid, int maxHops, int limit) {
+  public List<PathResult> paths(String fromQid, String toQid, int maxHops) {
     List<Path> raw =
         g.V()
             .has(ENTITY, P_QID, fromQid)
@@ -161,10 +158,8 @@ public final class TinkerGraphStore implements GraphStore {
             .toList();
 
     return raw.stream()
-        .sorted(Comparator.comparingInt(Path::size))
         .map(this::toPathResult)
         .filter(p -> p.length() > 0 && p.length() <= maxHops)
-        .limit(limit)
         .toList();
   }
 
