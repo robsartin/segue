@@ -3,6 +3,7 @@ package com.robsartin.segue.arch;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
+import com.robsartin.segue.port.GraphStore;
 import com.tngtech.archunit.core.domain.JavaAccess;
 import com.tngtech.archunit.core.domain.JavaCall;
 import com.tngtech.archunit.core.domain.JavaClass;
@@ -148,6 +149,35 @@ class ArchitectureTest {
           .dependOnClassesThat()
           .resideInAPackage("java.util.logging..")
           .because("ADR 30: SLF4J is the only logging API");
+
+  /** ADR 32: adapters never depend on each other. */
+  @ArchTest
+  static final ArchRule sqliteDoesNotDependOnOtherAdapters =
+      noClasses()
+          .that()
+          .resideInAPackage("..sqlite..")
+          .should()
+          .dependOnClassesThat()
+          .resideInAnyPackage("..tinker..", "..jena..", "..wikidata..")
+          .because("ADR 32: adapters are siblings, not collaborators");
+
+  /**
+   * ADR 19: the graph is a derived projection, so only {@code ingest} replays claims into it via
+   * {@code GraphStore.record}. Everything else appends to the log; nothing edits the graph
+   * directly.
+   */
+  @ArchTest
+  static final ArchRule onlyIngestAppliesClaimsToTheGraph =
+      noClasses()
+          .that()
+          .resideOutsideOfPackage("..ingest..")
+          .should()
+          .callMethodWhere(
+              JavaCall.Predicates.target(HasName.Predicates.name("record"))
+                  .and(
+                      JavaAccess.Predicates.targetOwner(
+                          JavaClass.Predicates.assignableTo(GraphStore.class))))
+          .because("ADR 19: the log is the source of truth and only ingest projects it");
 
   /** ADR 32's layering is unidirectional by construction, so any slice cycle is a violation. */
   @ArchTest

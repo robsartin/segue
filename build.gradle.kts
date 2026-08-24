@@ -22,6 +22,8 @@ dependencies {
     implementation(libs.tinkergraph)
     // Reference implementation, kept working as a cross-check.
     implementation(libs.jena.arq)
+    // Assertion-log persistence. See docs/adr/0024-sqlite-assertion-log.md.
+    implementation(libs.sqlite.jdbc)
     runtimeOnly(libs.slf4j.nop)
 
     testImplementation(platform(libs.junit.bom))
@@ -39,6 +41,9 @@ tasks.withType<JavaCompile>().configureEach {
 
 tasks.test {
     useJUnitPlatform()
+    // sqlite-jdbc loads a native library; grant it so the JDK's restricted-method
+    // warning does not become a failure on a future release.
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
     testLogging {
         events("failed")
     }

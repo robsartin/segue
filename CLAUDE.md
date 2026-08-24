@@ -58,9 +58,11 @@ Full reasoning: `docs/adr/0018-graph-engine-gremlin.md`. All decisions are recor
 
 ```
 domain/   records + Wikidata-derived edge vocabulary. NO third-party deps.
-port/     GraphStore — the seam that keeps the engine choice reversible.
+port/     GraphStore + AssertionLog — the seams that keep engine and store reversible.
 tinker/   Gremlin adapter (the chosen one).
 jena/     RDF adapter (reference implementation, keep it working).
+sqlite/   SqliteAssertionLog — the append-only log persisted to one file (ADR 24).
+ingest/   GraphProjector — replays the log into the graph at boot; the only writer.
 ```
 
 Tests mirror this, plus `fixture/` (the Nick Cave neighbourhood, test-only) and
