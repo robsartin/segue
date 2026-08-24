@@ -1,0 +1,9 @@
+build/
+.gradle/
+target/
+*.class
+.idea/
+*.iml
+.DS_Store
+__pycache__/
+_to_delete/
