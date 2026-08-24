@@ -11,7 +11,7 @@ related: [quarantine-model-generated-assertions, graph-engine-gremlin, mcp-tool-
 ## Context
 
 ADR 23 records this as a known open issue. In the slice 0 fixture the shortest route
-between Nick Cave and John Hillcoat is an unverified model guess at confidence 0.30,
+between Nick Cave and Cormac McCarthy is an unverified model guess at confidence 0.30,
 while the trustworthy route is three hops at 1.00. Ranking by length surfaces the guess
 first.
 
@@ -57,3 +57,10 @@ ranking code could see them. Ranking cannot be fixed where the results are alrea
   `maxHops` and the internal cap, and acceptable at personal scale.
 - A long, fully sourced route now outranks a short guess. That is the intent, and it will
   occasionally surprise, so `find_paths` results show per-hop citations that explain the order.
+
+---
+
+*Correction, 2026-08-24: the Context section originally named John Hillcoat as the
+endpoint of the low-confidence shortcut. The fixture's model-generated shortcut is
+Cave→McCarthy; all Cave→Hillcoat routes are wikidata-sourced at confidence 1.00.
+The decision is unaffected.*

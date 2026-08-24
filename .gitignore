@@ -7,3 +7,5 @@ target/
 .DS_Store
 __pycache__/
 _to_delete/
+
+!gradle/wrapper/gradle-wrapper.jar

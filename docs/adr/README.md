@@ -30,12 +30,15 @@
 - [9. Build JVM projects with Gradle](0009-jvm-build-with-gradle.md) — _Accepted_
   JVM projects need a consistent build tool, dependency management, and package organization so repositories are predictable to build and navigate, and so shared tooling (formatting, coverage, arch tests) can be applied the same way everywhere.
   Related: [10. Enforce JVM quality gates and layered tests](0010-jvm-quality-and-tests.md), [11. Java language conventions](0011-java-conventions.md)
-- [10. Enforce JVM quality gates and layered tests](0010-jvm-quality-and-tests.md) — _Accepted_
+- [10. Enforce JVM quality gates and layered tests](0010-jvm-quality-and-tests.md) — _Superseded by 0034_
   The universal CI-gate decision requires enforced formatting, tests, and coverage, and this project's baseline also calls for architecture tests and real-dependency integration tests.
-  Related: [9. Build JVM projects with Gradle](0009-jvm-build-with-gradle.md), [11. Java language conventions](0011-java-conventions.md), [5. Make CI the merge gate](0005-ci-is-the-merge-gate.md)
+  Related: [9. Build JVM projects with Gradle](0009-jvm-build-with-gradle.md), [11. Java language conventions](0011-java-conventions.md), [5. Make CI the merge gate](0005-ci-is-the-merge-gate.md), [34. JVM quality gates: JUnit 6, Spotless, JaCoCo, ArchUnit](0034-jvm-quality-gates-junit-6-spotless-jacoco-archunit.md)
 - [11. Java language conventions](0011-java-conventions.md) — _Accepted_
   Java builds on the shared JVM baseline (Gradle, Spotless, JaCoCo, layered tests) and needs its language level and formatting standard pinned so Java repositories are consistent.
   Related: [9. Build JVM projects with Gradle](0009-jvm-build-with-gradle.md), [10. Enforce JVM quality gates and layered tests](0010-jvm-quality-and-tests.md)
+- [34. JVM quality gates: JUnit 6, Spotless, JaCoCo, ArchUnit](0034-jvm-quality-gates-junit-6-spotless-jacoco-archunit.md) — _Accepted_
+  ADR 10 set the JVM quality baseline from the shared toolkit pack, written before this repository existed.
+  Related: [10. Enforce JVM quality gates and layered tests](0010-jvm-quality-and-tests.md)
 
 ## Framework
 

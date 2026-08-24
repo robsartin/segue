@@ -1,5 +1,7 @@
 plugins {
-    application
+    java
+    jacoco
+    alias(libs.plugins.spotless)
 }
 
 group = "com.robsartin"
@@ -9,28 +11,87 @@ repositories {
     mavenCentral()
 }
 
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(25))
+    }
+}
+
 dependencies {
-    // Chosen engine. See CLAUDE.md for why.
-    implementation("org.apache.tinkerpop:tinkergraph-gremlin:3.7.3")
+    // Chosen engine. See docs/adr/0018-graph-engine-gremlin.md.
+    implementation(libs.tinkergraph)
     // Reference implementation, kept working as a cross-check.
-    implementation("org.apache.jena:jena-arq:5.3.0")
-    runtimeOnly("org.slf4j:slf4j-nop:2.0.16")
+    implementation(libs.jena.arq)
+    runtimeOnly(libs.slf4j.nop)
+
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
+    testImplementation(libs.assertj)
+    testImplementation(libs.archunit.junit6)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 tasks.withType<JavaCompile>().configureEach {
-    // Compiles on JDK 25 while staying runnable on 21. Bump to 25 whenever
-    // you stop caring about the older runtime.
+    // Compiles on the toolchain JDK while staying runnable on 21.
     options.release.set(21)
     options.compilerArgs.add("-Xlint:unchecked")
 }
 
-application {
-    mainClass.set("com.robsartin.segue.bakeoff.BakeOff")
+tasks.test {
+    useJUnitPlatform()
+    testLogging {
+        events("failed")
+    }
 }
 
-tasks.register<JavaExec>("selfTest") {
-    group = "verification"
-    description = "Zero-dependency domain and fixture checks."
-    mainClass.set("com.robsartin.segue.bakeoff.DomainSelfTest")
-    classpath = sourceSets["main"].runtimeClasspath
+spotless {
+    java {
+        googleJavaFormat(libs.versions.googleJavaFormat.get())
+        target("src/**/*.java")
+        removeUnusedImports()
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
+}
+
+jacoco {
+    toolVersion = libs.versions.jacoco.get()
+}
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
+}
+
+tasks.jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = "0.80".toBigDecimal()
+            }
+        }
+        rule {
+            limit {
+                counter = "INSTRUCTION"
+                value = "COVEREDRATIO"
+                minimum = "0.80".toBigDecimal()
+            }
+        }
+        rule {
+            limit {
+                counter = "BRANCH"
+                value = "COVEREDRATIO"
+                minimum = "0.65".toBigDecimal()
+            }
+        }
+    }
+}
+
+tasks.check {
+    dependsOn(tasks.jacocoTestReport, tasks.jacocoTestCoverageVerification)
 }

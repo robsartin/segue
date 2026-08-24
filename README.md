@@ -24,7 +24,6 @@ domain/     records + the Wikidata-derived edge vocabulary. No dependencies.
 port/       GraphStore — the seam that makes the engine choice reversible.
 tinker/     Apache TinkerPop / Gremlin, on the in-memory TinkerGraph.
 jena/       Apache Jena, one named graph per assertion.
-bakeoff/    Fixture (the Nick Cave neighbourhood), BakeOff, DomainSelfTest.
 ```
 
 `NodeKind` has six constants — PERSON, GROUP, WORK, PLACE, EVENT, CONCEPT — and
@@ -34,20 +33,10 @@ edges. One Nick Cave node is all three at once and the enum never grows.
 ## Running it
 
 ```bash
-./gradlew run             # the full bake-off, both engines
-./gradlew selfTest        # zero-dependency domain checks
+./gradlew check    # format, tests, coverage, arch rules
 ```
 
 No infrastructure: TinkerGraph and Jena's TxnMem dataset are both in-process.
-
-The domain layer has **zero third-party dependencies**, so it runs with just a JDK:
-
-```bash
-javac -d /tmp/out $(find src/main/java/dev/rob/affinity/domain src/main/java/dev/rob/affinity/port -name '*.java') \
-      src/main/java/dev/rob/affinity/bakeoff/Fixture.java \
-      src/main/java/dev/rob/affinity/bakeoff/DomainSelfTest.java
-java -cp /tmp/out com.robsartin.segue.bakeoff.DomainSelfTest
-```
 
 ## The four queries, and why each one
 
@@ -62,7 +51,7 @@ java -cp /tmp/out com.robsartin.segue.bakeoff.DomainSelfTest
 
 **Q1 — paths. Gremlin wins decisively.**
 
-| | non-comment lines |
+| | non-comment lines at slice 0 |
 |---|---|
 | Gremlin | 27 |
 | Jena | 81 |
@@ -81,7 +70,7 @@ SPARQL 1.1 property paths can test *that* two entities are connected —
 `?a (afp:X|^afp:X)* ?b` — but there is no standard way to get the path **back**.
 So a citable explanation requires hand-rolled depth-first enumeration, a
 neighbour cache to stop it being quadratic (one SPARQL round trip per node
-expanded), and a reconstruction pass. That's the 83 lines, and none of it is
+expanded), and a reconstruction pass. That's the 81 lines, and none of it is
 incidental.
 
 **And the failure mode matters more than the line count.**
@@ -163,9 +152,21 @@ rewrite.
 ## Verification status
 
 **Runs green.** Java 25 (Temurin), macOS aarch64, compiled at `release 21`.
-Originally verified under Maven 3.9.13; the build is now Gradle. All 22 checks pass; both engines return identical results for all
-four queries, including identical full route sets (11 routes each between Cave
-and Hillcoat, 3 of them two-hop).
+`./gradlew check` runs formatting, 46 tests, coverage and the architecture rules.
+Both engines return identical results for all four queries, including identical
+full route sets between Cave and Hillcoat.
+
+The suite is layered: domain record invariants and the reference edge fold run
+without a store; `GraphStoreContract` runs the four queries against both
+`TinkerGraphStore` and `JenaGraphStore`, so the cross-engine comparison is a
+merge gate rather than a program someone remembers to run; `ArchitectureTest`
+enforces the ADRs mechanically.
+
+Coverage sits at 87% line, 75% branch, gated at 80% and 65%.
+
+*(Historically: originally verified under Maven 3.9.13 with 22 hand-rolled
+checks in a `main()` method. The build is now Gradle and those checks are real
+tests.)*
 
 Two real bugs were found by running it, neither caught by inspection:
 
@@ -186,7 +187,8 @@ depends on their values.
 
 ## Deliberately not here
 
-The `SourceAdapter` SPI, the Wikidata ingest, and the MCP server. This is slice 0
-— the part that answers the engine question. Slices 1 and 2 come next, and the
-open risk remains #4 from the original plan: whether MCP is a pleasant *authoring*
+The `SourceAdapter` SPI, the Wikidata ingest, and the MCP server. Slice 0 — the
+part that answers the engine question — is complete; the increments that build
+on it are tracked as GitHub issues rather than narrated here. The open risk
+remains #4 from the original plan: whether MCP is a pleasant *authoring*
 interface or whether you want a UI within ten minutes.

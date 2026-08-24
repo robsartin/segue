@@ -17,7 +17,7 @@ fact is the failure mode that destroys the product: the explanation still render
 reads well, and is not true.
 
 Slice 0 demonstrated this concretely. In the fixture, the shortest route between Nick Cave
-and John Hillcoat is an unverified model guess at confidence 0.30, while the trustworthy
+and Cormac McCarthy is an unverified model guess at confidence 0.30, while the trustworthy
 route is three hops at confidence 1.00. Ranking by path length surfaces the guess.
 
 ## Decision
@@ -65,3 +65,10 @@ route is three hops at confidence 1.00. Ranking by path length surfaces the gues
   own numbers silently corrupts the ranking, so the scale belongs in review.
 - The `llm:` prefix is a string convention rather than a type, which keeps `Provenance`
   free of adapter knowledge but means the check is not compiler-enforced.
+
+---
+
+*Correction, 2026-08-24: the Context section originally named John Hillcoat as the
+endpoint of the low-confidence shortcut. The fixture's model-generated shortcut is
+Cave→McCarthy; all Cave→Hillcoat routes are wikidata-sourced at confidence 1.00.
+The decision is unaffected.*

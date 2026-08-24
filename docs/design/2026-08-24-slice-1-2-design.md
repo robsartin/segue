@@ -291,6 +291,10 @@ Each is a real gap, recorded rather than solved:
 | `@Tool` names match MCP's charset and length rules | ADR 26 |
 | `NodeKind.values().length == 6` (plain unit test) | ADR 21 |
 
+This table describes the target state once slices 1 and 2 land. As of increment 0,
+only the rows that don't depend on `ingest`, `wikidata`, `app`, or `mcp` existing
+are actually enforced — see ADR 32's Status column for the current breakdown.
+
 Not mechanically checkable, and therefore review concerns: ADR 20's bitemporal
 separation, ADR 23's confidence conventions, and ADR 16's rule that affinity notes
 never reach a log.

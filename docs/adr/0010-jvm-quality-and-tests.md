@@ -1,10 +1,11 @@
 ---
-status: Accepted
+status: "Superseded by 0034"
 date: "2026-08-23"
 topic: jvm-quality-and-tests
 tags: [language, jvm, testing]
 supersedes: []
-related: [jvm-build-with-gradle, java-conventions, kotlin-conventions, ci-is-the-merge-gate]
+superseded-by: [jvm-quality-gates-junit-6-spotless-jacoco-archunit]
+related: [jvm-build-with-gradle, java-conventions, kotlin-conventions, ci-is-the-merge-gate, jvm-quality-gates-junit-6-spotless-jacoco-archunit]
 ---
 # 10. Enforce JVM quality gates and layered tests
 

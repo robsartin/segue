@@ -1,71 +1,69 @@
 package com.robsartin.segue.domain;
 
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Collection;
 
 /**
- * The controlled vocabulary. In the real system these are DB rows so a new
- * relation type is a data change, not a redeploy - this class is the spike's
- * stand-in, and deliberately spans three domains to prove the model does not
- * need per-domain dialects.
+ * The controlled vocabulary. In the real system these are DB rows so a new relation type is a data
+ * change, not a redeploy - this class is the spike's stand-in, and deliberately spans three domains
+ * to prove the model does not need per-domain dialects.
  *
- * <p>Music, film and literature relations all sit in one flat namespace because
- * they are all just relations between the same six node kinds. That is the whole
- * cross-domain bet, stated in one file.
+ * <p>Music, film and literature relations all sit in one flat namespace because they are all just
+ * relations between the same six node kinds. That is the whole cross-domain bet, stated in one
+ * file.
  */
 public final class EdgeTypes {
 
-    private static final Map<String, EdgeType> BY_CODE = new LinkedHashMap<>();
+  private static final Map<String, EdgeType> BY_CODE = new LinkedHashMap<>();
 
-    // --- people and groups -------------------------------------------------
-    public static final EdgeType MEMBER_OF =
-            register(EdgeType.direct("MEMBER_OF", "P463", "member of"));
+  // --- people and groups -------------------------------------------------
+  public static final EdgeType MEMBER_OF =
+      register(EdgeType.direct("MEMBER_OF", "P463", "member of"));
 
-    // --- creative roles (Wikidata states these on the work) ----------------
-    public static final EdgeType PERFORMED =
-            register(EdgeType.inverted("PERFORMED", "P175", "performed"));
-    public static final EdgeType AUTHORED =
-            register(EdgeType.inverted("AUTHORED", "P50", "authored"));
-    public static final EdgeType DIRECTED =
-            register(EdgeType.inverted("DIRECTED", "P57", "directed"));
-    public static final EdgeType WROTE_SCREENPLAY_FOR =
-            register(EdgeType.inverted("WROTE_SCREENPLAY_FOR", "P58", "wrote the screenplay for"));
-    public static final EdgeType COMPOSED_FOR =
-            register(EdgeType.inverted("COMPOSED_FOR", "P86", "composed the music for"));
-    public static final EdgeType ACTED_IN =
-            register(EdgeType.inverted("ACTED_IN", "P161", "acted in"));
+  // --- creative roles (Wikidata states these on the work) ----------------
+  public static final EdgeType PERFORMED =
+      register(EdgeType.inverted("PERFORMED", "P175", "performed"));
+  public static final EdgeType AUTHORED =
+      register(EdgeType.inverted("AUTHORED", "P50", "authored"));
+  public static final EdgeType DIRECTED =
+      register(EdgeType.inverted("DIRECTED", "P57", "directed"));
+  public static final EdgeType WROTE_SCREENPLAY_FOR =
+      register(EdgeType.inverted("WROTE_SCREENPLAY_FOR", "P58", "wrote the screenplay for"));
+  public static final EdgeType COMPOSED_FOR =
+      register(EdgeType.inverted("COMPOSED_FOR", "P86", "composed the music for"));
+  public static final EdgeType ACTED_IN =
+      register(EdgeType.inverted("ACTED_IN", "P161", "acted in"));
 
-    // --- work to work ------------------------------------------------------
-    public static final EdgeType BASED_ON =
-            register(EdgeType.direct("BASED_ON", "P144", "based on"));
-    public static final EdgeType PART_OF =
-            register(EdgeType.direct("PART_OF", "P361", "part of"));
+  // --- work to work ------------------------------------------------------
+  public static final EdgeType BASED_ON = register(EdgeType.direct("BASED_ON", "P144", "based on"));
+  public static final EdgeType PART_OF = register(EdgeType.direct("PART_OF", "P361", "part of"));
 
-    // --- influence and affinity -------------------------------------------
-    public static final EdgeType INFLUENCED_BY =
-            register(EdgeType.direct("INFLUENCED_BY", "P737", "influenced by"));
-    /** No source states this; it is derived from co-credits or proposed by a model. */
-    public static final EdgeType COLLABORATED_WITH =
-            register(EdgeType.derived("COLLABORATED_WITH", "collaborated with", true));
-    /** Statistical similarity - last.fm and friends. Never authoritative. */
-    public static final EdgeType SIMILAR_TO =
-            register(EdgeType.derived("SIMILAR_TO", "similar to", true));
+  // --- influence and affinity -------------------------------------------
+  public static final EdgeType INFLUENCED_BY =
+      register(EdgeType.direct("INFLUENCED_BY", "P737", "influenced by"));
 
-    private EdgeTypes() {
-    }
+  /** No source states this; it is derived from co-credits or proposed by a model. */
+  public static final EdgeType COLLABORATED_WITH =
+      register(EdgeType.derived("COLLABORATED_WITH", "collaborated with", true));
 
-    private static EdgeType register(EdgeType t) {
-        BY_CODE.put(t.code(), t);
-        return t;
-    }
+  /** Statistical similarity - last.fm and friends. Never authoritative. */
+  public static final EdgeType SIMILAR_TO =
+      register(EdgeType.derived("SIMILAR_TO", "similar to", true));
 
-    public static Optional<EdgeType> byCode(String code) {
-        return Optional.ofNullable(BY_CODE.get(code));
-    }
+  private EdgeTypes() {}
 
-    public static Collection<EdgeType> all() {
-        return BY_CODE.values();
-    }
+  private static EdgeType register(EdgeType t) {
+    BY_CODE.put(t.code(), t);
+    return t;
+  }
+
+  public static Optional<EdgeType> byCode(String code) {
+    return Optional.ofNullable(BY_CODE.get(code));
+  }
+
+  public static Collection<EdgeType> all() {
+    return BY_CODE.values();
+  }
 }

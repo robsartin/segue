@@ -32,17 +32,17 @@ domain  <- port <- adapters (tinker, jena, sqlite, wikidata)
 
 Rules enforced by ArchUnit, each naming the decision it defends:
 
-| Rule | Defends |
-|---|---|
-| Only `ingest` calls `GraphStore.record` or `AssertionLog.append` | ADR 19 |
-| Nothing in `src/main` references `System.out` | ADR 28 |
-| No `System.err.println` or `java.util.logging`; SLF4J only | ADR 30 |
-| Adapters depend on `port` and `domain` only, never each other or upward | this ADR |
-| `domain` depends on nothing outside `java.*` and itself | ADR 18 |
-| Domain types are records, enums or sealed | ADR 11 |
-| `wikidata` must not depend on any Spring package | ADR 25 |
-| Spring annotations only in `app` and `mcp` | ADR 12 |
-| Tool names match MCP's charset and length rules | ADR 26 |
+| Rule | Defends | Status |
+|---|---|---|
+| Only `ingest` calls `GraphStore.record` or `AssertionLog.append` | ADR 19 | arrives with `ingest` |
+| Nothing in `src/main` references `System.out` | ADR 28 | enforced |
+| No `System.err.println`, `Throwable.printStackTrace()`, or `java.util.logging`; SLF4J only | ADR 30 | enforced |
+| Adapters depend on `port` and `domain` only, never each other or upward | this ADR | partially enforced — the sibling (`tinker`/`jena` don't depend on each other) and upward (adapters don't depend on `ingest`/`mcp`/`app`) halves are written; the "port and domain only" downward restriction is not |
+| `domain` depends on nothing outside `java.*` and itself | ADR 18 | enforced |
+| Domain types are records, enums or sealed | ADR 11 | enforced |
+| `wikidata` must not depend on any Spring package | ADR 25 | arrives with `wikidata` |
+| Spring annotations only in `app` and `mcp` | ADR 12 | arrives with `app`/`mcp` |
+| Tool names match MCP's charset and length rules | ADR 26 | arrives with `mcp` |
 
 `NodeKind.values().length == 6` (ADR 21) is a plain unit test rather than an ArchUnit rule,
 but belongs to the same set.
@@ -74,3 +74,13 @@ rule that affinity notes never reach a log. These stay review concerns.
   rather than weakened.
 - Three invariants are explicitly unguarded, which is the honest position and is written
   down so nobody assumes otherwise.
+
+---
+
+*Correction, 2026-08-24: the rules table originally presented all nine rows as
+"enforced by ArchUnit" without qualification. As of increment 0, four rows
+(ADR 19, ADR 25, ADR 12, ADR 26) cannot be enforced yet because their packages
+(`ingest`, `wikidata`, `app`, `mcp`) do not exist, and the adapter-layering row
+only has its sibling and upward halves written, not the downward "port and
+domain only" restriction. Added a Status column recording this. The decisions
+are unaffected; the packages' rules arrive with the increments that add them.*

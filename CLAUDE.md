@@ -9,36 +9,27 @@ speakers, whatever. Edges are relationships, each carrying the provenance of who
 claimed it. The payoff feature is **explanation**: "you like this because
 X → Y → Z", with every hop citable to a source.
 
-This repo is currently **slice 0**: the domain model plus a two-engine bake-off
-that answered the graph-database question. Ingest and the MCP interface are not
-built yet.
+Slice 0 — the domain model plus a two-engine bake-off that answered the
+graph-database question — is complete. Ingest and the MCP interface are not
+built yet; the increments that build on slice 0 are tracked as GitHub issues.
 
 ## Build and run
 
 ```bash
-./gradlew run             # the bake-off, both engines
-./gradlew selfTest        # zero-dependency domain + fixture checks
+./gradlew check           # format, tests, coverage, arch rules — the full CI gate
+./gradlew test            # tests only
+./gradlew spotlessApply   # fix formatting
 ```
 
-Gradle, not Maven. **Gradle 9.1.0 is the minimum for running on Java 25** (9.7.1
-is current), so the wrapper is pinned. If `gradlew` is missing, bootstrap once
-with a local Gradle:
+Gradle, not Maven. The wrapper is pinned to 9.7.1 and committed; **Gradle 9.1.0 is the
+minimum that runs on Java 25**. The build uses a toolchain of JDK 25 and compiles at
+`release 21`.
 
-```bash
-gradle wrapper --gradle-version 9.7.1
-```
+Versions live in `gradle/libs.versions.toml`, never in `build.gradle.kts`.
 
-Zero-dependency domain tests (useful when offline):
-
-```bash
-javac -d /tmp/out $(find src/main/java/dev/rob/affinity/domain src/main/java/dev/rob/affinity/port -name '*.java') \
-      src/main/java/dev/rob/affinity/bakeoff/Fixture.java \
-      src/main/java/dev/rob/affinity/bakeoff/DomainSelfTest.java
-java -cp /tmp/out com.robsartin.segue.bakeoff.DomainSelfTest
-```
-
-Java 25 local, compiled at `release 21`. TinkerPop 3.7.3 targets Java 11/17 but
-runs fine on 25.
+TinkerPop 3.7.3 targets Java 11/17 but runs fine on 25 — verified, not assumed.
+Jena 5.3.0 likewise; both are exercised on JDK 25 by every `GraphStoreContract`
+run.
 
 ## Decision already made: use Gremlin
 
@@ -59,8 +50,8 @@ merge semantics; graph-level retraction; Wikidata IRIs need no mapping). Keep
 becomes more common than walking it — the assertion log makes that a replay, not
 a rewrite.
 
-Full reasoning: `README.md`, and `decisions/graph-engine.md` in the Interest
-Finder project.
+Full reasoning: `docs/adr/0018-graph-engine-gremlin.md`. All decisions are recorded in
+`docs/adr/`; the slice 1 and 2 design is `docs/design/2026-08-24-slice-1-2-design.md`.
 
 ## Architecture
 
@@ -69,8 +60,13 @@ domain/   records + Wikidata-derived edge vocabulary. NO third-party deps.
 port/     GraphStore — the seam that keeps the engine choice reversible.
 tinker/   Gremlin adapter (the chosen one).
 jena/     RDF adapter (reference implementation, keep it working).
-bakeoff/  Fixture, BakeOff, DomainSelfTest.
 ```
+
+Tests mirror this, plus `fixture/` (the Nick Cave neighbourhood, test-only) and
+`arch/` (the ArchUnit rules that enforce the ADRs).
+
+The engine bake-off is now `GraphStoreContract` — an abstract test run against both
+adapters, so the cross-engine comparison is a merge gate rather than a program.
 
 ## Design invariants — do not violate without a deliberate decision
 
