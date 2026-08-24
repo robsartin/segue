@@ -24,7 +24,8 @@ public record AssertionRecord(
     String typeCode,
     LocalDate validFrom,
     LocalDate validTo,
-    Provenance provenance) {
+    Provenance provenance)
+    implements LoggedAssertion {
 
   public AssertionRecord {
     Objects.requireNonNull(fromQid, "fromQid");
