@@ -72,3 +72,8 @@ route is three hops at confidence 1.00. Ranking by path length surfaces the gues
 endpoint of the low-confidence shortcut. The fixture's model-generated shortcut is
 Cave→McCarthy; all Cave→Hillcoat routes are wikidata-sourced at confidence 1.00.
 The decision is unaffected.*
+
+*Resolved, 2026-08-24: the open ranking issue in the Consequences is closed by ADR 31 and
+increment 1. `GraphStore.paths(from, to, maxHops)` now returns every route untruncated and a
+shared `PathRanking` orders them by weakest confidence (hop count as tiebreak) above the port,
+so the trustworthy route is surfaced first. See docs/adr/0031-path-ranking-by-confidence.md.*

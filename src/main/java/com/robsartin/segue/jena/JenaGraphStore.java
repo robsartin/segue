@@ -11,7 +11,6 @@ import com.robsartin.segue.port.GraphStore;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -51,7 +50,7 @@ import org.apache.jena.system.Txn;
  *       graphs it owns, with no risk of removing a claim another source also happens to make.
  * </ol>
  *
- * <p>The cost lands squarely on paths - see {@link #shortestPaths}.
+ * <p>The cost lands squarely on paths - see {@link #paths}.
  */
 public final class JenaGraphStore implements GraphStore {
 
@@ -257,7 +256,7 @@ public final class JenaGraphStore implements GraphStore {
    * repeat().until().path()}.
    */
   @Override
-  public List<PathResult> shortestPaths(String fromQid, String toQid, int maxHops, int limit) {
+  public List<PathResult> paths(String fromQid, String toQid, int maxHops) {
     if (fromQid.equals(toQid)) return List.of();
 
     Map<String, List<Step>> neighbourCache = new HashMap<>();
@@ -266,12 +265,11 @@ public final class JenaGraphStore implements GraphStore {
     onPath.add(fromQid);
 
     enumerate(fromQid, toQid, maxHops, new ArrayList<>(), onPath, routes, neighbourCache);
-    routes.sort(Comparator.comparingInt(List::size));
 
     Map<String, EdgeRecord> edges = allEdges();
     Map<String, NodeRecord> nodeCache = new HashMap<>();
     List<PathResult> results = new ArrayList<>();
-    for (List<Step> route : routes.stream().limit(limit).toList()) {
+    for (List<Step> route : routes) {
       List<Hop> hops = new ArrayList<>();
       String current = fromQid;
       for (Step step : route) {

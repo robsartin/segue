@@ -3,6 +3,7 @@ package com.robsartin.segue.port;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.domain.EdgeRecord;
+import com.robsartin.segue.domain.PathRanking;
 import com.robsartin.segue.domain.PathResult;
 import com.robsartin.segue.fixture.Fixture;
 import java.time.Instant;
@@ -67,35 +68,39 @@ public abstract class GraphStoreContract {
   @Test
   @DisplayName("Q1: Cave reaches Hillcoat in two hops, through a film")
   void pathsCrossFromMusicIntoFilm() {
-    List<PathResult> paths = store.shortestPaths(Fixture.CAVE, Fixture.HILLCOAT, 4, 50);
+    List<PathResult> ranked = PathRanking.rank(store.paths(Fixture.CAVE, Fixture.HILLCOAT, 4));
 
-    assertThat(paths).isNotEmpty();
-    assertThat(paths.get(0).length()).isEqualTo(2);
+    assertThat(ranked).isNotEmpty();
+    // Every Cave-Hillcoat route is wikidata-sourced at 1.00, so ranking ties on confidence and the
+    // hop-count tiebreak surfaces the two-hop route first.
+    assertThat(ranked.get(0).length()).isEqualTo(2);
   }
 
   @Test
   @DisplayName("Q1: the multigraph survives — three distinct two-hop routes")
   void multigraphProducesThreeTwoHopRoutes() {
-    List<PathResult> paths = store.shortestPaths(Fixture.CAVE, Fixture.HILLCOAT, 4, 50);
+    List<PathResult> paths = store.paths(Fixture.CAVE, Fixture.HILLCOAT, 4);
 
     assertThat(paths.stream().filter(p -> p.length() == 2)).hasSize(3);
   }
 
   @Test
-  @DisplayName("Q1b: the shortest Cave-McCarthy route is the model's unverified guess")
-  void shortestIsNotMostTrustworthy() {
-    List<PathResult> paths = store.shortestPaths(Fixture.CAVE, Fixture.MCCARTHY, 4, 5);
+  @DisplayName("Q1b: ranking surfaces the trustworthy route over the model's shorter guess")
+  void rankingSurfacesTrustOverBrevity() {
+    List<PathResult> ranked = PathRanking.rank(store.paths(Fixture.CAVE, Fixture.MCCARTHY, 4));
 
     PathResult shortest =
-        paths.stream().min(Comparator.comparingInt(PathResult::length)).orElseThrow();
-    PathResult longest =
-        paths.stream().max(Comparator.comparingInt(PathResult::length)).orElseThrow();
-
-    // This is the bug ADR 23 records; ADR 31 is the decision that fixes it in increment 1:
-    // length and trust disagree.
+        ranked.stream().min(Comparator.comparingInt(PathResult::length)).orElseThrow();
+    // The shortest Cave-McCarthy route is the model's unverified 1-hop guess (the bug ADR 23
+    // records).
     assertThat(shortest.length()).isEqualTo(1);
     assertThat(shortest.weakestConfidence()).isLessThanOrEqualTo(0.30);
-    assertThat(longest.weakestConfidence()).isGreaterThan(shortest.weakestConfidence());
+
+    // ADR 31 is the fix: the fully-sourced, longer route ranks first instead of the short guess.
+    PathResult top = ranked.get(0);
+    assertThat(top).isNotEqualTo(shortest);
+    assertThat(top.weakestConfidence()).isGreaterThan(shortest.weakestConfidence());
+    assertThat(top.length()).isGreaterThan(shortest.length());
   }
 
   @Test

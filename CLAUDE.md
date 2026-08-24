@@ -90,7 +90,7 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   `orElseGet`, `ifPresent` — but no `map()`.
 - Never write `SELECT DISTINCT ?other` for graph traversal in the Jena adapter.
   Carry `(predicate, other, direction)`. See the class comment on
-  `JenaGraphStore.shortestPaths`.
+  `JenaGraphStore.paths`.
 - `label` is reserved in TinkerPop (it's the element label). The vertex property
   for a display name is `name`.
 - **When comparing engines, compare full result SETS, not the first element.**
@@ -99,10 +99,10 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
 
 ## Known open issues
 
-- **Shortest path is the wrong default ranking.** In the fixture the shortest
-  Cave→McCarthy route is an unverified model guess (confidence 0.30) while the
-  trustworthy route is three hops (1.00). `PathResult.weakestConfidence()` exists
-  but nothing ranks by it. Fix before the graph gets big.
+- ~~Shortest path is the wrong default ranking.~~ **Fixed (ADR 31, increment 1.)**
+  `GraphStore.paths(from, to, maxHops)` returns every route untruncated and the shared
+  `PathRanking` orders them weakest-confidence-first (hop count as tiebreak) above the
+  port, so the trustworthy Cave→McCarthy route now outranks the model's 0.30 shortcut.
 - Validity conflict resolution is first-writer-wins in both adapters. Deliberately
   deferred, not solved.
 - Provenance in the Gremlin adapter is packed into an opaque edge property

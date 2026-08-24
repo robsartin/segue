@@ -23,18 +23,16 @@ class TinkerGraphStoreContractTest extends GraphStoreContract {
       assertThat(tinker.edgeCount()).isEqualTo(jena.edgeCount());
       assertThat(
               GraphStoreContract.signatures(
-                  tinker.shortestPaths(
+                  tinker.paths(
                       com.robsartin.segue.fixture.Fixture.CAVE,
                       com.robsartin.segue.fixture.Fixture.HILLCOAT,
-                      4,
-                      50)))
+                      4)))
           .isEqualTo(
               GraphStoreContract.signatures(
-                  jena.shortestPaths(
+                  jena.paths(
                       com.robsartin.segue.fixture.Fixture.CAVE,
                       com.robsartin.segue.fixture.Fixture.HILLCOAT,
-                      4,
-                      50)));
+                      4)));
     }
   }
 
