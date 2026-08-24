@@ -1,8 +1,6 @@
 package com.robsartin.segue.ingest;
 
-import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.LoggedAssertion;
-import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.GraphStore;
 import java.util.List;
@@ -25,18 +23,11 @@ public final class GraphProjector {
     for (int i = 0; i < assertions.size(); i++) {
       LoggedAssertion assertion = assertions.get(i);
       try {
-        apply(assertion, store);
+        IngestService.apply(store, assertion);
       } catch (RuntimeException e) {
         // Sequence is 1-based, matching the log's own autoincrement.
         throw new IllegalStateException("replay failed at sequence " + (i + 1), e);
       }
-    }
-  }
-
-  private static void apply(LoggedAssertion assertion, GraphStore store) {
-    switch (assertion) {
-      case NodeAssertion n -> store.upsertNode(n.toNode());
-      case AssertionRecord e -> store.record(e);
     }
   }
 }
