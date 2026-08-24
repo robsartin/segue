@@ -27,9 +27,10 @@ minimum that runs on Java 25**. The build uses a toolchain of JDK 25 and compile
 
 Versions live in `gradle/libs.versions.toml`, never in `build.gradle.kts`.
 
-TinkerPop 3.7.3 targets Java 11/17 but runs fine on 25 — verified, not assumed.
-Jena 5.3.0 likewise; both are exercised on JDK 25 by every `GraphStoreContract`
-run.
+TinkerPop and Jena both target older JDKs than 25 and both run fine on it —
+verified by every `GraphStoreContract` run, not assumed. **Don't name their versions
+here**; `gradle/libs.versions.toml` is the only place they live, and a number repeated
+in prose goes stale the first time Dependabot lands a bump.
 
 ## Decision already made: use Gremlin
 
@@ -112,13 +113,27 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
 
 ## Next steps
 
+The authoritative plan is `docs/design/2026-08-24-slice-1-2-design.md` and the ADRs it
+cites; the increments are GitHub issues. What follows is orientation, not specification —
+where it disagrees with an ADR, the ADR wins.
+
 ### Slice 1 — SourceAdapter SPI + Wikidata ingest
+
+**Two** SPIs, not one — see `docs/adr/0025-source-adapter-spi.md`. Resolution and
+expansion are different capabilities with different implementors: a similarity source
+expands but has nothing to resolve.
 
 ```java
 public interface SourceAdapter {
     String id();
     boolean supports(NodeKind kind);
     List<AssertionRecord> expand(NodeRecord seed, ExpandContext ctx);
+}
+
+public interface EntityResolver {
+    String id();
+    List<Candidate> search(String query, NodeKind kind, int limit);
+    Optional<NodeAssertion> fetch(String qid);
 }
 ```
 
