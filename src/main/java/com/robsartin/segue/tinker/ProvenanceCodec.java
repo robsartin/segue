@@ -29,6 +29,10 @@ final class ProvenanceCodec {
 
   private ProvenanceCodec() {}
 
+  // Encodes assertedAt as Instant#toString (ISO-8601), not epoch millis: epoch millis silently
+  // truncated sub-millisecond precision, which disagreed with JenaGraphStore's xsd:dateTime
+  // round trip via Instant#parse. ISO-8601 output contains neither a tab nor a newline, so it is
+  // safe against the FIELD_SEP/RECORD_SEP delimiters Provenance's fields are forbidden to contain.
   static String encode(List<Provenance> sources) {
     StringBuilder sb = new StringBuilder();
     for (Provenance p : sources) {
@@ -37,7 +41,7 @@ final class ProvenanceCodec {
           .append(Provenance.FIELD_SEP)
           .append(p.sourceRef() == null ? "" : p.sourceRef())
           .append(Provenance.FIELD_SEP)
-          .append(p.assertedAt().toEpochMilli())
+          .append(p.assertedAt().toString())
           .append(Provenance.FIELD_SEP)
           .append(p.confidence());
     }
@@ -55,10 +59,7 @@ final class ProvenanceCodec {
       }
       out.add(
           new Provenance(
-              f[0],
-              f[1].isEmpty() ? null : f[1],
-              Instant.ofEpochMilli(Long.parseLong(f[2])),
-              Double.parseDouble(f[3])));
+              f[0], f[1].isEmpty() ? null : f[1], Instant.parse(f[2]), Double.parseDouble(f[3])));
     }
     return out;
   }

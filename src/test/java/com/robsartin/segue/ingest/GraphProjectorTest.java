@@ -41,6 +41,30 @@ class GraphProjectorTest {
   }
 
   @Test
+  @DisplayName("a replayed graph matches the log exactly, including sub-millisecond timestamps")
+  void replayPreservesFullPrecisionTimestamps() {
+    // Issue #6 / ADR 19: replaying the log must reproduce the log exactly. Provenance.assertedAt
+    // is stored with nanosecond precision, so a projection that truncates it (e.g. to epoch
+    // millis) silently disagrees with the log it was replayed from.
+    Instant nanosecondPrecision = Instant.parse("2026-08-24T09:15:30.123456789Z");
+    Provenance precise = new Provenance("wikidata", "ref", nanosecondPrecision, 1.0);
+
+    try (AssertionLog log = SqliteAssertionLog.inMemory();
+        TinkerGraphStore store = new TinkerGraphStore()) {
+      log.append(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+      log.append(new NodeAssertion("Q2", NodeKind.GROUP, "The Bad Seeds", WIKIDATA));
+      log.append(new AssertionRecord("Q1", "Q2", "MEMBER_OF", null, null, precise));
+
+      GraphProjector.project(log, store);
+
+      assertThat(store.edges("Q1"))
+          .singleElement()
+          .extracting(e -> e.sources().get(0).assertedAt())
+          .isEqualTo(nanosecondPrecision);
+    }
+  }
+
+  @Test
   @DisplayName("an empty log projects an empty graph")
   void emptyLogEmptyGraph() {
     try (AssertionLog log = SqliteAssertionLog.inMemory();
