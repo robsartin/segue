@@ -1,12 +1,13 @@
 package com.robsartin.segue.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -118,16 +119,22 @@ class EdgeTypesTest {
   }
 
   @Test
-  @DisplayName(
-      "all() is a live view over the registry, not a defensive copy — noted for later cleanup")
-  void allIsALiveMutableView() {
-    // Pins EdgeTypes.all()'s current implementation (`return BY_CODE.values();`): the same
-    // backing Map.values() view is handed out every call rather than a fresh, safe copy. This
-    // is a real defect worth filing separately — EdgeTypesTest cannot fix src/main here — but
-    // callers should not rely on the returned Collection being unmodifiable.
-    Optional<?> first = Optional.of(EdgeTypes.all());
-    Optional<?> second = Optional.of(EdgeTypes.all());
+  @DisplayName("all() hands out an immutable copy, not a live view onto the registry")
+  void allIsAnImmutableCopy() {
+    // ADR 22 makes the edge vocabulary a controlled, borrowed-from-Wikidata namespace, and
+    // increment 3's ingest reads that registry as its property whitelist (ClaimMapper). While
+    // all() returned BY_CODE.values(), every caller held a live handle on the backing map and
+    // could empty the vocabulary at runtime; a namespace any caller can edit is not controlled.
+    Collection<EdgeType> vocabulary = EdgeTypes.all();
 
-    assertThat(first.get()).isSameAs(second.get());
+    // Probe with a type that was never registered, and assert remove() before clear(): an
+    // unmodifiable collection throws even for an absent element, whereas the old live view
+    // answered false and left the map alone. The red run therefore fails on this first
+    // assertion without emptying the static registry out from under the rest of the suite.
+    EdgeType neverRegistered = EdgeType.derived("NOT_A_REGISTERED_TYPE", "probe", false);
+
+    assertThatThrownBy(() -> vocabulary.remove(neverRegistered))
+        .isInstanceOf(UnsupportedOperationException.class);
+    assertThatThrownBy(vocabulary::clear).isInstanceOf(UnsupportedOperationException.class);
   }
 }

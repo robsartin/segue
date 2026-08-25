@@ -2,6 +2,7 @@ package com.robsartin.segue.domain;
 
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -76,7 +77,16 @@ public final class EdgeTypes {
     return Optional.ofNullable(BY_CODE.get(code));
   }
 
+  /**
+   * The whole vocabulary in registration order, as an immutable copy.
+   *
+   * <p>Deliberately a copy rather than {@code BY_CODE.values()}: that view is live onto the backing
+   * map, so any caller could have emptied the vocabulary at runtime. ADR 22 makes this a
+   * <em>controlled</em> namespace borrowed from Wikidata properties, and {@code ClaimMapper} reads
+   * it as the ingest property whitelist - a whitelist callers can edit is not controlled, and
+   * clearing it would silently turn every ingest run into a no-op rather than failing loudly.
+   */
   public static Collection<EdgeType> all() {
-    return BY_CODE.values();
+    return List.copyOf(BY_CODE.values());
   }
 }
