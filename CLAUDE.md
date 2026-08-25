@@ -161,13 +161,17 @@ Wikidata first, deliberately — no API key, cross-domain by construction, and i
 supplies both the QID identity spine and the edge vocabulary. Uses
 `wbsearchentities` for resolution and `wbgetentities` for claims, maps a
 whitelist of properties to edge types, and turns qualifiers P580/P582 into
-`validFrom`/`validTo`. Virtual threads drive the claim fan-out.
+`validFrom`/`validTo`.
 
 Design rule: adding a source must not require touching the graph layer.
 
 Retiring the placeholder QIDs in `Fixture` was deliberately left undone — it
 touches every test's expected counts and deserves its own change. Backlink
 discovery via the Query Service (see the Gotchas section) is likewise deferred.
+So is the neighbour-QID fan-out: `expand` makes exactly one call today and
+resolves nothing about the entities on the other end of its edges. Virtual
+threads are for that fan-out, bounded and resolving neighbours in parallel —
+not yet built, and increment 4's work.
 
 ### Slice 2 — MCP server
 
