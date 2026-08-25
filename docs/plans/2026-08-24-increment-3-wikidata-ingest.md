@@ -2136,12 +2136,39 @@ git commit -m "feat: expand entities from Wikidata behind the SourceAdapter SPI"
 ### Task 9: End-to-end ingest, and the ArchUnit rules for wikidata
 
 **Files:**
+- Modify: `src/main/java/com/robsartin/segue/ingest/GraphProjector.java`
 - Create: `src/test/java/com/robsartin/segue/ingest/WikidataIngestEndToEndTest.java`
 - Modify: `src/test/java/com/robsartin/segue/arch/ArchitectureTest.java`
 
 **Interfaces:**
 - Consumes: everything from Tasks 1-8
-- Produces: nothing
+- Produces: `GraphProjector.project` returns `long` (was `void`) — the count of assertions replayed
+
+- [ ] **Step 0: Give `GraphProjector.project` a return value**
+
+`project()` currently returns `void`. The end-to-end test below asserts on how many
+assertions were replayed, which is worth knowing — a replay that silently applied nothing
+looks identical to one that worked.
+
+In `src/main/java/com/robsartin/segue/ingest/GraphProjector.java`, change the signature to
+return `long`, count the applied assertions, and return the count. Keep the existing
+sequence numbering and fatal-on-failure behaviour exactly as they are.
+
+Update the Javadoc to document the return:
+
+```java
+   * @return how many assertions were applied
+```
+
+`GraphProjectorTest` must still pass **unmodified** — `void` to `long` is source-compatible
+for callers that ignore the result. If it does not, you changed behaviour, not just the
+signature.
+
+```bash
+./gradlew test --tests '*GraphProjectorTest' --tests '*IngestServiceTest'
+```
+
+Expected: PASS, unmodified.
 
 - [ ] **Step 1: Write the end-to-end test**
 
