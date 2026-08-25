@@ -24,6 +24,9 @@ dependencies {
     implementation(libs.jena.arq)
     // Assertion-log persistence. See docs/adr/0024-sqlite-assertion-log.md.
     implementation(libs.sqlite.jdbc)
+    // Wikidata responses. Jackson rather than a second parser because Spring Boot brings
+    // it in increment 4 anyway, and one JSON library is better than two.
+    implementation(libs.jackson.databind)
     runtimeOnly(libs.slf4j.nop)
 
     testImplementation(platform(libs.junit.bom))
