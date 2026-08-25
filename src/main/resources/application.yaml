@@ -16,5 +16,7 @@ spring:
 
 segue:
   database: ${SEGUE_DB:${user.home}/.segue/segue.db}
-  expand:
-    max-new-edges: 200
+  # Flat, not nested under "expand": relaxed binding does not map a nested
+  # segue.expand.max-new-edges key onto SegueProperties' flat maxNewEdges
+  # component. Verified empirically — see task-5-report.md.
+  max-new-edges: 200

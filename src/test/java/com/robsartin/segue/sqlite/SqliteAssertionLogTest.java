@@ -69,4 +69,16 @@ class SqliteAssertionLogTest {
       assertThat(reopened.readAll()).containsExactly((LoggedAssertion) node);
     }
   }
+
+  @Test
+  @DisplayName("a first run creates missing parent directories, matching the class's own claim")
+  void createsMissingParentDirectories(@TempDir Path dir) {
+    Path db = dir.resolve(".segue").resolve("segue.db");
+
+    try (SqliteAssertionLog log = new SqliteAssertionLog(db)) {
+      log.append(new NodeAssertion("Q5593", NodeKind.PERSON, "Pablo Picasso", WIKIDATA));
+    }
+
+    assertThat(db).exists();
+  }
 }
