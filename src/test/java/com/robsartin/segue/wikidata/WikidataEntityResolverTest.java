@@ -1,6 +1,7 @@
 package com.robsartin.segue.wikidata;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.robsartin.segue.domain.Candidate;
 import com.robsartin.segue.domain.NodeAssertion;
@@ -102,6 +103,22 @@ class WikidataEntityResolverTest {
       assertThat(node.kind()).isEqualTo(NodeKind.WORK); // P31 = Q11424, film
       assertThat(node.provenance().sourceId()).isEqualTo("wikidata");
       assertThat(node.provenance().assertedAt()).isEqualTo(PULL);
+    }
+  }
+
+  @Test
+  @DisplayName("a malformed qid is rejected before it becomes a JSON pointer")
+  void rejectsMalformedQid() {
+    // fetch builds a JSON Pointer ("/entities/" + qid) from whatever it is given. Once
+    // add_entity(qid) takes model-supplied strings (increment 4), an unvalidated qid is a
+    // pointer-injection surface, not just a 404.
+    try (StubWikidataServer stub = new StubWikidataServer()) {
+      EntityResolver resolver =
+          new WikidataEntityResolver(new WikidataClient(stub.baseUri()), FIXED);
+
+      assertThatThrownBy(() -> resolver.fetch("../secrets"))
+          .isInstanceOf(IllegalArgumentException.class);
+      assertThat(stub.requestCount()).isZero();
     }
   }
 

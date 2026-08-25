@@ -93,6 +93,13 @@ public final class WikidataEntityResolver implements EntityResolver {
 
   /** The raw entity node, or null when Wikidata does not have it. Shared with the adapter. */
   JsonNode entity(String qid) {
+    Objects.requireNonNull(qid, "qid");
+    if (!qid.matches("Q\\d+")) {
+      // This id becomes a JSON Pointer segment below. Once add_entity(qid) takes
+      // model-supplied strings (increment 4), an unvalidated qid is a pointer-injection
+      // surface, not just a 404 waiting to happen.
+      throw new IllegalArgumentException("not a QID: " + qid);
+    }
     JsonNode response =
         client.get(
             Map.of(
