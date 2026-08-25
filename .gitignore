@@ -9,3 +9,6 @@ __pycache__/
 _to_delete/
 
 !gradle/wrapper/gradle-wrapper.jar
+
+# Agent-isolated git worktrees are created here, inside the repo (issue #30).
+.claude/
