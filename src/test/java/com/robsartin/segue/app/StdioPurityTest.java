@@ -42,6 +42,16 @@ import org.junit.jupiter.api.io.TempDir;
  * confirmed by hand while writing this test) before checking anything: {@code initialize}, then the
  * {@code notifications/initialized} notification, then {@code tools/list}. Two response lines are
  * required, not just "no line was invalid."
+ *
+ * <p><b>FIX 6 of the increment-4a final review:</b> the handshake used to stop at {@code
+ * tools/list}, so the Gremlin traversal, the SQLite write path and the whole {@code SegueService}
+ * call path — precisely the libraries most likely to print something unexpected — were never
+ * exercised while stdout was being observed. Two {@code tools/call} requests now follow: {@code
+ * get_entity} on a QID nothing has added, and {@code find_paths} on two QIDs neither of which
+ * exists. Both are offline (no Wikidata call — {@code get_entity} and {@code find_paths} only read
+ * the local graph) and deterministic (an unknown qid always errors the same way), and both exercise
+ * the code paths FIX 1 was about: this test would have caught {@code content: []}/{@code isError:
+ * false} on a genuine error result, which the handshake alone never could.
  */
 class StdioPurityTest {
 
@@ -80,13 +90,31 @@ class StdioPurityTest {
     sendLine(stdin, "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}");
     awaitLineCount(stdout, 2, RESPONSE_TIMEOUT, "the tools/list response");
 
+    // FIX 6: exercise the Gremlin/SQLite/SegueService call path — not just the handshake —
+    // while stdout is being observed. Both calls are offline and deterministic: neither qid
+    // was ever added, so both must error rather than call out to Wikidata.
+    sendLine(
+        stdin,
+        "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":"
+            + "\"get_entity\",\"arguments\":{\"qid\":\"Q999999999\"}}}");
+    awaitLineCount(stdout, 3, RESPONSE_TIMEOUT, "the get_entity tools/call response");
+
+    sendLine(
+        stdin,
+        "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":"
+            + "\"find_paths\",\"arguments\":{\"fromQid\":\"Q999999998\",\"toQid\":"
+            + "\"Q999999997\"}}}");
+    awaitLineCount(stdout, 4, RESPONSE_TIMEOUT, "the find_paths tools/call response");
+
     process.destroy();
     stdoutReader.join(5_000);
     stderrReader.join(5_000);
 
     assertThat(stdout)
-        .as("the handshake produced at least the initialize and tools/list responses")
-        .hasSizeGreaterThanOrEqualTo(2);
+        .as(
+            "the handshake plus both tools/call requests produced four responses"
+                + " (initialize, tools/list, get_entity, find_paths)")
+        .hasSizeGreaterThanOrEqualTo(4);
 
     ObjectMapper mapper = new ObjectMapper();
     for (String line : stdout) {
@@ -109,9 +137,40 @@ class StdioPurityTest {
                     () -> new AssertionError("no stdout line carried the tools/list result")));
     assertThat(toolsListResponse.at("/result/tools")).as("five MCP tools registered").hasSize(5);
 
+    // FIX 1/FIX 6: a genuine error result must carry isError: true and a non-empty content
+    // block — this is exactly what content: [], isError: false (the bug FIX 1 fixed) would
+    // have failed.
+    JsonNode getEntityResponse = responseWithId(mapper, stdout, 3);
+    assertThat(getEntityResponse.at("/result/isError").asBoolean())
+        .as("get_entity on a never-added qid must report isError: true")
+        .isTrue();
+    assertThat(getEntityResponse.at("/result/content").size())
+        .as("content must be non-empty — a client that renders only content must not see blank")
+        .isGreaterThan(0);
+
+    JsonNode findPathsResponse = responseWithId(mapper, stdout, 4);
+    assertThat(findPathsResponse.at("/result/isError").asBoolean())
+        .as("find_paths on two never-added qids must report isError: true (FIX 8)")
+        .isTrue();
+    assertThat(findPathsResponse.at("/result/content").size())
+        .as("content must be non-empty — a client that renders only content must not see blank")
+        .isGreaterThan(0);
+
     assertThat(stderr)
         .as("stderr must carry the application's logs — proves logging did not silently vanish")
         .anyMatch(line -> line.contains("Started SegueApplication"));
+  }
+
+  /** The stdout line carrying the response to request {@code id}, parsed as JSON. */
+  private static JsonNode responseWithId(ObjectMapper mapper, List<String> stdout, int id)
+      throws IOException {
+    for (String line : stdout) {
+      JsonNode node = mapper.readTree(line);
+      if (node.has("id") && node.get("id").asInt() == id) {
+        return node;
+      }
+    }
+    throw new AssertionError("no stdout line carried a response with id " + id + ": " + stdout);
   }
 
   private Process launchStdioServer(Path database) throws IOException {
