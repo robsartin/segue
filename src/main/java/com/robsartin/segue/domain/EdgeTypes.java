@@ -22,6 +22,19 @@ public final class EdgeTypes {
   public static final EdgeType MEMBER_OF =
       register(EdgeType.direct("MEMBER_OF", "P463", "member of"));
 
+  /**
+   * A roster stated from the group's side, and the cheap half of the fix for issue #20: without it
+   * a band expands to nothing at all, because P463 lives on the member. Registered DIRECT because
+   * Wikidata really does say "group has part person" — inverting it would produce an edge whose
+   * label reads backwards.
+   *
+   * <p><b>Reverse-P463 strictly dominates this.</b> Measured on Nick Cave and the Bad Seeds
+   * (Q1051182): P527 lists 8 members, while {@code ?person wdt:P463 wd:Q1051182} returns 10 — the
+   * same 8 plus Mick Harvey and Blixa Bargeld. Keep this registration as the degraded fallback for
+   * when the Query Service is unreachable, not as the answer. See ADR 36.
+   */
+  public static final EdgeType HAS_PART = register(EdgeType.direct("HAS_PART", "P527", "has part"));
+
   // --- creative roles (Wikidata states these on the work) ----------------
   public static final EdgeType PERFORMED =
       register(EdgeType.inverted("PERFORMED", "P175", "performed"));

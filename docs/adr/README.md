@@ -123,3 +123,6 @@
 - [35. Use Jackson 3 as the single JSON library](0035-jackson-3-single-json-library.md) — _Accepted_
   Increment 4a left two Jackson major versions on the classpath, and the project used both.
   Related: [26. Expose six MCP tools, and hold back assert_edge](0026-mcp-tool-surface.md), [27. Pin the MCP protocol revision and follow its error conventions](0027-mcp-protocol-conformance.md), [32. Enforce the layering with ArchUnit](0032-layering-and-archunit.md), [25. Split ingest into a SourceAdapter and an EntityResolver SPI](0025-source-adapter-spi.md)
+- [36. Discover inverted relations with one SPARQL reverse lookup per expansion](0036-reverse-lookup-via-sparql.md) — _Accepted_
+  Expansion only ever read the claims stated ON the entity being expanded, and Wikidata states most of the vocabulary on the other end of the edge.
+  Related: [22. Anchor identity and vocabulary to Wikidata](0022-wikidata-identity-and-vocabulary.md), [25. Split ingest into a SourceAdapter and an EntityResolver SPI](0025-source-adapter-spi.md), [23. Quarantine model-generated assertions until corroborated](0023-quarantine-model-generated-assertions.md), [20. Keep valid time and assertion time independent](0020-bitemporal-time-model.md), [26. Expose six MCP tools, and hold back assert_edge](0026-mcp-tool-surface.md)

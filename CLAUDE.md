@@ -113,8 +113,21 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
 - **Wikidata states creative relations on the WORK, not the person.** Fetching an
   entity returns only claims stated on it, so expanding a film finds its director
   while expanding a person does not find their films. `EdgeType.wikidataInverted`
-  fixes the stored direction, not the discovery problem. Backlinks need a Query
-  Service call and are their own piece of work.
+  fixes the stored direction, not the discovery problem. **Fixed (ADR 36, issue
+  #20):** `WikidataSourceAdapter` runs two passes — `ClaimMapper` over the claims
+  stated ON the seed, then `ReverseClaims`, one SPARQL query to the Query Service
+  asking which items point AT it. Nick Cave went 4 edges → 88, his band 0 → 106.
+  Don't "simplify" the adapter back to one call; the second pass is the whole fix.
+- **A truthy `wdt:` triple has no references and no qualifiers.** That is why every
+  reverse-discovered edge is graded 0.80 rather than ADR 23's referenced 1.00, and
+  why it carries no `validFrom`/`validTo` — the Blixa-Bargeld-1983-to-2003 window
+  ADR 20 uses as its example only survives the forward direction. It is also why
+  `wdt:` reproduces the deprecated-statement filter for free. Not a bug, a trade.
+- **`query.wikidata.org` holds only the main graph.** Scholarly articles live on
+  `query-scholarly.wikidata.org`, so `AUTHORED` (P50) silently under-reports for an
+  academic seed: Einstein returns 32 on the main endpoint against 117 in reality.
+  No error, just a smaller number. ADR 36 records why segue documents this rather
+  than federating, and what would trigger revisiting it.
 - **`wbsearchentities` does not return P31**, so search results cannot be filtered
   by kind without one extra round trip per hit. `EntityResolver.search` therefore
   accepts a `kind` argument and deliberately does NOT apply it — a filter that
@@ -198,17 +211,18 @@ Wikidata first, deliberately — no API key, cross-domain by construction, and i
 supplies both the QID identity spine and the edge vocabulary. Uses
 `wbsearchentities` for resolution and `wbgetentities` for claims, maps a
 whitelist of properties to edge types, and turns qualifiers P580/P582 into
-`validFrom`/`validTo`.
+`validFrom`/`validTo`. Backlink discovery landed with ADR 36: one SPARQL query
+per expansion to the Query Service, covering the whole vocabulary at once and
+returning each neighbour's label and P31 inline.
 
 Design rule: adding a source must not require touching the graph layer.
 
 Retiring the placeholder QIDs in `Fixture` was deliberately left undone — it
-touches every test's expected counts and deserves its own change. Backlink
-discovery via the Query Service (see the Gotchas section) is likewise deferred.
-So is the neighbour-QID fan-out: `expand` makes exactly one call today and
-resolves nothing about the entities on the other end of its edges. Virtual
-threads are for that fan-out, bounded and resolving neighbours in parallel —
-not yet built, and increment 4's work.
+touches every test's expected counts and deserves its own change. The
+neighbour-QID fan-out is now mostly moot for Wikidata: the reverse lookup already
+returns identity for the entities it discovers, so `expandEntity` fetches only
+the ones a source could not describe. A bounded virtual-thread fan-out for that
+remainder is still unbuilt, and is a smaller job than it was.
 
 ### Slice 2 — MCP server
 

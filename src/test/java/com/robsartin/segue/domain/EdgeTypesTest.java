@@ -28,7 +28,21 @@ class EdgeTypesTest {
   @Test
   @DisplayName("all() returns the expected number of entries")
   void allReturnsExpectedCount() {
-    assertThat(EdgeTypes.all()).hasSize(12);
+    assertThat(EdgeTypes.all()).hasSize(13);
+  }
+
+  @Test
+  @DisplayName("HAS_PART is registered on P527, stated the way Wikidata states it")
+  void hasPartIsRegistered() {
+    // Issue #20: a band's roster is P527 on the GROUP, so registering it is the one thing that
+    // makes a group expand to anything at all without a Query Service call. It is a degraded
+    // fallback, not the fix — reverse-P463 strictly dominates it (10 Bad Seeds against P527's
+    // 8, verified live) — so it is registered DIRECT rather than inverted: Wikidata really does
+    // say "group has part person", and flipping it would produce an edge whose label reads
+    // backwards.
+    assertThat(EdgeTypes.HAS_PART.wikidataProperty()).isEqualTo("P527");
+    assertThat(EdgeTypes.HAS_PART.wikidataInverted()).isFalse();
+    assertThat(EdgeTypes.HAS_PART.symmetric()).isFalse();
   }
 
   @Test

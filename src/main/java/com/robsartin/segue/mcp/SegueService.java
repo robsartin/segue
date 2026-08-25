@@ -17,8 +17,10 @@ import com.robsartin.segue.port.SourceAdapter;
 import com.robsartin.segue.port.SourceAdapters;
 import com.robsartin.segue.wikidata.WikidataUnavailableException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -114,12 +116,22 @@ public final class SegueService {
    * Expand a known entity through every source that supports its kind.
    *
    * <p>An expansion can reference neighbour entities the graph has never seen, and {@link
-   * GraphStore#record} throws on an unknown endpoint. So each unknown neighbour is resolved via
-   * {@link EntityResolver#fetch} — sequentially, one HTTP round trip per new neighbour — and
-   * recorded before the edge that references it. This is deliberately the slow, correct choice over
-   * synthesising a placeholder node: a graph full of {@code Q12345}-labelled stubs is worse than an
-   * expansion that takes a few seconds. (Follow-up: a bounded virtual-thread fan-out for the
-   * neighbour fetches, not built in this increment.)
+   * GraphStore#record} throws on an unknown endpoint. Each unknown neighbour therefore has to be
+   * identified before the edge that names it can be recorded, and there are two ways to get that:
+   *
+   * <ul>
+   *   <li><b>The adapter already knew.</b> {@link ExpandResult#neighbors()} carries identity the
+   *       source learned while discovering the edge, and it is used in preference to anything else.
+   *       Wikidata's reverse lookup returns label and kind alongside each backlink in one query
+   *       (ADR 36), and after that change an expansion routinely finds seventy-odd neighbours —
+   *       enough that fetching them individually would cost more than the entire expansion did
+   *       before.
+   *   <li><b>Otherwise, fetch it.</b> {@link EntityResolver#fetch}, sequentially, one HTTP round
+   *       trip per remaining neighbour. Deliberately the slow, correct choice over synthesising a
+   *       placeholder node: a graph full of {@code Q12345}-labelled stubs is worse than an
+   *       expansion that takes a few seconds. (Follow-up: a bounded virtual-thread fan-out for the
+   *       neighbour fetches, not built in this increment.)
+   * </ul>
    *
    * <p>Neighbour fetches that fail once are not retried for the same neighbour within this call —
    * that is the bound on how many calls a dense, partly-unreachable entity can trigger, alongside
@@ -143,6 +155,10 @@ public final class SegueService {
     boolean sourceUnavailable = false;
     boolean adapterTruncated = false;
     List<AssertionRecord> collected = new ArrayList<>();
+    // Identity an adapter already knew, keyed by qid. First writer wins, matching the way the
+    // graph resolves a conflict everywhere else: two sources describing one entity differently
+    // is a real possibility, and silently preferring the later one would hide it.
+    Map<String, NodeAssertion> described = new HashMap<>();
     for (SourceAdapter adapter : adapters.all()) {
       if (!adapter.supports(node.kind())) {
         continue;
@@ -151,6 +167,9 @@ public final class SegueService {
       sourceUnavailable |= result.sourceUnavailable();
       adapterTruncated |= result.truncated();
       collected.addAll(result.assertions());
+      for (NodeAssertion neighbor : result.neighbors()) {
+        described.putIfAbsent(neighbor.qid(), neighbor);
+      }
     }
 
     boolean truncated = adapterTruncated || collected.size() > maxNewEdges;
@@ -169,13 +188,19 @@ public final class SegueService {
           continue;
         }
         if (graph.node(neighbor).isEmpty()) {
-          Optional<NodeAssertion> resolved;
-          try {
-            resolved = resolver.fetch(neighbor);
-          } catch (WikidataUnavailableException e) {
-            log.warn(
-                "expandEntity({}) neighbour {} unavailable: {}", qid, neighbor, e.getMessage());
-            resolved = Optional.empty();
+          // An adapter that already knows this entity spares a round trip. That is not a
+          // micro-optimisation since ADR 36: expanding a person now discovers seventy-odd
+          // works in one query, and fetching each of them one at a time afterwards would cost
+          // more than the whole expansion used to.
+          Optional<NodeAssertion> resolved = Optional.ofNullable(described.get(neighbor));
+          if (resolved.isEmpty()) {
+            try {
+              resolved = resolver.fetch(neighbor);
+            } catch (WikidataUnavailableException e) {
+              log.warn(
+                  "expandEntity({}) neighbour {} unavailable: {}", qid, neighbor, e.getMessage());
+              resolved = Optional.empty();
+            }
           }
           if (resolved.isEmpty()) {
             unresolvableNeighbors.add(neighbor);

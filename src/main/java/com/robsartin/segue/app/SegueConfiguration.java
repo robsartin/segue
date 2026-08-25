@@ -74,7 +74,11 @@ public class SegueConfiguration {
 
   @Bean
   SourceAdapters sourceAdapters(WikidataEntityResolver resolver, Clock clock) {
-    return new SourceAdapters(List.of(new WikidataSourceAdapter(resolver, clock)));
+    // Two endpoints, two clients: the resolver's Action API client for the claims stated on an
+    // entity, and a second aimed at the Query Service for the ones stated about it (ADR 36).
+    // Both are plain Java constructed here, so the adapter needs no framework knowledge (ADR 25).
+    return new SourceAdapters(
+        List.of(new WikidataSourceAdapter(resolver, WikidataClient.queryService(), clock)));
   }
 
   @Bean

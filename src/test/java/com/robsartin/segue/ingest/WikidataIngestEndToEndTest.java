@@ -68,7 +68,11 @@ class WikidataIngestEndToEndTest {
       stub.enqueueBody(resource("/wikidata/proposition-claims.json"));
       WikidataEntityResolver resolver =
           new WikidataEntityResolver(new WikidataClient(stub.baseUri()), FIXED);
-      SourceAdapter adapter = new WikidataSourceAdapter(resolver, FIXED);
+      // The same stub answers both endpoints; this test queued one body, so the reverse
+      // lookup's call gets the stub's default {} and finds no backlinks. That keeps this test
+      // about durability, which is what it is for, rather than about ADR 36's second pass.
+      SourceAdapter adapter =
+          new WikidataSourceAdapter(resolver, new WikidataClient(stub.baseUri()), FIXED);
 
       ExpandResult expanded = adapter.expand(SEED, ExpandContext.defaults());
       List<AssertionRecord> claims = expanded.assertions();
