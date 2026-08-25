@@ -6,6 +6,7 @@ import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.port.ExpandContext;
+import com.robsartin.segue.port.ExpandResult;
 import com.robsartin.segue.port.SourceAdapter;
 import java.io.IOException;
 import java.io.InputStream;
@@ -13,7 +14,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -41,24 +41,54 @@ class WikidataSourceAdapterTest {
     try (StubWikidataServer stub = new StubWikidataServer()) {
       stub.enqueueBody(resource("/wikidata/proposition-claims.json"));
 
-      List<AssertionRecord> claims = adapterFor(stub).expand(SEED, ExpandContext.defaults());
+      ExpandResult result = adapterFor(stub).expand(SEED, ExpandContext.defaults());
 
-      assertThat(claims).isNotEmpty();
-      assertThat(claims).extracting(AssertionRecord::typeCode).contains("DIRECTED");
-      assertThat(claims)
+      assertThat(result.assertions()).isNotEmpty();
+      assertThat(result.assertions()).extracting(AssertionRecord::typeCode).contains("DIRECTED");
+      assertThat(result.assertions())
           .allSatisfy(c -> assertThat(c.provenance().sourceId()).isEqualTo("wikidata"));
+      assertThat(result.sourceUnavailable()).isFalse();
+      assertThat(result.truncated()).isFalse();
     }
   }
 
   @Test
-  @DisplayName("it honours maxNewEdges, and stops before fetching what it would discard")
+  @DisplayName("it honours maxNewEdges")
   void honoursBound() throws IOException {
     try (StubWikidataServer stub = new StubWikidataServer()) {
       stub.enqueueBody(resource("/wikidata/proposition-claims.json"));
 
-      List<AssertionRecord> claims = adapterFor(stub).expand(SEED, new ExpandContext(2));
+      ExpandResult result = adapterFor(stub).expand(SEED, new ExpandContext(2));
 
-      assertThat(claims).hasSize(2);
+      assertThat(result.assertions()).hasSize(2);
+    }
+  }
+
+  @Test
+  @DisplayName("a bound narrower than the available claims is reported as truncated")
+  void reportsTruncation() throws IOException {
+    // Three distinct outcomes collapse into the same short list without this: unavailable,
+    // genuinely nothing to say, and cut short by maxNewEdges. The MCP tool layer needs to
+    // tell those apart to report a shortfall to the model.
+    try (StubWikidataServer stub = new StubWikidataServer()) {
+      stub.enqueueBody(resource("/wikidata/proposition-claims.json"));
+
+      ExpandResult result = adapterFor(stub).expand(SEED, new ExpandContext(2));
+
+      assertThat(result.truncated()).isTrue();
+      assertThat(result.sourceUnavailable()).isFalse();
+    }
+  }
+
+  @Test
+  @DisplayName("a bound that does not cut anything off is not reported as truncated")
+  void doesNotReportTruncationWhenNothingWasCut() throws IOException {
+    try (StubWikidataServer stub = new StubWikidataServer()) {
+      stub.enqueueBody(resource("/wikidata/proposition-claims.json"));
+
+      ExpandResult result = adapterFor(stub).expand(SEED, ExpandContext.defaults());
+
+      assertThat(result.truncated()).isFalse();
     }
   }
 
@@ -73,22 +103,28 @@ class WikidataSourceAdapterTest {
         stub.enqueueBody("{}");
       }
 
-      assertThat(adapterFor(stub).expand(SEED, ExpandContext.defaults())).isEmpty();
+      ExpandResult result = adapterFor(stub).expand(SEED, ExpandContext.defaults());
+
+      assertThat(result.assertions()).isEmpty();
+      assertThat(result.sourceUnavailable()).isTrue();
+      assertThat(result.truncated()).isFalse();
     }
   }
 
   @Test
-  @DisplayName("an unknown seed yields nothing")
+  @DisplayName("an unknown seed yields nothing, and is not reported as unavailable")
   void unknownSeedIsEmpty() {
     try (StubWikidataServer stub = new StubWikidataServer()) {
       stub.enqueueBody("{\"entities\":{\"Q999999999\":{\"missing\":\"\"}}}");
 
-      assertThat(
-              adapterFor(stub)
-                  .expand(
-                      new NodeRecord("Q999999999", NodeKind.PERSON, "Nobody"),
-                      ExpandContext.defaults()))
-          .isEmpty();
+      ExpandResult result =
+          adapterFor(stub)
+              .expand(
+                  new NodeRecord("Q999999999", NodeKind.PERSON, "Nobody"),
+                  ExpandContext.defaults());
+
+      assertThat(result.assertions()).isEmpty();
+      assertThat(result.sourceUnavailable()).isFalse();
     }
   }
 

@@ -5,6 +5,7 @@ import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.port.ExpandContext;
+import com.robsartin.segue.port.ExpandResult;
 import com.robsartin.segue.port.SourceAdapter;
 import java.time.Clock;
 import java.util.List;
@@ -44,21 +45,23 @@ public final class WikidataSourceAdapter implements SourceAdapter {
   }
 
   @Override
-  public List<AssertionRecord> expand(NodeRecord seed, ExpandContext ctx) {
+  public ExpandResult expand(NodeRecord seed, ExpandContext ctx) {
     Objects.requireNonNull(seed, "seed");
     Objects.requireNonNull(ctx, "ctx");
     try {
       JsonNode entity = resolver.entity(seed.qid());
       if (entity == null) {
-        return List.of();
+        return ExpandResult.of(List.of());
       }
-      return ClaimMapper.map(seed.qid(), entity, clock.instant()).stream()
-          .limit(ctx.maxNewEdges())
-          .toList();
+      List<AssertionRecord> mapped = ClaimMapper.map(seed.qid(), entity, clock.instant());
+      List<AssertionRecord> limited = mapped.stream().limit(ctx.maxNewEdges()).toList();
+      boolean truncated = limited.size() < mapped.size();
+      return new ExpandResult(limited, false, truncated);
     } catch (WikidataUnavailableException e) {
-      // Deliberately swallowed. The tool layer reports the shortfall to the model; throwing
-      // here would turn a partial answer into no answer.
-      return List.of();
+      // Deliberately swallowed rather than thrown. The tool layer reports the shortfall to
+      // the model via ExpandResult.sourceUnavailable(); throwing here would turn a partial
+      // answer into no answer.
+      return ExpandResult.unavailable();
     }
   }
 }

@@ -10,6 +10,7 @@ import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.ExpandContext;
+import com.robsartin.segue.port.ExpandResult;
 import com.robsartin.segue.port.GraphStore;
 import com.robsartin.segue.port.SourceAdapter;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
@@ -69,7 +70,8 @@ class WikidataIngestEndToEndTest {
           new WikidataEntityResolver(new WikidataClient(stub.baseUri()), FIXED);
       SourceAdapter adapter = new WikidataSourceAdapter(resolver, FIXED);
 
-      List<AssertionRecord> claims = adapter.expand(SEED, ExpandContext.defaults());
+      ExpandResult expanded = adapter.expand(SEED, ExpandContext.defaults());
+      List<AssertionRecord> claims = expanded.assertions();
       expectedEdges = claims.size();
 
       // Every entity an edge touches must exist before the edge does. The neighbours are

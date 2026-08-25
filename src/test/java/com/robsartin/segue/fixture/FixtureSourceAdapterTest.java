@@ -2,12 +2,11 @@ package com.robsartin.segue.fixture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.port.ExpandContext;
+import com.robsartin.segue.port.ExpandResult;
 import com.robsartin.segue.port.SourceAdapter;
-import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -19,35 +18,41 @@ class FixtureSourceAdapterTest {
   @Test
   @DisplayName("it expands a seed to the claims the fixture makes about it")
   void expandsSeed() {
-    List<AssertionRecord> claims =
+    ExpandResult result =
         adapter.expand(
             new NodeRecord(Fixture.CAVE, NodeKind.PERSON, "Nick Cave"), ExpandContext.defaults());
 
-    assertThat(claims).isNotEmpty();
-    assertThat(claims)
+    assertThat(result.assertions()).isNotEmpty();
+    assertThat(result.assertions())
         .allSatisfy(
             c ->
                 assertThat(c.fromQid().equals(Fixture.CAVE) || c.toQid().equals(Fixture.CAVE))
                     .isTrue());
+    assertThat(result.sourceUnavailable()).isFalse();
+    assertThat(result.truncated()).isFalse();
   }
 
   @Test
-  @DisplayName("it honours maxNewEdges rather than returning everything")
+  @DisplayName("it honours maxNewEdges rather than returning everything, and reports truncation")
   void honoursBound() {
-    List<AssertionRecord> claims =
+    ExpandResult result =
         adapter.expand(
             new NodeRecord(Fixture.CAVE, NodeKind.PERSON, "Nick Cave"), new ExpandContext(2));
 
-    assertThat(claims).hasSize(2);
+    assertThat(result.assertions()).hasSize(2);
+    assertThat(result.truncated()).isTrue();
   }
 
   @Test
   @DisplayName("an unknown seed yields nothing, and is not an error")
   void unknownSeedIsEmpty() {
-    assertThat(
-            adapter.expand(
-                new NodeRecord("Q999999", NodeKind.PERSON, "Nobody"), ExpandContext.defaults()))
-        .isEmpty();
+    ExpandResult result =
+        adapter.expand(
+            new NodeRecord("Q999999", NodeKind.PERSON, "Nobody"), ExpandContext.defaults());
+
+    assertThat(result.assertions()).isEmpty();
+    assertThat(result.sourceUnavailable()).isFalse();
+    assertThat(result.truncated()).isFalse();
   }
 
   @Test

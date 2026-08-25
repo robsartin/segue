@@ -1,9 +1,7 @@
 package com.robsartin.segue.port;
 
-import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
-import java.util.List;
 
 /**
  * A source of relationships.
@@ -27,7 +25,9 @@ public interface SourceAdapter {
    *
    * <p>Implementations return what they successfully gathered rather than throwing on partial
    * failure: the caller is a language model, and a partial result it can see beats an exception it
-   * can only retry.
+   * can only retry. {@link ExpandResult} carries why the list might be short, because the MCP tool
+   * layer has to report that shortfall and an empty list alone cannot say whether the source was
+   * unreachable, the entity had nothing to say, or {@code ctx} cut it short.
    */
-  List<AssertionRecord> expand(NodeRecord seed, ExpandContext ctx);
+  ExpandResult expand(NodeRecord seed, ExpandContext ctx);
 }

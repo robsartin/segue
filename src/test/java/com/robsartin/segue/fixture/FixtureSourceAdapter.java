@@ -4,6 +4,7 @@ import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.port.ExpandContext;
+import com.robsartin.segue.port.ExpandResult;
 import com.robsartin.segue.port.SourceAdapter;
 import java.util.List;
 
@@ -27,10 +28,13 @@ public final class FixtureSourceAdapter implements SourceAdapter {
   }
 
   @Override
-  public List<AssertionRecord> expand(NodeRecord seed, ExpandContext ctx) {
-    return Fixture.assertions().stream()
-        .filter(a -> a.fromQid().equals(seed.qid()) || a.toQid().equals(seed.qid()))
-        .limit(ctx.maxNewEdges())
-        .toList();
+  public ExpandResult expand(NodeRecord seed, ExpandContext ctx) {
+    List<AssertionRecord> matching =
+        Fixture.assertions().stream()
+            .filter(a -> a.fromQid().equals(seed.qid()) || a.toQid().equals(seed.qid()))
+            .toList();
+    List<AssertionRecord> limited = matching.stream().limit(ctx.maxNewEdges()).toList();
+    boolean truncated = limited.size() < matching.size();
+    return new ExpandResult(limited, false, truncated);
   }
 }
