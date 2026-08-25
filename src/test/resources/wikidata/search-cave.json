@@ -1,0 +1,12 @@
+{
+  "searchinfo": { "search": "nick cave" },
+  "search": [
+    { "id": "Q214601", "label": "Nick Cave",
+      "description": "Australian musician, songwriter and author" },
+    { "id": "Q6013406", "label": "Nick Cave",
+      "description": "American sculptor and performance artist" },
+    { "id": "Q19863965", "label": "Nick Cave and the Bad Seeds",
+      "description": "Australian rock band" }
+  ],
+  "success": 1
+}
