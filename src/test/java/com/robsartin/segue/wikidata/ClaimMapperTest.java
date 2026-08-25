@@ -110,6 +110,16 @@ class ClaimMapperTest {
   }
 
   @Test
+  @DisplayName("a deprecated statement is dropped, even though it carries a reference")
+  void dropsDeprecatedStatements() {
+    // P737 in the fixture is rank "deprecated" with a non-empty references array — Wikidata
+    // marks these wrong-but-recorded. Without the guard this would land at confidence 1.00,
+    // the top of ADR 23's scale, and PathRanking would surface a known-false claim first.
+    assertThat(ClaimMapper.map(SUBJECT, entity, PULL))
+        .noneMatch(a -> a.typeCode().equals("INFLUENCED_BY"));
+  }
+
+  @Test
   @DisplayName("a snak with no value is skipped rather than crashing the whole entity")
   void skipsValuelessSnaks() {
     // P2047 in the fixture is snaktype "somevalue" — Wikidata's "we know there is one but

@@ -36,6 +36,11 @@
               "P582": [ { "snaktype": "value", "property": "P582",
                   "datavalue": { "type": "time", "value": { "time": "+2003-07-31T00:00:00Z", "precision": 11 } } } ]
             } } ],
+        "P737": [
+          { "mainsnak": { "snaktype": "value", "property": "P737",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q1064" } } },
+            "rank": "deprecated",
+            "references": [ { "hash": "deprecated-but-referenced" } ] } ],
         "P1476": [
           { "mainsnak": { "snaktype": "value", "property": "P1476",
               "datavalue": { "type": "monolingualtext", "value": { "text": "The Proposition", "language": "en" } } },

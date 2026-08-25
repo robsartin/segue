@@ -77,6 +77,12 @@ public final class ClaimMapper {
       // "somevalue"/"novalue": Wikidata knows there is one but not what it is. Nothing to store.
       return Optional.empty();
     }
+    if ("deprecated".equals(statement.path("rank").asText("normal"))) {
+      // Wikidata marks these wrong-but-recorded. Ingesting one as a fact — at 1.00, since
+      // deprecated statements usually carry the reference that got them recorded — would
+      // put a known-false claim at the top of PathRanking. See ADR 23.
+      return Optional.empty();
+    }
     String objectQid = snak.at("/datavalue/value/id").asText(null);
     if (objectQid == null || objectQid.isBlank()) {
       return Optional.empty();
