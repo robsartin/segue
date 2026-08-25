@@ -120,3 +120,6 @@
 - [33. Keep the taste layer separate from the world-facts layer](0033-taste-layer-separation.md) — _Accepted_
   Segue holds two kinds of claim that look superficially alike and behave nothing alike.
   Related: [19. Make the append-only assertion log the source of truth](0019-assertion-log-source-of-truth.md), [24. Persist the assertion log in SQLite and project the graph at boot](0024-sqlite-assertion-log.md), [26. Expose six MCP tools, and hold back assert_edge](0026-mcp-tool-surface.md), [16. Privacy and data handling](0016-privacy-and-data-handling.md), [20. Keep valid time and assertion time independent](0020-bitemporal-time-model.md)
+- [35. Use Jackson 3 as the single JSON library](0035-jackson-3-single-json-library.md) — _Accepted_
+  Increment 4a left two Jackson major versions on the classpath, and the project used both.
+  Related: [26. Expose six MCP tools, and hold back assert_edge](0026-mcp-tool-surface.md), [27. Pin the MCP protocol revision and follow its error conventions](0027-mcp-protocol-conformance.md), [32. Enforce the layering with ArchUnit](0032-layering-and-archunit.md), [25. Split ingest into a SourceAdapter and an EntityResolver SPI](0025-source-adapter-spi.md)

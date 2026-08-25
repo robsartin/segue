@@ -232,4 +232,30 @@ class ArchitectureTest {
           .dependOnClassesThat()
           .resideInAnyPackage("..tinker..", "..jena..", "..sqlite..")
           .because("ADR 32: adapters are siblings, not collaborators");
+
+  /**
+   * One JSON library, one major version. Jackson 3 lives under {@code tools.jackson}; Jackson 2's
+   * {@code com.fasterxml.jackson.core}/{@code .databind}/{@code .datatype} packages are what this
+   * rule keeps out. {@code com.fasterxml.jackson.annotation} is deliberately NOT listed: Jackson 3
+   * kept its annotations on the old coordinates, so {@code ToolResult}'s {@code @JsonValue} is a
+   * Jackson 3 import despite how it reads.
+   *
+   * <p>The two-major split was never a decision anyone made, and it is what let issue #18 happen —
+   * the tool surface was serialised by the one Jackson that cannot write a {@code
+   * java.time.Instant} without an extra module, while the MCP SDK next to it used Jackson 3, which
+   * can.
+   */
+  @ArchTest
+  static final ArchRule onlyJackson3 =
+      noClasses()
+          .should()
+          .dependOnClassesThat()
+          .resideInAnyPackage(
+              "com.fasterxml.jackson.core..",
+              "com.fasterxml.jackson.databind..",
+              "com.fasterxml.jackson.datatype..")
+          .because(
+              "ADR 35: Jackson 3 is the one JSON library — the MCP SDK already speaks it and"
+                  + " it handles java.time natively, so a second major on the classpath buys"
+                  + " nothing and costs a serialisation bug (issue #18)");
 }
