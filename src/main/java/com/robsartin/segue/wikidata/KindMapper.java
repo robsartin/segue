@@ -58,7 +58,12 @@ public final class KindMapper {
   private KindMapper() {}
 
   private static void put(String qid, NodeKind kind) {
-    BY_CLASS.put(qid, kind);
+    NodeKind prior = BY_CLASS.put(qid, kind);
+    if (prior != null) {
+      // Two registrations for the same Wikidata class is a whitelist bug: one of them would
+      // silently vanish rather than raising an error.
+      throw new IllegalStateException("two kinds claim " + qid + ": " + prior + " and " + kind);
+    }
   }
 
   /**

@@ -50,7 +50,19 @@ public final class ClaimMapper {
   static {
     for (EdgeType type : EdgeTypes.all()) {
       if (type.wikidataProperty() != null) {
-        BY_PROPERTY.put(type.wikidataProperty(), type);
+        EdgeType prior = BY_PROPERTY.put(type.wikidataProperty(), type);
+        if (prior != null) {
+          // put() silently keeps the last write. Two EdgeTypes claiming the same Wikidata
+          // property is a vocabulary bug, not a valid configuration — one of them would
+          // vanish from ingest with no error.
+          throw new IllegalStateException(
+              "two edge types claim "
+                  + type.wikidataProperty()
+                  + ": "
+                  + prior.code()
+                  + " and "
+                  + type.code());
+        }
       }
     }
   }

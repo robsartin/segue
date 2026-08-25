@@ -46,6 +46,21 @@ class EdgeTypesTest {
   }
 
   @Test
+  @DisplayName("every registered Wikidata property maps to exactly one edge type")
+  void wikidataPropertiesAreDistinct() {
+    // ClaimMapper derives its whitelist from EdgeTypes, keyed by wikidataProperty. Two types
+    // claiming the same property would make one vanish from ingest silently (ClaimMapper's
+    // static block now throws on that, but the vocabulary itself should never collide).
+    List<String> properties =
+        EdgeTypes.all().stream()
+            .map(EdgeType::wikidataProperty)
+            .filter(java.util.Objects::nonNull)
+            .toList();
+
+    assertThat(properties).doesNotHaveDuplicates();
+  }
+
+  @Test
   @DisplayName("byCode on an unknown code returns empty")
   void unknownCodeIsEmpty() {
     assertThat(EdgeTypes.byCode("NOT_A_REAL_CODE")).isEmpty();
