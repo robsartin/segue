@@ -4,6 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import com.robsartin.segue.domain.AssertionRecord;
+import com.robsartin.segue.domain.NodeAssertion;
+import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.domain.Provenance;
+import com.robsartin.segue.port.AssertionLog;
+import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -52,12 +58,29 @@ import tools.jackson.databind.ObjectMapper;
  * the local graph) and deterministic (an unknown qid always errors the same way), and both exercise
  * the code paths FIX 1 was about: this test would have caught {@code content: []}/{@code isError:
  * false} on a genuine error result, which the handshake alone never could.
+ *
+ * <p><b>Issue #23:</b> every one of those {@code tools/call} requests takes the ERROR path, and an
+ * error {@code ToolResult} carries {@code payload = null} by construction — so no {@code PathView},
+ * no {@code ProvenanceView} and no {@code java.time.Instant} has ever reached the mapper from this
+ * test. That is exactly how issue #18, a serialisation defect inside {@code find_paths}, survived a
+ * green build despite an end-to-end test calling the broken tool over the real transport: the one
+ * input shape that could have caught it was the one shape never sent. {@link
+ * #successfulFindPathsSurvivesTheStdioRoundTrip} closes that gap.
  */
 class StdioPurityTest {
 
   private static final String PROTOCOL_REVISION = "2025-11-25";
   private static final Duration STARTUP_TIMEOUT = Duration.ofSeconds(30);
   private static final Duration RESPONSE_TIMEOUT = Duration.ofSeconds(15);
+
+  // Placeholder QIDs in the same Q9000xx range the test fixture uses, and for the same reason:
+  // they cannot collide with a real Wikidata identifier. See Fixture's Javadoc.
+  private static final String CAVE = "Q900001";
+  private static final String PROPOSITION = "Q900009";
+  private static final String HILLCOAT = "Q900010";
+
+  /** Fixed, so the round-tripped timestamp can be compared rather than merely shape-checked. */
+  private static final Instant SEEDED_AT = Instant.parse("2026-08-01T09:00:00.123456Z");
 
   private Process process;
 
@@ -159,6 +182,134 @@ class StdioPurityTest {
     assertThat(stderr)
         .as("stderr must carry the application's logs — proves logging did not silently vanish")
         .anyMatch(line -> line.contains("Started SegueApplication"));
+  }
+
+  /**
+   * The success path over the real transport (issue #23): a {@code find_paths} that returns routes.
+   *
+   * <p>The test above cannot catch a serialisation defect in {@code find_paths} however carefully
+   * it asserts, because both of its {@code tools/call} requests take the error path and an error
+   * result's payload is null — nothing carrying an {@code Instant} is ever written. This test is
+   * the one that puts a real {@code PathView} — hops, edges, and the {@code ProvenanceView}
+   * timestamp that broke in issue #18 — through the serialiser, the MCP SDK's own framing, the
+   * stdio pipe, and back out as text this JVM parses.
+   *
+   * <p><b>How the graph gets populated with no network call.</b> A successful {@code find_paths}
+   * needs entities in the graph, and the only tools that put them there — {@code add_entity} and
+   * {@code expand_entity} — both call Wikidata. The live tests are tagged and excluded from {@code
+   * check} for a good reason (a recorded fixture cannot tell you the upstream API changed), so this
+   * does not go near them. Instead it writes an assertion log directly — three nodes and two edges
+   * into a temporary SQLite file — and points the subprocess at it with {@code -Dsegue.database}.
+   * The boot projection ({@code GraphProjector}, ADR 19/ADR 24) rebuilds the graph from that log
+   * exactly as it does for a real database, so the server under test reached its populated state
+   * through production code rather than a test-only back door.
+   *
+   * <p>The alternative considered was injecting a stub Wikidata endpoint into the subprocess so the
+   * handshake could {@code add_entity} for real. That needs a production wiring seam whose only
+   * purpose is to be overridden by a test, and it would still end up loading the graph through this
+   * same projection — so it costs main-source complexity to reach the same place.
+   *
+   * <p>The seeded route is deliberately two hops (Cave → The Proposition → Hillcoat, joined by two
+   * different creative-role edges), so "every hop carries provenance" has more than one hop to be
+   * true of. {@code maxHops} is pinned to 2 rather than left to default, so the assertion on the
+   * route's length cannot start passing for the wrong reason if the default changes.
+   */
+  @Test
+  void successfulFindPathsSurvivesTheStdioRoundTrip(@TempDir Path tempDir) throws Exception {
+    Path database = tempDir.resolve("stdio-find-paths-test.db");
+    seedTwoHopRoute(database);
+
+    List<String> stdout = new CopyOnWriteArrayList<>();
+    List<String> stderr = new CopyOnWriteArrayList<>();
+
+    process = launchStdioServer(database);
+    Thread stdoutReader = drain(process.getInputStream(), stdout);
+    Thread stderrReader = drain(process.getErrorStream(), stderr);
+    stdoutReader.start();
+    stderrReader.start();
+
+    awaitStderrContains(stderr, "Started SegueApplication", STARTUP_TIMEOUT);
+
+    OutputStream stdin = process.getOutputStream();
+    sendLine(stdin, initializeRequest());
+    awaitLineCount(stdout, 1, RESPONSE_TIMEOUT, "the initialize response");
+    sendLine(stdin, "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}");
+
+    sendLine(
+        stdin,
+        "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":"
+            + "\"find_paths\",\"arguments\":{\"fromQid\":\""
+            + CAVE
+            + "\",\"toQid\":\""
+            + HILLCOAT
+            + "\",\"maxHops\":2}}}");
+    awaitLineCount(stdout, 2, RESPONSE_TIMEOUT, "the find_paths tools/call response");
+
+    process.destroy();
+    stdoutReader.join(5_000);
+    stderrReader.join(5_000);
+
+    ObjectMapper mapper = new ObjectMapper();
+    JsonNode response = responseWithId(mapper, stdout, 2);
+
+    assertThat(response.at("/result/isError").asBoolean())
+        .as("find_paths between two seeded, connected entities must succeed: %s", response)
+        .isFalse();
+    assertThat(response.at("/result/content").size())
+        .as("content must be non-empty — a client that renders only content must not see blank")
+        .isGreaterThan(0);
+    assertThat(response.at("/result/structuredContent/payload").size())
+        .as("structuredContent must carry at least one route: %s", response)
+        .isGreaterThan(0);
+
+    JsonNode hops = response.at("/result/structuredContent/payload/0/hops");
+    assertThat(hops.size()).as("the seeded route is two hops long: %s", response).isEqualTo(2);
+    for (JsonNode hop : hops) {
+      JsonNode sources = hop.at("/edge/sources");
+      assertThat(sources.size())
+          .as("every hop must be citable — an uncited hop is the payoff feature missing: %s", hop)
+          .isGreaterThan(0);
+      for (JsonNode source : sources) {
+        JsonNode assertedAt = source.get("assertedAt");
+        // The exact shape issue #18 got wrong. A mapper without java.time support either throws
+        // while writing this value or emits an epoch number; insisting on a parseable ISO-8601
+        // string is what distinguishes a citable timestamp from a number a reader cannot cite.
+        assertThat(assertedAt.isString())
+            .as("assertedAt must reach the wire as an ISO-8601 string, not a number: %s", source)
+            .isTrue();
+        assertThat(Instant.parse(assertedAt.stringValue()))
+            .as("and must survive the round trip unchanged, to sub-second precision")
+            .isEqualTo(SEEDED_AT);
+      }
+    }
+  }
+
+  /**
+   * Write the assertion log the subprocess will boot from: Cave → The Proposition ← Hillcoat.
+   *
+   * <p>Written through {@link SqliteAssertionLog} rather than as raw SQL on purpose — the schema is
+   * that class's business, and a test that hand-rolled the {@code INSERT} would keep passing after
+   * the log's storage format changed while the real server could no longer read the file. The
+   * connection is closed before the subprocess starts, so the two never hold the file at once.
+   *
+   * <p>Nothing is written to a {@code GraphStore} here. The subprocess builds its own graph by
+   * replaying this log at boot, which is the point: the route the test asks for exists only if the
+   * production projection path works.
+   *
+   * <p>The file lives under the test's {@code @TempDir}, which JUnit deletes afterwards — including
+   * the {@code -wal}/{@code -shm} companions SQLite may leave beside it.
+   */
+  private static void seedTwoHopRoute(Path database) {
+    Provenance provenance = new Provenance("wikidata", "S-stdio-seed", SEEDED_AT, 0.8);
+    try (AssertionLog log = new SqliteAssertionLog(database)) {
+      log.append(new NodeAssertion(CAVE, NodeKind.PERSON, "Nick Cave", provenance));
+      log.append(new NodeAssertion(PROPOSITION, NodeKind.WORK, "The Proposition", provenance));
+      log.append(new NodeAssertion(HILLCOAT, NodeKind.PERSON, "John Hillcoat", provenance));
+      // Two different creative roles, so neither hop is a mirror of the other. Both point at the
+      // work, because Wikidata states creative relations on the work — see CLAUDE.md's gotchas.
+      log.append(new AssertionRecord(CAVE, PROPOSITION, "COMPOSED_FOR", null, null, provenance));
+      log.append(new AssertionRecord(HILLCOAT, PROPOSITION, "DIRECTED", null, null, provenance));
+    }
   }
 
   /** The stdout line carrying the response to request {@code id}, parsed as JSON. */
