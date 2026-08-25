@@ -9,6 +9,7 @@ import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.port.ExpandContext;
 import com.robsartin.segue.port.ExpandResult;
+import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -46,7 +47,17 @@ class WikidataLiveSmokeTest {
    */
   private static final String PROPOSITION = "Q180337";
 
+  /**
+   * Nick Cave and the Bad Seeds. A GROUP, and the seed that expanded to nothing at all before ADR
+   * 36: the band's own item carries only P527, and P463 lives on each member.
+   */
+  private static final String BAD_SEEDS = "Q1051182";
+
   private final WikidataEntityResolver resolver = new WikidataEntityResolver(new WikidataClient());
+
+  private WikidataSourceAdapter adapter() {
+    return new WikidataSourceAdapter(resolver, WikidataClient.queryService(), Clock.systemUTC());
+  }
 
   @Test
   @DisplayName("wbsearchentities still returns id, label and description")
@@ -72,7 +83,7 @@ class WikidataLiveSmokeTest {
   @DisplayName("a real expansion still produces whitelisted, attributed claims")
   void expansionStillWorks() {
     ExpandResult result =
-        new WikidataSourceAdapter(resolver, java.time.Clock.systemUTC())
+        adapter()
             .expand(
                 new NodeRecord(PROPOSITION, NodeKind.WORK, "The Proposition"),
                 new ExpandContext(50));
@@ -90,5 +101,69 @@ class WikidataLiveSmokeTest {
               assertThat(c.provenance().confidence()).isBetween(0.80, 1.00);
               assertThat(c.typeCode()).isNotBlank();
             });
+  }
+
+  @Test
+  @DisplayName("a PERSON seed now reaches the works that name them, not just their memberships")
+  void personSeedReachesTheWorks() {
+    // Issue #20's first symptom, against the live API. Before ADR 36 this returned exactly four
+    // MEMBER_OF edges, because those are the only vocabulary claims stated on Nick Cave's own
+    // item. A count is not asserted — Wikidata changes — but "strictly more than the four
+    // forward claims, and at least one creative role among them" is the property that broke.
+    ExpandResult result =
+        adapter()
+            .expand(new NodeRecord(CAVE, NodeKind.PERSON, "Nick Cave"), new ExpandContext(200));
+
+    assertThat(result.sourceUnavailable()).isFalse();
+    assertThat(result.assertions()).hasSizeGreaterThan(4);
+    assertThat(result.assertions())
+        .extracting(AssertionRecord::typeCode)
+        .containsAnyOf("COMPOSED_FOR", "ACTED_IN", "WROTE_SCREENPLAY_FOR", "DIRECTED", "AUTHORED");
+    // The inline identities are the reason this costs two calls rather than seventy-odd.
+    assertThat(result.neighbors()).isNotEmpty();
+    assertThat(result.neighbors()).allSatisfy(n -> assertThat(n.label()).isNotBlank());
+  }
+
+  @Test
+  @DisplayName("a GROUP seed now finds its members, which reverse-P463 knows and P527 does not")
+  void groupSeedFindsItsMembers() {
+    // Issue #20's second symptom: this seed returned ZERO edges. Both halves of the fix show up
+    // here — P527 gives HAS_PART from the band's own item, and the reverse P463 lookup gives
+    // MEMBER_OF from the members', which is the half that includes Mick Harvey and Blixa
+    // Bargeld. Asserting on MEMBER_OF specifically is what would catch a regression to the
+    // P527-only fallback, since that alone would still leave this list non-empty.
+    ExpandResult result =
+        adapter()
+            .expand(
+                new NodeRecord(BAD_SEEDS, NodeKind.GROUP, "Nick Cave and the Bad Seeds"),
+                new ExpandContext(200));
+
+    assertThat(result.sourceUnavailable()).isFalse();
+    assertThat(result.assertions()).isNotEmpty();
+    assertThat(result.assertions())
+        .filteredOn(a -> a.typeCode().equals("MEMBER_OF"))
+        .extracting(AssertionRecord::fromQid)
+        .contains(CAVE);
+  }
+
+  @Test
+  @DisplayName("the Query Service still answers the reverse question for the whole vocabulary")
+  void reverseLookupStillWorks() {
+    // The positive control for ADR 36 specifically. A recorded SPARQL fixture cannot tell you
+    // that WDQS changed its result shape, renamed a binding, or started refusing the query.
+    ReverseClaims.Result found =
+        new ReverseClaims(WikidataClient.queryService())
+            .lookup(CAVE, 200, Clock.systemUTC().instant());
+
+    assertThat(found.assertions()).isNotEmpty();
+    assertThat(found.assertions())
+        .allSatisfy(
+            a -> {
+              assertThat(a.provenance().sourceId()).isEqualTo("wikidata");
+              assertThat(a.provenance().confidence()).isEqualTo(0.80);
+              assertThat(a.typeCode()).isNotBlank();
+            });
+    assertThat(found.neighbors()).isNotEmpty();
+    assertThat(found.neighbors()).allSatisfy(n -> assertThat(n.qid()).matches("Q\\d+"));
   }
 }

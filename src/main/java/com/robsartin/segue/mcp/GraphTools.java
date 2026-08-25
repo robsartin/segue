@@ -45,16 +45,20 @@ public class GraphTools {
           kind (currently Wikidata) and recording what they find as new edges and, where needed, \
           new neighbour nodes. The entity must already be in the graph — call add_entity first.
 
-          Cost: every neighbour this entity connects to that the graph has not seen before costs \
-          one extra network round trip to resolve its identity before the edge can be recorded. A \
-          well-connected entity's first expansion is therefore commonly 10-30 HTTP calls and can \
-          take several seconds; expanding the same entity again afterward is fast, because its \
-          neighbours are already known nodes. Tell the user to expect the wait rather than \
-          assuming the call has hung.
+          This works on a person or a band, not only on a film or an album. Wikidata states a \
+          creative relation once, on the WORK ("this film's director is X"), so expanding a person \
+          also asks which items name them. A well-known musician commonly yields 80-100 edges.
+
+          Cost: two network calls for the expansion itself, plus one per neighbour whose identity \
+          the source could not supply along the way. That is usually a handful, so a first \
+          expansion typically takes a few seconds; expanding the same entity again afterward is \
+          faster, because its neighbours are already known nodes. Tell the user to expect a short \
+          wait rather than assuming the call has hung.
 
           maxNewEdges bounds how many new assertions this call will consider; omit it to use the \
-          server's configured default. The result reports whether it had to stop early at that \
-          bound, or could not resolve some neighbours.\
+          server's configured default. The bound keeps the most-linked neighbours rather than an \
+          arbitrary slice, so a small bound still returns the famous ones first. The result reports \
+          whether it had to stop early at that bound, or could not resolve some neighbours.\
           """,
       annotations =
           @McpTool.McpAnnotations(

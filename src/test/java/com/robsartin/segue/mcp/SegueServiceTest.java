@@ -264,6 +264,73 @@ class SegueServiceTest {
   }
 
   @Test
+  @DisplayName("expandEntity uses the identity an adapter supplied instead of fetching it again")
+  void expandEntityUsesInlineNeighbours() {
+    // ADR 36. Wikidata's reverse lookup already knows each neighbour's label and kind, because
+    // one SPARQL query returns them alongside the backlinks. Fetching them again would undo the
+    // saving: expanding Nick Cave finds seventy-odd works, and a round trip each is the cost
+    // that made the reverse lookup look unaffordable in the first place.
+    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+    NodeAssertion inline = new NodeAssertion("Q2", NodeKind.WORK, "The Proposition", WIKIDATA);
+    AssertionRecord edge = new AssertionRecord("Q1", "Q2", "COMPOSED_FOR", null, null, WIKIDATA);
+    SourceAdapter adapter =
+        new StubSourceAdapter(
+            "inline", new ExpandResult(List.of(edge), List.of(inline), false, false));
+
+    ToolResult<SegueService.ExpansionSummary> result = service(adapter).expandEntity("Q1", 10);
+
+    assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
+    assertThat(resolver.fetchCallCount()).isZero();
+    assertThat(result.payload().nodesAdded()).isEqualTo(1);
+    assertThat(result.payload().edgesAdded()).isEqualTo(1);
+    assertThat(graph.node("Q2")).contains(inline.toNode());
+  }
+
+  @Test
+  @DisplayName("a neighbour the adapter did not describe still falls back to a fetch")
+  void expandEntityFallsBackToFetchForUndescribedNeighbours() {
+    // The port does not oblige an adapter to know anything about the far end (see
+    // ExpandResult), so the inline map is an optimisation, never a replacement. An adapter that
+    // describes some of its neighbours and not others must not silently lose the rest.
+    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+    NodeAssertion inline = new NodeAssertion("Q2", NodeKind.WORK, "The Proposition", WIKIDATA);
+    resolver.withEntity(new NodeAssertion("Q3", NodeKind.GROUP, "Bad Seeds", WIKIDATA));
+    AssertionRecord described =
+        new AssertionRecord("Q1", "Q2", "COMPOSED_FOR", null, null, WIKIDATA);
+    AssertionRecord undescribed =
+        new AssertionRecord("Q1", "Q3", "MEMBER_OF", null, null, WIKIDATA);
+    SourceAdapter adapter =
+        new StubSourceAdapter(
+            "partly-inline",
+            new ExpandResult(List.of(described, undescribed), List.of(inline), false, false));
+
+    ToolResult<SegueService.ExpansionSummary> result = service(adapter).expandEntity("Q1", 10);
+
+    assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
+    assertThat(resolver.fetchCallCount()).isEqualTo(1);
+    assertThat(result.payload().nodesAdded()).isEqualTo(2);
+    assertThat(graph.node("Q2")).isPresent();
+    assertThat(graph.node("Q3")).isPresent();
+  }
+
+  @Test
+  @DisplayName("an inline neighbour the graph already holds is not recorded a second time")
+  void expandEntityDoesNotRerecordKnownInlineNeighbours() {
+    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+    ingest.record(new NodeAssertion("Q2", NodeKind.WORK, "The Proposition", WIKIDATA));
+    NodeAssertion inline = new NodeAssertion("Q2", NodeKind.WORK, "The Proposition", WIKIDATA);
+    AssertionRecord edge = new AssertionRecord("Q1", "Q2", "COMPOSED_FOR", null, null, WIKIDATA);
+    SourceAdapter adapter =
+        new StubSourceAdapter(
+            "inline", new ExpandResult(List.of(edge), List.of(inline), false, false));
+
+    ToolResult<SegueService.ExpansionSummary> result = service(adapter).expandEntity("Q1", 10);
+
+    assertThat(result.payload().nodesAdded()).isZero();
+    assertThat(result.payload().edgesAdded()).isEqualTo(1);
+  }
+
+  @Test
   @DisplayName("expandEntity does not call the resolver when every neighbour is already known")
   void expandEntityDoesNotResolveKnownNeighbours() {
     Fixture.seed(graph);

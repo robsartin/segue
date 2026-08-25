@@ -8,7 +8,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -27,10 +27,12 @@ import tools.jackson.databind.JsonNode;
  * person}); segue stores them from the person ({@code person DIRECTED film}). {@link
  * EdgeType#wikidataInverted()} records which, and this flips them mechanically.
  *
- * <p><b>Known limitation.</b> Fetching an entity returns only claims stated ON it, so expanding a
- * film finds its director but expanding a person does not find their films — Wikidata never stated
- * that triple on the person. Backlinks need a Query Service call and are deliberately out of scope
- * here.
+ * <p><b>This class sees half the graph, by construction.</b> Fetching an entity returns only claims
+ * stated ON it, so expanding a film finds its director but expanding a person does not find their
+ * films — Wikidata never stated that triple on the person. That is not a defect to fix here: it is
+ * what {@link ReverseClaims} is for, and {@link WikidataSourceAdapter} runs both. Keeping the two
+ * apart matters, because they have genuinely different evidence available — a claim read from the
+ * entity carries its references and qualifiers, and a truthy triple carries neither (ADR 36).
  */
 public final class ClaimMapper {
 
@@ -44,7 +46,9 @@ public final class ClaimMapper {
   // so treating their presence as authoritative would flatten ADR 23's distinction.
   private static final Set<String> SELF_REFERENTIAL_IMPORT_PROPERTIES = Set.of("P143", "P4656");
 
-  private static final Map<String, EdgeType> BY_PROPERTY = new HashMap<>();
+  // LinkedHashMap, not HashMap: ReverseClaims renders these property codes into a SPARQL VALUES
+  // clause, and an unordered map would make the query text vary run to run for no reason.
+  private static final Map<String, EdgeType> BY_PROPERTY = new LinkedHashMap<>();
 
   static {
     for (EdgeType type : EdgeTypes.all()) {
@@ -67,6 +71,23 @@ public final class ClaimMapper {
   }
 
   private ClaimMapper() {}
+
+  /**
+   * The Wikidata properties this vocabulary maps, in registration order.
+   *
+   * <p>Shared with {@link ReverseClaims} on purpose. The forward whitelist IS {@link EdgeTypes},
+   * and the reverse one has to be the same set or the two directions would drift apart the first
+   * time someone registers a relation type — which is precisely the failure issue #20 describes,
+   * one level up.
+   */
+  static List<String> mappedProperties() {
+    return List.copyOf(BY_PROPERTY.keySet());
+  }
+
+  /** The edge type a Wikidata property maps to, or null when it is not in the vocabulary. */
+  static EdgeType typeFor(String property) {
+    return BY_PROPERTY.get(property);
+  }
 
   /** Every whitelisted claim on {@code entity}, as assertions. */
   public static List<AssertionRecord> map(String subjectQid, JsonNode entity, Instant assertedAt) {

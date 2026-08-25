@@ -1,0 +1,206 @@
+{
+  "head": {
+    "vars": [
+      "p",
+      "other",
+      "otherLabel",
+      "type",
+      "sitelinks"
+    ]
+  },
+  "results": {
+    "bindings": [
+      {
+        "p": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/prop/direct/P58"
+        },
+        "other": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q180337"
+        },
+        "type": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q11424"
+        },
+        "otherLabel": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "The Proposition"
+        },
+        "sitelinks": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "22"
+        }
+      },
+      {
+        "p": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/prop/direct/P86"
+        },
+        "other": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q180337"
+        },
+        "type": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q11424"
+        },
+        "otherLabel": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "The Proposition"
+        },
+        "sitelinks": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "22"
+        }
+      },
+      {
+        "p": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/prop/direct/P57"
+        },
+        "other": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q97798779"
+        },
+        "type": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q11424"
+        },
+        "otherLabel": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Idiot Prayer"
+        },
+        "sitelinks": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "2"
+        }
+      },
+      {
+        "p": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/prop/direct/P50"
+        },
+        "other": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q2715462"
+        },
+        "type": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q7725634"
+        },
+        "otherLabel": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "And the Ass Saw the Angel"
+        },
+        "sitelinks": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "8"
+        }
+      },
+      {
+        "p": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/prop/direct/P527"
+        },
+        "other": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q1051182"
+        },
+        "type": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q215380"
+        },
+        "otherLabel": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Nick Cave and the Bad Seeds"
+        },
+        "sitelinks": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "31"
+        }
+      },
+      {
+        "p": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/prop/direct/P50"
+        },
+        "other": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q121998451"
+        },
+        "type": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q3331189"
+        },
+        "otherLabel": {
+          "type": "literal",
+          "value": "Q121998451"
+        },
+        "sitelinks": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "0"
+        }
+      },
+      {
+        "p": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/prop/direct/P86"
+        },
+        "other": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q6301911"
+        },
+        "type": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q134556"
+        },
+        "otherLabel": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Jubilee Street (song)"
+        },
+        "sitelinks": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "4"
+        }
+      },
+      {
+        "p": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/prop/direct/P86"
+        },
+        "other": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q6301911"
+        },
+        "type": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q7366"
+        },
+        "otherLabel": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Jubilee Street (song)"
+        },
+        "sitelinks": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "4"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "entities": {
+    "Q192668": {
+      "id": "Q192668",
+      "labels": { "en": { "language": "en", "value": "Nick Cave" } },
+      "descriptions": { "en": { "language": "en", "value": "Australian musician and writer" } },
+      "claims": {
+        "P31": [
+          { "mainsnak": { "snaktype": "value", "property": "P31",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q5" } } },
+            "rank": "normal", "references": [] } ],
+        "P463": [
+          { "mainsnak": { "snaktype": "value", "property": "P463",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q1051182" } } },
+            "rank": "normal", "references": [] },
+          { "mainsnak": { "snaktype": "value", "property": "P463",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q1535279" } } },
+            "rank": "normal", "references": [] },
+          { "mainsnak": { "snaktype": "value", "property": "P463",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q1147045" } } },
+            "rank": "normal", "references": [] },
+          { "mainsnak": { "snaktype": "value", "property": "P463",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q9357859" } } },
+            "rank": "normal", "references": [] } ]
+      }
+    }
+  }
+}

@@ -8,6 +8,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -22,8 +23,10 @@ public final class StubWikidataServer implements AutoCloseable {
   private final HttpServer server;
   private final Deque<String> bodies = new ArrayDeque<>();
   private final Deque<Integer> statuses = new ArrayDeque<>();
+  private final Deque<Map.Entry<String, String>> headers = new ArrayDeque<>();
   private final AtomicInteger requests = new AtomicInteger();
   private volatile String lastUserAgent;
+  private volatile String lastQuery;
 
   public StubWikidataServer() {
     try {
@@ -36,9 +39,14 @@ public final class StubWikidataServer implements AutoCloseable {
         exchange -> {
           requests.incrementAndGet();
           lastUserAgent = exchange.getRequestHeaders().getFirst("User-Agent");
+          lastQuery = exchange.getRequestURI().getRawQuery();
           int status = statuses.isEmpty() ? 200 : statuses.poll();
           byte[] body = (bodies.isEmpty() ? "{}" : bodies.poll()).getBytes(StandardCharsets.UTF_8);
           exchange.getResponseHeaders().add("Content-Type", "application/json");
+          Map.Entry<String, String> header = headers.poll();
+          if (header != null) {
+            exchange.getResponseHeaders().add(header.getKey(), header.getValue());
+          }
           exchange.sendResponseHeaders(status, body.length);
           try (OutputStream out = exchange.getResponseBody()) {
             out.write(body);
@@ -61,12 +69,26 @@ public final class StubWikidataServer implements AutoCloseable {
     statuses.add(status);
   }
 
+  /** Queue one extra response header, consumed by the next request — {@code Retry-After} et al. */
+  public void enqueueHeader(String name, String value) {
+    headers.add(Map.entry(name, value));
+  }
+
   public int requestCount() {
     return requests.get();
   }
 
   public String lastUserAgent() {
     return lastUserAgent;
+  }
+
+  /**
+   * The raw, still-percent-encoded query string of the last request. Tests that care about what was
+   * asked — a SPARQL query's LIMIT, the properties in its VALUES clause — assert on the decoded
+   * form themselves, because decoding here would hide an encoding bug rather than expose it.
+   */
+  public String lastQuery() {
+    return lastQuery;
   }
 
   @Override
