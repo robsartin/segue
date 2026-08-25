@@ -184,16 +184,18 @@ class ArchitectureTest {
   static final ArchRule noPackageCycles =
       SlicesRuleDefinition.slices().matching("com.robsartin.segue.(*)..").should().beFreeOfCycles();
 
-  /** ADR 25: the wikidata adapter stays plain Java so it is testable without a context. */
+  /** ADR 32: the framework lives at the edges. Everything else stays plain Java. */
   @ArchTest
-  static final ArchRule wikidataDoesNotDependOnSpring =
+  static final ArchRule springOnlyInAppAndMcp =
       noClasses()
           .that()
-          .resideInAPackage("..wikidata..")
+          .resideOutsideOfPackages("..app..", "..mcp..")
           .should()
           .dependOnClassesThat()
           .resideInAnyPackage("org.springframework..")
-          .because("ADR 25: adding a source must not require a framework");
+          .because(
+              "ADR 25 and ADR 32: adapters must be testable without an application context,"
+                  + " and adding a source must not require a framework");
 
   /** ADR 32: wikidata is an adapter like any other. */
   @ArchTest

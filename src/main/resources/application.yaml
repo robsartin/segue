@@ -1,0 +1,20 @@
+spring:
+  main:
+    banner-mode: "off"
+  application:
+    name: segue
+  ai:
+    mcp:
+      server:
+        name: segue
+        version: 0.1.0
+        type: sync
+        instructions: >
+          A personal interest graph. Search for entities, add them, expand them from
+          Wikidata, and find citable routes between two things. Every relationship
+          carries the provenance of who claimed it.
+
+segue:
+  database: ${SEGUE_DB:${user.home}/.segue/segue.db}
+  expand:
+    max-new-edges: 200
