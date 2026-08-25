@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Every appender targets System.err.
+
+  On the stdio transport stdout carries the MCP protocol: one newline-delimited JSON-RPC
+  message per line, and nothing else. A single log line on stdout corrupts the stream and
+  the client sees a parse error rather than a diagnostic. The MCP specification designates
+  stderr for logging and tells clients not to read it as an error signal.
+
+  ch.qos.logback.classic.encoder.JsonEncoder is a real class shipped in logback-classic
+  (verified present in 1.5.38, the version Spring Boot 4.1.1's dependency management
+  resolves for this project) — it needs no extra dependency beyond spring-boot-starter.
+
+  See docs/adr/0028-mcp-transports.md and docs/adr/0030-structured-logging.md.
+-->
+<configuration>
+  <appender name="STDERR" class="ch.qos.logback.core.ConsoleAppender">
+    <target>System.err</target>
+    <encoder class="ch.qos.logback.classic.encoder.JsonEncoder"/>
+  </appender>
+
+  <root level="INFO">
+    <appender-ref ref="STDERR"/>
+  </root>
+
+  <logger name="com.robsartin.segue" level="INFO"/>
+</configuration>
