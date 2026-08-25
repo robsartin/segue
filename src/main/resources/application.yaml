@@ -13,6 +13,25 @@ spring:
           A personal interest graph. Search for entities, add them, expand them from
           Wikidata, and find citable routes between two things. Every relationship
           carries the provenance of who claimed it.
+        # Streamable HTTP is the default transport (ADR 28 ships both; the stdio profile
+        # below selects the other one). Named explicitly rather than inherited: the starter
+        # also offers SSE — the transport Streamable HTTP replaced — and leaving the choice
+        # implicit means a dependency bump can silently change which protocol segue speaks,
+        # which is the kind of change ADR 27 insists should be a decision. Without this line
+        # the SSE auto-configuration is what actually wins.
+        protocol: streamable
+        streamable-http:
+          mcp-endpoint: /mcp
+
+server:
+  # ADR 28: bind to loopback, never 0.0.0.0. An MCP server with no authentication that
+  # answers on every interface is a graph anyone on the network can read and write; making
+  # it reachable from elsewhere is a deliberate change with its own security review, not a
+  # default. SegueConfiguration's origin and host allowlist is the other half of this —
+  # loopback binding alone does not stop a web page in the user's own browser from posting
+  # here, which is what DNS rebinding exploits.
+  address: 127.0.0.1
+  port: ${SEGUE_HTTP_PORT:8080}
 
 segue:
   database: ${SEGUE_DB:${user.home}/.segue/segue.db}
@@ -25,6 +44,13 @@ segue:
 # SPRING_PROFILES_ACTIVE=stdio). web-application-type: none skips starting an embedded
 # HTTP server entirely — there is nothing for it to serve on this transport, and leaving
 # it running would be one more thing that could log or listen unexpectedly.
+#
+# The two transports are mutually exclusive by construction rather than by convention:
+# `stdio: true` is what the starter's own McpServerStdioDisabledCondition reads to switch
+# the whole Streamable HTTP auto-configuration off, and this project's own two transport
+# beans (SegueApplication.stdioServerTransport and SegueConfiguration.streamableHttpTransport)
+# are conditional on that same property. A client launching this as a subprocess gets a
+# process that speaks JSON-RPC on stdout and listens on nothing.
 spring:
   config:
     activate:

@@ -27,6 +27,7 @@ spring-boot-bom = { module = "org.springframework.boot:spring-boot-dependencies"
 spring-ai-bom = { module = "org.springframework.ai:spring-ai-bom", version.ref = "springAi" }
 spring-boot-starter = { module = "org.springframework.boot:spring-boot-starter" }
 spring-ai-starter-mcp-server = { module = "org.springframework.ai:spring-ai-starter-mcp-server" }
+spring-ai-starter-mcp-server-webmvc = { module = "org.springframework.ai:spring-ai-starter-mcp-server-webmvc" }
 spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
 
 [plugins]
