@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.LoggerContext;
-import ch.qos.logback.classic.encoder.JsonEncoder;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.Appender;
 import ch.qos.logback.core.ConsoleAppender;
@@ -12,6 +11,7 @@ import java.util.Iterator;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.logging.logback.StructuredLogEncoder;
 import org.springframework.boot.test.context.SpringBootTest;
 
 /**
@@ -40,8 +40,13 @@ import org.springframework.boot.test.context.SpringBootTest;
  *
  * <p>Instead this asserts against Logback's own configuration model: the root logger's appender is
  * a {@link ConsoleAppender} whose resolved {@code target} is {@code "System.err"}, encoding with
- * {@link JsonEncoder}. That is deterministic regardless of test order or JVM reuse, and it fails
- * the instant {@code logback-spring.xml} points anywhere else.
+ * {@link StructuredLogEncoder}. That is deterministic regardless of test order or JVM reuse, and it
+ * fails the instant {@code logback-spring.xml} points anywhere else.
+ *
+ * <p>FIX 10 of the increment-4a final review switched the encoder from Logback's own {@code
+ * JsonEncoder} (valid JSON, but Logback's own field shape) to Spring Boot's {@code
+ * StructuredLogEncoder}, which is what actually emits Elastic Common Schema — matching what ADR 30
+ * decided rather than amending the ADR to match the code.
  */
 @SpringBootTest
 class LoggingTargetsStderrTest {
@@ -63,8 +68,8 @@ class LoggingTargetsStderrTest {
         .as("appender target — must be stderr, never stdout, on the stdio transport")
         .isEqualTo("System.err");
     assertThat(consoleAppender.getEncoder())
-        .as("encoder — structured JSON per ADR 30")
-        .isInstanceOf(JsonEncoder.class);
+        .as("encoder — Elastic Common Schema per ADR 30")
+        .isInstanceOf(StructuredLogEncoder.class);
 
     assertThat(appenders.hasNext()).as("no second appender that could target stdout").isFalse();
   }
