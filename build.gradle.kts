@@ -43,13 +43,27 @@ tasks.withType<JavaCompile>().configureEach {
 }
 
 tasks.test {
-    useJUnitPlatform()
     // sqlite-jdbc loads a native library; grant it so the JDK's restricted-method
     // warning does not become a failure on a future release.
     jvmArgs("--enable-native-access=ALL-UNNAMED")
+    useJUnitPlatform {
+        // Excluded from the normal gate: it needs the network and can fail for reasons
+        // that have nothing to do with this code. Run it deliberately, via ./gradlew liveTest.
+        excludeTags("live")
+    }
     testLogging {
         events("failed")
     }
+}
+
+tasks.register<Test>("liveTest") {
+    group = "verification"
+    description = "Runs the tagged live tests against the real Wikidata API. Needs network."
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform { includeTags("live") }
+    // Never up-to-date: the point is to re-check the real endpoint.
+    outputs.upToDateWhen { false }
 }
 
 spotless {
