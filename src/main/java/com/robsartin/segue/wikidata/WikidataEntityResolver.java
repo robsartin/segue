@@ -63,13 +63,14 @@ public final class WikidataEntityResolver implements EntityResolver {
         continue;
       }
       String description = hit.path("description").asText(null);
-      // wbsearchentities does not return P31, so the kind is not knowable here without a
-      // second round trip per hit. Report CONCEPT and let fetch() settle it — better than
-      // paying N requests to decorate a list the caller may discard.
-      Candidate candidate = new Candidate(qid, label, description, NodeKind.CONCEPT);
-      if (kind == null || kind == candidate.kind()) {
-        out.add(candidate);
-      }
+      // wbsearchentities does not return P31, so the real kind is not knowable here without
+      // one extra round trip per hit — for a list the caller may well discard. Candidates are
+      // therefore reported as CONCEPT and the `kind` argument is deliberately NOT applied:
+      // a filter that cannot see the kind would return an empty list, which reads as "no such
+      // entity" rather than "cannot filter". The description is what disambiguates a search
+      // hit; kind is settled by fetch(). See ADR 26 — the MCP search_entities tool inherits
+      // this, and should say so in its tool description rather than implying a working filter.
+      out.add(new Candidate(qid, label, description, NodeKind.CONCEPT));
     }
     return List.copyOf(out);
   }

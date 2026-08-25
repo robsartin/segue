@@ -59,6 +59,21 @@ class WikidataEntityResolverTest {
   }
 
   @Test
+  @DisplayName("a kind argument does not silently empty the results")
+  void kindDoesNotSilentlyFilterEverythingOut() throws IOException {
+    // The failure this guards: filtering on a kind we cannot determine returns [], which a
+    // caller reads as "no such entity". Returning everything and letting the description
+    // disambiguate is the honest behaviour until search can see P31.
+    try (StubWikidataServer stub = new StubWikidataServer()) {
+      stub.enqueueBody(resource("/wikidata/search-cave.json"));
+      EntityResolver resolver =
+          new WikidataEntityResolver(new WikidataClient(stub.baseUri()), FIXED);
+
+      assertThat(resolver.search("nick cave", NodeKind.PERSON, 10)).hasSize(3);
+    }
+  }
+
+  @Test
   @DisplayName("an empty result is empty, not an error")
   void emptySearchIsNotAnError() {
     try (StubWikidataServer stub = new StubWikidataServer()) {
