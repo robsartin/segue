@@ -28,6 +28,11 @@ dependencies {
     // Wikidata responses. Jackson rather than a second parser because Spring Boot brings
     // it in increment 4 anyway, and one JSON library is better than two.
     implementation(libs.jackson.databind)
+    // java.time handlers for the tool-surface mapper. Jackson 2 keeps JSR-310 support in a
+    // separate module, and without it ProvenanceView.assertedAt cannot be written at all
+    // (issue #18) — 2.22's REQUIRE_HANDLERS_FOR_JAVA8_TIMES turns the omission into a hard
+    // failure rather than a silent epoch number, which is why the tool threw.
+    implementation(libs.jackson.datatype.jsr310)
     // Nullability on the mcp/ view records (ADR 18 forbids this annotation in domain/, so it
     // stays out of the records the schema module actually needs it for there). Already resolved
     // transitively via Spring's dependency management; declared explicitly because code in this
