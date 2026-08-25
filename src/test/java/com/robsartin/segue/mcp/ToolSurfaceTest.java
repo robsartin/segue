@@ -30,12 +30,23 @@ import org.springframework.boot.test.context.SpringBootTest;
  *       {@link GraphTools} stopped being ordinary Spring beans — the only thing that
  *       BeanPostProcessor cares about — this is the test that would notice.
  *   <li>Everything else here is plain reflection over the {@code @McpTool} annotations, which is
- *       the right tool for asserting on annotation attribute VALUES (names, descriptions,
- *       generateOutputSchema) — ArchUnit's structural rules are not built for reading annotation
- *       string content, which is also why no ArchUnit rule was added or extended: there was no
- *       existing tool-name rule to extend, and inspecting an annotation's own attributes is a
- *       reflection problem, not a dependency-structure one.
+ *       the right tool for asserting on annotation attribute VALUES (names, descriptions, {@code
+ *       annotations}) — ArchUnit's structural rules are not built for reading annotation string
+ *       content, which is also why no ArchUnit rule was added or extended: there was no existing
+ *       tool-name rule to extend, and inspecting an annotation's own attributes is a reflection
+ *       problem, not a dependency-structure one.
  * </ul>
+ *
+ * <p><b>{@code generateOutputSchema} is asserted FALSE, not true</b> — the reverse of increment
+ * 4a's original intent. With it true, Spring AI's {@code SyncMcpToolProvider} puts every tool on
+ * its STRUCTURED-mode path, whose {@code convertValueToCallToolResult} builds only {@code
+ * structuredContent}: {@code content} came back {@code []} and {@code isError} was always {@code
+ * false}, even for the errors this project deliberately models as {@code outcome: "error"} —
+ * inverting ADR 27. Every {@code @McpTool} method here returns {@link
+ * io.modelcontextprotocol.spec.McpSchema.CallToolResult} directly instead (see {@link
+ * ToolResults}), which is the return type {@code SyncMcpToolProvider} recognises as already being
+ * the protocol's own result and skips schema generation for entirely. See the final-fix report for
+ * increment 4a (FIX 1) and the ADR 26 amendment.
  */
 @SpringBootTest(classes = SegueApplication.class)
 class ToolSurfaceTest {
@@ -83,14 +94,63 @@ class ToolSurfaceTest {
   }
 
   @Test
-  @DisplayName("every tool declares a non-blank description and requests an output schema")
-  void everyToolHasADescriptionAndRequestsAnOutputSchema() {
+  @DisplayName(
+      "every tool declares a non-blank description and does NOT ask Spring AI to generate a"
+          + " schema (FIX 1 — see the class Javadoc)")
+  void everyToolHasADescriptionAndSkipsFrameworkSchemaGeneration() {
     for (McpTool tool : allTools()) {
       assertThat(tool.description()).as("description of %s", tool.name()).isNotBlank();
       assertThat(tool.generateOutputSchema())
-          .as("generateOutputSchema of %s — required by ADR 26", tool.name())
-          .isTrue();
+          .as(
+              "generateOutputSchema of %s must stay false — true routes the tool onto the"
+                  + " STRUCTURED-mode path that drops isError (FIX 1)",
+              tool.name())
+          .isFalse();
     }
+  }
+
+  @Test
+  @DisplayName("every tool returns CallToolResult directly, opting out of framework conversion")
+  void everyToolReturnsCallToolResultDirectly() {
+    for (var method :
+        Stream.concat(
+                Arrays.stream(EntityTools.class.getDeclaredMethods()),
+                Arrays.stream(GraphTools.class.getDeclaredMethods()))
+            .filter(m -> m.getAnnotation(McpTool.class) != null)
+            .toList()) {
+      assertThat(method.getReturnType())
+          .as("return type of %s", method.getName())
+          .isEqualTo(io.modelcontextprotocol.spec.McpSchema.CallToolResult.class);
+    }
+  }
+
+  @Test
+  @DisplayName("read-only tools are annotated readOnlyHint / not destructive / idempotent")
+  void readOnlyToolsAreAnnotatedAccordingly() {
+    for (String name : List.of("search_entities", "get_entity", "find_paths")) {
+      McpTool.McpAnnotations annotations = toolNamed(name).annotations();
+      assertThat(annotations.readOnlyHint()).as("%s readOnlyHint", name).isTrue();
+      assertThat(annotations.destructiveHint()).as("%s destructiveHint", name).isFalse();
+      assertThat(annotations.idempotentHint()).as("%s idempotentHint", name).isTrue();
+    }
+  }
+
+  @Test
+  @DisplayName("add_entity is annotated non-destructive and idempotent, but not read-only")
+  void addEntityIsAnnotatedAccordingly() {
+    McpTool.McpAnnotations annotations = toolNamed("add_entity").annotations();
+    assertThat(annotations.readOnlyHint()).isFalse();
+    assertThat(annotations.destructiveHint()).isFalse();
+    assertThat(annotations.idempotentHint()).isTrue();
+  }
+
+  @Test
+  @DisplayName("expand_entity is annotated non-destructive, non-idempotent, and not read-only")
+  void expandEntityIsAnnotatedAccordingly() {
+    McpTool.McpAnnotations annotations = toolNamed("expand_entity").annotations();
+    assertThat(annotations.readOnlyHint()).isFalse();
+    assertThat(annotations.destructiveHint()).isFalse();
+    assertThat(annotations.idempotentHint()).isFalse();
   }
 
   @Test
@@ -116,6 +176,12 @@ class ToolSurfaceTest {
     assertThat(allTools()).extracting(McpTool::name).doesNotContain("assert_edge");
   }
 
+  @Test
+  @DisplayName("note_affinity is deferred to the taste layer (ADR 33), not a tool yet")
+  void noteAffinityIsDeferred() {
+    assertThat(allTools()).extracting(McpTool::name).doesNotContain("note_affinity");
+  }
+
   private static List<McpTool> allTools() {
     return Stream.concat(
             Arrays.stream(EntityTools.class.getDeclaredMethods()),
@@ -123,5 +189,9 @@ class ToolSurfaceTest {
         .map(method -> method.getAnnotation(McpTool.class))
         .filter(Objects::nonNull)
         .toList();
+  }
+
+  private static McpTool toolNamed(String name) {
+    return allTools().stream().filter(tool -> tool.name().equals(name)).findFirst().orElseThrow();
   }
 }

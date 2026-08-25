@@ -11,6 +11,7 @@ spotless = "8.10.0"
 jackson = "2.22.2"
 springBoot = "4.1.1"
 springAi = "2.0.1"
+jspecify = "1.0.1"
 
 [libraries]
 tinkergraph = { module = "org.apache.tinkerpop:tinkergraph-gremlin", version.ref = "tinkerpop" }
@@ -22,6 +23,7 @@ junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher
 assertj = { module = "org.assertj:assertj-core", version.ref = "assertj" }
 archunit-junit6 = { module = "com.tngtech.archunit:archunit-junit6", version.ref = "archunit" }
 jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }
+jspecify = { module = "org.jspecify:jspecify", version.ref = "jspecify" }
 spring-boot-bom = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "springBoot" }
 spring-ai-bom = { module = "org.springframework.ai:spring-ai-bom", version.ref = "springAi" }
 spring-boot-starter = { module = "org.springframework.boot:spring-boot-starter" }

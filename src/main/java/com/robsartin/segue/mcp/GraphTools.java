@@ -1,7 +1,6 @@
 package com.robsartin.segue.mcp;
 
-import com.robsartin.segue.domain.PathResult;
-import java.util.List;
+import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
 
@@ -18,6 +17,9 @@ import org.springframework.ai.mcp.annotation.McpToolParam;
  * SegueConfiguration} resolves {@code properties.maxNewEdges()} once and passes the plain value
  * across the boundary. Every method begins with {@link CorrelationId#begin()} and clears it in a
  * {@code finally} (ADR 29).
+ *
+ * <p>Every method returns {@link CallToolResult} directly — see {@link ToolResults}' Javadoc (FIX 1
+ * of the increment-4a final review; also ADR 26 amendment).
  */
 public class GraphTools {
 
@@ -54,8 +56,12 @@ public class GraphTools {
           server's configured default. The result reports whether it had to stop early at that \
           bound, or could not resolve some neighbours.\
           """,
-      generateOutputSchema = true)
-  public ToolResult<SegueService.ExpansionSummary> expandEntity(
+      annotations =
+          @McpTool.McpAnnotations(
+              readOnlyHint = false,
+              destructiveHint = false,
+              idempotentHint = false))
+  public CallToolResult expandEntity(
       @McpToolParam(required = true, description = "A Wikidata QID already in the graph.")
           String qid,
       @McpToolParam(
@@ -67,7 +73,7 @@ public class GraphTools {
     CorrelationId.begin();
     try {
       int bound = maxNewEdges == null ? defaultMaxNewEdges : maxNewEdges;
-      return service.expandEntity(qid, bound);
+      return ToolResults.of(service.expandEntity(qid, bound));
     } finally {
       CorrelationId.clear();
     }
@@ -85,10 +91,15 @@ public class GraphTools {
 
           An empty result means no route exists within maxHops hops, not that the two entities are \
           unrelated at a greater distance — try a larger maxHops. Both entities must already be in \
-          the graph (add_entity first). maxHops defaults to 4 if omitted.\
+          the graph (add_entity first); this returns an error, not an empty result, if either one \
+          has not been added. maxHops defaults to 4 if omitted.\
           """,
-      generateOutputSchema = true)
-  public ToolResult<List<PathResult>> findPaths(
+      annotations =
+          @McpTool.McpAnnotations(
+              readOnlyHint = true,
+              destructiveHint = false,
+              idempotentHint = true))
+  public CallToolResult findPaths(
       @McpToolParam(required = true, description = "QID to start from, already in the graph.")
           String fromQid,
       @McpToolParam(required = true, description = "QID to reach, already in the graph.")
@@ -99,7 +110,8 @@ public class GraphTools {
           Integer maxHops) {
     CorrelationId.begin();
     try {
-      return service.findPaths(fromQid, toQid, maxHops == null ? DEFAULT_MAX_HOPS : maxHops);
+      return ToolResults.of(
+          service.findPaths(fromQid, toQid, maxHops == null ? DEFAULT_MAX_HOPS : maxHops));
     } finally {
       CorrelationId.clear();
     }

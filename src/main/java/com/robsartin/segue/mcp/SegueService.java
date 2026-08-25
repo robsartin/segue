@@ -15,15 +15,15 @@ import com.robsartin.segue.port.ExpandResult;
 import com.robsartin.segue.port.GraphStore;
 import com.robsartin.segue.port.SourceAdapter;
 import com.robsartin.segue.port.SourceAdapters;
+import com.robsartin.segue.wikidata.WikidataUnavailableException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,15 +38,24 @@ import org.slf4j.LoggerFactory;
  *       AssertionLog.append} directly — ArchUnit rule {@code onlyIngestAppliesClaimsToTheGraph}
  *       would fail it otherwise, and it is the right rule (ADR 19).
  *   <li>nothing thrown by a port escapes a public method here except a programmer error, such as a
- *       null argument. Every other shortfall — an unknown qid, an unreachable source, a result cut
- *       short by its own bound — comes back as a {@link ToolResult} the calling model can read and
- *       act on (ADR 27), with {@link CorrelationId#current()} folded into the detail of every
- *       non-ok result so a user-visible error can be pasted into a log search (ADR 29).
+ *       null argument. Every other shortfall — an unknown qid, a malformed one, an unreachable
+ *       source, a result cut short by its own bound — comes back as a {@link ToolResult} the
+ *       calling model can read and act on (ADR 27), with {@link CorrelationId#current()} folded
+ *       into the detail of every non-ok result so a user-visible error can be pasted into a log
+ *       search (ADR 29). {@link WikidataUnavailableException} in particular is caught at every call
+ *       site that can throw it — {@code resolver.search}, {@code resolver.fetch}, and the unwrapped
+ *       neighbour fetch inside {@link #expandEntity} — rather than left to escape.
  * </ul>
+ *
+ * <p>Every method returns view types from {@code mcp/} (translated by {@link ViewMapper}), never
+ * the domain records themselves — see {@link ViewMapper}'s Javadoc for why.
  */
 public final class SegueService {
 
   private static final Logger log = LoggerFactory.getLogger(SegueService.class);
+
+  /** ADR 26/ADR 22: identity is a Wikidata QID, always of this shape. */
+  private static final Pattern QID = Pattern.compile("Q\\d+");
 
   private final EntityResolver resolver;
   private final GraphStore graph;
@@ -62,25 +71,43 @@ public final class SegueService {
   }
 
   /** Candidates for a free-text query, best match first. Writes nothing. */
-  public ToolResult<List<Candidate>> search(String query, NodeKind kind, int limit) {
+  public ToolResult<List<CandidateView>> search(String query, NodeKind kind, int limit) {
     Objects.requireNonNull(query, "query");
-    List<Candidate> candidates = resolver.search(query, kind, limit);
-    return ToolResult.ok(candidates.size() + " candidate(s) for \"" + query + "\"", candidates);
+    List<Candidate> candidates;
+    try {
+      candidates = resolver.search(query, kind, limit);
+    } catch (WikidataUnavailableException e) {
+      log.warn("search(\"{}\") source unavailable: {}", query, e.getMessage());
+      return error("wikidata unavailable: " + e.getMessage());
+    }
+    return ToolResult.ok(
+        candidates.size() + " candidate(s) for \"" + query + "\"",
+        ViewMapper.toCandidateViews(candidates));
   }
 
   /**
    * Fetch one entity's identity from the resolver and record it. Recording is an upsert, so a
    * second call with the same qid is idempotent — it refreshes the node rather than duplicating it.
    */
-  public ToolResult<NodeRecord> addEntity(String qid) {
+  public ToolResult<NodeView> addEntity(String qid) {
     Objects.requireNonNull(qid, "qid");
-    Optional<NodeAssertion> fetched = resolver.fetch(qid);
+    if (!QID.matcher(qid).matches()) {
+      return error("not a QID: " + qid);
+    }
+    Optional<NodeAssertion> fetched;
+    try {
+      fetched = resolver.fetch(qid);
+    } catch (WikidataUnavailableException e) {
+      log.warn("addEntity({}) source unavailable: {}", qid, e.getMessage());
+      return error("wikidata unavailable: " + e.getMessage());
+    }
     if (fetched.isEmpty()) {
       return error("no such entity: " + qid);
     }
     NodeAssertion assertion = fetched.get();
     ingest.record(assertion);
-    return ToolResult.ok("added " + qid + " (" + assertion.label() + ")", assertion.toNode());
+    return ToolResult.ok(
+        "added " + qid + " (" + assertion.label() + ")", ViewMapper.toNodeView(assertion.toNode()));
   }
 
   /**
@@ -96,7 +123,10 @@ public final class SegueService {
    *
    * <p>Neighbour fetches that fail once are not retried for the same neighbour within this call —
    * that is the bound on how many calls a dense, partly-unreachable entity can trigger, alongside
-   * {@code maxNewEdges} bounding the assertions considered at all.
+   * {@code maxNewEdges} bounding the assertions considered at all. A neighbour fetch that throws
+   * {@link WikidataUnavailableException} is treated exactly like one that returned empty: counted
+   * as skipped and the call continues, rather than aborting a 30-round-trip expansion after some
+   * assertions are already committed.
    */
   public ToolResult<ExpansionSummary> expandEntity(String qid, int maxNewEdges) {
     Objects.requireNonNull(qid, "qid");
@@ -139,7 +169,14 @@ public final class SegueService {
           continue;
         }
         if (graph.node(neighbor).isEmpty()) {
-          Optional<NodeAssertion> resolved = resolver.fetch(neighbor);
+          Optional<NodeAssertion> resolved;
+          try {
+            resolved = resolver.fetch(neighbor);
+          } catch (WikidataUnavailableException e) {
+            log.warn(
+                "expandEntity({}) neighbour {} unavailable: {}", qid, neighbor, e.getMessage());
+            resolved = Optional.empty();
+          }
           if (resolved.isEmpty()) {
             unresolvableNeighbors.add(neighbor);
             skipped++;
@@ -153,7 +190,8 @@ public final class SegueService {
       edgesAdded++;
     }
 
-    ExpansionSummary summary = new ExpansionSummary(qid, nodesAdded, edgesAdded, skipped);
+    ExpansionSummary summary =
+        new ExpansionSummary(qid, nodesAdded, edgesAdded, skipped, truncated, sourceUnavailable);
     List<String> reasons = new ArrayList<>();
     if (sourceUnavailable) {
       reasons.add("a source was unavailable and could not be reached");
@@ -192,7 +230,7 @@ public final class SegueService {
       return error("unknown entity: " + qid);
     }
     List<EdgeRecord> edges = graph.edges(qid);
-    Map<String, List<NodeRecord>> byType = new TreeMap<>();
+    TreeMap<String, List<NodeRecord>> byType = new TreeMap<>();
     for (EdgeRecord edge : edges) {
       String neighborQid = edge.fromQid().equals(qid) ? edge.toQid() : edge.fromQid();
       graph
@@ -201,31 +239,48 @@ public final class SegueService {
               neighbor ->
                   byType.computeIfAbsent(edge.typeCode(), t -> new ArrayList<>()).add(neighbor));
     }
-    Map<String, List<NodeRecord>> immutable = new TreeMap<>();
-    byType.forEach((type, neighbors) -> immutable.put(type, List.copyOf(neighbors)));
-    EntityView view = new EntityView(node.get(), Collections.unmodifiableMap(immutable));
+    List<NeighborGroup> groups =
+        byType.entrySet().stream()
+            .map(
+                e ->
+                    new NeighborGroup(
+                        e.getKey(), e.getValue().stream().map(ViewMapper::toNodeView).toList()))
+            .toList();
+    EntityView view = new EntityView(ViewMapper.toNodeView(node.get()), groups);
     return ToolResult.ok(
-        node.get().label() + ": " + edges.size() + " edge(s), " + immutable.size() + " type(s)",
-        view);
+        node.get().label() + ": " + edges.size() + " edge(s), " + groups.size() + " type(s)", view);
   }
 
   /**
    * Every route between two entities up to {@code maxHops}, ranked most-trustworthy-first (ADR 31).
    * Never the raw order {@link GraphStore#paths} returns — shortest is not most trustworthy.
+   *
+   * <p>Both endpoints must already be in the graph. Without this check an entity nobody ever {@code
+   * add_entity}'d reads identically to two entities the graph knows are unrelated — both return
+   * {@code ok} with zero routes — and a model that forgot to add one would report "these things are
+   * unrelated" rather than the actual problem.
    */
-  public ToolResult<List<PathResult>> findPaths(String fromQid, String toQid, int maxHops) {
+  public ToolResult<List<PathView>> findPaths(String fromQid, String toQid, int maxHops) {
     Objects.requireNonNull(fromQid, "fromQid");
     Objects.requireNonNull(toQid, "toQid");
     if (maxHops <= 0) {
-      return ToolResult.error(withCorrelation("maxHops must be positive, got " + maxHops));
+      return error("maxHops must be positive, got " + maxHops);
+    }
+    if (graph.node(fromQid).isEmpty()) {
+      return error("unknown entity: " + fromQid + " — add it before searching for routes");
+    }
+    if (graph.node(toQid).isEmpty()) {
+      return error("unknown entity: " + toQid + " — add it before searching for routes");
     }
     List<PathResult> raw = graph.paths(fromQid, toQid, maxHops);
     List<PathResult> ranked = PathRanking.rank(raw);
-    return ToolResult.ok(ranked.size() + " route(s) from " + fromQid + " to " + toQid, ranked);
+    return ToolResult.ok(
+        ranked.size() + " route(s) from " + fromQid + " to " + toQid,
+        ViewMapper.toPathViews(ranked));
   }
 
   private static <T> ToolResult<T> error(String reason) {
-    return new ToolResult<>("error", withCorrelation(reason), null);
+    return ToolResult.error(withCorrelation(reason));
   }
 
   private static String withCorrelation(String reason) {
@@ -233,10 +288,17 @@ public final class SegueService {
     return correlation.isEmpty() ? reason : reason + " (correlation " + correlation + ")";
   }
 
-  /** What one expansion produced, and how much of it it could not resolve. */
+  /**
+   * What one expansion produced, and how much of it it could not resolve.
+   *
+   * @param truncated the adapter or the {@code maxNewEdges} bound cut the result short
+   * @param sourceUnavailable at least one source could not be reached at all
+   */
   public record ExpansionSummary(
-      String qid, int nodesAdded, int edgesAdded, int skippedNeighbors) {}
-
-  /** One entity plus its neighbours, grouped by the edge type that connects them. */
-  public record EntityView(NodeRecord node, Map<String, List<NodeRecord>> neighborsByType) {}
+      String qid,
+      int nodesAdded,
+      int edgesAdded,
+      int skippedNeighbors,
+      boolean truncated,
+      boolean sourceUnavailable) {}
 }

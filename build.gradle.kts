@@ -28,6 +28,11 @@ dependencies {
     // Wikidata responses. Jackson rather than a second parser because Spring Boot brings
     // it in increment 4 anyway, and one JSON library is better than two.
     implementation(libs.jackson.databind)
+    // Nullability on the mcp/ view records (ADR 18 forbids this annotation in domain/, so it
+    // stays out of the records the schema module actually needs it for there). Already resolved
+    // transitively via Spring's dependency management; declared explicitly because code in this
+    // project imports it directly.
+    implementation(libs.jspecify)
 
     // MCP server. See docs/adr/0032-layering-and-archunit.md — fenced to app and mcp.
     // spring-boot-starter brings Logback as the SLF4J binding (ADR 30: structured JSON to

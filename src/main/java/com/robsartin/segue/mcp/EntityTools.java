@@ -1,9 +1,7 @@
 package com.robsartin.segue.mcp;
 
-import com.robsartin.segue.domain.Candidate;
 import com.robsartin.segue.domain.NodeKind;
-import com.robsartin.segue.domain.NodeRecord;
-import java.util.List;
+import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
 
@@ -18,6 +16,10 @@ import org.springframework.ai.mcp.annotation.McpToolParam;
  * mechanism was confirmed by reading the autoconfiguration rather than assumed. Every method begins
  * with {@link CorrelationId#begin()} and clears it in a {@code finally}, because the stdio
  * transport has no header layer to carry a trace id any other way (ADR 29).
+ *
+ * <p>Every method returns {@link CallToolResult} directly rather than a Spring AI-generated one —
+ * see {@link ToolResults}' Javadoc for why {@code generateOutputSchema} is gone from every
+ * {@code @McpTool} here (FIX 1 of the increment-4a final review; also ADR 26 amendment).
  */
 public class EntityTools {
 
@@ -38,10 +40,11 @@ public class EntityTools {
       description =
           """
           Search for entities by free text (a person, band, film, place, or any other name) and \
-          return ranked candidates carrying Wikidata QIDs for use with add_entity, get_entity, or \
-          expand_entity. Each candidate has a short description field: use it to disambiguate when \
-          the same name matches more than one entity, such as a painter and a film named after him. \
-          This tool writes nothing.
+          return ranked candidates carrying Wikidata QIDs. Pass one to add_entity first; \
+          get_entity, expand_entity and find_paths only work on entities already added. Each \
+          candidate has a short description field: use it to disambiguate when the same name \
+          matches more than one entity, such as a painter and a film named after him. This tool \
+          writes nothing.
 
           The kind parameter does NOT filter results. Wikidata's search endpoint cannot report an \
           entity's kind at search time, so kind is never applied as a filter here and every \
@@ -49,8 +52,12 @@ public class EntityTools {
           it as fact. An empty result means the search text matched nothing; it never means "no \
           entity of that kind exists". The real kind is settled once the entity is added.\
           """,
-      generateOutputSchema = true)
-  public ToolResult<List<Candidate>> searchEntities(
+      annotations =
+          @McpTool.McpAnnotations(
+              readOnlyHint = true,
+              destructiveHint = false,
+              idempotentHint = true))
+  public CallToolResult searchEntities(
       @McpToolParam(required = true, description = "Free-text name or phrase to search for.")
           String query,
       @McpToolParam(
@@ -65,7 +72,8 @@ public class EntityTools {
           Integer limit) {
     CorrelationId.begin();
     try {
-      return service.search(query, kind, limit == null ? DEFAULT_SEARCH_LIMIT : limit);
+      return ToolResults.of(
+          service.search(query, kind, limit == null ? DEFAULT_SEARCH_LIMIT : limit));
     } finally {
       CorrelationId.clear();
     }
@@ -81,12 +89,16 @@ public class EntityTools {
           have a QID. Returns the stored node (QID, kind, label), or an error result if Wikidata \
           has no entity at that QID.\
           """,
-      generateOutputSchema = true)
-  public ToolResult<NodeRecord> addEntity(
+      annotations =
+          @McpTool.McpAnnotations(
+              readOnlyHint = false,
+              destructiveHint = false,
+              idempotentHint = true))
+  public CallToolResult addEntity(
       @McpToolParam(required = true, description = "A Wikidata QID, e.g. Q192668.") String qid) {
     CorrelationId.begin();
     try {
-      return service.addEntity(qid);
+      return ToolResults.of(service.addEntity(qid));
     } finally {
       CorrelationId.clear();
     }
@@ -98,17 +110,22 @@ public class EntityTools {
           """
           Look up one entity already in the graph by QID and return it together with its \
           neighbours, grouped by the relationship type connecting them — every DIRECTED edge \
-          together, every MEMBER_OF edge together, and so on. Read-only; this never calls out to \
-          Wikidata. Returns an error result if the QID has not been added yet — call add_entity \
-          first.\
+          together, every MEMBER_OF edge together, and so on. Neighbours only appear once \
+          expand_entity has been run for this entity; a freshly added entity that has not been \
+          expanded yet has none. Read-only; this never calls out to Wikidata. Returns an error \
+          result if the QID has not been added yet — call add_entity first.\
           """,
-      generateOutputSchema = true)
-  public ToolResult<SegueService.EntityView> getEntity(
+      annotations =
+          @McpTool.McpAnnotations(
+              readOnlyHint = true,
+              destructiveHint = false,
+              idempotentHint = true))
+  public CallToolResult getEntity(
       @McpToolParam(required = true, description = "A Wikidata QID already in the graph.")
           String qid) {
     CorrelationId.begin();
     try {
-      return service.getEntity(qid);
+      return ToolResults.of(service.getEntity(qid));
     } finally {
       CorrelationId.clear();
     }
