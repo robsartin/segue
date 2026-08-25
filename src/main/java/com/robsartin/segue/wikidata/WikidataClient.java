@@ -1,7 +1,5 @@
 package com.robsartin.segue.wikidata;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -13,6 +11,9 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The Wikidata Action API over the JDK's own HTTP client.
@@ -83,6 +84,13 @@ public final class WikidataClient {
         last = new WikidataUnavailableException("Wikidata returned HTTP " + status);
       } catch (IOException e) {
         last = new WikidataUnavailableException("could not reach Wikidata", e);
+      } catch (JacksonException e) {
+        // A 200 whose body will not parse. Jackson 2's parse failure was an IOException and so
+        // fell into the handler above by accident of the type hierarchy; Jackson 3's is unchecked
+        // and would otherwise escape this loop raw (ADR 35). Callers are entitled to one failure
+        // type from this adapter — expand() reports it as sourceUnavailable — so it is named here
+        // rather than left to propagate.
+        last = new WikidataUnavailableException("Wikidata sent a body that would not parse", e);
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         throw new WikidataUnavailableException("interrupted while calling Wikidata", e);

@@ -1,6 +1,5 @@
 package com.robsartin.segue.wikidata;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.EdgeType;
 import com.robsartin.segue.domain.EdgeTypes;
@@ -10,11 +9,11 @@ import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Turns one entity's Wikidata claims into segue assertions.
@@ -152,9 +151,8 @@ public final class ClaimMapper {
       return false;
     }
     for (JsonNode reference : references) {
-      Iterator<String> snakProperties = reference.path("snaks").fieldNames();
-      while (snakProperties.hasNext()) {
-        if (!SELF_REFERENTIAL_IMPORT_PROPERTIES.contains(snakProperties.next())) {
+      for (String snakProperty : reference.path("snaks").propertyNames()) {
+        if (!SELF_REFERENTIAL_IMPORT_PROPERTIES.contains(snakProperty)) {
           return true;
         }
       }

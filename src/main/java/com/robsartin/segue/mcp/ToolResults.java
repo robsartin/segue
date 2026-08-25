@@ -1,13 +1,11 @@
 package com.robsartin.segue.mcp;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.json.JsonMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
 import java.util.Map;
 import java.util.Objects;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Builds the {@link CallToolResult} every {@code @McpTool} method returns (FIX 1 of the
@@ -27,16 +25,12 @@ import java.util.Objects;
 final class ToolResults {
 
   /**
-   * Configured, not bare. {@code ProvenanceView.assertedAt} is the one {@code java.time} value on
-   * the tool surface, and Jackson 2 needs {@link JavaTimeModule} registered before it can write
-   * one. Timestamps go out ISO-8601 rather than as epoch numbers because a route's provenance is
-   * meant to be citable, and a bare number is not.
+   * Stock Jackson 3, deliberately unconfigured. Jackson 3 registers java.time support itself and
+   * writes an {@code Instant} as ISO-8601 by default, so {@code ProvenanceView.assertedAt} — the
+   * one java.time value on the tool surface — needs no module and no feature flag here. The Jackson
+   * 2 mapper this replaces needed both, and shipped without them (issue #18).
    */
-  private static final ObjectMapper MAPPER =
-      JsonMapper.builder()
-          .addModule(new JavaTimeModule())
-          .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-          .build();
+  private static final ObjectMapper MAPPER = JsonMapper.builder().build();
 
   private ToolResults() {}
 
@@ -45,9 +39,9 @@ final class ToolResults {
     String json;
     try {
       json = MAPPER.writeValueAsString(result);
-    } catch (JsonProcessingException e) {
+    } catch (JacksonException e) {
       // A ToolResult payload is built from this project's own records, enums, primitives,
-      // Strings and the java.time values MAPPER is configured for. If this throws, the payload
+      // Strings and the java.time values Jackson 3 handles natively. If this throws, the payload
       // grew a type the mapper has no handler for — a programmer error the caller should see,
       // not a shortfall to degrade gracefully from. It is not hypothetical: this is exactly how
       // find_paths shipped broken in increment 4a (issue #18), which is why ToolResultsTest now

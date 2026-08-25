@@ -1,6 +1,5 @@
 package com.robsartin.segue.wikidata;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
@@ -10,6 +9,7 @@ import com.robsartin.segue.port.SourceAdapter;
 import java.time.Clock;
 import java.util.List;
 import java.util.Objects;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Expansion from Wikidata.

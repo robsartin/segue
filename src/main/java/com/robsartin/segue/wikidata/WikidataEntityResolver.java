@@ -1,6 +1,5 @@
 package com.robsartin.segue.wikidata;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.robsartin.segue.domain.Candidate;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
@@ -12,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Resolution against the Wikidata Action API: {@code wbsearchentities} to find, {@code

@@ -80,4 +80,25 @@ class WikidataClientTest {
       assertThat(stub.requestCount()).isEqualTo(1);
     }
   }
+
+  @Test
+  @DisplayName("a 200 carrying unparseable JSON surfaces as unavailable, not as a raw parser error")
+  void unparseableBodyIsReportedAsUnavailable() {
+    // Characterisation test, pinned before the Jackson 3 migration (#21). Jackson 2's parse
+    // failure is an IOException, so it fell into this client's existing IOException handler by
+    // accident of the type hierarchy; Jackson 3's is an unchecked JacksonException that would
+    // escape it. The contract worth keeping is the one the callers rely on: everything that goes
+    // wrong reaching or reading Wikidata arrives as WikidataUnavailableException, which is what
+    // expand_entity reports as sourceUnavailable rather than failing the whole tool call.
+    try (StubWikidataServer stub = new StubWikidataServer()) {
+      for (int i = 0; i < 4; i++) {
+        stub.enqueueStatus(200);
+        stub.enqueueBody("this is not JSON");
+      }
+      WikidataClient client = new WikidataClient(stub.baseUri());
+
+      assertThatThrownBy(() -> client.get(Map.of("action", "x")))
+          .isInstanceOf(WikidataUnavailableException.class);
+    }
+  }
 }
