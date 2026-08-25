@@ -1,0 +1,49 @@
+{
+  "entities": {
+    "Q1194713": {
+      "id": "Q1194713",
+      "labels": { "en": { "language": "en", "value": "The Proposition" } },
+      "descriptions": { "en": { "language": "en", "value": "2005 film by John Hillcoat" } },
+      "claims": {
+        "P31": [
+          { "mainsnak": { "snaktype": "value", "property": "P31",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q11424" } } },
+            "rank": "normal", "references": [] } ],
+        "P57": [
+          { "mainsnak": { "snaktype": "value", "property": "P57",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q1339275" } } },
+            "rank": "normal",
+            "references": [ { "hash": "abc" } ] } ],
+        "P86": [
+          { "mainsnak": { "snaktype": "value", "property": "P86",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q214601" } } },
+            "rank": "normal", "references": [] } ],
+        "P58": [
+          { "mainsnak": { "snaktype": "value", "property": "P58",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q214601" } } },
+            "rank": "normal", "references": [] } ],
+        "P462": [
+          { "mainsnak": { "snaktype": "value", "property": "P462",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q23444" } } },
+            "rank": "normal", "references": [] } ],
+        "P463": [
+          { "mainsnak": { "snaktype": "value", "property": "P463",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q1299" } } },
+            "rank": "normal", "references": [],
+            "qualifiers": {
+              "P580": [ { "snaktype": "value", "property": "P580",
+                  "datavalue": { "type": "time", "value": { "time": "+1983-01-01T00:00:00Z", "precision": 11 } } } ],
+              "P582": [ { "snaktype": "value", "property": "P582",
+                  "datavalue": { "type": "time", "value": { "time": "+2003-07-31T00:00:00Z", "precision": 11 } } } ]
+            } } ],
+        "P1476": [
+          { "mainsnak": { "snaktype": "value", "property": "P1476",
+              "datavalue": { "type": "monolingualtext", "value": { "text": "The Proposition", "language": "en" } } },
+            "rank": "normal", "references": [] } ],
+        "P2047": [
+          { "mainsnak": { "snaktype": "somevalue", "property": "P2047" },
+            "rank": "normal", "references": [] } ]
+      }
+    }
+  }
+}
