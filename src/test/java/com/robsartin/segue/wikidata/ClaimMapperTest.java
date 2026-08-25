@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 class ClaimMapperTest {
 
   private static final Instant PULL = Instant.parse("2026-08-24T09:00:00Z");
-  private static final String SUBJECT = "Q1194713";
+  private static final String SUBJECT = "Q180337";
 
   private JsonNode entity;
 
@@ -57,7 +57,7 @@ class ClaimMapperTest {
             .findFirst()
             .orElseThrow();
 
-    assertThat(directed.fromQid()).isEqualTo("Q1339275");
+    assertThat(directed.fromQid()).isEqualTo("Q552814");
     assertThat(directed.toQid()).isEqualTo(SUBJECT);
   }
 

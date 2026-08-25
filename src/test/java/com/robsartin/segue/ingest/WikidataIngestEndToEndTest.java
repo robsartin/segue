@@ -40,7 +40,7 @@ class WikidataIngestEndToEndTest {
   private static final Clock FIXED =
       Clock.fixed(Instant.parse("2026-08-24T09:00:00Z"), ZoneOffset.UTC);
   private static final NodeRecord SEED =
-      new NodeRecord("Q1194713", NodeKind.WORK, "The Proposition");
+      new NodeRecord("Q180337", NodeKind.WORK, "The Proposition");
 
   @TempDir Path tempDir;
 
@@ -103,7 +103,7 @@ class WikidataIngestEndToEndTest {
       long replayed = GraphProjector.project(reopened, rebuilt);
 
       assertThat(replayed).isEqualTo(recorded.size());
-      assertThat(rebuilt.node("Q1194713")).isPresent();
+      assertThat(rebuilt.node("Q180337")).isPresent();
       assertThat(rebuilt.edgeCount()).isEqualTo(expectedEdges);
     }
   }

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -52,10 +53,7 @@ class EdgeTypesTest {
     // claiming the same property would make one vanish from ingest silently (ClaimMapper's
     // static block now throws on that, but the vocabulary itself should never collide).
     List<String> properties =
-        EdgeTypes.all().stream()
-            .map(EdgeType::wikidataProperty)
-            .filter(java.util.Objects::nonNull)
-            .toList();
+        EdgeTypes.all().stream().map(EdgeType::wikidataProperty).filter(Objects::nonNull).toList();
 
     assertThat(properties).doesNotHaveDuplicates();
   }

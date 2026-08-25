@@ -1,7 +1,7 @@
 {
   "entities": {
-    "Q1194713": {
-      "id": "Q1194713",
+    "Q180337": {
+      "id": "Q180337",
       "labels": { "en": { "language": "en", "value": "The Proposition" } },
       "descriptions": { "en": { "language": "en", "value": "2005 film by John Hillcoat" } },
       "claims": {
@@ -11,7 +11,7 @@
             "rank": "normal", "references": [] } ],
         "P57": [
           { "mainsnak": { "snaktype": "value", "property": "P57",
-              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q1339275" } } },
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q552814" } } },
             "rank": "normal",
             "references": [
               { "snaks": {

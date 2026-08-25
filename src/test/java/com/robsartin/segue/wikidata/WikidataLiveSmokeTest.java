@@ -37,12 +37,12 @@ class WikidataLiveSmokeTest {
    * The Proposition (2005 film by John Hillcoat). A work, not a person — Wikidata states creative
    * relations (director, composer, writer) ON the work, not on the person (see the class-level
    * known limitation in ClaimMapper), so a person seed is not guaranteed to have any whitelisted
-   * claims to find. Expanding a work is.
+   * claims to find. Expanding a work is. Confirmed live at https://www.wikidata.org/wiki/Q180337.
    *
-   * <p><b>Not Q1194713.</b> That is the id used by the stub-backed fixtures in this package
-   * (proposition-claims.json et al.) — a fine placeholder for tests that never leave the stub
-   * server, but on the real graph it resolves to "Sackheim", not this film. This test talks to the
-   * real API, so it needs the real id: confirmed live at https://www.wikidata.org/wiki/Q180337.
+   * <p>The stub-backed fixtures in this package (proposition-claims.json et al.) originally used a
+   * different, real-but-unrelated QID here — see CLAUDE.md's gotchas section — rather than a
+   * deliberately invalid placeholder like {@code Fixture}'s {@code Q9000xx} range. A fixture about
+   * a real entity should be true about it, so the fixtures now use this same id.
    */
   private static final String PROPOSITION = "Q180337";
 

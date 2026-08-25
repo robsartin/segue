@@ -22,7 +22,7 @@ class WikidataSourceAdapterTest {
   private static final Clock FIXED =
       Clock.fixed(Instant.parse("2026-08-24T09:00:00Z"), ZoneOffset.UTC);
   private static final NodeRecord SEED =
-      new NodeRecord("Q1194713", NodeKind.WORK, "The Proposition");
+      new NodeRecord("Q180337", NodeKind.WORK, "The Proposition");
 
   private static String resource(String name) throws IOException {
     try (InputStream in = WikidataSourceAdapterTest.class.getResourceAsStream(name)) {

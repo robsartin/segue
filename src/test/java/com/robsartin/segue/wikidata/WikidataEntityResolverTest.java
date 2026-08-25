@@ -94,11 +94,11 @@ class WikidataEntityResolverTest {
       EntityResolver resolver =
           new WikidataEntityResolver(new WikidataClient(stub.baseUri()), FIXED);
 
-      Optional<NodeAssertion> fetched = resolver.fetch("Q1194713");
+      Optional<NodeAssertion> fetched = resolver.fetch("Q180337");
 
       assertThat(fetched).isPresent();
       NodeAssertion node = fetched.orElseThrow();
-      assertThat(node.qid()).isEqualTo("Q1194713");
+      assertThat(node.qid()).isEqualTo("Q180337");
       assertThat(node.label()).isEqualTo("The Proposition");
       assertThat(node.kind()).isEqualTo(NodeKind.WORK); // P31 = Q11424, film
       assertThat(node.provenance().sourceId()).isEqualTo("wikidata");
