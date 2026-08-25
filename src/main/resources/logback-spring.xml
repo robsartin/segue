@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Every appender targets System.err.
+
+  On the stdio transport stdout carries the MCP protocol: one newline-delimited JSON-RPC
+  message per line, and nothing else. A single log line on stdout corrupts the stream and
+  the client sees a parse error rather than a diagnostic. The MCP specification designates
+  stderr for logging and tells clients not to read it as an error signal.
+
+  org.springframework.boot.logging.logback.StructuredLogEncoder with format=ecs is Spring
+  Boot's own structured-logging encoder (shipped in spring-boot, no extra dependency) and
+  emits actual Elastic Common Schema — the format ADR 30 decided on. An earlier version of
+  this file used Logback's own ch.qos.logback.classic.encoder.JsonEncoder instead, which is
+  valid JSON but Logback's own field shape, not ECS; corrected in the increment-4a final
+  review (FIX 10) to match what ADR 30 actually decided, rather than amending the ADR to
+  match the code.
+
+  See docs/adr/0028-mcp-transports.md and docs/adr/0030-structured-logging.md.
+-->
+<configuration>
+  <appender name="STDERR" class="ch.qos.logback.core.ConsoleAppender">
+    <target>System.err</target>
+    <encoder class="org.springframework.boot.logging.logback.StructuredLogEncoder">
+      <format>ecs</format>
+    </encoder>
+  </appender>
+
+  <root level="INFO">
+    <appender-ref ref="STDERR"/>
+  </root>
+
+  <logger name="com.robsartin.segue" level="INFO"/>
+</configuration>

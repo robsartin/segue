@@ -32,12 +32,31 @@ Six tools, no more:
 | `find_paths(from, to, maxHops)` | ranked routes with per-hop citations |
 | `note_affinity(entityId, rating, note)` | taste layer, its own tables |
 
+**Amendment (2026-08-25, increment-4a final review).** This table is the target
+end-state across increments, not what increment 4a ships. `note_affinity` lands
+with the taste layer in increment 5 (ADR 33) and is out of scope here — the five
+tools above the `note_affinity` row are what increment 4a's server actually
+exposes. `ToolSurfaceTest.noteAffinityIsDeferred()` mirrors the existing
+`assertEdgeIsNotAToolYet()` check so this stays true.
+
 - **`assert_edge` is deliberately absent** until corroboration is visibly working.
   When it arrives its assertions carry the `llm:` prefix of ADR 23.
-- **Every tool declares an `outputSchema` and returns `structuredContent`**, with the
-  JSON also serialized into a text block for compatibility.
+- **Every tool returns a `CallToolResult` built by hand** (`mcp/ToolResults`),
+  carrying the JSON as `structuredContent` and again as a text content block for
+  clients that render only `content`; `isError` is set from the result's outcome.
+  *(Amendment, 2026-08-25: the original wording here said "declares an
+  `outputSchema` and returns `structuredContent`" — Spring AI's
+  annotation-driven schema generation (`generateOutputSchema = true`) puts a
+  tool on a STRUCTURED-mode path whose result conversion produces only
+  `structuredContent`, never a text block and never `isError: true`, which
+  silently drops the error signalling this ADR requires. There is therefore no
+  framework-generated `outputSchema` in this tool surface — see the increment-4a
+  final-fix report, FIX 1.)*
 - **Tool names follow MCP's naming rules** — ASCII letters, digits, underscore, hyphen
-  and dot, within the length bound. ArchUnit asserts it.
+  and dot, within the length bound. *(Amendment, 2026-08-25: `ToolSurfaceTest`
+  asserts this by reflection over the `@McpTool` annotations, not ArchUnit —
+  ArchUnit's structural rules are not built for reading annotation attribute
+  values.)*
 - **All tool inputs are validated** before reaching the domain, and `expand_entity`
   carries a call budget, satisfying the specification's rate-limiting requirement.
 - **`note_affinity` is the only tool touching the taste layer**, and it never writes

@@ -2,6 +2,7 @@ plugins {
     java
     jacoco
     alias(libs.plugins.spotless)
+    alias(libs.plugins.spring.boot)
 }
 
 group = "com.robsartin"
@@ -27,12 +28,28 @@ dependencies {
     // Wikidata responses. Jackson rather than a second parser because Spring Boot brings
     // it in increment 4 anyway, and one JSON library is better than two.
     implementation(libs.jackson.databind)
-    runtimeOnly(libs.slf4j.nop)
+    // Nullability on the mcp/ view records (ADR 18 forbids this annotation in domain/, so it
+    // stays out of the records the schema module actually needs it for there). Already resolved
+    // transitively via Spring's dependency management; declared explicitly because code in this
+    // project imports it directly.
+    implementation(libs.jspecify)
+
+    // MCP server. See docs/adr/0032-layering-and-archunit.md — fenced to app and mcp.
+    // spring-boot-starter brings Logback as the SLF4J binding (ADR 30: structured JSON to
+    // stderr, no additional dependency), which supersedes the slf4j-nop placeholder that
+    // stood in for logging before Spring existed. Keeping both on the classpath makes
+    // Boot's LoggingApplicationListener refuse to start: "LoggerFactory is not a Logback
+    // LoggerContext but Logback is on the classpath."
+    implementation(platform(libs.spring.boot.bom))
+    implementation(platform(libs.spring.ai.bom))
+    implementation(libs.spring.boot.starter)
+    implementation(libs.spring.ai.starter.mcp.server)
 
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.assertj)
     testImplementation(libs.archunit.junit6)
+    testImplementation(libs.spring.boot.starter.test)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
 
@@ -46,6 +63,10 @@ tasks.test {
     // sqlite-jdbc loads a native library; grant it so the JDK's restricted-method
     // warning does not become a failure on a future release.
     jvmArgs("--enable-native-access=ALL-UNNAMED")
+    // StdioPurityTest launches the real application as a subprocess and needs its runtime
+    // classpath. Passed as a system property rather than relying on a packaged jar, so the
+    // test runs against exactly what this build just compiled — no separate bootJar step.
+    systemProperty("segue.mainRuntimeClasspath", sourceSets["main"].runtimeClasspath.asPath)
     useJUnitPlatform {
         // Excluded from the normal gate: it needs the network and can fail for reasons
         // that have nothing to do with this code. Run it deliberately, via ./gradlew liveTest.

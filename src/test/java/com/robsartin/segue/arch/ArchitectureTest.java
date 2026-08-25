@@ -3,6 +3,7 @@ package com.robsartin.segue.arch;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
+import com.robsartin.segue.app.SegueApplication;
 import com.robsartin.segue.port.GraphStore;
 import com.tngtech.archunit.core.domain.JavaAccess;
 import com.tngtech.archunit.core.domain.JavaCall;
@@ -103,23 +104,47 @@ class ArchitectureTest {
           .resideInAnyPackage("..ingest..", "..mcp..", "..app..")
           .because("ADR 32: adapters are the bottom of the dependency graph");
 
-  /** ADR 28: stdout belongs to the MCP protocol and nothing else. */
+  /**
+   * ADR 28: stdout belongs to the MCP protocol and nothing else — with one named exception.
+   *
+   * <p>{@link SegueApplication} reads {@code System.out} exactly once, in {@code main}, before
+   * Spring runs, in order to capture the real stdout and redirect {@code System.out} itself to
+   * stderr (FIX 5 of the increment-4a final review — see that class's Javadoc for why: a
+   * dependency's own accidental write, not this project's, is what the redirection defends
+   * against). That is the one legitimate read this rule needs to exempt, named by class rather than
+   * relaxed for the package or the project, so a second class reaching for {@code System.out} still
+   * fails this rule.
+   */
   @ArchTest
   static final ArchRule nothingWritesToStandardOut =
       noClasses()
+          .that()
+          .doNotHaveFullyQualifiedName(SegueApplication.class.getName())
           .should()
           .accessField(System.class, "out")
           .because(
               "ADR 28: on the stdio transport stdout carries the protocol; a stray"
-                  + " println corrupts the JSON-RPC stream");
+                  + " println corrupts the JSON-RPC stream. SegueApplication is the sole, named"
+                  + " exception (FIX 5, final review) — see its Javadoc.");
 
-  /** ADR 30: SLF4J is the only logging API, and stderr is written through it. */
+  /**
+   * ADR 30: SLF4J is the only logging API, and stderr is written through it — with the same one
+   * named exception as {@link #nothingWritesToStandardOut}. {@link SegueApplication} reads {@code
+   * System.err} once, in {@code main}, to build the {@code PrintStream} that {@code System.out}
+   * gets redirected to (FIX 5, final review): this is not logging, it is the redirection target,
+   * and it is the same class and the same justification as the stdout exemption above.
+   */
   @ArchTest
   static final ArchRule nothingWritesToStandardError =
       noClasses()
+          .that()
+          .doNotHaveFullyQualifiedName(SegueApplication.class.getName())
           .should()
           .accessField(System.class, "err")
-          .because("ADR 30: logging goes through SLF4J, which is configured to target stderr");
+          .because(
+              "ADR 30: logging goes through SLF4J, which is configured to target stderr."
+                  + " SegueApplication is the sole, named exception (FIX 5, final review) — see"
+                  + " its Javadoc.");
 
   /**
    * ADR 30: printStackTrace writes to stderr without touching System.err.
@@ -184,16 +209,18 @@ class ArchitectureTest {
   static final ArchRule noPackageCycles =
       SlicesRuleDefinition.slices().matching("com.robsartin.segue.(*)..").should().beFreeOfCycles();
 
-  /** ADR 25: the wikidata adapter stays plain Java so it is testable without a context. */
+  /** ADR 32: the framework lives at the edges. Everything else stays plain Java. */
   @ArchTest
-  static final ArchRule wikidataDoesNotDependOnSpring =
+  static final ArchRule springOnlyInAppAndMcp =
       noClasses()
           .that()
-          .resideInAPackage("..wikidata..")
+          .resideOutsideOfPackages("..app..", "..mcp..")
           .should()
           .dependOnClassesThat()
           .resideInAnyPackage("org.springframework..")
-          .because("ADR 25: adding a source must not require a framework");
+          .because(
+              "ADR 25 and ADR 32: adapters must be testable without an application context,"
+                  + " and adding a source must not require a framework");
 
   /** ADR 32: wikidata is an adapter like any other. */
   @ArchTest

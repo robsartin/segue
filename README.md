@@ -38,6 +38,40 @@ edges. One Nick Cave node is all three at once and the enum never grows.
 
 No infrastructure: TinkerGraph and Jena's TxnMem dataset are both in-process.
 
+## Run it as an MCP server
+
+Increment 4a adds a Spring Boot MCP server over the stdio transport (ADR 26,
+ADR 28). Build it, then launch with the `stdio` profile active:
+
+```bash
+./gradlew bootJar
+java -Dspring.profiles.active=stdio -jar build/libs/segue-0.1.0-SNAPSHOT.jar
+```
+
+The server speaks newline-delimited JSON-RPC over stdin/stdout and logs
+structured JSON to stderr — nothing else is allowed to touch stdout (ADR 28,
+ADR 30). Point an MCP client at it with a config block like:
+
+```json
+{
+  "mcpServers": {
+    "segue": {
+      "command": "java",
+      "args": [
+        "-Dspring.profiles.active=stdio",
+        "-jar",
+        "/absolute/path/to/segue-0.1.0-SNAPSHOT.jar"
+      ]
+    }
+  }
+}
+```
+
+Five tools are exposed — `search_entities`, `add_entity`, `expand_entity`,
+`get_entity`, `find_paths` — documented in `docs/adr/0026-mcp-tool-surface.md`.
+`SEGUE_DB` overrides where the assertion log lives (defaults to
+`~/.segue/segue.db`).
+
 ## The four queries, and why each one
 
 | | Query | Why it's here |
@@ -152,9 +186,9 @@ rewrite.
 ## Verification status
 
 **Runs green.** Java 25 (Temurin), macOS aarch64, compiled at `release 21`.
-`./gradlew check` runs formatting, 46 tests, coverage and the architecture rules.
-Both engines return identical results for all four queries, including identical
-full route sets between Cave and Hillcoat.
+`./gradlew check` runs formatting, 180 tests, coverage and the architecture
+rules. Both engines return identical results for all four queries, including
+identical full route sets between Cave and Hillcoat.
 
 The suite is layered: domain record invariants and the reference edge fold run
 without a store; `GraphStoreContract` runs the four queries against both
@@ -162,7 +196,7 @@ without a store; `GraphStoreContract` runs the four queries against both
 merge gate rather than a program someone remembers to run; `ArchitectureTest`
 enforces the ADRs mechanically.
 
-Coverage sits at 87% line, 75% branch, gated at 80% and 65%.
+Coverage sits at 92% line, 80% branch, gated at 80% and 65%.
 
 *(Historically: originally verified under Maven 3.9.13 with 22 hand-rolled
 checks in a `main()` method. The build is now Gradle and those checks are real
@@ -187,8 +221,9 @@ depends on their values.
 
 ## Deliberately not here
 
-The `SourceAdapter` SPI, the Wikidata ingest, and the MCP server. Slice 0 — the
-part that answers the engine question — is complete; the increments that build
-on it are tracked as GitHub issues rather than narrated here. The open risk
+This README covers slice 0 — the part that answers the engine question, which
+is complete. The `SourceAdapter` SPI, the Wikidata ingest, and the MCP server
+(see "Run it as an MCP server" above) have since landed as later increments,
+tracked as GitHub issues and ADRs rather than narrated here. The open risk
 remains #4 from the original plan: whether MCP is a pleasant *authoring*
 interface or whether you want a UI within ten minutes.

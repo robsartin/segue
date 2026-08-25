@@ -6,6 +6,8 @@ import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.port.AssertionLog;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -62,9 +64,21 @@ public final class SqliteAssertionLog implements AssertionLog {
 
   private final Connection conn;
 
-  /** Open (creating if absent) a log stored in {@code dbFile}. */
+  /** Open (creating if absent) a log stored in {@code dbFile}, and its parent directory. */
   public SqliteAssertionLog(Path dbFile) {
-    this("jdbc:sqlite:" + dbFile);
+    this(createParentDirectories(dbFile));
+  }
+
+  private static String createParentDirectories(Path dbFile) {
+    Path parent = dbFile.toAbsolutePath().getParent();
+    if (parent != null) {
+      try {
+        Files.createDirectories(parent);
+      } catch (IOException e) {
+        throw new IllegalStateException("cannot create directory " + parent, e);
+      }
+    }
+    return "jdbc:sqlite:" + dbFile;
   }
 
   /** A throwaway in-memory log, for tests. Its data lives only as long as this instance. */

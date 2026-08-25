@@ -1,0 +1,37 @@
+spring:
+  main:
+    banner-mode: "off"
+  application:
+    name: segue
+  ai:
+    mcp:
+      server:
+        name: segue
+        version: 0.1.0-SNAPSHOT
+        type: sync
+        instructions: >
+          A personal interest graph. Search for entities, add them, expand them from
+          Wikidata, and find citable routes between two things. Every relationship
+          carries the provenance of who claimed it.
+
+segue:
+  database: ${SEGUE_DB:${user.home}/.segue/segue.db}
+  # Flat, not nested under "expand": relaxed binding does not map a nested
+  # segue.expand.max-new-edges key onto SegueProperties' flat maxNewEdges
+  # component. Verified empirically — see task-5-report.md.
+  max-new-edges: 200
+---
+# The stdio transport (ADR 28). Activate with --spring.profiles.active=stdio (or
+# SPRING_PROFILES_ACTIVE=stdio). web-application-type: none skips starting an embedded
+# HTTP server entirely — there is nothing for it to serve on this transport, and leaving
+# it running would be one more thing that could log or listen unexpectedly.
+spring:
+  config:
+    activate:
+      on-profile: stdio
+  main:
+    web-application-type: none
+  ai:
+    mcp:
+      server:
+        stdio: true
