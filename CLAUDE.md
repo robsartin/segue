@@ -65,6 +65,15 @@ jena/     RDF adapter (reference implementation, keep it working).
 sqlite/   SqliteAssertionLog — the append-only log persisted to one file (ADR 24).
 wikidata/ The first source: resolution and expansion. Plain Java, no Spring.
 ingest/   IngestService (the only write path) and GraphProjector (boot replay).
+support/  Plain-Java cross-cutting helpers with no project dependencies of their
+          own — currently UuidV7, the RFC 9562 v7 id generator used for request
+          correlation.
+mcp/      The five MCP tools (EntityTools, GraphTools), SegueService (the facade
+          they call), CorrelationId. Spring-only package (ADR 32) — annotated
+          with the starter's @McpTool, but plain enough to unit test.
+app/      SegueApplication, SegueConfiguration (all wiring lives here),
+          SegueProperties, application.yaml. The other Spring-only package;
+          owns the stdio/HTTP transport profiles.
 ```
 
 Tests mirror this, plus `fixture/` (the Nick Cave neighbourhood, test-only) and
@@ -117,6 +126,34 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   The lesson is not just the fact: every fixture-backed test would have carried
   that error forever, because the fixture asserts whatever its author wrote. Run
   `./gradlew liveTest` deliberately when touching ingest.
+- **stdout is the MCP protocol channel on the stdio transport, and nothing else.**
+  All logging goes to stderr. This is enforced twice: an ArchUnit rule
+  (`nothingWritesToStandardOut`) forbids `System.out` anywhere in `src/main`, AND
+  `StdioPurityTest` launches the built application as a real subprocess and
+  asserts every line it writes to stdout parses as JSON. The two are not
+  redundant — the ArchUnit rule cannot see into a misbehaving dependency or into
+  the framework's own startup output (proved by temporarily flipping
+  `spring.main.banner-mode` to `console` under the `stdio` profile: the ArchUnit
+  suite stayed green while `StdioPurityTest` went red on the banner's first
+  line). Only running the process for real catches that class of failure.
+- **The MCP protocol revision is pinned to 2025-11-25**, not the current
+  2026-07-28, because that is what Spring AI's MCP Java SDK actually speaks
+  (ADR 27). Migrating is a tracked follow-up blocked on the Java SDK, not an
+  oversight — don't "fix" the pinned version without checking the SDK first.
+- **`search_entities`'s `kind` argument does not filter anything.** Wikidata's
+  search endpoint cannot report an entity's kind at search time, so `kind` is
+  accepted but ignored and the tool description says so explicitly — a model
+  reading only the schema, not the description, would otherwise assume it works.
+- **`logback-spring.xml` is Boot-only** — it is loaded by Spring Boot's
+  `LoggingApplicationListener`, not by Logback's own classpath scanning (which
+  only looks for `logback.xml` / `logback-test.xml`). A plain JUnit test with no
+  Spring context never triggers that listener, so Logback silently falls back to
+  its built-in default `ConsoleAppender`, which targets **stdout** — the exact
+  channel this project cannot allow logging on. A logging-configuration test
+  must be `@SpringBootTest`; a non-Spring test that asserts on log output is
+  validating Logback's factory default, not this project. See
+  `LoggingTargetsStderrTest` and its task-3 report for the two ways the naive
+  version of that test lied.
 
 ## Known open issues
 

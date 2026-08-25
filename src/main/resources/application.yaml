@@ -20,3 +20,18 @@ segue:
   # segue.expand.max-new-edges key onto SegueProperties' flat maxNewEdges
   # component. Verified empirically — see task-5-report.md.
   max-new-edges: 200
+---
+# The stdio transport (ADR 28). Activate with --spring.profiles.active=stdio (or
+# SPRING_PROFILES_ACTIVE=stdio). web-application-type: none skips starting an embedded
+# HTTP server entirely — there is nothing for it to serve on this transport, and leaving
+# it running would be one more thing that could log or listen unexpectedly.
+spring:
+  config:
+    activate:
+      on-profile: stdio
+  main:
+    web-application-type: none
+  ai:
+    mcp:
+      server:
+        stdio: true

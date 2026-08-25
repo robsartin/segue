@@ -58,6 +58,10 @@ tasks.test {
     // sqlite-jdbc loads a native library; grant it so the JDK's restricted-method
     // warning does not become a failure on a future release.
     jvmArgs("--enable-native-access=ALL-UNNAMED")
+    // StdioPurityTest launches the real application as a subprocess and needs its runtime
+    // classpath. Passed as a system property rather than relying on a packaged jar, so the
+    // test runs against exactly what this build just compiled — no separate bootJar step.
+    systemProperty("segue.mainRuntimeClasspath", sourceSets["main"].runtimeClasspath.asPath)
     useJUnitPlatform {
         // Excluded from the normal gate: it needs the network and can fail for reasons
         // that have nothing to do with this code. Run it deliberately, via ./gradlew liveTest.
