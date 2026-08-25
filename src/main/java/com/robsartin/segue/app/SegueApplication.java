@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.Banner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -67,8 +68,16 @@ public class SegueApplication {
    * McpServerTransportProviderBase}, so its {@code @ConditionalOnMissingBean} backs off) with one
    * wired to the stdout captured in {@link #main} — not whatever {@code System.out} happens to
    * resolve to by the time this bean is created, which by then is always stderr.
+   *
+   * <p>Conditional on the same property the starter itself switches on, rather than on the {@code
+   * stdio} profile that sets it, so this bean and the framework's own stdio wiring can never
+   * disagree about which transport is live. Without the condition it was created on the HTTP
+   * transport too, where it collided with the Streamable HTTP provider — two beans of type {@code
+   * McpServerTransportProviderBase} and a {@code NoUniqueBeanDefinitionException} before the server
+   * ever answered a request.
    */
   @Bean
+  @ConditionalOnProperty(prefix = "spring.ai.mcp.server", name = "stdio", havingValue = "true")
   McpServerTransportProviderBase stdioServerTransport(
       @Qualifier("mcpServerJsonMapper") JsonMapper mcpServerJsonMapper) {
     PrintStream stdout = realStdout != null ? realStdout : System.out;
