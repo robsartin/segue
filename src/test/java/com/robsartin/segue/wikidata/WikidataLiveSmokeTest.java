@@ -21,12 +21,16 @@ import org.junit.jupiter.api.Test;
  *
  * <p>Tagged {@code live} and excluded from CI, because it needs the network and can fail for
  * reasons unrelated to this code. Run it on purpose: {@code ./gradlew liveTest}.
+ *
+ * <p>This test has already paid for itself: on its first run it caught that the QID used here was
+ * David Tennant's, not Nick Cave's. Every fixture-backed test in this package would have carried
+ * that error indefinitely.
  */
 @Tag("live")
 class WikidataLiveSmokeTest {
 
   /** Nick Cave. A real, stable identifier with relations across music, film and literature. */
-  private static final String CAVE = "Q214601";
+  private static final String CAVE = "Q192668";
 
   private final WikidataEntityResolver resolver = new WikidataEntityResolver(new WikidataClient());
 
