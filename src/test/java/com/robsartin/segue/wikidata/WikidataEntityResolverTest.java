@@ -40,7 +40,7 @@ class WikidataEntityResolverTest {
       List<Candidate> hits = resolver.search("nick cave", null, 10);
 
       assertThat(hits).hasSize(3);
-      assertThat(hits.get(0).qid()).isEqualTo("Q214601");
+      assertThat(hits.get(0).qid()).isEqualTo("Q192668");
       // Two entries share the label. Only the description separates them.
       assertThat(hits.get(0).label()).isEqualTo(hits.get(1).label());
       assertThat(hits.get(0).description()).isNotEqualTo(hits.get(1).description());

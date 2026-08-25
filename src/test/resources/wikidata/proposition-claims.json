@@ -25,11 +25,11 @@
             "rank": "normal", "references": [] } ],
         "P86": [
           { "mainsnak": { "snaktype": "value", "property": "P86",
-              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q214601" } } },
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q192668" } } },
             "rank": "normal", "references": [] } ],
         "P58": [
           { "mainsnak": { "snaktype": "value", "property": "P58",
-              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q214601" } } },
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q192668" } } },
             "rank": "normal", "references": [] } ],
         "P462": [
           { "mainsnak": { "snaktype": "value", "property": "P462",

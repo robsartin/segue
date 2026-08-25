@@ -8,6 +8,7 @@ import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.port.ExpandContext;
+import com.robsartin.segue.port.ExpandResult;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -31,6 +32,13 @@ class WikidataLiveSmokeTest {
 
   /** Nick Cave. A real, stable identifier with relations across music, film and literature. */
   private static final String CAVE = "Q192668";
+
+  /**
+   * The Proposition. A work, not a person — Wikidata states creative relations (director, composer,
+   * writer) ON the work, not on the person (see the class-level known limitation in ClaimMapper),
+   * so a person seed is not guaranteed to have any whitelisted claims to find. Expanding a work is.
+   */
+  private static final String PROPOSITION = "Q1194713";
 
   private final WikidataEntityResolver resolver = new WikidataEntityResolver(new WikidataClient());
 
@@ -57,10 +65,17 @@ class WikidataLiveSmokeTest {
   @Test
   @DisplayName("a real expansion still produces whitelisted, attributed claims")
   void expansionStillWorks() {
-    List<AssertionRecord> claims =
+    ExpandResult result =
         new WikidataSourceAdapter(resolver, java.time.Clock.systemUTC())
-            .expand(new NodeRecord(CAVE, NodeKind.PERSON, "Nick Cave"), new ExpandContext(50));
+            .expand(
+                new NodeRecord(PROPOSITION, NodeKind.WORK, "The Proposition"),
+                new ExpandContext(50));
+    List<AssertionRecord> claims = result.assertions();
 
+    // expand() swallows WikidataUnavailableException and returns empty (see
+    // WikidataSourceAdapter) — allSatisfy alone passes vacuously on that empty list, so this
+    // would stay green even if Wikidata were unreachable. isNotEmpty is the actual detection.
+    assertThat(claims).isNotEmpty();
     // Not asserting a count: Wikidata changes. Asserting the shape still holds.
     assertThat(claims)
         .allSatisfy(
