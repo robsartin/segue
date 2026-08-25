@@ -2,9 +2,13 @@ package com.robsartin.segue.app;
 
 import com.robsartin.segue.ingest.GraphProjector;
 import com.robsartin.segue.ingest.IngestService;
+import com.robsartin.segue.mcp.EntityTools;
+import com.robsartin.segue.mcp.GraphTools;
+import com.robsartin.segue.mcp.SegueService;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.EntityResolver;
 import com.robsartin.segue.port.GraphStore;
+import com.robsartin.segue.port.SourceAdapters;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import com.robsartin.segue.wikidata.WikidataClient;
@@ -76,5 +80,24 @@ public class SegueConfiguration {
   @Bean
   IngestService ingestService(AssertionLog assertionLog, GraphStore graphStore) {
     return new IngestService(assertionLog, graphStore);
+  }
+
+  @Bean
+  SegueService segueService(
+      EntityResolver resolver, GraphStore graph, IngestService ingest, SourceAdapters adapters) {
+    return new SegueService(resolver, graph, ingest, adapters);
+  }
+
+  // The five MCP tools (Task 7 / ADR 26). Registering them as beans here — the same way as every
+  // other collaborator in this class — is what makes the starter's annotation scanner find their
+  // @McpTool methods; see EntityTools' Javadoc and the task-7 report for how that was confirmed.
+  @Bean
+  EntityTools entityTools(SegueService segueService) {
+    return new EntityTools(segueService);
+  }
+
+  @Bean
+  GraphTools graphTools(SegueService segueService, SegueProperties properties) {
+    return new GraphTools(segueService, properties.maxNewEdges());
   }
 }

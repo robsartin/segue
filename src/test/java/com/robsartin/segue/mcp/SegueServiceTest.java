@@ -2,7 +2,6 @@ package com.robsartin.segue.mcp;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.robsartin.segue.app.SourceAdapters;
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.Candidate;
 import com.robsartin.segue.domain.NodeAssertion;
@@ -19,6 +18,7 @@ import com.robsartin.segue.port.ExpandContext;
 import com.robsartin.segue.port.ExpandResult;
 import com.robsartin.segue.port.GraphStore;
 import com.robsartin.segue.port.SourceAdapter;
+import com.robsartin.segue.port.SourceAdapters;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import java.time.Instant;

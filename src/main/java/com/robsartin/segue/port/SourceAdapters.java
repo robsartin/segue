@@ -1,6 +1,5 @@
-package com.robsartin.segue.app;
+package com.robsartin.segue.port;
 
-import com.robsartin.segue.port.SourceAdapter;
 import java.util.List;
 
 /**
