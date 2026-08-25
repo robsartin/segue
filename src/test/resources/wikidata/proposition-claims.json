@@ -13,7 +13,16 @@
           { "mainsnak": { "snaktype": "value", "property": "P57",
               "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q1339275" } } },
             "rank": "normal",
-            "references": [ { "hash": "abc" } ] } ],
+            "references": [
+              { "snaks": {
+                  "P248": [ { "snaktype": "value", "property": "P248",
+                      "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q1860" } } } ] },
+                "snaks-order": [ "P248" ] } ] },
+          { "mainsnak": { "snaktype": "somevalue", "property": "P57" },
+            "rank": "normal", "references": [] },
+          { "mainsnak": { "snaktype": "value", "property": "P57",
+              "datavalue": { "type": "string", "value": "not an entity id" } },
+            "rank": "normal", "references": [] } ],
         "P86": [
           { "mainsnak": { "snaktype": "value", "property": "P86",
               "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q214601" } } },
@@ -36,6 +45,15 @@
               "P582": [ { "snaktype": "value", "property": "P582",
                   "datavalue": { "type": "time", "value": { "time": "+2003-07-31T00:00:00Z", "precision": 11 } } } ]
             } } ],
+        "P144": [
+          { "mainsnak": { "snaktype": "value", "property": "P144",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q7791" } } },
+            "rank": "normal",
+            "references": [
+              { "snaks": {
+                  "P143": [ { "snaktype": "value", "property": "P143",
+                      "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q328" } } } ] },
+                "snaks-order": [ "P143" ] } ] } ],
         "P737": [
           { "mainsnak": { "snaktype": "value", "property": "P737",
               "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q1064" } } },

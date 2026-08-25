@@ -38,7 +38,8 @@ class ClaimMapperTest {
 
     assertThat(out)
         .extracting(AssertionRecord::typeCode)
-        .containsExactlyInAnyOrder("DIRECTED", "COMPOSED_FOR", "WROTE_SCREENPLAY_FOR", "MEMBER_OF");
+        .containsExactlyInAnyOrder(
+            "DIRECTED", "COMPOSED_FOR", "WROTE_SCREENPLAY_FOR", "MEMBER_OF", "BASED_ON");
   }
 
   @Test
@@ -110,6 +111,22 @@ class ClaimMapperTest {
   }
 
   @Test
+  @DisplayName("a references block of only P143/P4656 counts as unreferenced")
+  void selfReferentialImportReferencesDoNotCount() {
+    // P144 in the fixture carries one reference, and that reference is only P143
+    // ("imported from Wikimedia project") — a bot import citing itself, not authority.
+    // ADR 23's 1.00 tier is for a real reference; this must land at 0.80 like no reference
+    // at all.
+    AssertionRecord basedOn =
+        ClaimMapper.map(SUBJECT, entity, PULL).stream()
+            .filter(a -> a.typeCode().equals("BASED_ON"))
+            .findFirst()
+            .orElseThrow();
+
+    assertThat(basedOn.provenance().confidence()).isEqualTo(0.80);
+  }
+
+  @Test
   @DisplayName("a deprecated statement is dropped, even though it carries a reference")
   void dropsDeprecatedStatements() {
     // P737 in the fixture is rank "deprecated" with a non-empty references array — Wikidata
@@ -120,11 +137,17 @@ class ClaimMapperTest {
   }
 
   @Test
-  @DisplayName("a snak with no value is skipped rather than crashing the whole entity")
-  void skipsValuelessSnaks() {
-    // P2047 in the fixture is snaktype "somevalue" — Wikidata's "we know there is one but
-    // not what it is". One unusable claim must not lose the other forty.
-    assertThat(ClaimMapper.map(SUBJECT, entity, PULL)).isNotEmpty();
+  @DisplayName(
+      "a snak with no value, and a snak whose value is not an entity id, are both skipped rather"
+          + " than crashing the whole entity")
+  void skipsValuelessAndMistypedSnaks() {
+    // P57 in the fixture now carries three statements: one good DIRECTED claim, one
+    // snaktype "somevalue" (Wikidata's "we know there is one but not what it is"), and one
+    // whose datavalue is a plain string rather than an entity id. Only the first should
+    // survive — the other two must not crash the whole entity, and must not silently count.
+    List<AssertionRecord> out = ClaimMapper.map(SUBJECT, entity, PULL);
+
+    assertThat(out).filteredOn(a -> a.typeCode().equals("DIRECTED")).hasSize(1);
   }
 
   @Test

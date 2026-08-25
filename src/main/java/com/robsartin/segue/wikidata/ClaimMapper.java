@@ -10,9 +10,11 @@ import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Turns one entity's Wikidata claims into segue assertions.
@@ -37,6 +39,11 @@ public final class ClaimMapper {
   private static final String INSTANCE_OF = "P31";
   private static final String START_TIME = "P580";
   private static final String END_TIME = "P582";
+
+  // "imported from Wikimedia project" / "Wikimedia import URL" — a bot citing its own import
+  // pipeline, not an authority. A large share of real Wikidata references are only these two,
+  // so treating their presence as authoritative would flatten ADR 23's distinction.
+  private static final Set<String> SELF_REFERENTIAL_IMPORT_PROPERTIES = Set.of("P143", "P4656");
 
   private static final Map<String, EdgeType> BY_PROPERTY = new HashMap<>();
 
@@ -92,8 +99,7 @@ public final class ClaimMapper {
     String to = type.wikidataInverted() ? subjectQid : objectQid;
 
     // ADR 23: a referenced statement is authoritative, an unreferenced one is merely structured.
-    boolean referenced =
-        statement.path("references").isArray() && !statement.path("references").isEmpty();
+    boolean referenced = hasRealReference(statement.path("references"));
     double confidence = referenced ? 1.00 : 0.80;
 
     LocalDate validFrom = qualifierDate(statement, START_TIME);
@@ -115,6 +121,26 @@ public final class ClaimMapper {
             validFrom,
             validTo,
             new Provenance(SOURCE_ID, statementRef, assertedAt, confidence)));
+  }
+
+  /**
+   * True when at least one reference carries a snak on a property other than the self-referential
+   * import ones. A references block that is empty, or whose only snaks are P143/P4656, does not
+   * count — see the class-level note on {@link #SELF_REFERENTIAL_IMPORT_PROPERTIES}.
+   */
+  private static boolean hasRealReference(JsonNode references) {
+    if (!references.isArray()) {
+      return false;
+    }
+    for (JsonNode reference : references) {
+      Iterator<String> snakProperties = reference.path("snaks").fieldNames();
+      while (snakProperties.hasNext()) {
+        if (!SELF_REFERENTIAL_IMPORT_PROPERTIES.contains(snakProperties.next())) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   private static LocalDate qualifierDate(JsonNode statement, String property) {
