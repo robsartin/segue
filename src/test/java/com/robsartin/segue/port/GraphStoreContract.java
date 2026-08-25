@@ -1,6 +1,7 @@
 package com.robsartin.segue.port;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.EdgeRecord;
@@ -178,6 +179,26 @@ public abstract class GraphStoreContract {
             e ->
                 assertThat(e.sources())
                     .anySatisfy(p -> assertThat(p.assertedAt()).isEqualTo(precise)));
+  }
+
+  @Test
+  @DisplayName(
+      "recording an assertion against an unknown entity is rejected, not silently materialised")
+  void recordingAgainstAnUnknownEntityIsRejected() {
+    // An edge to an entity nothing has claimed is a claim about nothing, not a node to invent
+    // on the fly. TinkerGraphStore.requireVertex already throws; this pins that as the agreed
+    // cross-engine behaviour rather than an accident of one adapter — increment 4's neighbour
+    // fan-out will hit this constantly, and the two engines must fail the same way.
+    AssertionRecord toNowhere =
+        new AssertionRecord(
+            "Q999999997",
+            "Q999999996",
+            "AUTHORED",
+            null,
+            null,
+            new Provenance("wikidata", "S-unknown", Instant.EPOCH, 1.0));
+
+    assertThatThrownBy(() -> store.record(toNowhere)).isInstanceOf(IllegalStateException.class);
   }
 
   /**

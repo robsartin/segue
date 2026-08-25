@@ -82,6 +82,14 @@ public final class JenaGraphStore implements GraphStore {
     Txn.executeWrite(
         ds,
         () -> {
+          Model def = ds.getDefaultModel();
+          // An edge to an entity nothing has claimed is a claim about nothing. Without this
+          // check Jena would silently materialise a bare resource for a QID no one ever
+          // upserted - see GraphStoreContract's cross-engine pin; TinkerGraphStore's
+          // requireVertex already rejects the same case.
+          requireKnown(def, a.fromQid());
+          requireKnown(def, a.toQid());
+
           String graphIri = "urn:assertion:" + UUID.randomUUID();
 
           // The claim itself: one triple, alone in its own graph.
@@ -95,7 +103,6 @@ public final class JenaGraphStore implements GraphStore {
           ds.addNamedModel(graphIri, claim);
 
           // Everything about the claim: attached to the graph IRI, in the default graph.
-          Model def = ds.getDefaultModel();
           Resource g = def.createResource(graphIri);
           Provenance p = a.provenance();
           def.add(g, def.createProperty(Vocab.P_SOURCE), p.sourceId());
@@ -123,6 +130,21 @@ public final class JenaGraphStore implements GraphStore {
                 def.createTypedLiteral(a.validTo().toString(), XSDDatatype.XSDdate));
           }
         });
+  }
+
+  /**
+   * Rejects an assertion that points at a QID {@link #upsertNode} was never called for, matching
+   * {@code TinkerGraphStore.requireVertex}. A resource is "known" once it carries the label
+   * upsertNode gives it; checked with {@code Model.contains(subject, predicate)} rather than a
+   * SPARQL round trip, since this runs inside {@code record}'s own write transaction and Jena's
+   * in-memory dataset does not support nesting one transaction inside another.
+   */
+  private static void requireKnown(Model def, String qid) {
+    Resource subject = def.createResource(Vocab.entity(qid));
+    if (!def.contains(subject, def.createProperty(Vocab.RDFS + "label"))) {
+      throw new IllegalStateException(
+          "assertion references unknown entity " + qid + " - upsert the node first");
+    }
   }
 
   // ---- reads ------------------------------------------------------------

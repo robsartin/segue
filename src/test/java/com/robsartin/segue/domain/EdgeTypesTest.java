@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -43,6 +44,18 @@ class EdgeTypesTest {
           .as("field %s should register under its own name", field.getName())
           .isEqualTo(field.getName());
     }
+  }
+
+  @Test
+  @DisplayName("every registered Wikidata property maps to exactly one edge type")
+  void wikidataPropertiesAreDistinct() {
+    // ClaimMapper derives its whitelist from EdgeTypes, keyed by wikidataProperty. Two types
+    // claiming the same property would make one vanish from ingest silently (ClaimMapper's
+    // static block now throws on that, but the vocabulary itself should never collide).
+    List<String> properties =
+        EdgeTypes.all().stream().map(EdgeType::wikidataProperty).filter(Objects::nonNull).toList();
+
+    assertThat(properties).doesNotHaveDuplicates();
   }
 
   @Test

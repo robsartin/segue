@@ -1,0 +1,84 @@
+{
+  "entities": {
+    "Q180337": {
+      "id": "Q180337",
+      "labels": { "en": { "language": "en", "value": "The Proposition" } },
+      "descriptions": { "en": { "language": "en", "value": "2005 film by John Hillcoat" } },
+      "claims": {
+        "P31": [
+          { "mainsnak": { "snaktype": "value", "property": "P31",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q11424" } } },
+            "rank": "normal", "references": [] } ],
+        "P57": [
+          { "mainsnak": { "snaktype": "value", "property": "P57",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q552814" } } },
+            "rank": "normal",
+            "references": [
+              { "snaks": {
+                  "P248": [ { "snaktype": "value", "property": "P248",
+                      "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q1860" } } } ] },
+                "snaks-order": [ "P248" ] } ] },
+          { "mainsnak": { "snaktype": "somevalue", "property": "P57" },
+            "rank": "normal", "references": [] },
+          { "mainsnak": { "snaktype": "value", "property": "P57",
+              "datavalue": { "type": "string", "value": "not an entity id" } },
+            "rank": "normal", "references": [] } ],
+        "P86": [
+          { "mainsnak": { "snaktype": "value", "property": "P86",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q192668" } } },
+            "rank": "normal", "references": [] } ],
+        "P58": [
+          { "mainsnak": { "snaktype": "value", "property": "P58",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q192668" } } },
+            "rank": "normal", "references": [] } ],
+        "P462": [
+          { "mainsnak": { "snaktype": "value", "property": "P462",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q23444" } } },
+            "rank": "normal", "references": [] } ],
+        "P463": [
+          { "mainsnak": { "snaktype": "value", "property": "P463",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q1299" } } },
+            "rank": "normal", "references": [],
+            "qualifiers": {
+              "P580": [ { "snaktype": "value", "property": "P580",
+                  "datavalue": { "type": "time", "value": { "time": "+1983-01-01T00:00:00Z", "precision": 11 } } } ],
+              "P582": [ { "snaktype": "value", "property": "P582",
+                  "datavalue": { "type": "time", "value": { "time": "+2003-07-31T00:00:00Z", "precision": 11 } } } ]
+            } } ],
+        "P361": [
+          { "mainsnak": { "snaktype": "value", "property": "P361",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "P123" } } },
+            "rank": "normal", "references": [] } ],
+        "P175": [
+          { "mainsnak": { "snaktype": "value", "property": "P175",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q233046" } } },
+            "rank": "normal", "references": [],
+            "qualifiers": {
+              "P580": [ { "snaktype": "value", "property": "P580",
+                  "datavalue": { "type": "time", "value": { "time": "+1990-01-01T00:00:00Z", "precision": 9 } } } ]
+            } } ],
+        "P144": [
+          { "mainsnak": { "snaktype": "value", "property": "P144",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q7791" } } },
+            "rank": "normal",
+            "references": [
+              { "snaks": {
+                  "P143": [ { "snaktype": "value", "property": "P143",
+                      "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q328" } } } ] },
+                "snaks-order": [ "P143" ] } ] } ],
+        "P737": [
+          { "mainsnak": { "snaktype": "value", "property": "P737",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q1064" } } },
+            "rank": "deprecated",
+            "references": [ { "hash": "deprecated-but-referenced" } ] } ],
+        "P1476": [
+          { "mainsnak": { "snaktype": "value", "property": "P1476",
+              "datavalue": { "type": "monolingualtext", "value": { "text": "The Proposition", "language": "en" } } },
+            "rank": "normal", "references": [] } ],
+        "P2047": [
+          { "mainsnak": { "snaktype": "somevalue", "property": "P2047" },
+            "rank": "normal", "references": [] } ]
+      }
+    }
+  }
+}

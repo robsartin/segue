@@ -24,6 +24,9 @@ dependencies {
     implementation(libs.jena.arq)
     // Assertion-log persistence. See docs/adr/0024-sqlite-assertion-log.md.
     implementation(libs.sqlite.jdbc)
+    // Wikidata responses. Jackson rather than a second parser because Spring Boot brings
+    // it in increment 4 anyway, and one JSON library is better than two.
+    implementation(libs.jackson.databind)
     runtimeOnly(libs.slf4j.nop)
 
     testImplementation(platform(libs.junit.bom))
@@ -40,13 +43,27 @@ tasks.withType<JavaCompile>().configureEach {
 }
 
 tasks.test {
-    useJUnitPlatform()
     // sqlite-jdbc loads a native library; grant it so the JDK's restricted-method
     // warning does not become a failure on a future release.
     jvmArgs("--enable-native-access=ALL-UNNAMED")
+    useJUnitPlatform {
+        // Excluded from the normal gate: it needs the network and can fail for reasons
+        // that have nothing to do with this code. Run it deliberately, via ./gradlew liveTest.
+        excludeTags("live")
+    }
     testLogging {
         events("failed")
     }
+}
+
+tasks.register<Test>("liveTest") {
+    group = "verification"
+    description = "Runs the tagged live tests against the real Wikidata API. Needs network."
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform { includeTags("live") }
+    // Never up-to-date: the point is to re-check the real endpoint.
+    outputs.upToDateWhen { false }
 }
 
 spotless {
