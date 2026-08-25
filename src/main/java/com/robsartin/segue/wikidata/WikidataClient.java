@@ -87,7 +87,11 @@ public final class WikidataClient {
         Thread.currentThread().interrupt();
         throw new WikidataUnavailableException("interrupted while calling Wikidata", e);
       }
-      backoff(attempt);
+      // No backoff after the final attempt — the decision to fail is already made, and
+      // expand() swallows this exception, so the wait would be a user staring at nothing.
+      if (attempt < MAX_ATTEMPTS) {
+        backoff(attempt);
+      }
     }
     throw new WikidataUnavailableException(
         "Wikidata did not answer after " + MAX_ATTEMPTS + " attempts", last);
