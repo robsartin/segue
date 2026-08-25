@@ -94,6 +94,13 @@ public final class ClaimMapper {
     if (objectQid == null || objectQid.isBlank()) {
       return Optional.empty();
     }
+    if (!objectQid.matches("Q\\d+")) {
+      // wikibase-property/lexeme/form/sense datatypes also carry a value.id ("P123",
+      // "L123-F1"). AssertionRecord does not validate, so an unvalidated id would reach
+      // TinkerGraphStore.requireVertex and throw mid-batch, after the log entry is already
+      // written.
+      return Optional.empty();
+    }
 
     String from = type.wikidataInverted() ? objectQid : subjectQid;
     String to = type.wikidataInverted() ? subjectQid : objectQid;
@@ -143,9 +150,20 @@ public final class ClaimMapper {
     return false;
   }
 
+  // Wikidata's time precision codes: 11 = day, 10 = month, 9 = year, and coarser below that.
+  // Anything less precise than a day cannot honestly become a LocalDate.
+  private static final int DAY_PRECISION = 11;
+
   private static LocalDate qualifierDate(JsonNode statement, String property) {
     JsonNode value = statement.at("/qualifiers/" + property + "/0/datavalue/value/time");
     if (value.isMissingNode() || value.asText().isBlank()) {
+      return null;
+    }
+    int precision =
+        statement.at("/qualifiers/" + property + "/0/datavalue/value/precision").asInt(-1);
+    if (precision < DAY_PRECISION) {
+      // A year- or month-precision date read as a LocalDate would feed false day-level
+      // precision into validAt() time-travel queries.
       return null;
     }
     // Wikidata times look like "+1983-01-01T00:00:00Z" — a leading sign, and zeroes where the

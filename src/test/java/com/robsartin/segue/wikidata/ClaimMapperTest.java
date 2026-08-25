@@ -39,7 +39,12 @@ class ClaimMapperTest {
     assertThat(out)
         .extracting(AssertionRecord::typeCode)
         .containsExactlyInAnyOrder(
-            "DIRECTED", "COMPOSED_FOR", "WROTE_SCREENPLAY_FOR", "MEMBER_OF", "BASED_ON");
+            "DIRECTED",
+            "COMPOSED_FOR",
+            "WROTE_SCREENPLAY_FOR",
+            "MEMBER_OF",
+            "BASED_ON",
+            "PERFORMED");
   }
 
   @Test
@@ -124,6 +129,32 @@ class ClaimMapperTest {
             .orElseThrow();
 
     assertThat(basedOn.provenance().confidence()).isEqualTo(0.80);
+  }
+
+  @Test
+  @DisplayName("a non-QID object id is skipped rather than reaching the graph store broken")
+  void skipsNonQidObjectIds() {
+    // P361 in the fixture points at "P123" — the shape wikibase-property/lexeme/form/sense
+    // datavalues take. AssertionRecord does not validate, so an unvalidated id would reach
+    // TinkerGraphStore.requireVertex and blow up mid-batch, after the log entry is already
+    // written.
+    assertThat(ClaimMapper.map(SUBJECT, entity, PULL))
+        .noneMatch(a -> a.typeCode().equals("PART_OF"));
+  }
+
+  @Test
+  @DisplayName("a below-day-precision date is treated as absent, not a fabricated day")
+  void ignoresLowPrecisionDates() {
+    // P175 in the fixture has a P580 qualifier at precision 9 (year). Reading its raw
+    // "+1990-01-01..." text as a LocalDate would feed false day-level precision into
+    // validAt() time-travel queries.
+    AssertionRecord performed =
+        ClaimMapper.map(SUBJECT, entity, PULL).stream()
+            .filter(a -> a.typeCode().equals("PERFORMED"))
+            .findFirst()
+            .orElseThrow();
+
+    assertThat(performed.validFrom()).isNull();
   }
 
   @Test

@@ -45,6 +45,18 @@
               "P582": [ { "snaktype": "value", "property": "P582",
                   "datavalue": { "type": "time", "value": { "time": "+2003-07-31T00:00:00Z", "precision": 11 } } } ]
             } } ],
+        "P361": [
+          { "mainsnak": { "snaktype": "value", "property": "P361",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "P123" } } },
+            "rank": "normal", "references": [] } ],
+        "P175": [
+          { "mainsnak": { "snaktype": "value", "property": "P175",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q233046" } } },
+            "rank": "normal", "references": [],
+            "qualifiers": {
+              "P580": [ { "snaktype": "value", "property": "P580",
+                  "datavalue": { "type": "time", "value": { "time": "+1990-01-01T00:00:00Z", "precision": 9 } } } ]
+            } } ],
         "P144": [
           { "mainsnak": { "snaktype": "value", "property": "P144",
               "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q7791" } } },
