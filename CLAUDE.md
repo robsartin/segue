@@ -19,6 +19,7 @@ built yet; the increments that build on slice 0 are tracked as GitHub issues.
 ./gradlew check           # format, tests, coverage, arch rules — the full CI gate
 ./gradlew test            # tests only
 ./gradlew spotlessApply   # fix formatting
+./gradlew liveTest        # tagged live tests against the real Wikidata API; excluded from check
 ```
 
 Gradle, not Maven. The wrapper is pinned to 9.7.1 and committed; **Gradle 9.1.0 is the
@@ -58,11 +59,12 @@ Full reasoning: `docs/adr/0018-graph-engine-gremlin.md`. All decisions are recor
 
 ```
 domain/   records + Wikidata-derived edge vocabulary. NO third-party deps.
-port/     GraphStore + AssertionLog — the seams that keep engine and store reversible.
+port/     GraphStore, AssertionLog, SourceAdapter, EntityResolver — the seams.
 tinker/   Gremlin adapter (the chosen one).
 jena/     RDF adapter (reference implementation, keep it working).
 sqlite/   SqliteAssertionLog — the append-only log persisted to one file (ADR 24).
-ingest/   GraphProjector — replays the log into the graph at boot; the only writer.
+wikidata/ The first source: resolution and expansion. Plain Java, no Spring.
+ingest/   IngestService (the only write path) and GraphProjector (boot replay).
 ```
 
 Tests mirror this, plus `fixture/` (the Nick Cave neighbourhood, test-only) and
@@ -99,6 +101,22 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
 - **When comparing engines, compare full result SETS, not the first element.**
   Comparing only the shortest path is what let the multigraph bug pass CI.
 - The QIDs in `Fixture` are placeholders (Q9000xx), not real Wikidata ids.
+- **Wikidata states creative relations on the WORK, not the person.** Fetching an
+  entity returns only claims stated on it, so expanding a film finds its director
+  while expanding a person does not find their films. `EdgeType.wikidataInverted`
+  fixes the stored direction, not the discovery problem. Backlinks need a Query
+  Service call and are their own piece of work.
+- **`wbsearchentities` does not return P31**, so search results cannot be filtered
+  by kind without one extra round trip per hit. `EntityResolver.search` therefore
+  accepts a `kind` argument and deliberately does NOT apply it — a filter that
+  cannot see the kind returns an empty list, which reads as "no such entity" rather
+  than "cannot filter". ADR 26's `search_entities(query, kind?)` MCP tool inherits
+  this, and its tool description must say so.
+- **The live smoke test caught a wrong QID on its first run** — the plan used
+  Q214601 for Nick Cave, which is actually David Tennant (Nick Cave is Q192668).
+  The lesson is not just the fact: every fixture-backed test would have carried
+  that error forever, because the fixture asserts whatever its author wrote. Run
+  `./gradlew liveTest` deliberately when touching ingest.
 
 ## Known open issues
 
@@ -119,7 +137,7 @@ The authoritative plan is `docs/design/2026-08-24-slice-1-2-design.md` and the A
 cites; the increments are GitHub issues. What follows is orientation, not specification —
 where it disagrees with an ADR, the ADR wins.
 
-### Slice 1 — SourceAdapter SPI + Wikidata ingest
+### Slice 1 — SourceAdapter SPI + Wikidata ingest (landed)
 
 **Two** SPIs, not one — see `docs/adr/0025-source-adapter-spi.md`. Resolution and
 expansion are different capabilities with different implementors: a similarity source
@@ -140,13 +158,16 @@ public interface EntityResolver {
 ```
 
 Wikidata first, deliberately — no API key, cross-domain by construction, and it
-supplies both the QID identity spine and the edge vocabulary. Use
-`wbsearchentities` for resolution and `wbgetentities` for claims; map a whitelist
-of ~15 properties to edge types; qualifiers P580/P582 become
-`validFrom`/`validTo`. Virtual threads for the claim fan-out. This also retires
-the placeholder QIDs in `Fixture`.
+supplies both the QID identity spine and the edge vocabulary. Uses
+`wbsearchentities` for resolution and `wbgetentities` for claims, maps a
+whitelist of properties to edge types, and turns qualifiers P580/P582 into
+`validFrom`/`validTo`. Virtual threads drive the claim fan-out.
 
 Design rule: adding a source must not require touching the graph layer.
+
+Retiring the placeholder QIDs in `Fixture` was deliberately left undone — it
+touches every test's expected counts and deserves its own change. Backlink
+discovery via the Query Service (see the Gotchas section) is likewise deferred.
 
 ### Slice 2 — MCP server
 
