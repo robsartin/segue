@@ -2,6 +2,9 @@ package com.robsartin.segue.mcp;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
 import java.util.Map;
 import java.util.Objects;
@@ -23,7 +26,17 @@ import java.util.Objects;
  */
 final class ToolResults {
 
-  private static final ObjectMapper MAPPER = new ObjectMapper();
+  /**
+   * Configured, not bare. {@code ProvenanceView.assertedAt} is the one {@code java.time} value on
+   * the tool surface, and Jackson 2 needs {@link JavaTimeModule} registered before it can write
+   * one. Timestamps go out ISO-8601 rather than as epoch numbers because a route's provenance is
+   * meant to be citable, and a bare number is not.
+   */
+  private static final ObjectMapper MAPPER =
+      JsonMapper.builder()
+          .addModule(new JavaTimeModule())
+          .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+          .build();
 
   private ToolResults() {}
 
@@ -33,10 +46,12 @@ final class ToolResults {
     try {
       json = MAPPER.writeValueAsString(result);
     } catch (JsonProcessingException e) {
-      // Every field on every ToolResult payload is one of this project's own records, enums,
-      // primitives or Strings — there is nothing here Jackson cannot serialise. If this ever
-      // throws, the payload grew a type that shouldn't be on the wire, which is a programmer
-      // error the caller should see, not a shortfall to degrade gracefully from.
+      // A ToolResult payload is built from this project's own records, enums, primitives,
+      // Strings and the java.time values MAPPER is configured for. If this throws, the payload
+      // grew a type the mapper has no handler for — a programmer error the caller should see,
+      // not a shortfall to degrade gracefully from. It is not hypothetical: this is exactly how
+      // find_paths shipped broken in increment 4a (issue #18), which is why ToolResultsTest now
+      // puts a provenance-bearing payload through this method.
       throw new IllegalStateException("tool result is not serializable: " + result, e);
     }
     @SuppressWarnings("unchecked")
