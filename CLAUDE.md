@@ -154,6 +154,25 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   validating Logback's factory default, not this project. See
   `LoggingTargetsStderrTest` and its task-3 report for the two ways the naive
   version of that test lied.
+- **Never put an `application.yaml` in `src/test/resources`.** Spring Boot
+  resolves `classpath:/application.yaml` to the *first* match on the classpath,
+  and test resources come first, so such a file does not override a key — it
+  shadows the whole of `src/main/resources/application.yaml`. The suite spent
+  increment 4a booting contexts that had never seen the real MCP server name,
+  transport protocol or bind address, which is the opposite of what an
+  integration test is for. Test-wide property overrides go in `tasks.test`'s
+  `systemProperty` (system properties outrank config data, and override exactly
+  the key they name); per-test ones go in `@DynamicPropertySource`, which
+  outranks both.
+- **Spring AI 2.0.1's Streamable HTTP auto-configuration cannot start on its
+  own.** `webMvcStreamableServerTransportProvider` takes
+  `McpServerStreamableHttpProperties`, and nothing registers that class —
+  `McpServerAutoConfiguration` enables only `McpServerProperties` and
+  `McpServerChangeNotificationProperties`. `SegueConfiguration` enables it.
+  Re-check on the next Spring AI bump. In the same area: the starter's
+  *effective* default protocol is the deprecated `SSE`, not `streamable`, no
+  matter what the property metadata claims — so `spring.ai.mcp.server.protocol`
+  is set explicitly (ADR 37).
 
 ## Known open issues
 

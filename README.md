@@ -40,11 +40,20 @@ No infrastructure: TinkerGraph and Jena's TxnMem dataset are both in-process.
 
 ## Run it as an MCP server
 
-Increment 4a adds a Spring Boot MCP server over the stdio transport (ADR 26,
-ADR 28). Build it, then launch with the `stdio` profile active:
+A Spring Boot MCP server exposing five tools (ADR 26) over **both** transports
+ADR 28 commits to. Build the jar once:
 
 ```bash
 ./gradlew bootJar
+```
+
+Which transport you get is a launch-time choice, and the two are mutually
+exclusive: the `stdio` profile starts no HTTP listener at all, and without it no
+process reads stdin.
+
+### stdio — for a client that launches segue as a subprocess
+
+```bash
 java -Dspring.profiles.active=stdio -jar build/libs/segue-0.1.0-SNAPSHOT.jar
 ```
 
@@ -67,10 +76,55 @@ ADR 30). Point an MCP client at it with a config block like:
 }
 ```
 
+### Streamable HTTP — for a client that connects to a running segue
+
+No profile: HTTP is what a plain launch gives you.
+
+```bash
+java -jar build/libs/segue-0.1.0-SNAPSHOT.jar
+```
+
+The MCP endpoint is `http://127.0.0.1:8080/mcp`; `SEGUE_HTTP_PORT` moves it.
+A client config block for it looks like:
+
+```json
+{
+  "mcpServers": {
+    "segue": {
+      "type": "http",
+      "url": "http://127.0.0.1:8080/mcp"
+    }
+  }
+}
+```
+
+To drive it by hand, remember the two things every Streamable HTTP client has to
+do: send `Accept: application/json, text/event-stream` on every POST, and echo
+back the `Mcp-Session-Id` the `initialize` response returns.
+
+```bash
+curl -si -X POST http://127.0.0.1:8080/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"curl","version":"1"}}}'
+```
+
+**It is deliberately reachable only from this machine.** The server binds to
+`127.0.0.1`, and it refuses any request whose `Origin` or `Host` is not loopback
+— 403 and 421 respectively. That is not belt-and-braces: binding to loopback
+alone would still let a web page open in your own browser POST to
+`localhost:8080`, which is the DNS-rebinding attack. There is no authentication,
+because there is nothing to authenticate to a server only you can reach. Making
+segue reachable from anywhere else is a code change to the allowlist plus a
+decision about auth — see `docs/adr/0037-streamable-http-transport-on-the-servlet-stack.md`.
+
+### Either way
+
 Five tools are exposed — `search_entities`, `add_entity`, `expand_entity`,
 `get_entity`, `find_paths` — documented in `docs/adr/0026-mcp-tool-surface.md`.
-`SEGUE_DB` overrides where the assertion log lives (defaults to
-`~/.segue/segue.db`).
+The tool surface, the protocol revision and the graph behind them are identical
+on both transports. `SEGUE_DB` overrides where the assertion log lives (defaults
+to `~/.segue/segue.db`).
 
 ## The four queries, and why each one
 
@@ -186,8 +240,8 @@ rewrite.
 ## Verification status
 
 **Runs green.** Java 25 (Temurin), macOS aarch64, compiled at `release 21`.
-`./gradlew check` runs formatting, 180 tests, coverage and the architecture
-rules. Both engines return identical results for all four queries, including
+`./gradlew check` runs formatting, the whole test suite, coverage and the
+architecture rules. Both engines return identical results for all four queries, including
 identical full route sets between Cave and Hillcoat.
 
 The suite is layered: domain record invariants and the reference edge fold run
@@ -196,7 +250,8 @@ without a store; `GraphStoreContract` runs the four queries against both
 merge gate rather than a program someone remembers to run; `ArchitectureTest`
 enforces the ADRs mechanically.
 
-Coverage sits at 92% line, 80% branch, gated at 80% and 65%.
+Coverage is gated at 80% line/instruction and 65% branch, and comfortably
+clears both; `build/reports/jacoco/` has the current numbers.
 
 *(Historically: originally verified under Maven 3.9.13 with 22 hand-rolled
 checks in a `main()` method. The build is now Gradle and those checks are real
@@ -222,8 +277,8 @@ depends on their values.
 ## Deliberately not here
 
 This README covers slice 0 — the part that answers the engine question, which
-is complete. The `SourceAdapter` SPI, the Wikidata ingest, and the MCP server
-(see "Run it as an MCP server" above) have since landed as later increments,
+is complete. The `SourceAdapter` SPI, the Wikidata ingest, and the MCP server on
+both transports (see "Run it as an MCP server" above) have since landed as later increments,
 tracked as GitHub issues and ADRs rather than narrated here. The open risk
 remains #4 from the original plan: whether MCP is a pleasant *authoring*
 interface or whether you want a UI within ten minutes.

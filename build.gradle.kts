@@ -43,6 +43,12 @@ dependencies {
     implementation(platform(libs.spring.ai.bom))
     implementation(libs.spring.boot.starter)
     implementation(libs.spring.ai.starter.mcp.server)
+    // The Streamable HTTP transport (ADR 28 ships both). The servlet flavour, not WebFlux: the
+    // rest of this application is blocking — SQLite over JDBC, an in-process Gremlin traversal —
+    // and a reactive stack would buy nothing but a second concurrency model to reason about.
+    // This starter also drags in spring-boot-starter-web, which is what makes the `stdio` profile's
+    // web-application-type: none load-bearing rather than decorative.
+    implementation(libs.spring.ai.starter.mcp.server.webmvc)
 
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
@@ -62,10 +68,36 @@ tasks.test {
     // sqlite-jdbc loads a native library; grant it so the JDK's restricted-method
     // warning does not become a failure on a future release.
     jvmArgs("--enable-native-access=ALL-UNNAMED")
+    // StreamableHttpTransportTest sends a forged Host header to prove the DNS-rebinding defence
+    // (ADR 28) answers 421. java.net.http.HttpClient refuses to set Host at all without this flag,
+    // so without it the security control could only be configured, never tested — and a security
+    // control nothing exercises is a comment.
+    jvmArgs("-Djdk.httpclient.allowRestrictedHeaders=host")
     // StdioPurityTest launches the real application as a subprocess and needs its runtime
     // classpath. Passed as a system property rather than relying on a packaged jar, so the
     // test runs against exactly what this build just compiled — no separate bootJar step.
     systemProperty("segue.mainRuntimeClasspath", sourceSets["main"].runtimeClasspath.asPath)
+    // Keep every @SpringBootTest off the developer's real graph. Without this they inherit
+    // src/main/resources/application.yaml's default of ${user.home}/.segue/segue.db, so `./gradlew
+    // check` would create ~/.segue/, open the real assertion log and replay whatever is in it.
+    //
+    // A system property, not a src/test/resources/application.yaml. That file used to hold this
+    // override and looked like it overrode one key; it did not. Spring Boot resolves
+    // classpath:/application.yaml to the FIRST match on the classpath, and test resources come
+    // first, so the whole of main's application.yaml — transport protocol, endpoint, server bind
+    // address, MCP server name — was invisible to every test in the suite. That is the opposite of
+    // what an integration test is for, and it is why the Streamable HTTP transport could not be
+    // tested against its own configuration until the file was deleted. A system property sits above
+    // config data in Spring's precedence order, so it overrides exactly the one key it names and
+    // shadows nothing. @DynamicPropertySource still wins over it, which is what lets individual
+    // tests point at their own @TempDir.
+    //
+    // build/, not a TempDir: `./gradlew clean` removes it, and nothing in the suite reads a graph
+    // seeded by a previous run through this default.
+    systemProperty(
+        "segue.database",
+        layout.buildDirectory.file("test-data/segue-test.db").get().asFile.absolutePath,
+    )
     useJUnitPlatform {
         // Excluded from the normal gate: it needs the network and can fail for reasons
         // that have nothing to do with this code. Run it deliberately, via ./gradlew liveTest.

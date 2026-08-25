@@ -123,3 +123,6 @@
 - [35. Use Jackson 3 as the single JSON library](0035-jackson-3-single-json-library.md) — _Accepted_
   Increment 4a left two Jackson major versions on the classpath, and the project used both.
   Related: [26. Expose six MCP tools, and hold back assert_edge](0026-mcp-tool-surface.md), [27. Pin the MCP protocol revision and follow its error conventions](0027-mcp-protocol-conformance.md), [32. Enforce the layering with ArchUnit](0032-layering-and-archunit.md), [25. Split ingest into a SourceAdapter and an EntityResolver SPI](0025-source-adapter-spi.md)
+- [37. Serve Streamable HTTP from the servlet stack, on a loopback allowlist](0037-streamable-http-transport-on-the-servlet-stack.md) — _Accepted_
+  ADR 28 decided that segue ships both transports, that `Origin` is validated on every HTTP request with 403 on mismatch, and that the server binds to `127.0.0.1`.
+  Related: [28. Ship both transports, and keep stdout for the protocol alone](0028-mcp-transports.md), [27. Pin the MCP protocol revision and follow its error conventions](0027-mcp-protocol-conformance.md), [26. Expose six MCP tools, and hold back assert_edge](0026-mcp-tool-surface.md), [12. Spring Boot application conventions](0012-spring-boot-conventions.md), [8. Maintain a security baseline](0008-security-baseline.md)
