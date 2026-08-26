@@ -301,8 +301,11 @@ empty result, if the QID has not been added.
 ### `find_paths(fromQid, toQid, maxHops?)`
 
 The payoff. Every route between two entities up to `maxHops` relationships apart, ranked
-most-trustworthy-first: a route built on well-corroborated edges outranks a shorter one resting on a
-single unconfirmed source. See
+most-explanatory-first. Two things decide the order, and the second one settles ties in the first:
+a route is demoted if it passes through a **hub** — a concept node so many entities touch that
+sharing it says nothing about either end, a Walk of Fame star being the standard example — and
+among routes that are equally specific, one built on well-corroborated edges outranks a shorter one
+resting on a single unconfirmed source. See
 [ADR 31, on path ranking by confidence](adr/0031-path-ranking-by-confidence.md). Each route comes
 back hop by hop with the assertions behind it, so you can cite it.
 
@@ -598,11 +601,18 @@ whose statements cite no source. That is
 
 Awards are the *only* non-collaboration edge in the vocabulary, and that restraint is deliberate —
 "shares a genre" or "shares an occupation" would connect everybody to everybody through a hub node
-with tens of thousands of members, and a hub edge is perfectly confident, so the ranking would put
-meaningless routes on top. The measurements behind that are in
+with tens of thousands of members. The measurements behind that are in
 [ADR 38, on award received as the first non-collaboration edge](adr/0038-award-received-as-the-first-non-collaboration-edge.md).
 The practical consequence for you: **a person who has won nothing and collaborated with nobody in
 your graph will connect to nothing.**
+
+Some awards turn out to be hubs too, which is what the specificity half of the ranking is for. An
+award for one *work* — a Hugo for a particular novel, an Oscar for a particular performance — is a
+real thing two people share. Recognition of a *career* — a Walk of Fame star, a hall of fame, a
+lifetime achievement award — is collected by everyone notable, so it connects everyone to everyone.
+Those edges are still in the graph and those routes are still returned; they are returned **last**,
+behind anything that explains more. If the only route between two people runs through a Walk of
+Fame star, that is the honest answer and you will see it — after everything better.
 
 ## The taste layer
 

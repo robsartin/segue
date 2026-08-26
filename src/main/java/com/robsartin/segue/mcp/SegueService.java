@@ -28,6 +28,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.function.ToIntFunction;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -387,10 +388,29 @@ public final class SegueService {
       return error("unknown entity: " + toQid + " — add it before searching for routes");
     }
     List<PathResult> raw = graph.paths(fromQid, toQid, maxHops);
-    List<PathResult> ranked = PathRanking.rank(raw);
+    List<PathResult> ranked = PathRanking.rank(raw, degreeLookup());
     return ToolResult.ok(
         ranked.size() + " route(s) from " + fromQid + " to " + toQid,
         ViewMapper.toPathViews(ranked));
+  }
+
+  /**
+   * The graph's shape, handed to {@link PathRanking} as a plain function over a qid.
+   *
+   * <p>ADR 31's specificity amendment (issue #52) needs to know how busy a route's intermediate
+   * nodes are, and {@code PathRanking} lives in {@code domain}, which carries no third-party
+   * dependencies and no graph access at all (ADR 18, enforced by ArchUnit). This class already
+   * holds the port, so the lookup is built here and passed down — the ranking uses the graph's
+   * shape without the domain ever learning what a graph is.
+   *
+   * <p>Memoised for the duration of one call and no longer. A dense pair can produce thousands of
+   * candidate routes through a handful of nodes, so the cache turns an edge scan per hop into one
+   * per distinct entity; a fresh map per call is what keeps it from answering with a degree the
+   * graph has since moved past.
+   */
+  private ToIntFunction<String> degreeLookup() {
+    Map<String, Integer> cache = new HashMap<>();
+    return qid -> cache.computeIfAbsent(qid, q -> graph.edges(q).size());
   }
 
   private static <T> ToolResult<T> error(String reason) {

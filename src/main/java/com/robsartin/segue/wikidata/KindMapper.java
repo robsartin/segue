@@ -45,6 +45,11 @@ public final class KindMapper {
     put("Q163740", NodeKind.GROUP); // nonprofit organization
     put("Q16334295", NodeKind.GROUP); // group of humans
     put("Q13473501", NodeKind.GROUP); // collective
+    // Four more group classes, from the issue-#52 sweep described below.
+    put("Q414147", NodeKind.GROUP); // academy of sciences
+    put("Q56816954", NodeKind.GROUP); // heavy metal band
+    put("Q18510489", NodeKind.GROUP); // comedy troupe
+    put("Q178790", NodeKind.GROUP); // labor union
     // works
     put("Q11424", NodeKind.WORK); // film
     put("Q482994", NodeKind.WORK); // album
@@ -56,6 +61,26 @@ public final class KindMapper {
     put("Q47461344", NodeKind.WORK); // written work
     put("Q3305213", NodeKind.WORK); // painting
     put("Q2431196", NodeKind.WORK); // audiovisual work
+    // Wikidata does not settle on "film" or "album" for works either, and the consequence is
+    // worse than it was for bands. Issue #52 demotes routes through a high-degree CONCEPT
+    // intermediate as hubs, which is only honest while CONCEPT means "we could not place this".
+    // Measured over every CONCEPT node in a real 25,815-node graph that could be an intermediate
+    // at all (degree >= 2, 1,416 of them): 1,058 were works wearing a class this list did not
+    // know — 667 of them "musical work/composition" alone, and one of them the best connector in
+    // the whole graph. Every QID was looked up and confirmed by label AND description.
+    put("Q105543609", NodeKind.WORK); // musical work/composition
+    put("Q21191270", NodeKind.WORK); // television series episode
+    put("Q110039749", NodeKind.WORK); // Saturday Night Live sketch
+    put("Q506240", NodeKind.WORK); // television film
+    put("Q24862", NodeKind.WORK); // short film
+    put("Q1261214", NodeKind.WORK); // television special
+    put("Q15416", NodeKind.WORK); // television program
+    put("Q58483083", NodeKind.WORK); // dramatico-musical work
+    put("Q55850593", NodeKind.WORK); // music track with vocals
+    put("Q193977", NodeKind.WORK); // music video
+    put("Q1259759", NodeKind.WORK); // miniseries
+    put("Q202866", NodeKind.WORK); // animated film
+    put("Q10590726", NodeKind.WORK); // video album
     // places
     put("Q515", NodeKind.PLACE); // city
     put("Q6256", NodeKind.PLACE); // country

@@ -9,6 +9,7 @@ import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
+import com.robsartin.segue.domain.PathRanking;
 import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.fixture.Fixture;
 import com.robsartin.segue.fixture.FixtureSourceAdapter;
@@ -632,6 +633,45 @@ class SegueServiceTest {
 
   private static double maxConfidence(EdgeView edge) {
     return edge.sources().stream().mapToDouble(ProvenanceView::confidence).max().orElse(0.0);
+  }
+
+  @Test
+  @DisplayName("findPaths demotes a route through a hub, using degrees only the graph knows")
+  void findPathsDemotesHubRoutes() {
+    // Issue #52: PathRanking judges specificity from the in-graph degree of a CONCEPT
+    // intermediate, and only this class can see the graph. Everything below is invented —
+    // an award half the cast has collected, and one film two of them actually made together.
+    ingest.record(new NodeAssertion("Q900301", NodeKind.PERSON, "Ada Vance", WIKIDATA));
+    ingest.record(new NodeAssertion("Q900302", NodeKind.PERSON, "Bruno Kell", WIKIDATA));
+    ingest.record(new NodeAssertion("Q900303", NodeKind.CONCEPT, "Boulevard Plaque", WIKIDATA));
+    ingest.record(new NodeAssertion("Q900304", NodeKind.WORK, "The Quiet Ferry", WIKIDATA));
+    // The plaque is a hub: enough other people hold one to clear HUB_DEGREE.
+    for (int i = 0; i < PathRanking.HUB_DEGREE; i++) {
+      String holder = "Q9004" + (10 + i);
+      ingest.record(new NodeAssertion(holder, NodeKind.PERSON, "Holder " + i, WIKIDATA));
+      ingest.record(edge(holder, "RECEIVED_AWARD", "Q900303", 1.00));
+    }
+    ingest.record(edge("Q900301", "RECEIVED_AWARD", "Q900303", 1.00));
+    ingest.record(edge("Q900302", "RECEIVED_AWARD", "Q900303", 1.00));
+    // The specific route is less well evidenced, and under ADR 31 alone it lost because of it.
+    ingest.record(edge("Q900301", "ACTED_IN", "Q900304", 0.80));
+    ingest.record(edge("Q900302", "ACTED_IN", "Q900304", 0.80));
+
+    ToolResult<List<PathView>> result = service().findPaths("Q900301", "Q900302", 2);
+
+    assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
+    assertThat(result.payload()).hasSize(2);
+    assertThat(result.payload().get(0).hops().get(0).to().qid()).isEqualTo("Q900304");
+  }
+
+  private static AssertionRecord edge(String from, String type, String to, double confidence) {
+    return new AssertionRecord(
+        from,
+        to,
+        type,
+        null,
+        null,
+        new Provenance("wikidata", "S-" + from + "-" + to, WIKIDATA.assertedAt(), confidence));
   }
 
   @Test

@@ -80,6 +80,34 @@ class WikidataLiveSmokeTest {
   }
 
   @Test
+  @DisplayName("the classes added for issue #52 still place a real entity where they claim")
+  void theWorkClassesStillMapRealEntities() {
+    // The positive control for the whitelist itself, and the reason it is here rather than in
+    // KindMapperTest: an offline test asserts that Q1261214 maps to WORK, which is true of
+    // whatever Q1261214 turns out to be. Only a live call can say that the entity typed with it
+    // is the television special this change was written for. Issue #52's rule reads "high-degree
+    // CONCEPT" as "hub", so a class QID that is quietly wrong does not fail — it demotes a good
+    // route and nothing notices.
+    assertThat(kindOf("Q131806449")) // Saturday Night Live 50th Anniversary Special
+        .isEqualTo(NodeKind.WORK);
+    assertThat(kindOf("Q6650163")) // Little Girl Blue, a musical work/composition
+        .isEqualTo(NodeKind.WORK);
+    assertThat(kindOf("Q486688")) // Mötley Crüe, typed only as a heavy metal band
+        .isEqualTo(NodeKind.GROUP);
+    // The negative half, and the one that matters most: awards must stay CONCEPT (ADR 38), or
+    // the specificity rule stops firing. The Kennedy Center Honors is the awkward case — its
+    // only P31 is "award" itself, which is why excluding hubs by class was rejected.
+    assertThat(kindOf("Q1738793")).isEqualTo(NodeKind.CONCEPT); // Kennedy Center Honors
+  }
+
+  private NodeKind kindOf(String qid) {
+    return resolver
+        .fetch(qid)
+        .orElseThrow(() -> new AssertionError("no such entity: " + qid))
+        .kind();
+  }
+
+  @Test
   @DisplayName("a real expansion still produces whitelisted, attributed claims")
   void expansionStillWorks() {
     ExpandResult result =
