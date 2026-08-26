@@ -12,3 +12,10 @@ _to_delete/
 
 # Agent-isolated git worktrees are created here, inside the repo (issue #30).
 .claude/
+
+# The graph, and the affinity data ADR 33 keeps out of version control (issue #37).
+# The default path is ${user.home}/.segue/segue.db, outside the tree — but SEGUE_DB can
+# point anywhere, including here.
+*.db
+*.db-journal
+*.db-wal
