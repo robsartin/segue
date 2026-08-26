@@ -29,12 +29,26 @@ public final class EdgeTypes {
    * Wikidata really does say "group has part person" — inverting it would produce an edge whose
    * label reads backwards.
    *
-   * <p><b>Reverse-P463 strictly dominates this.</b> Measured on Nick Cave and the Bad Seeds
-   * (Q1051182): P527 lists 8 members, while {@code ?person wdt:P463 wd:Q1051182} returns 10 — the
-   * same 8 plus Mick Harvey and Blixa Bargeld. Keep this registration as the degraded fallback for
-   * when the Query Service is unreachable, not as the answer. See ADR 36.
+   * <p><b>Registered {@code fallbackOnly}, and that word is now load-bearing.</b> Wikidata defines
+   * P527 as the inverse of both {@link #MEMBER_OF} (P463) and {@link #PART_OF} (P361): one
+   * relationship, stated from the opposite end. ADR 36 always described this as "the degraded
+   * fallback for when the Query Service is unreachable, not the answer" — but nothing implemented
+   * that, so both ends were ingested and every membership became two edges. Issue #33 measured 4 of
+   * 23 HAS_PART edges shadowing a MEMBER_OF over the same pair, which is two identical routes
+   * through {@code find_paths} and two slots against one {@code maxNewEdges} bound.
+   *
+   * <p>What {@code fallbackOnly} buys, mechanically: {@code ReverseClaims} never asks about P527,
+   * and {@code WikidataSourceAdapter} drops the forward P527 claims whenever the reverse pass ran.
+   * When the Query Service is down there is no better direction to defer to, so these claims are
+   * kept and a band still expands to its roster.
+   *
+   * <p><b>Reverse-P463 strictly dominates this when it is available.</b> Measured on Nick Cave and
+   * the Bad Seeds (Q1051182): P527 lists 8 members, while {@code ?person wdt:P463 wd:Q1051182}
+   * returns 10 — the same 8 plus Mick Harvey and Blixa Bargeld. Preferring the fallback would
+   * quietly lose two of the most significant Bad Seeds.
    */
-  public static final EdgeType HAS_PART = register(EdgeType.direct("HAS_PART", "P527", "has part"));
+  public static final EdgeType HAS_PART =
+      register(EdgeType.fallbackOnly("HAS_PART", "P527", "has part"));
 
   // --- creative roles (Wikidata states these on the work) ----------------
   public static final EdgeType PERFORMED =

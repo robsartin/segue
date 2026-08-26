@@ -42,14 +42,16 @@ Two candidate mechanisms were measured against the live APIs rather than argued 
   `VALUES ?p { wdt:P463 wdt:P527 … } ?other ?p wd:SEED`. Measured on Q192668: 86 rows,
   73 distinct works, HTTP 200 in 0.28s.
 - **The property set is derived from the vocabulary, not hand-kept.** `ReverseClaims`
-  reverses every property in `ClaimMapper.mappedProperties()` — which is `EdgeTypes` —
-  for the same reason the forward whitelist is derived rather than duplicated. A
-  hand-kept subset would stop covering a relation type the day someone registered one,
-  which is this bug again one level down.
+  reverses every property in `ClaimMapper.reverseProperties()` — which is `EdgeTypes`,
+  minus the fallback-only types of the issue-#33 amendment below — for the same reason
+  the forward whitelist is derived rather than duplicated. A hand-kept subset would stop
+  covering a relation type the day someone registered one, which is this bug again one
+  level down; note that the subtraction is derived from the vocabulary too, and is not a
+  second list.
 - **Direction reuses ClaimMapper's rule with the subject swapped.** A reverse hit means
   Wikidata holds `other P seed`, so it maps exactly as ClaimMapper would with
   `subject = other`. An inverted type yields `seed DIRECTED other`; a direct one yields
-  `other HAS_PART seed`. How an edge is stored does not depend on which pass found it.
+  `other PART_OF seed`. How an edge is stored does not depend on which pass found it.
 - **`maxNewEdges` moves server-side, as `ORDER BY DESC(?sitelinks) LIMIT n+1`.** The n
   we keep are the most-linked rather than an arbitrary slice — for the Bad Seeds at
   n=15 that is Nick Cave, Blixa Bargeld, Mick Harvey and Warren Ellis ahead of a 2024
@@ -67,6 +69,27 @@ Two candidate mechanisms were measured against the live APIs rather than argued 
   *plus Mick Harvey and Blixa Bargeld*, two of the most significant Bad Seeds. The two
   directions disagree and reverse-P463 strictly dominates, so P527 alone would quietly
   miss people.
+
+  **Amendment (2026-08-26, issue #33): "fallback only" is now implemented, not just
+  written.** As accepted, this bullet described an intent nothing enforced — P527 was
+  registered like any other property, so it was read on every expansion, including the
+  ones where the reverse pass answered. Wikidata defines P527 as the inverse of both P463
+  and P361, the same relationship stated from the other end, so one membership was
+  recorded as two edges: measured on the dogfooding graph, **4 of 23 `HAS_PART` edges
+  duplicated a `MEMBER_OF` over the same pair.** Three mechanisms now make the sentence
+  true, and all three are derived from one flag rather than from a list of property codes:
+  - `EdgeType.fallbackOnly` marks the registration, so the vocabulary states it;
+  - `ClaimMapper.reverseProperties()` subtracts fallback-only properties from the
+    `VALUES` clause, so the reverse pass never asks the backwards question about both
+    ends of an inverse pair (and `ReverseClaims` ignores such a row if one arrives
+    anyway);
+  - `WikidataSourceAdapter` drops the forward fallback-only claims whenever
+    `reverse.lookup` returned rather than threw — the adapter already knew which had
+    happened, so this cost no new state.
+
+  Degraded behaviour is therefore unchanged and deliberate: with the Query Service
+  unreachable there is no better direction to defer to, the P527 claims are kept, and a
+  band still expands to its 8-member roster with `sourceUnavailable` set.
 - **Both passes run, and the forward one goes first.** Neither is redundant: a film's
   director is stated on the film, so only the forward pass finds it when expanding the
   film and only the reverse pass finds it when expanding the director. Forward claims
@@ -103,11 +126,35 @@ Two candidate mechanisms were measured against the live APIs rather than argued 
   hand — something `wdt:` does for free. Revisit if undated memberships prove to matter
   in practice.
 
+Considered again for the issue-#33 amendment, and rejected:
+
+- **Dropping P527 from the vocabulary entirely.** The simplest way to end the
+  duplication, and reverse-P463 dominates it 10 to 8 whenever the Query Service answers,
+  so nothing is lost on the happy path. It was rejected because the whole of the degraded
+  path is lost with it: WDQS is a shared, rate-limited service that this project has
+  already seen throttle, and "the Query Service is down, so this band has no members"
+  is a worse answer than eight of them, flagged. Deleting a fallback to fix a bug that
+  was only ever "the fallback is not conditional" solves the wrong half.
+- **Suppressing inverse pairs at ingest**, by teaching `IngestService` that two edges over
+  one entity pair whose types are inverses are one edge. The most general answer, and the
+  only one that would also catch a duplicate arriving from two different sources. It was
+  rejected as bigger than the problem: the vocabulary has no notion of inverse pairs, so
+  it would have to gain one *and* a collapse rule *and* a decision about which of the two
+  provenances survives — while the concrete defect here is one property being read on a
+  path the accepted decision already said it should not be. Revisit if a second inverse
+  pair appears, or if a non-Wikidata source starts restating Wikidata's edges.
+
 ## Consequences
 
 - Expanding a PERSON went from 4 edges to **88**, and a GROUP from **0 to 106** — both
   measured against the live API through the adapter, not projected. The band's 106
   includes 8 `HAS_PART` from P527 and 10 `MEMBER_OF` from reverse-P463.
+
+  *(Amendment, 2026-08-26, issue #33: those two sets overlap — all 8 of the `HAS_PART` are
+  the same memberships as 8 of the 10 `MEMBER_OF`, stated from the band's side. Re-measured
+  live against the same two seeds at `maxNewEdges=200`: the PERSON goes 88 → **87** edges,
+  1 duplicate removed; the GROUP goes 106 → **98**, 8 duplicates removed, keeping all 10
+  `MEMBER_OF`. Nothing but the duplicates was lost.)*
 - `find_paths` works from person seeds alone. Nick Cave and John Hillcoat, added as two
   people and expanded, yield **8 routes**, the shortest running through *Ghosts… of the
   Civil Dead* — a film neither of their Wikidata items mentions. `PersonSeededRouteLiveTest`
@@ -148,10 +195,33 @@ Two candidate mechanisms were measured against the live APIs rather than argued 
   warning described a round trip per neighbour, which the inline identities largely
   remove; it now also tells the model that expanding a person or a band is productive,
   which is exactly the thing a user would otherwise have had to be told.
-- P527 is "has part" generally, not "has member": expanding an album now emits a
-  `HAS_PART` edge per track. That is real data and it is bounded by `maxNewEdges`, but it
-  is noisier than the group case that motivated the registration.
-- A group and its members are now connected by two parallel edges in opposite directions
-  — `HAS_PART` from P527 and `MEMBER_OF` from reverse-P463. The graph is a multigraph and
-  `find_paths` handles it, but the redundancy is real, and it is the price of keeping the
-  fallback that works when the Query Service does not.
+- P527 is "has part" generally, not "has member": expanding an album emits a `HAS_PART`
+  edge per track. That is real data and it is bounded by `maxNewEdges`, but it is noisier
+  than the group case that motivated the registration. *(Amendment, 2026-08-26, issue #33:
+  on the normal path it no longer does. A track states `P361` back at its album, and the
+  reverse pass reads that — so the album's tracks now arrive as `PART_OF` from the track's
+  side, once each, instead of as `HAS_PART` and `PART_OF` over the same pair.)*
+- ~~A group and its members are now connected by two parallel edges in opposite
+  directions.~~ **Resolved 2026-08-26 (issue #33).** That redundancy was described here as
+  "the price of keeping the fallback", but it was really the price of the fallback not
+  being conditional. It is now conditional, and the consequences of that are:
+  - **One membership is one edge whenever the Query Service answers.** `find_paths` stops
+    returning two structurally distinct, semantically identical routes through every
+    affected membership — the duplicate-route noise ADR 31's ranking exists to reduce —
+    `get_entity` stops reporting one relationship under two type groups, and no slot of
+    the `maxNewEdges` bound is spent on a duplicate (the drop happens before the bound is
+    applied).
+  - **A band's members cost one `wbgetentities` fetch each again, when expanding the
+    member.** Their identity used to ride in inline on the P527 row of the reverse answer;
+    the reverse pass no longer asks for that row. This is the pre-ADR-36 cost of any
+    forward-discovered neighbour, it is bounded by the number of memberships on one item,
+    and paying it beats asking WDQS for rows in order to throw their edges away.
+  - **Asymmetrically-stated memberships now depend on P463 alone.** If a band lists
+    someone under P527 and that person's item has no P463 back, the membership is invisible
+    on the normal path. Wikidata's inverse-constraint reports make this rare and the
+    measured case is clean — the Bad Seeds' 8 are a subset of reverse-P463's 10 — but it
+    is a real narrowing, and it is the reason the alternative of suppressing inverse pairs
+    at ingest is recorded as a revisit rather than dismissed.
+  - **The degraded mode is unchanged and now actually degrades.** With WDQS unreachable a
+    band still expands to its P527 roster, flagged `sourceUnavailable`, which is what the
+    registration was for in the first place.

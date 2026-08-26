@@ -73,15 +73,24 @@ public final class ClaimMapper {
   private ClaimMapper() {}
 
   /**
-   * The Wikidata properties this vocabulary maps, in registration order.
+   * The Wikidata properties {@link ReverseClaims} asks the backwards question about, in
+   * registration order: this vocabulary, minus the fallback-only ones.
    *
-   * <p>Shared with {@link ReverseClaims} on purpose. The forward whitelist IS {@link EdgeTypes},
-   * and the reverse one has to be the same set or the two directions would drift apart the first
-   * time someone registers a relation type — which is precisely the failure issue #20 describes,
-   * one level up.
+   * <p>Derived from {@link EdgeTypes} rather than hand-kept, for the same reason the forward
+   * whitelist is: a second list would stop covering a relation type the day someone registered one,
+   * which is the failure issue #20 describes, one level up.
+   *
+   * <p><b>The subtraction is issue #33.</b> A fallback-only property is Wikidata's inverse of one
+   * already here — P527 says from the band's side exactly what P463 says from the member's. Asking
+   * the reverse question about both ends returns one relationship twice, so the reverse pass asks
+   * about the dominant direction only, and the fallback is left to the degraded path in {@link
+   * WikidataSourceAdapter} where nothing else can answer.
    */
-  static List<String> mappedProperties() {
-    return List.copyOf(BY_PROPERTY.keySet());
+  static List<String> reverseProperties() {
+    return BY_PROPERTY.entrySet().stream()
+        .filter(entry -> !entry.getValue().wikidataFallbackOnly())
+        .map(Map.Entry::getKey)
+        .toList();
   }
 
   /** The edge type a Wikidata property maps to, or null when it is not in the vocabulary. */

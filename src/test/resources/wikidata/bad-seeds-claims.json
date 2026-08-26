@@ -1,0 +1,40 @@
+{
+  "entities": {
+    "Q1051182": {
+      "id": "Q1051182",
+      "labels": { "en": { "language": "en", "value": "Nick Cave and the Bad Seeds" } },
+      "descriptions": { "en": { "language": "en", "value": "Australian rock band" } },
+      "claims": {
+        "P31": [
+          { "mainsnak": { "snaktype": "value", "property": "P31",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q215380" } } },
+            "rank": "normal", "references": [] } ],
+        "P527": [
+          { "mainsnak": { "snaktype": "value", "property": "P527",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q192668" } } },
+            "rank": "normal", "references": [] },
+          { "mainsnak": { "snaktype": "value", "property": "P527",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q809003" } } },
+            "rank": "normal", "references": [] },
+          { "mainsnak": { "snaktype": "value", "property": "P527",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q118066" } } },
+            "rank": "normal", "references": [] },
+          { "mainsnak": { "snaktype": "value", "property": "P527",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q2268818" } } },
+            "rank": "normal", "references": [] },
+          { "mainsnak": { "snaktype": "value", "property": "P527",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q2996499" } } },
+            "rank": "normal", "references": [] },
+          { "mainsnak": { "snaktype": "value", "property": "P527",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q3129816" } } },
+            "rank": "normal", "references": [] },
+          { "mainsnak": { "snaktype": "value", "property": "P527",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q383784" } } },
+            "rank": "normal", "references": [] },
+          { "mainsnak": { "snaktype": "value", "property": "P527",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q23418635" } } },
+            "rank": "normal", "references": [] } ]
+      }
+    }
+  }
+}

@@ -26,16 +26,18 @@ import tools.jackson.databind.JsonNode;
  * found none — issue #20. One SPARQL query against the Query Service answers the reverse question
  * for the whole vocabulary at once. See ADR 36 for why SPARQL rather than {@code haswbstatement}.
  *
- * <p><b>The property set is not a second list.</b> It is {@link ClaimMapper#mappedProperties()},
+ * <p><b>The property set is not a second list.</b> It is {@link ClaimMapper#reverseProperties()},
  * for exactly the reason ClaimMapper derives its forward whitelist from {@link
  * com.robsartin.segue.domain.EdgeTypes}: a hand-kept subset here would silently stop covering a
  * relation type the day someone registers one, and that divergence is the bug this class exists to
- * fix.
+ * fix. The one deliberate subtraction is the fallback-only properties (issue #33) — P527 states
+ * from the band's side what P463 states from the member's, and asking the backwards question about
+ * both ends of an inverse pair returns one relationship twice.
  *
  * <p><b>Direction is the same rule, with the subject swapped.</b> A reverse hit means Wikidata
  * holds {@code other P seed}, so the mapping is ClaimMapper's with {@code subject = other} and
  * {@code object = seed}. An inverted type (P57) therefore yields {@code seed DIRECTED other}, and a
- * direct one (P527) yields {@code other HAS_PART seed}. Nothing about how an edge is stored depends
+ * direct one (P361) yields {@code other PART_OF seed}. Nothing about how an edge is stored depends
  * on which direction discovered it.
  *
  * <p><b>Truthy triples are lossy, and that is priced in.</b> {@code wdt:} exposes only the
@@ -150,7 +152,10 @@ final class ReverseClaims {
         continue;
       }
       EdgeType type = ClaimMapper.typeFor(property);
-      if (type == null) {
+      if (type == null || type.wikidataFallbackOnly()) {
+        // The query never asks about a fallback-only property (issue #33), so this is defence
+        // against the answer not being the one the query asked for: recording a P527 hit here
+        // would restore the duplicate edge the whole change exists to remove.
         continue;
       }
       byStatement.computeIfAbsent(
@@ -171,7 +176,7 @@ final class ReverseClaims {
 
   private String query(String seedQid, int maxNewEdges) {
     String values =
-        ClaimMapper.mappedProperties().stream()
+        ClaimMapper.reverseProperties().stream()
             .map(property -> "wdt:" + property)
             .collect(Collectors.joining(" "));
     // One more than the bound, so "there were exactly n" and "there were thousands" are
