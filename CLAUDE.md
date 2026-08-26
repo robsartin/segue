@@ -99,6 +99,11 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   a real source corroborates. `EdgeRecord.isUncorroboratedHypothesis()`.
 
 ## Gotchas already paid for
+- **Never put real affinity data in the repository.** ADR 33 makes taste personal data, and this
+  repo is PUBLIC — the protection is that the data lives at `${user.home}/.segue/` and never
+  enters git, not that the repo is closed (issue #37 corrected an ADR bullet claiming otherwise).
+  Ratings and notes in test fixtures, ADR examples, CLAUDE.md snippets and commit messages must be
+  invented, not Rob's. `*.db` is gitignored; that covers the file, not a quoted example.
 
 - TinkerPop's `Property` is **not** a `java.util.Optional`. It has `orElse`,
   `orElseGet`, `ifPresent` — but no `map()`.

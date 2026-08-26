@@ -36,7 +36,13 @@ data into a structure whose whole purpose is to be traversed and cited.
   things you like is a world-graph question; which things you like is a taste question.
 - **Affinity is not an assertion.** It carries no `Provenance`, no corroboration count,
   and no `llm:` prefix, because none of those concepts apply to a first-person statement.
-- **Affinity is personal data** under ADR 16: never logged, and the repository is private.
+- **Affinity is personal data** under ADR 16: never logged, and kept out of version control.
+  *(Amended 2026-08-25, issue #37. This bullet previously read "and the repository is private".
+  The repository is public and is staying public, so that sentence named a protection that did not
+  exist. The real boundary is the filesystem, not GitHub: the graph lives at `${user.home}/.segue/`
+  outside the working tree, `*.db` is gitignored, and no real rating, note or affinity example ever
+  goes into a fixture, a document or a commit message. Those are the things that could actually
+  leak it, and none of them is prevented by repository visibility.)*
 - **v1 is a rating and a free-text note.** `CLAUDE.md` floats first-heard-where and
   seen-live-when; the note absorbs them until a real need argues for columns.
 
