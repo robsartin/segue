@@ -37,6 +37,13 @@ stderr for logging and tells clients not to read stderr output as an error signa
   the server binds to `127.0.0.1`, never `0.0.0.0`.
 - **RFC 9457 Problem Details applies to the non-MCP HTTP surface only** — actuator and
   health. The MCP endpoint answers in JSON-RPC and must not be "corrected" to use it.
+  *(Amended 2026-08-26, issue #29: that surface deliberately does not exist. Segue exposes no
+  actuator or health endpoint, because a health check answers to an orchestrator and segue's
+  lifecycle belongs to the MCP client that spawns it; a second HTTP surface would also have to
+  inherit ADR 37's `Origin`/`Host` allowlist. So this clause has nothing to apply to and is kept
+  only to record the boundary: **if** such a surface is ever added, its errors are Problem Details
+  and the MCP endpoint's are not. The second sentence stands on its own and is unaffected —
+  ADR 27's `isError` convention is what the MCP endpoint uses.)*
 
 ## Alternatives considered
 

@@ -26,6 +26,32 @@ Spring Boot settles it.
 - **Actuator** exposes `health`, `metrics`, and `prometheus`/OTLP endpoints, secured and
   limited to what operators need.
 
+**Amendment (2026-08-26, issues #28 and #29).** This decision was adopted as a general Spring Boot
+convention, and every bullet above presumes a **deployed service**: operators to read the endpoints,
+a collector to receive the spans, and environments distinct enough that sampling differs between
+them. Segue is none of those. It is a single-user tool bound to loopback (ADR 37) whose lifecycle
+belongs to the MCP client that spawns it — it has a user, not an operator. So for this project:
+
+- **Tracing is deliberately not built** (issue #28). Nothing sends segue a `traceparent` and there
+  is no collector to receive a span, so propagation would run from nobody to nowhere. There is a
+  cost as well as an absent benefit: on the stdio transport stdout *is* the JSON-RPC channel
+  (ADR 28, ADR 30), so an exporter logging a failed connection to console would corrupt the
+  protocol stream.
+- **Actuator is deliberately not exposed** (issue #29). A health endpoint answers to an
+  orchestrator and segue has none. Exposing one would also mean a second HTTP surface that must
+  inherit ADR 37's `Origin`/`Host` allowlist, or become an unguarded door beside a deliberately
+  locked one — a real increase in attack surface for telemetry nobody reads.
+- **Metrics follow from that.** Micrometer's observation API is on the classpath transitively, but
+  there is no meter registry export, because the `prometheus`/OTLP endpoint that would carry it is
+  the surface issue #29 declined.
+- **Structured JSON logging and request correlation stay exactly as specified.** They are the half
+  of this baseline a single-user tool still needs, and they are built: ADR 30 for the logging,
+  ADR 29 for the UUIDv7 request id that reaches the user in every `isError` result.
+
+What would reopen all of this: segue becoming reachable beyond loopback, gaining an orchestrator, or
+serving more than one user. ADR 28 already makes the first a deliberate change with its own security
+review, so none of these can happen by accident.
+
 ## Alternatives considered
 
 - **A vendor-specific tracing agent (e.g. Datadog, New Relic) instead of Micrometer Tracing
