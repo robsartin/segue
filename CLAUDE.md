@@ -123,6 +123,17 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   why it carries no `validFrom`/`validTo` — the Blixa-Bargeld-1983-to-2003 window
   ADR 20 uses as its example only survives the forward direction. It is also why
   `wdt:` reproduces the deprecated-statement filter for free. Not a bug, a trade.
+- **Some Wikidata properties are inverses of each other, and ingesting both ends
+  records one relationship twice.** P527 "has part" is the inverse of P463 "member
+  of" and of P361 "part of", so once the reverse lookup existed every band
+  membership became two edges — two identical `find_paths` routes, one relationship
+  under two `get_entity` type groups, two slots against one `maxNewEdges` bound
+  (issue #33). The fix is `EdgeType.fallbackOnly`: P527 is left out of the reverse
+  query and its forward claims are dropped whenever the reverse pass ran, so it
+  contributes only on the degraded path — where a band still expands to its roster
+  with the Query Service down. **Registering a property that is Wikidata's inverse
+  of one already in `EdgeTypes` reintroduces this**; mark it `fallbackOnly` or do
+  not register it. See ADR 36's issue-#33 amendment.
 - **`query.wikidata.org` holds only the main graph.** Scholarly articles live on
   `query-scholarly.wikidata.org`, so `AUTHORED` (P50) silently under-reports for an
   academic seed: Einstein returns 32 on the main endpoint against 117 in reality.

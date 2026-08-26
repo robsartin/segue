@@ -127,11 +127,10 @@ class WikidataLiveSmokeTest {
   @Test
   @DisplayName("a GROUP seed now finds its members, which reverse-P463 knows and P527 does not")
   void groupSeedFindsItsMembers() {
-    // Issue #20's second symptom: this seed returned ZERO edges. Both halves of the fix show up
-    // here — P527 gives HAS_PART from the band's own item, and the reverse P463 lookup gives
-    // MEMBER_OF from the members', which is the half that includes Mick Harvey and Blixa
-    // Bargeld. Asserting on MEMBER_OF specifically is what would catch a regression to the
-    // P527-only fallback, since that alone would still leave this list non-empty.
+    // Issue #20's second symptom: this seed returned ZERO edges. The roster now arrives from the
+    // reverse P463 lookup, which is the half that includes Mick Harvey and Blixa Bargeld.
+    // Asserting on MEMBER_OF specifically is what would catch a regression to the P527-only
+    // fallback, since that alone would still leave this list non-empty.
     ExpandResult result =
         adapter()
             .expand(
@@ -144,6 +143,44 @@ class WikidataLiveSmokeTest {
         .filteredOn(a -> a.typeCode().equals("MEMBER_OF"))
         .extracting(AssertionRecord::fromQid)
         .contains(CAVE);
+  }
+
+  @Test
+  @DisplayName("one membership is one edge, from both ends, against the live API")
+  void oneMembershipIsOneEdge() {
+    // Issue #33's acceptance criterion, executable. P463 and P527 are Wikidata inverses, so
+    // before this both ends of the same membership were ingested: expanding Cave gave
+    // `Cave MEMBER_OF Bad Seeds` AND `Bad Seeds HAS_PART Cave`, and expanding the band gave the
+    // same pair from the other side. A fixture cannot prove this is fixed against the real data
+    // — the fixture only holds the rows its author kept — so the check lives here.
+    ExpandResult person =
+        adapter()
+            .expand(new NodeRecord(CAVE, NodeKind.PERSON, "Nick Cave"), new ExpandContext(200));
+    ExpandResult band =
+        adapter()
+            .expand(
+                new NodeRecord(BAD_SEEDS, NodeKind.GROUP, "Nick Cave and the Bad Seeds"),
+                new ExpandContext(200));
+
+    assertThat(person.sourceUnavailable()).isFalse();
+    assertThat(band.sourceUnavailable()).isFalse();
+    // With the Query Service reachable there is no degraded path, so P527 contributes nothing.
+    assertThat(person.assertions())
+        .extracting(AssertionRecord::typeCode)
+        .doesNotContain("HAS_PART");
+    assertThat(band.assertions()).extracting(AssertionRecord::typeCode).doesNotContain("HAS_PART");
+    // The pair that was doubled: exactly one edge over it, in the direction that reads forwards.
+    assertThat(person.assertions())
+        .filteredOn(a -> a.fromQid().equals(BAD_SEEDS) || a.toQid().equals(BAD_SEEDS))
+        .allSatisfy(
+            a -> {
+              assertThat(a.typeCode()).isEqualTo("MEMBER_OF");
+              assertThat(a.fromQid()).isEqualTo(CAVE);
+            });
+    assertThat(band.assertions())
+        .filteredOn(a -> a.fromQid().equals(CAVE) || a.toQid().equals(CAVE))
+        .singleElement()
+        .satisfies(a -> assertThat(a.typeCode()).isEqualTo("MEMBER_OF"));
   }
 
   @Test

@@ -164,8 +164,10 @@ class WikidataSourceAdapterTest {
       assertThat(result.assertions()).extracting(AssertionRecord::typeCode).contains("MEMBER_OF");
       assertThat(result.assertions())
           .extracting(AssertionRecord::typeCode)
-          .contains("DIRECTED", "AUTHORED", "COMPOSED_FOR", "WROTE_SCREENPLAY_FOR", "HAS_PART");
-      assertThat(result.assertions()).hasSize(11);
+          .contains("DIRECTED", "AUTHORED", "COMPOSED_FOR", "WROTE_SCREENPLAY_FOR");
+      // Ten, not the eleven this asserted before issue #33: the fixture's P527 row is the band
+      // stating the membership Cave's own P463 already states, and it is no longer recorded twice.
+      assertThat(result.assertions()).hasSize(10);
       assertThat(result.sourceUnavailable()).isFalse();
       assertThat(result.truncated()).isFalse();
     }
@@ -183,15 +185,19 @@ class WikidataSourceAdapterTest {
 
       ExpandResult result = adapterFor(actionApi, queryService).expand(CAVE, new ExpandContext(50));
 
-      assertThat(result.neighbors()).extracting(NodeAssertion::qid).contains("Q180337", "Q1051182");
+      assertThat(result.neighbors()).extracting(NodeAssertion::qid).contains("Q180337");
       assertThat(result.neighbors())
-          .filteredOn(n -> n.qid().equals("Q1051182"))
+          .filteredOn(n -> n.qid().equals("Q180337"))
           .singleElement()
           .satisfies(
               n -> {
-                assertThat(n.label()).isEqualTo("Nick Cave and the Bad Seeds");
-                assertThat(n.kind()).isEqualTo(NodeKind.GROUP);
+                assertThat(n.label()).isEqualTo("The Proposition");
+                assertThat(n.kind()).isEqualTo(NodeKind.WORK);
               });
+      // The band is deliberately NOT here any more. Its identity used to ride in on the P527 row,
+      // and issue #33 stopped asking for that row at all — so a forward-discovered neighbour costs
+      // SegueService a fetch, exactly as it did for every forward claim before ADR 36.
+      assertThat(result.neighbors()).extracting(NodeAssertion::qid).doesNotContain("Q1051182");
       // Two calls for the whole expansion: claims, then backlinks. Nothing per neighbour.
       assertThat(actionApi.requestCount()).isEqualTo(1);
       assertThat(queryService.requestCount()).isEqualTo(1);
@@ -252,6 +258,93 @@ class WikidataSourceAdapterTest {
               new NodeRecord("Q999999999", NodeKind.PERSON, "Nobody"), ExpandContext.defaults());
 
       assertThat(queryService.requestCount()).isZero();
+    }
+  }
+
+  // ---- inverse properties (issue #33) -------------------------------------
+
+  private static final NodeRecord BAD_SEEDS =
+      new NodeRecord("Q1051182", NodeKind.GROUP, "Nick Cave and the Bad Seeds");
+
+  @Test
+  @DisplayName("one membership is one edge, not the same relationship stated from both ends")
+  void inversePropertiesDoNotDoubleAMembership() throws IOException {
+    // Issue #33, from the person's side. Wikidata defines P463 and P527 as inverses, so the
+    // forward pass reads `Cave P463 Bad Seeds` off his own item while the reverse pass reads
+    // the band's `P527 Cave` — one membership, recorded twice, in opposite directions. Measured
+    // on the dogfooding graph: 4 of 23 HAS_PART edges shadowed a MEMBER_OF over the same pair.
+    try (StubWikidataServer actionApi = new StubWikidataServer();
+        StubWikidataServer queryService = new StubWikidataServer()) {
+      actionApi.enqueueBody(resource("/wikidata/cave-claims.json"));
+      queryService.enqueueBody(resource("/wikidata/cave-reverse.json"));
+
+      ExpandResult result = adapterFor(actionApi, queryService).expand(CAVE, new ExpandContext(50));
+
+      assertThat(result.assertions())
+          .filteredOn(a -> a.fromQid().equals("Q1051182") || a.toQid().equals("Q1051182"))
+          .singleElement()
+          .satisfies(
+              a -> {
+                assertThat(a.typeCode()).isEqualTo("MEMBER_OF");
+                assertThat(a.fromQid()).isEqualTo("Q192668");
+              });
+    }
+  }
+
+  @Test
+  @DisplayName("a band's roster arrives once, as the MEMBER_OF set that dominates P527")
+  void groupRosterIsNotDoubled() throws IOException {
+    // Issue #33 from the band's side, and the reason the fix is not "drop whichever we find
+    // second". P527 lists 8 members; reverse-P463 returns those minus a couple plus Blixa
+    // Bargeld and Mick Harvey. Keeping the reverse answer keeps the better one — and the
+    // non-membership relations the reverse pass finds (P175, an album) are untouched.
+    try (StubWikidataServer actionApi = new StubWikidataServer();
+        StubWikidataServer queryService = new StubWikidataServer()) {
+      actionApi.enqueueBody(resource("/wikidata/bad-seeds-claims.json"));
+      queryService.enqueueBody(resource("/wikidata/bad-seeds-reverse.json"));
+
+      ExpandResult result =
+          adapterFor(actionApi, queryService).expand(BAD_SEEDS, new ExpandContext(50));
+
+      assertThat(result.assertions())
+          .extracting(AssertionRecord::typeCode)
+          .doesNotContain("HAS_PART");
+      assertThat(result.assertions())
+          .filteredOn(a -> a.typeCode().equals("MEMBER_OF"))
+          .extracting(AssertionRecord::fromQid)
+          .containsExactlyInAnyOrder("Q192668", "Q316528", "Q166565", "Q383784", "Q809003");
+      assertThat(result.assertions())
+          .filteredOn(a -> a.typeCode().equals("PERFORMED"))
+          .extracting(AssertionRecord::toQid)
+          .containsExactly("Q900790");
+      assertThat(result.sourceUnavailable()).isFalse();
+    }
+  }
+
+  @Test
+  @DisplayName("with the Query Service down, a band still expands to its members via P527")
+  void groupStillExpandsWhenTheQueryServiceIsDown() throws IOException {
+    // The degraded mode ADR 36 registered P527 for, and the thing the simplest fix to issue #33
+    // would have thrown away. With no reverse pass there is nothing for the roster to duplicate,
+    // so the band's own P527 is the only membership evidence there is — 8 members instead of
+    // zero, flagged so the model knows it is looking at the smaller answer.
+    try (StubWikidataServer actionApi = new StubWikidataServer();
+        StubWikidataServer queryService = new StubWikidataServer()) {
+      actionApi.enqueueBody(resource("/wikidata/bad-seeds-claims.json"));
+      for (int i = 0; i < 6; i++) {
+        queryService.enqueueStatus(503);
+        queryService.enqueueBody("{}");
+      }
+
+      ExpandResult result =
+          adapterFor(actionApi, queryService).expand(BAD_SEEDS, new ExpandContext(50));
+
+      assertThat(result.assertions())
+          .filteredOn(a -> a.typeCode().equals("HAS_PART"))
+          .extracting(AssertionRecord::toQid)
+          .contains("Q192668", "Q809003", "Q383784")
+          .hasSize(8);
+      assertThat(result.sourceUnavailable()).isTrue();
     }
   }
 

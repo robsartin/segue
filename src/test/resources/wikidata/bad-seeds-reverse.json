@@ -1,0 +1,159 @@
+{
+  "head": {
+    "vars": [
+      "p",
+      "other",
+      "otherLabel",
+      "type",
+      "sitelinks"
+    ]
+  },
+  "results": {
+    "bindings": [
+      {
+        "p": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/prop/direct/P463"
+        },
+        "other": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q192668"
+        },
+        "otherLabel": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Nick Cave"
+        },
+        "type": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q5"
+        },
+        "sitelinks": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "58"
+        }
+      },
+      {
+        "p": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/prop/direct/P463"
+        },
+        "other": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q316528"
+        },
+        "otherLabel": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Blixa Bargeld"
+        },
+        "type": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q5"
+        },
+        "sitelinks": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "26"
+        }
+      },
+      {
+        "p": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/prop/direct/P175"
+        },
+        "other": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q900790"
+        },
+        "otherLabel": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Where the Wild Roses Grow"
+        },
+        "type": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q134556"
+        },
+        "sitelinks": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "26"
+        }
+      },
+      {
+        "p": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/prop/direct/P463"
+        },
+        "other": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q166565"
+        },
+        "otherLabel": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Mick Harvey"
+        },
+        "type": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q5"
+        },
+        "sitelinks": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "18"
+        }
+      },
+      {
+        "p": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/prop/direct/P463"
+        },
+        "other": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q383784"
+        },
+        "otherLabel": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Warren Ellis"
+        },
+        "type": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q5"
+        },
+        "sitelinks": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "18"
+        }
+      },
+      {
+        "p": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/prop/direct/P463"
+        },
+        "other": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q809003"
+        },
+        "otherLabel": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Barry Adamson"
+        },
+        "type": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q5"
+        },
+        "sitelinks": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "16"
+        }
+      }
+    ]
+  }
+}

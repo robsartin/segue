@@ -62,18 +62,43 @@ class ReverseClaimsTest {
   @Test
   @DisplayName("it turns a reverse hit on a direct property into an edge pointing at the seed")
   void directPropertiesPointAtTheSeed() throws IOException {
-    // P527 is stated on the group ("band has part person"), so a reverse hit found while
-    // expanding the person has the group as its subject. Getting this backwards would file the
-    // band as a part of Nick Cave.
+    // P361 is stated on the part ("song part of album"), so a reverse hit found while expanding
+    // the album has the song as its subject. Getting this backwards would file the album as a
+    // part of the song. This used to be demonstrated with P527, which the reverse pass no longer
+    // asks about at all (issue #33) — the rule it demonstrates is unchanged.
+    try (StubWikidataServer stub = new StubWikidataServer()) {
+      stub.enqueueBody(
+          binding(
+              "http://www.wikidata.org/prop/direct/P361",
+              "http://www.wikidata.org/entity/Q6301911"));
+
+      ReverseClaims.Result result = lookupAgainst(stub).lookup(CAVE, 200, ASSERTED_AT);
+
+      assertThat(result.assertions())
+          .containsExactly(
+              new AssertionRecord(
+                  "Q6301911", CAVE, "PART_OF", null, null, provenance("P361", "Q6301911")));
+    }
+  }
+
+  @Test
+  @DisplayName("a fallback-only property is neither asked for nor recorded if it arrives anyway")
+  void fallbackOnlyPropertiesAreNotRecorded() throws IOException {
+    // Issue #33. Wikidata defines P527 as the inverse of P463, so a P527 hit on a person is the
+    // membership their own P463 already states — the forward pass has it, better evidenced. The
+    // fixture still carries the real P527 row this once returned an edge for, which makes this a
+    // test of the parser and not only of the query text.
     try (StubWikidataServer stub = new StubWikidataServer()) {
       stub.enqueueBody(resource("/wikidata/cave-reverse.json"));
 
       ReverseClaims.Result result = lookupAgainst(stub).lookup(CAVE, 200, ASSERTED_AT);
 
       assertThat(result.assertions())
-          .contains(
-              new AssertionRecord(
-                  "Q1051182", CAVE, "HAS_PART", null, null, provenance("P527", "Q1051182")));
+          .extracting(AssertionRecord::typeCode)
+          .doesNotContain("HAS_PART");
+      assertThat(result.assertions()).noneMatch(a -> a.fromQid().equals("Q1051182"));
+      assertThat(URLDecoder.decode(stub.lastQuery(), StandardCharsets.UTF_8))
+          .doesNotContain("wdt:P527");
     }
   }
 
@@ -103,7 +128,9 @@ class ReverseClaimsTest {
 
       ReverseClaims.Result result = lookupAgainst(stub).lookup(CAVE, 200, ASSERTED_AT);
 
-      assertThat(result.assertions()).hasSize(7);
+      // Six (property, entity) pairs from eight rows: Jubilee Street's two P31 values collapse,
+      // and the fixture's P527 row is dropped as a fallback-only property (issue #33).
+      assertThat(result.assertions()).hasSize(6);
       assertThat(result.assertions()).doesNotHaveDuplicates();
     }
   }
@@ -123,10 +150,10 @@ class ReverseClaimsTest {
               new NodeAssertion(
                   "Q180337", NodeKind.WORK, "The Proposition", nodeProvenance("Q180337")),
               new NodeAssertion(
-                  "Q1051182",
-                  NodeKind.GROUP,
-                  "Nick Cave and the Bad Seeds",
-                  nodeProvenance("Q1051182")));
+                  "Q2715462",
+                  NodeKind.WORK,
+                  "And the Ass Saw the Angel",
+                  nodeProvenance("Q2715462")));
       assertThat(stub.requestCount()).isEqualTo(1);
     }
   }
@@ -208,11 +235,12 @@ class ReverseClaimsTest {
   }
 
   @Test
-  @DisplayName("the query asks about every vocabulary property, derived from EdgeTypes")
+  @DisplayName("the query asks about every vocabulary property except the fallback-only ones")
   void queriesEveryMappedProperty() throws IOException {
     // The reverse set is not a second list to keep in step with EdgeTypes — it IS EdgeTypes,
     // for the same reason ClaimMapper's forward whitelist is. A hand-kept subset here would
-    // silently stop covering a relation type the day someone registers one.
+    // silently stop covering a relation type the day someone registers one. The single
+    // subtraction is derived too: a fallback-only type is asked about by nothing (issue #33).
     try (StubWikidataServer stub = new StubWikidataServer()) {
       stub.enqueueBody(resource("/wikidata/cave-reverse.json"));
 
@@ -221,10 +249,11 @@ class ReverseClaimsTest {
       String sparql = URLDecoder.decode(stub.lastQuery(), StandardCharsets.UTF_8);
       for (String property :
           new String[] {
-            "P463", "P175", "P50", "P57", "P58", "P86", "P161", "P144", "P361", "P737", "P527"
+            "P463", "P175", "P50", "P57", "P58", "P86", "P161", "P144", "P361", "P737"
           }) {
         assertThat(sparql).contains("wdt:" + property + " ");
       }
+      assertThat(sparql).doesNotContain("wdt:P527");
     }
   }
 

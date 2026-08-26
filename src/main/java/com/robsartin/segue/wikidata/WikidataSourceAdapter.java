@@ -1,6 +1,8 @@
 package com.robsartin.segue.wikidata;
 
 import com.robsartin.segue.domain.AssertionRecord;
+import com.robsartin.segue.domain.EdgeType;
+import com.robsartin.segue.domain.EdgeTypes;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
@@ -26,6 +28,13 @@ import tools.jackson.databind.JsonNode;
  * director is stated on the film, so only the forward pass finds it when expanding the film, and
  * only the reverse pass finds it when expanding the director. Running just the forward pass is what
  * made a person expand to four edges and a band to zero — issue #20, decided in ADR 36.
+ *
+ * <p><b>The fallback pass is a fallback.</b> Some of the vocabulary is stated on both ends —
+ * Wikidata defines P527 as the inverse of P463, so a band's roster and its members' memberships are
+ * one relationship written twice. Ingesting both made every membership two edges (issue #33), so
+ * the forward claims on a fallback-only type are dropped whenever the reverse pass actually ran,
+ * and kept when it did not. That is the degraded mode ADR 36 always described and never
+ * implemented: with the Query Service unreachable, a band still expands to its P527 roster.
  *
  * <p><b>Forward first when the bound bites.</b> The two lists are concatenated in that order before
  * {@code maxNewEdges} is applied, so a claim Wikidata states on the seed itself outranks one merely
@@ -100,6 +109,11 @@ public final class WikidataSourceAdapter implements SourceAdapter {
     List<NodeAssertion> neighbors = List.of();
     try {
       ReverseClaims.Result found = reverse.lookup(seed.qid(), ctx.maxNewEdges(), assertedAt);
+      // The reverse pass ran, so the fallback-only claims are redundant by construction — P527 on
+      // a band says what P463 on each member says, and keeping both records one membership as two
+      // edges (issue #33). Dropped BEFORE the bound is applied, so a duplicate cannot spend a slot
+      // that a real relation could have had.
+      mapped.removeIf(WikidataSourceAdapter::isFallbackOnly);
       mapped.addAll(found.assertions());
       neighbors = found.neighbors();
       truncated = found.truncated();
@@ -112,5 +126,18 @@ public final class WikidataSourceAdapter implements SourceAdapter {
     List<AssertionRecord> limited = mapped.stream().limit(ctx.maxNewEdges()).toList();
     truncated |= limited.size() < mapped.size();
     return new ExpandResult(limited, neighbors, sourceUnavailable, truncated);
+  }
+
+  /**
+   * Whether this claim came from a property Wikidata defines as the inverse of another registered
+   * one — the vocabulary's own judgement, read back off the assertion, rather than a list of
+   * property codes kept here where it would fall out of step with {@link EdgeTypes}.
+   *
+   * <p>An unrecognised code is not fallback-only: this adapter only ever emits codes it just read
+   * out of the vocabulary, and silently discarding an edge because its type could not be resolved
+   * would turn a vocabulary bug into missing data.
+   */
+  private static boolean isFallbackOnly(AssertionRecord assertion) {
+    return EdgeTypes.byCode(assertion.typeCode()).map(EdgeType::wikidataFallbackOnly).orElse(false);
   }
 }
