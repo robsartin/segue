@@ -7,8 +7,14 @@ import java.util.List;
 
 /**
  * Rebuilds the derived graph from the append-only log (ADR 19, ADR 24): replays every assertion in
- * sequence order into a {@link GraphStore}. This is the only place that applies logged claims to
- * the graph, which is what keeps the graph a projection rather than a second source of truth.
+ * sequence order into a {@link GraphStore}. Nothing else reads the log to rebuild the graph, which
+ * is what keeps the graph a projection rather than a second source of truth.
+ *
+ * <p><b>The apply step itself is shared, deliberately.</b> This class owns replay, not the switch
+ * over assertion kinds: it calls the same package-private {@link IngestService#apply} that live
+ * ingest calls, so a rebuilt graph cannot silently differ from the one it replaced. Both callers
+ * live in this package, which is what {@code onlyIngestAppliesClaimsToTheGraph} fences — replay
+ * needs no exemption from that rule, because it is not outside it.
  *
  * <p>Replay is fatal on the first failure, naming the sequence number: a log that will not project
  * is a corruption to surface at boot, not to limp past.

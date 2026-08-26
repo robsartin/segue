@@ -41,7 +41,9 @@ import org.slf4j.LoggerFactory;
  *   <li>only {@link IngestService} ever applies a claim to the graph. This class calls it for every
  *       write and never touches {@link GraphStore#record}, {@link GraphStore#upsertNode} or {@code
  *       AssertionLog.append} directly — ArchUnit rule {@code onlyIngestAppliesClaimsToTheGraph}
- *       would fail it otherwise, and it is the right rule (ADR 19).
+ *       fails the build on any of the three, and it is the right rule (ADR 19). Read that as
+ *       enforcement rather than intent: until issue #44 the rule matched {@code GraphStore.record}
+ *       alone, so two-thirds of this sentence described a convention while claiming a guarantee.
  *   <li>nothing thrown by a port escapes a public method here except a programmer error, such as a
  *       null argument. Every other shortfall — an unknown qid, a malformed one, an unreachable
  *       source, a result cut short by its own bound — comes back as a {@link ToolResult} the

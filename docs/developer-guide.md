@@ -5,8 +5,8 @@ Orientation and mechanism for someone about to change this codebase.
 This guide answers **how the system fits together** and **where the load-bearing machinery is**. It
 does not re-argue any decision: the [architecture decision records](adr/README.md) are the authority
 on *why*, and every section below links to the ones that matter. Where this guide and an ADR
-disagree, the ADR wins on intent and the code wins on fact — see
-[Known drift between the ADRs and the code](#known-drift-between-the-adrs-and-the-code).
+disagree, the ADR wins on intent and the code wins on fact — and the disagreement is a bug in one of
+them, to be fixed rather than annotated.
 
 Everything here was checked against the source in `src/main/java/com/robsartin/segue/` and
 `src/test/java/com/robsartin/segue/arch/ArchitectureTest.java`, not against the ADRs.
@@ -21,7 +21,7 @@ Everything here was checked against the source in `src/main/java/com/robsartin/s
 - [Adding a source adapter](#adding-a-source-adapter)
 - [The testing strategy](#the-testing-strategy)
 - [The build and the gate](#the-build-and-the-gate)
-- [Known drift between the ADRs and the code](#known-drift-between-the-adrs-and-the-code)
+- [How to read an ADR against the code](#how-to-read-an-adr-against-the-code)
 
 ## What segue is, in one pass
 
@@ -130,7 +130,7 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `adaptersDoNotDependUpward` | any adapter depending on `ingest`, `mcp` or `app` | [ADR 32](adr/0032-layering-and-archunit.md) |
 | `noPackageCycles` | any dependency cycle between slices of `com.robsartin.segue` | [ADR 32](adr/0032-layering-and-archunit.md) |
 | `springOnlyInAppAndMcp` | `org.springframework.*` anywhere outside `app` and `mcp` | [ADR 25](adr/0025-source-adapter-spi.md), [ADR 32](adr/0032-layering-and-archunit.md) |
-| `onlyIngestAppliesClaimsToTheGraph` | calling `GraphStore.record` from outside `ingest` | [ADR 19](adr/0019-assertion-log-source-of-truth.md) |
+| `onlyIngestAppliesClaimsToTheGraph` | calling `GraphStore.record`, `GraphStore.upsertNode` or `AssertionLog.append` from outside `ingest` | [ADR 19](adr/0019-assertion-log-source-of-truth.md) |
 | `nothingWritesToStandardOut` | reading `System.out` anywhere except the one named exception, `SegueApplication` | [ADR 28](adr/0028-mcp-transports.md) |
 | `nothingWritesToStandardError`, `noPrintStackTrace`, `noJavaUtilLogging` | bypassing SLF4J | [ADR 30](adr/0030-structured-logging.md) |
 | `affinityNeverTouchesTheWorldFactLayer` | a taste-layer type depending on the log, the graph, `IngestService` or the claim records | [ADR 33](adr/0033-taste-layer-separation.md) |
@@ -147,10 +147,6 @@ These are true of the code today and nothing will stop you breaking them:
   explicitly.
 - **`ingest` depends on `port` and `domain` only.** No rule says so. Only `noPackageCycles` would
   notice, and only if the new dependency closed a cycle.
-- **Only `ingest` calls `AssertionLog.append` and `GraphStore.upsertNode`.** The ArchUnit rule
-  covers `GraphStore.record` and nothing else. Today `IngestService` is in fact the sole caller of
-  all three, but two-thirds of that is convention. See
-  [Known drift](#known-drift-between-the-adrs-and-the-code).
 - **`mcp` does not reach into an adapter.** It does, once: `SegueService` imports
   `com.robsartin.segue.wikidata.WikidataUnavailableException` so it can catch source failure and
   turn it into a readable tool result. That is the dotted edge in the diagram. No rule forbids it —
@@ -608,28 +604,19 @@ wrote. The live smoke test caught a wrong QID on its first run — a plan had us
 belonged to a different person entirely, and every fixture-backed test would have carried that error
 forever. **Run `./gradlew liveTest` deliberately when you touch ingest.**
 
-## Known drift between the ADRs and the code
+## How to read an ADR against the code
 
-Checked 2026-08-25 against the source on `main`. These are places where an ADR describes something
-the code does not do — recorded so nobody has to rediscover them, and so they can be closed by
-amending the ADR rather than by "fixing" working code.
+One thing looks like drift and is not: an ADR's Context section records what was measured **at the
+time the decision was made**. Edge-type counts, edges per seed and route counts there are dated
+observations, not claims about today, and correcting them would destroy the evidence the decision
+rests on. `EdgeTypes.java` is the authority on the vocabulary and `gradle/libs.versions.toml` on
+versions; a figure quoted anywhere else is either a citation or a bug.
 
-One thing that is *not* drift and is easy to mistake for it: an ADR's Context section records what
-was measured **at the time the decision was made**. Edge-type counts, edge counts per seed and
-route counts in a Context section are dated observations, not claims about today. `EdgeTypes.java`
-is the authority on the vocabulary; `gradle/libs.versions.toml` is the authority on versions.
-
-| Where | The ADR says | The code does |
-| --- | --- | --- |
-| [ADR 32](adr/0032-layering-and-archunit.md) rules table, row 1 | "Only `ingest` calls `GraphStore.record` **or `AssertionLog.append`**" | `onlyIngestAppliesClaimsToTheGraph` matches `record` on a `GraphStore` only. `AssertionLog.append` and `GraphStore.upsertNode` are unguarded. `IngestService` is in fact their sole caller today. `SegueService`'s own Javadoc repeats the ADR's wider claim |
-| [ADR 32](adr/0032-layering-and-archunit.md) rules table, row 9 | tool names are checked by ArchUnit | checked by reflection in `ToolSurfaceTest`. [ADR 26](adr/0026-mcp-tool-surface.md)'s fourth amendment already corrects this; ADR 32 was not updated |
-| [ADR 32](adr/0032-layering-and-archunit.md) rule statuses | four rows read "arrives with `ingest`/`wikidata`/`app`/`mcp`" | all four packages exist and all four rules are written. The table also predates `noPackageCycles`, `onlyJackson3` and the two affinity rules, so it is no longer the full list — `ArchitectureTest` is |
-| `CLAUDE.md`'s SPI snippet | `List<AssertionRecord> expand(NodeRecord seed, ExpandContext ctx)` | it returns `ExpandResult`. [ADR 36](adr/0036-reverse-lookup-via-sparql.md) made that change and is current. [ADR 25](adr/0025-source-adapter-spi.md) is *not* wrong here — it names the method as `expand(seed, ctx)` and never states a return type — so this one is a `CLAUDE.md` fix only |
-| [ADR 26](adr/0026-mcp-tool-surface.md) tool table | `note_affinity(entityId, rating, note)` | `note` is declared `required = false`; it is optional, as ADR 39 says |
-| [ADR 33](adr/0033-taste-layer-separation.md) | affinity lives "in its own tables" | one table, `affinity`, as specified by [ADR 39](adr/0039-affinity-capture-and-read.md) |
-| `GraphProjector` Javadoc | "the only place that applies logged claims to the graph" | the apply step is shared with live ingest, which is the point — the sentence describes the replay path as if it were exclusive |
-
-None of these change a decision. Each is a documentation fix.
+A Decision section is different. It describes what the code is supposed to do now, so a Decision
+bullet the code contradicts is drift, and the fix is to amend the ADR — dated, saying what it
+corrects — or to change the code, whichever one is wrong. This guide used to end with a table of
+such items; it was emptied by issues #44 and #46, and if it is ever needed again the table belongs
+in an issue rather than here, where it reads as permission to leave the ADRs untrue.
 
 ## Where to look next
 

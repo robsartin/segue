@@ -18,9 +18,9 @@ import java.util.Optional;
  * The taste layer in the same SQLite file as the assertion log, in its own table (ADR 33, ADR 39).
  *
  * <p><b>Same file, different table, different connection.</b> ADR 33 considered a separate database
- * file and rejected it: separate tables behind a separate port already express the boundary, and a
- * second file buys two connection lifecycles and no transactional relationship. A second connection
- * to the one file is cheap by comparison, and it keeps this class independent of {@link
+ * file and rejected it: a separate table behind a separate port already expresses the boundary, and
+ * a second file buys two connection lifecycles and no transactional relationship. A second
+ * connection to the one file is cheap by comparison, and it keeps this class independent of {@link
  * SqliteAssertionLog} - neither opens, migrates or closes the other, and this store can be
  * constructed in a test with no log in sight.
  *

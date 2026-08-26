@@ -28,7 +28,12 @@ data into a structure whose whole purpose is to be traversed and cited.
 ## Decision
 
 - **Two layers, two stores.** World facts live in the assertion log and its graph
-  projection. Affinity lives in its own tables behind an `AffinityStore` port.
+  projection. Affinity lives in its own table behind an `AffinityStore` port.
+  *(Amended 2026-08-25, issue #46. This bullet read "its own tables", plural, when this ADR
+  was written and the schema was open; **ADR 39** settled it as exactly one table, `affinity`,
+  one row per qid. Singular is not a smaller commitment — the boundary this decision draws is
+  the separate port and the separate store, not the number of tables behind it — but a plural
+  that no longer matches the schema invites a reader to go looking for the other ones.)*
 - **`note_affinity` is the only tool that writes affinity**, and it never writes to
   the graph. `IngestService` never sees a rating.
 - **Recommendations are derived by traversing the world graph and filtering through
@@ -66,7 +71,7 @@ data into a structure whose whole purpose is to be traversed and cited.
   the note field is the honest placeholder until the shape is known.
 - **A separate database file entirely** — stronger isolation for personal data, at the
   cost of two connection lifecycles and no transactional relationship, for a boundary
-  that separate tables and a separate port already express.
+  that a separate table and a separate port already express.
 
 ## Consequences
 
