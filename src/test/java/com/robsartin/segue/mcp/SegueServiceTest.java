@@ -228,6 +228,62 @@ class SegueServiceTest {
   }
 
   @Test
+  @DisplayName(
+      "one unresolvable neighbour named by two assertions is one skipped neighbour, not two")
+  void expandEntityCountsDistinctUnresolvableNeighbours() {
+    // The multigraph shape this project treats as a design property rather than an edge case:
+    // Nick Cave both wrote and scored The Proposition, so two assertions name one pair of nodes.
+    // When that far end cannot be resolved, exactly one entity was lost. `skippedNeighbors` and
+    // the sentence it is rendered into both promise a count of neighbours, so counting the
+    // assertions instead would tell a calling model that twice as much went missing as did.
+    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+    // Q2 is deliberately left unresolvable, and is the far end of both assertions.
+    AssertionRecord wrote =
+        new AssertionRecord("Q1", "Q2", "WROTE_SCREENPLAY_FOR", null, null, WIKIDATA);
+    AssertionRecord scored = new AssertionRecord("Q1", "Q2", "COMPOSED_FOR", null, null, WIKIDATA);
+    SourceAdapter adapter =
+        new StubSourceAdapter("multigraph", new ExpandResult(List.of(wrote, scored), false, false));
+
+    ToolResult<SegueService.ExpansionSummary> result = service(adapter).expandEntity("Q1", 10);
+
+    assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.PARTIAL);
+    assertThat(result.payload().skippedNeighbors()).isEqualTo(1);
+    assertThat(result.detail()).contains("1 neighbour(s) could not be resolved");
+    // Both assertions were still skipped — only the counting changes, never which edges land.
+    assertThat(result.payload().edgesAdded()).isZero();
+    assertThat(graph.node("Q2")).isEmpty();
+    // One failed resolution, not one per assertion: the failure is remembered for the call.
+    assertThat(resolver.fetchCallCount()).isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("nodesAdded counts the pair's node once while edgesAdded counts both assertions")
+  void expandEntityCountsNodesOnceAndAssertionsSeparately() {
+    // The other half of #34: whether nodesAdded and edgesAdded share the conflation
+    // skippedNeighbors had. They do not, and for different reasons. nodesAdded is guarded by the
+    // graph.node(neighbor).isEmpty() re-read — the first assertion records Q2, so the second one
+    // finds it already present and cannot increment again. edgesAdded is per assertion on
+    // purpose: two claims about one pair of nodes are two claims, and merging them into one edge
+    // is GraphStore.record's job downstream, not a number this summary should pre-empt.
+    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+    resolver.withEntity(new NodeAssertion("Q2", NodeKind.WORK, "The Proposition", WIKIDATA));
+    AssertionRecord wrote =
+        new AssertionRecord("Q1", "Q2", "WROTE_SCREENPLAY_FOR", null, null, WIKIDATA);
+    AssertionRecord scored = new AssertionRecord("Q1", "Q2", "COMPOSED_FOR", null, null, WIKIDATA);
+    SourceAdapter adapter =
+        new StubSourceAdapter("multigraph", new ExpandResult(List.of(wrote, scored), false, false));
+
+    ToolResult<SegueService.ExpansionSummary> result = service(adapter).expandEntity("Q1", 10);
+
+    assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
+    assertThat(result.payload().nodesAdded()).isEqualTo(1);
+    assertThat(result.payload().edgesAdded()).isEqualTo(2);
+    assertThat(result.payload().skippedNeighbors()).isZero();
+    assertThat(resolver.fetchCallCount()).isEqualTo(1);
+    assertThat(graph.edges("Q1")).hasSize(2);
+  }
+
+  @Test
   @DisplayName("expandEntity resolves unknown neighbours and creates their nodes before the edges")
   void expandEntityCreatesNeighbourNodesBeforeEdges() {
     ingest.record(new NodeAssertion(Fixture.CAVE, NodeKind.PERSON, "Nick Cave", WIKIDATA));
