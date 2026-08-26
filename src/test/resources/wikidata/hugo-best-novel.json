@@ -1,0 +1,15 @@
+{
+  "entities": {
+    "Q255032": {
+      "id": "Q255032",
+      "labels": { "en": { "language": "en", "value": "Hugo Award for Best Novel" } },
+      "descriptions": { "en": { "language": "en", "value": "annual science fiction literary award" } },
+      "claims": {
+        "P31": [
+          { "mainsnak": { "snaktype": "value", "property": "P31",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q378427" } } },
+            "rank": "normal", "references": [] } ]
+      }
+    }
+  }
+}

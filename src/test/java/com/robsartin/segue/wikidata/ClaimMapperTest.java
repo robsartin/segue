@@ -44,7 +44,8 @@ class ClaimMapperTest {
             "WROTE_SCREENPLAY_FOR",
             "MEMBER_OF",
             "BASED_ON",
-            "PERFORMED");
+            "PERFORMED",
+            "RECEIVED_AWARD");
   }
 
   @Test
@@ -72,6 +73,23 @@ class ClaimMapperTest {
 
     assertThat(memberOf.fromQid()).isEqualTo(SUBJECT);
     assertThat(memberOf.toQid()).isEqualTo("Q1299");
+  }
+
+  @Test
+  @DisplayName("an award received is stored pointing from the recipient at the award")
+  void awardsPointFromTheRecipient() {
+    // Issue #32. Wikidata states P166 on the RECIPIENT — "The Proposition P166 AACTA Award for
+    // Best Cinematography" — so RECEIVED_AWARD is a DIRECT type and the subject stays on the
+    // left. This is the assertion that would have caught registering it as inverted, which reads
+    // as the award having received the film.
+    AssertionRecord award =
+        ClaimMapper.map(SUBJECT, entity, PULL).stream()
+            .filter(a -> a.typeCode().equals("RECEIVED_AWARD"))
+            .findFirst()
+            .orElseThrow();
+
+    assertThat(award.fromQid()).isEqualTo(SUBJECT);
+    assertThat(award.toQid()).isEqualTo("Q4649799");
   }
 
   @Test
