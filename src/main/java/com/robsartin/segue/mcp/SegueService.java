@@ -1,5 +1,6 @@
 package com.robsartin.segue.mcp;
 
+import com.robsartin.segue.domain.AffinityRecord;
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.Candidate;
 import com.robsartin.segue.domain.EdgeRecord;
@@ -9,6 +10,7 @@ import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.PathRanking;
 import com.robsartin.segue.domain.PathResult;
 import com.robsartin.segue.ingest.IngestService;
+import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.EntityResolver;
 import com.robsartin.segue.port.ExpandContext;
 import com.robsartin.segue.port.ExpandResult;
@@ -16,6 +18,7 @@ import com.robsartin.segue.port.GraphStore;
 import com.robsartin.segue.port.SourceAdapter;
 import com.robsartin.segue.port.SourceAdapters;
 import com.robsartin.segue.wikidata.WikidataUnavailableException;
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -32,7 +35,7 @@ import org.slf4j.LoggerFactory;
 /**
  * The facade every MCP tool calls. It owns the ports; the tools own nothing.
  *
- * <p>Two invariants matter more than the rest of the class:
+ * <p>Three invariants matter more than the rest of the class:
  *
  * <ul>
  *   <li>only {@link IngestService} ever applies a claim to the graph. This class calls it for every
@@ -47,6 +50,10 @@ import org.slf4j.LoggerFactory;
  *       search (ADR 29). {@link WikidataUnavailableException} in particular is caught at every call
  *       site that can throw it — {@code resolver.search}, {@code resolver.fetch}, and the unwrapped
  *       neighbour fetch inside {@link #expandEntity} — rather than left to escape.
+ *   <li>this class is the only place the two layers meet, and they meet nowhere below it (ADR 33).
+ *       {@link #noteAffinity} writes taste and never touches the graph; {@link #getEntity} reads
+ *       both and composes them into one view. Neither store learns about the other, which is what
+ *       keeps the world graph exportable without personal data attached — see ADR 39.
  * </ul>
  *
  * <p>Every method returns view types from {@code mcp/} (translated by {@link ViewMapper}), never
@@ -63,13 +70,22 @@ public final class SegueService {
   private final GraphStore graph;
   private final IngestService ingest;
   private final SourceAdapters adapters;
+  private final AffinityStore affinity;
+  private final Clock clock;
 
   public SegueService(
-      EntityResolver resolver, GraphStore graph, IngestService ingest, SourceAdapters adapters) {
+      EntityResolver resolver,
+      GraphStore graph,
+      IngestService ingest,
+      SourceAdapters adapters,
+      AffinityStore affinity,
+      Clock clock) {
     this.resolver = Objects.requireNonNull(resolver, "resolver");
     this.graph = Objects.requireNonNull(graph, "graph");
     this.ingest = Objects.requireNonNull(ingest, "ingest");
     this.adapters = Objects.requireNonNull(adapters, "adapters");
+    this.affinity = Objects.requireNonNull(affinity, "affinity");
+    this.clock = Objects.requireNonNull(clock, "clock");
   }
 
   /** Candidates for a free-text query, best match first. Writes nothing. */
@@ -286,9 +302,65 @@ public final class SegueService {
                     new NeighborGroup(
                         e.getKey(), e.getValue().stream().map(ViewMapper::toNodeView).toList()))
             .toList();
-    EntityView view = new EntityView(ViewMapper.toNodeView(node.get()), groups);
+    // The join across the two layers ADR 33 anticipated, done here rather than in either store:
+    // the graph does not know this entity is liked and the affinity table does not know what it
+    // is. Null when the user has never rated it — see EntityView.
+    AffinityView rated = affinity.find(qid).map(ViewMapper::toAffinityView).orElse(null);
+    EntityView view = new EntityView(ViewMapper.toNodeView(node.get()), groups, rated);
+    // The summary line names neither the rating nor the note, only whether one exists. It is the
+    // one string in this method a caller is likely to paste somewhere, and ADR 33 keeps affinity
+    // values out of anything that reads like a log line.
     return ToolResult.ok(
-        node.get().label() + ": " + edges.size() + " edge(s), " + groups.size() + " type(s)", view);
+        node.get().label()
+            + ": "
+            + edges.size()
+            + " edge(s), "
+            + groups.size()
+            + " type(s)"
+            + (rated == null ? "" : ", rated"),
+        view);
+  }
+
+  /**
+   * Record what the user thinks of one entity: the taste layer's only write (ADR 33).
+   *
+   * <p><b>This never touches the graph or the log, and the shape of the method is the proof.</b>
+   * There is no {@code ingest.record} call and no {@link AssertionRecord} anywhere in it — a rating
+   * is not a claim about the world, so it gets no {@link com.robsartin.segue.domain.Provenance}, no
+   * corroboration and no {@code llm:} prefix. ArchUnit's {@code
+   * affinityNeverTouchesTheWorldFactLayer} rule keeps that true as the class grows.
+   *
+   * <p><b>Three refusals, in order, and every one of them a readable result rather than a throw
+   * (ADR 27).</b> Not a QID; a QID the graph has never seen; a rating off the 1-5 scale. The second
+   * is ADR 39's identity decision and its cost is deliberate: something Wikidata does not have
+   * cannot be rated at all, because a rating that joins to no world facts is a note in a text file
+   * with extra steps. The check is here rather than in {@link AffinityRecord} because only this
+   * class can see the graph.
+   *
+   * <p><b>Nothing in this method logs.</b> Not on the happy path and not on the refusals — every
+   * other method in this class logs its shortfalls, and this one deliberately does not, because ADR
+   * 30's structured logging is precisely the thing that makes ADR 33's "affinity is never logged"
+   * easy to violate by reflex. The refusal text never echoes the rating or the note back either: an
+   * error string is the likeliest of all of these to be logged by something upstream.
+   *
+   * @param note optional; blank is treated as absent, so a model that helpfully sends {@code ""}
+   *     does not store an empty note that later reads as "they wrote something"
+   */
+  public ToolResult<AffinityView> noteAffinity(String qid, int rating, String note) {
+    Objects.requireNonNull(qid, "qid");
+    if (!QID.matcher(qid).matches()) {
+      return error("not a QID: " + qid);
+    }
+    if (graph.node(qid).isEmpty()) {
+      return error("unknown entity: " + qid + " — add it before rating it");
+    }
+    if (rating < AffinityRecord.MIN_RATING || rating > AffinityRecord.MAX_RATING) {
+      return error("rating must be an integer from 1 to 5");
+    }
+    String trimmed = note == null || note.isBlank() ? null : note.strip();
+    AffinityRecord recorded = new AffinityRecord(qid, rating, trimmed, clock.instant());
+    affinity.put(recorded);
+    return ToolResult.ok("noted affinity for " + qid, ViewMapper.toAffinityView(recorded));
   }
 
   /**

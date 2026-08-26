@@ -4,7 +4,15 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 import com.robsartin.segue.app.SegueApplication;
+import com.robsartin.segue.domain.AssertionRecord;
+import com.robsartin.segue.domain.EdgeRecord;
+import com.robsartin.segue.domain.LoggedAssertion;
+import com.robsartin.segue.domain.NodeAssertion;
+import com.robsartin.segue.domain.Provenance;
+import com.robsartin.segue.ingest.IngestService;
+import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.GraphStore;
+import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaAccess;
 import com.tngtech.archunit.core.domain.JavaCall;
 import com.tngtech.archunit.core.domain.JavaClass;
@@ -14,6 +22,7 @@ import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.library.dependencies.SlicesRuleDefinition;
+import java.util.Set;
 
 /**
  * Each rule names the decision it defends. See docs/adr/0032-layering-and-archunit.md.
@@ -203,6 +212,83 @@ class ArchitectureTest {
                       JavaAccess.Predicates.targetOwner(
                           JavaClass.Predicates.assignableTo(GraphStore.class))))
           .because("ADR 19: the log is the source of truth and only ingest projects it");
+
+  /**
+   * The taste layer, by type rather than by package.
+   *
+   * <p>Every other rule in this class names a package, because every other boundary in this project
+   * IS a package. ADR 33's boundary is not: the affinity port sits in {@code port} beside {@code
+   * AssertionLog}, its record in {@code domain} beside {@code AssertionRecord}, its store in {@code
+   * sqlite} beside {@code SqliteAssertionLog} — each one where its layer's conventions put it. A
+   * fifth package for four classes would have made the rule easier to write and the codebase harder
+   * to read, so the predicate does the work the package name would have done.
+   */
+  private static final DescribedPredicate<JavaClass> AFFINITY_TYPES =
+      new DescribedPredicate<>("part of the taste layer (ADR 33)") {
+        @Override
+        public boolean test(JavaClass type) {
+          return type.getPackageName().startsWith("com.robsartin.segue")
+              && (type.getSimpleName().contains("Affinity")
+                  || type.getSimpleName().equals("TasteTools"));
+        }
+      };
+
+  /** The world-fact layer's own vocabulary: the log, the graph, and the claim types they carry. */
+  private static final DescribedPredicate<JavaClass> WORLD_FACT_TYPES =
+      new DescribedPredicate<>("the world-fact layer's stores and claim types (ADR 19)") {
+        private final Set<String> names =
+            Set.of(
+                GraphStore.class.getName(),
+                AssertionLog.class.getName(),
+                IngestService.class.getName(),
+                LoggedAssertion.class.getName(),
+                AssertionRecord.class.getName(),
+                NodeAssertion.class.getName(),
+                EdgeRecord.class.getName(),
+                Provenance.class.getName());
+
+        @Override
+        public boolean test(JavaClass type) {
+          return names.contains(type.getFullName());
+        }
+      };
+
+  /**
+   * ADR 33: affinity is not an assertion, and the taste layer never writes to the graph or the log.
+   *
+   * <p>This is the invariant the whole ADR rests on, and the tempting violation is small: give
+   * {@code AffinityRecord} a {@link Provenance} so it looks like everything else, or let the
+   * affinity store append a "user rated this" row to the log so the history is all in one place.
+   * Either would compile and pass every other test in the suite.
+   */
+  @ArchTest
+  static final ArchRule affinityNeverTouchesTheWorldFactLayer =
+      noClasses()
+          .that(AFFINITY_TYPES)
+          .should()
+          .dependOnClassesThat(WORLD_FACT_TYPES)
+          .because(
+              "ADR 33: affinity carries no provenance and no corroboration, and note_affinity is"
+                  + " the only writer of the taste layer — it never writes to the graph or the log");
+
+  /**
+   * ADR 33, from the other side: ingest and the graph adapters must not learn that taste exists.
+   *
+   * <p>{@code IngestService} never sees a rating, and a source adapter cannot be tempted to emit
+   * one. This is what keeps "the world graph can be shared, exported or made public without
+   * carrying personal data" true by construction rather than by care — which matters more here than
+   * usual, because this repository IS public (issue #37).
+   */
+  @ArchTest
+  static final ArchRule theWorldFactLayerNeverTouchesAffinity =
+      noClasses()
+          .that()
+          .resideInAnyPackage("..ingest..", "..tinker..", "..jena..", "..wikidata..")
+          .should()
+          .dependOnClassesThat(AFFINITY_TYPES)
+          .because(
+              "ADR 33: IngestService never sees a rating, and the world graph stays free of"
+                  + " personal data so it can be exported or shared without one");
 
   /** ADR 32's layering is unidirectional by construction, so any slice cycle is a violation. */
   @ArchTest

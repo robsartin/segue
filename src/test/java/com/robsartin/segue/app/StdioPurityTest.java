@@ -158,7 +158,7 @@ class StdioPurityTest {
                 .findFirst()
                 .orElseThrow(
                     () -> new AssertionError("no stdout line carried the tools/list result")));
-    assertThat(toolsListResponse.at("/result/tools")).as("five MCP tools registered").hasSize(5);
+    assertThat(toolsListResponse.at("/result/tools")).as("six MCP tools registered").hasSize(6);
 
     // FIX 1/FIX 6: a genuine error result must carry isError: true and a non-empty content
     // block — this is exactly what content: [], isError: false (the bug FIX 1 fixed) would
@@ -282,6 +282,121 @@ class StdioPurityTest {
             .isEqualTo(SEEDED_AT);
       }
     }
+  }
+
+  /**
+   * The taste layer over the real transport, across a real restart (increment 5, ADR 39).
+   *
+   * <p>Two subprocesses against one database file. The first records an affinity with {@code
+   * note_affinity}; it is then destroyed, taking its whole JVM — the Gremlin graph, the SQLite
+   * connections, every cache — with it. The second boots from nothing but the file on disk and is
+   * asked for the same entity with {@code get_entity}.
+   *
+   * <p>Why this is not covered by {@code SqliteAffinityStoreTest.persistsAcrossReopen}: that test
+   * reopens one class. This one proves the wiring — that the server writes affinity to the SAME
+   * file the graph is projected from, that the record survives a process boundary rather than an
+   * object lifetime, and that the read path a model actually calls returns it afterwards. An
+   * affinity written to an in-memory store, or to a second file nobody points at on restart, passes
+   * every unit test in this repository and fails this one.
+   *
+   * <p>The graph is seeded through the assertion log for the same reason as the test above: {@code
+   * add_entity} would call Wikidata, and ADR 39 requires the entity to be in the graph before it
+   * can be rated. The rating and the note are invented — the repository is public and affinity is
+   * personal data (ADR 33, as amended by issue #37).
+   */
+  @Test
+  void affinityRecordedOverStdioSurvivesARestart(@TempDir Path tempDir) throws Exception {
+    Path database = tempDir.resolve("stdio-affinity-test.db");
+    seedTwoHopRoute(database);
+    String note = "invented note, written by the test suite";
+
+    List<String> firstRun = new CopyOnWriteArrayList<>();
+    JsonNode noted =
+        oneStdioSession(
+            database,
+            firstRun,
+            stdin ->
+                sendLine(
+                    stdin,
+                    "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":"
+                        + "\"note_affinity\",\"arguments\":{\"qid\":\""
+                        + CAVE
+                        + "\",\"rating\":4,\"note\":\""
+                        + note
+                        + "\"}}}"));
+
+    assertThat(noted.at("/result/isError").asBoolean())
+        .as("note_affinity on a seeded entity must succeed: %s", noted)
+        .isFalse();
+    assertThat(noted.at("/result/structuredContent/payload/rating").asInt()).isEqualTo(4);
+
+    // A second JVM, the same file, nothing shared but the bytes on disk.
+    List<String> secondRun = new CopyOnWriteArrayList<>();
+    JsonNode readBack =
+        oneStdioSession(
+            database,
+            secondRun,
+            stdin ->
+                sendLine(
+                    stdin,
+                    "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":"
+                        + "\"get_entity\",\"arguments\":{\"qid\":\""
+                        + CAVE
+                        + "\"}}}"));
+
+    JsonNode affinity = readBack.at("/result/structuredContent/payload/affinity");
+    assertThat(affinity.isMissingNode() || affinity.isNull())
+        .as("get_entity must carry the affinity recorded before the restart: %s", readBack)
+        .isFalse();
+    assertThat(affinity.get("rating").asInt()).isEqualTo(4);
+    assertThat(affinity.get("note").stringValue()).isEqualTo(note);
+    assertThat(Instant.parse(affinity.get("updatedAt").stringValue()))
+        .as("updatedAt must round-trip as a parseable ISO-8601 instant")
+        .isNotNull();
+
+    // ADR 33: the rating must not have leaked into the log the graph is rebuilt from. The second
+    // server replayed that log at boot and still found the graph exactly as it was seeded.
+    try (AssertionLog log = new SqliteAssertionLog(database)) {
+      assertThat(log.readAll())
+          .as("the assertion log must hold only the five seeded claims, and no rating")
+          .hasSize(5);
+    }
+  }
+
+  /**
+   * Run one stdio server against {@code database}, do the handshake, send one request with id 2,
+   * and return its parsed response — then destroy the process.
+   */
+  private JsonNode oneStdioSession(Path database, List<String> stdout, StdinAction request)
+      throws Exception {
+    List<String> stderr = new CopyOnWriteArrayList<>();
+    process = launchStdioServer(database);
+    Thread stdoutReader = drain(process.getInputStream(), stdout);
+    Thread stderrReader = drain(process.getErrorStream(), stderr);
+    stdoutReader.start();
+    stderrReader.start();
+
+    awaitStderrContains(stderr, "Started SegueApplication", STARTUP_TIMEOUT);
+
+    OutputStream stdin = process.getOutputStream();
+    sendLine(stdin, initializeRequest());
+    awaitLineCount(stdout, 1, RESPONSE_TIMEOUT, "the initialize response");
+    sendLine(stdin, "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}");
+
+    request.send(stdin);
+    awaitLineCount(stdout, 2, RESPONSE_TIMEOUT, "the tools/call response");
+
+    process.destroy();
+    stdoutReader.join(5_000);
+    stderrReader.join(5_000);
+
+    return responseWithId(new ObjectMapper(), stdout, 2);
+  }
+
+  /** One request written to a running server's stdin. */
+  @FunctionalInterface
+  private interface StdinAction {
+    void send(OutputStream stdin) throws IOException;
   }
 
   /**

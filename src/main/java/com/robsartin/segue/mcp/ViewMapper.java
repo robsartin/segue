@@ -1,5 +1,6 @@
 package com.robsartin.segue.mcp;
 
+import com.robsartin.segue.domain.AffinityRecord;
 import com.robsartin.segue.domain.Candidate;
 import com.robsartin.segue.domain.EdgeRecord;
 import com.robsartin.segue.domain.Hop;
@@ -23,6 +24,14 @@ final class ViewMapper {
 
   static NodeView toNodeView(NodeRecord node) {
     return new NodeView(node.qid(), node.kind(), node.label());
+  }
+
+  /**
+   * The taste layer's one translation. {@code qid} is dropped on purpose — see {@link
+   * AffinityView}.
+   */
+  static AffinityView toAffinityView(AffinityRecord affinity) {
+    return new AffinityView(affinity.rating(), affinity.note(), affinity.updatedAt());
   }
 
   static CandidateView toCandidateView(Candidate candidate) {
