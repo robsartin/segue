@@ -23,6 +23,11 @@ per-request metadata travels in the JSON-RPC body and nothing propagates in.
 - **W3C Trace Context (`traceparent`) is honoured on the HTTP transport** via Micrometer
   Tracing, so segue participates in a wider trace when there is one. On stdio there is
   nothing to propagate from, and the request id is the only correlation available.
+  *(Amended 2026-08-26, issue #28: the HTTP half is deliberately **not** built. Nothing sends
+  segue a `traceparent` and no collector receives a span, so this would propagate from nobody to
+  nowhere — and an exporter that logged a failed connection to console would corrupt the stdio
+  protocol stream. ADR 17's amendment carries the full reasoning. The UUIDv7 request id below is
+  unaffected and is the correlation segue actually has, on both transports.)*
 - **UUIDv7 is generated in-project**, in `support/UuidV7`, implementing the RFC layout:
   a 48-bit big-endian millisecond timestamp, version nibble `0111`, variant bits `10`,
   and a random remainder. JDK 25 has no v7 generator — `UUID.randomUUID()` is version 4.
