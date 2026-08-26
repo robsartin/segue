@@ -30,31 +30,46 @@ domain  <- port <- adapters (tinker, jena, sqlite, wikidata)
 
 `app` is the only package permitted to depend on everything, because wiring is its job.
 
-Rules enforced by ArchUnit, each naming the decision it defends:
+Invariants this decision commits to defending mechanically, each naming the decision it
+defends:
 
-| Rule | Defends | Status |
+| Invariant | Defends | Status |
 |---|---|---|
-| Only `ingest` calls `GraphStore.record` or `AssertionLog.append` | ADR 19 | arrives with `ingest` |
+| Only `ingest` writes a claim — `GraphStore.record`, `GraphStore.upsertNode` and `AssertionLog.append` | ADR 19 | enforced |
 | Nothing in `src/main` references `System.out` | ADR 28 | enforced |
 | No `System.err.println`, `Throwable.printStackTrace()`, or `java.util.logging`; SLF4J only | ADR 30 | enforced |
 | Adapters depend on `port` and `domain` only, never each other or upward | this ADR | partially enforced — the sibling (`tinker`/`jena` don't depend on each other) and upward (adapters don't depend on `ingest`/`mcp`/`app`) halves are written; the "port and domain only" downward restriction is not |
 | `domain` depends on nothing outside `java.*` and itself | ADR 18 | enforced |
 | Domain types are records, enums or sealed | ADR 11 | enforced |
-| `wikidata` must not depend on any Spring package | ADR 25 | arrives with `wikidata` |
-| Spring annotations only in `app` and `mcp` | ADR 12 | arrives with `app`/`mcp` |
-| Tool names match MCP's charset and length rules | ADR 26 | arrives with `mcp` |
+| `wikidata` must not depend on any Spring package | ADR 25 | enforced |
+| Spring annotations only in `app` and `mcp` | ADR 12 | enforced |
 
-`NodeKind.values().length == 6` (ADR 21) is a plain unit test rather than an ArchUnit rule,
-but belongs to the same set.
+**`ArchitectureTest` is the list, not this table.** `src/test/java/com/robsartin/segue/arch/ArchitectureTest.java`
+holds every rule and is the authority on which exist; the table above records which
+*decisions* this ADR undertakes to defend, and one of them may be spread across several
+rules (adapter siblinghood is one row here and four rules there). Rules have been added
+without amending this ADR before and will be again, so read the test file for the roster
+and read this table for the intent. Each rule's Javadoc names its ADR, which is the link
+back.
+
+Three checks belong to the same set and are deliberately not ArchUnit rules, because
+ArchUnit's structural rules read types and dependencies rather than values:
+`NodeKind.values().length == 6` (ADR 21) is a plain unit test, and MCP's tool-name charset
+and length rules (ADR 26) are checked by reflection over the `@McpTool` annotations in
+`ToolSurfaceTest` — annotation *attribute values* are not what a structural rule can see.
+ADR 16's rule that a rating or note never reaches a log line is likewise a test rather than
+a rule (`AffinityIsNeverLoggedTest`), and for the same reason: it is about what a log event
+carries, not about who depends on whom.
 
 **Invariants that resist mechanical checking are named, not pretended away:** ADR 20's
-separation of valid time from assertion time, ADR 23's confidence conventions, and ADR 16's
-rule that affinity notes never reach a log. These stay review concerns.
+separation of valid time from assertion time, and ADR 23's confidence conventions. These
+stay review concerns.
 
 ## Alternatives considered
 
 - **Code review alone** — no tooling to maintain, and it depends on a reviewer remembering
-  nine invariants on every PR, which is exactly the failure mode enforcement exists for.
+  every invariant in the table above on every PR, which is exactly the failure mode
+  enforcement exists for.
 - **Java modules (JPMS)** — compiler-enforced and stronger than a test, and it cannot express
   the rules that matter most here, which are about specific method calls and annotations
   rather than package exports.
@@ -72,8 +87,8 @@ rule that affinity notes never reach a log. These stay review concerns.
 - New packages must be placed deliberately, because a misplacement fails immediately.
 - The rules need maintenance as the codebase moves; a rule nobody updates gets deleted
   rather than weakened.
-- Three invariants are explicitly unguarded, which is the honest position and is written
-  down so nobody assumes otherwise.
+- The invariants that are not machine-checked are named rather than assumed, which is the
+  honest position and is written down so nobody credits a rule that does not exist.
 
 ---
 
@@ -84,3 +99,18 @@ rule that affinity notes never reach a log. These stay review concerns.
 only has its sibling and upward halves written, not the downward "port and
 domain only" restriction. Added a Status column recording this. The decisions
 are unaffected; the packages' rules arrive with the increments that add them.*
+
+*Correction, 2026-08-25 (issues #44 and #46): the rules table had drifted from the test file in four
+ways, none of them a change of decision. (1) Row 1 credited the ADR 19 rule with covering
+`AssertionLog.append` when `onlyIngestAppliesClaimsToTheGraph` matched `GraphStore.record` alone —
+documented, believed and unenforced. Issue #44 widened the rule to all three writes rather than
+narrowing this row, because ADR 19 is right: a graph write that skipped the log would be gone at the
+next boot. The row now also names `GraphStore.upsertNode`, which was unguarded and unmentioned.
+(2) Four rows still read "arrives with `ingest`/`wikidata`/`app`/`mcp`"; all four packages exist and
+all four rules are written, so their status is now "enforced". (3) The row claiming ArchUnit checks
+MCP tool names was wrong about the mechanism — `ToolSurfaceTest` checks them by reflection, as ADR
+26's own amendment already recorded — so it has moved out of the table into the paragraph about
+value-shaped checks, alongside the ADR 16 logging check that the "resists mechanical checking"
+sentence had also outlived. (4) The table was written as a complete list of ArchUnit rules and had
+not stayed one; it now records the decisions defended and points at `ArchitectureTest` for the
+roster, so the next rule added does not silently make this ADR false again.*

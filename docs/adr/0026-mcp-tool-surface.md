@@ -25,12 +25,12 @@ Six tools, no more:
 
 | Tool | Effect |
 |---|---|
-| `search_entities(query, kind?)` | candidates with QIDs and disambiguation; writes nothing |
+| `search_entities(query, kind?, limit?)` | candidates with QIDs and disambiguation; writes nothing |
 | `add_entity(qid)` | upsert, returns id |
-| `expand_entity(entityId, sources?, maxNew?)` | runs adapters, returns new edges |
-| `get_entity(entityId)` | node plus neighbours grouped by edge type, plus this entity's affinity if it has been rated |
-| `find_paths(from, to, maxHops)` | ranked routes with per-hop citations |
-| `note_affinity(entityId, rating, note)` | taste layer, its own tables |
+| `expand_entity(qid, maxNewEdges?)` | runs adapters, returns new edges |
+| `get_entity(qid)` | node plus neighbours grouped by edge type, plus this entity's affinity if it has been rated |
+| `find_paths(fromQid, toQid, maxHops?)` | ranked routes with per-hop citations |
+| `note_affinity(qid, rating, note?)` | taste layer, its own table |
 
 **Amendment (2026-08-25, increment-4a final review).** This table is the target
 end-state across increments, not what increment 4a ships. `note_affinity` lands
@@ -47,6 +47,35 @@ says so — rather than as a seventh tool, precisely so this table stays six row
 that choice against both a dedicated `get_affinity` and a bulk `list_affinity`, the latter on ADR
 16's data minimisation. `ToolSurfaceTest.theTasteLayerAddsOneToolAndNoMore()` asserts the count, so
 adding either is a change to this ADR before it is a change to the code.
+
+**Amendment (2026-08-25, issue #46 — the table names parameters, so it uses the real ones).**
+Signatures in the table above were written before the tools existed and named
+`entityId`, `from`, `to`, `maxNew` and a `sources?` filter. The code names them `qid`,
+`fromQid`, `toQid`, `maxNewEdges`, and has no `sources` parameter at all. The increment-4a
+amendment above calls this table "the target end-state across increments", but that is
+about *which tools ship*, not about what their arguments are called, so it did not license
+the difference.
+
+The table now uses the real parameter names, for three reasons. First, a tool signature is
+a wire contract: a client that reads `get_entity(entityId)` here and sends `entityId` gets
+a protocol error, because the published input schema says `qid`. An ADR that is wrong about
+a name the caller must type is worse than an ADR that omits the name. Second, `qid` is not
+merely the implementation's spelling of `entityId` — it records a decision. Entities are
+identified by their Wikidata QID and by nothing else; there is no internal entity id to
+hold an `entityId`, and calling it one would suggest a level of indirection this design
+deliberately does not have. Third, `sources?` was never built and is not pending: this
+ADR's own alternatives already reject splitting expansion per source, and a per-call source
+filter would be a change to this decision rather than a detail of it, so listing it as
+though it existed invited someone to "finish" it.
+
+The optional marker is now applied consistently — `limit?` on `search_entities` and
+`maxHops?` on `find_paths` were both optional in the code and unmarked here, and `note?` is
+optional per ADR 39. The alternative considered and rejected was to keep the abstract names
+and add a sentence saying the table names concepts rather than parameters; that reads as a
+tidy escape and leaves the reader with no way to call the tool, and the concepts survive the
+rename intact anyway. `ToolSurfaceTest` asserts the tool *names*, not their parameters, so
+this table is what a reader has; if parameters are ever renamed again, they are renamed here
+in the same commit.
 
 - **`assert_edge` is deliberately absent** until corroboration is visibly working.
   When it arrives its assertions carry the `llm:` prefix of ADR 23.

@@ -189,7 +189,7 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   by kind without one extra round trip per hit. `EntityResolver.search` therefore
   accepts a `kind` argument and deliberately does NOT apply it — a filter that
   cannot see the kind returns an empty list, which reads as "no such entity" rather
-  than "cannot filter". ADR 26's `search_entities(query, kind?)` MCP tool inherits
+  than "cannot filter". ADR 26's `search_entities` MCP tool inherits
   this, and its tool description must say so.
 - **The live smoke test caught a wrong QID on its first run** — the plan used
   Q214601 for Nick Cave, which is actually David Tennant (Nick Cave is Q192668).
@@ -291,7 +291,7 @@ expands but has nothing to resolve.
 public interface SourceAdapter {
     String id();
     boolean supports(NodeKind kind);
-    List<AssertionRecord> expand(NodeRecord seed, ExpandContext ctx);
+    ExpandResult expand(NodeRecord seed, ExpandContext ctx);
 }
 
 public interface EntityResolver {
@@ -323,14 +323,14 @@ remainder is still unbuilt, and is a smaller job than it was.
 Spring Boot with the MCP server starter; streamable HTTP plus a stdio profile.
 Six tools, no more:
 
-- `search_entities(query, kind?)` → candidates with QIDs and disambiguation
+- `search_entities(query, kind?, limit?)` → candidates with QIDs and disambiguation
 - `add_entity(qid)` → upsert, returns id
-- `expand_entity(entityId, sources?, maxNew?)` → runs adapters, returns new edges
-- `get_entity(entityId)` → node plus neighbours grouped by edge type, plus this
+- `expand_entity(qid, maxNewEdges?)` → runs adapters, returns new edges
+- `get_entity(qid)` → node plus neighbours grouped by edge type, plus this
   entity's affinity if it has been rated (ADR 39: the taste layer's read path is
   here, and there is no seventh tool)
-- `find_paths(from, to, maxHops)` → routes with per-hop citations
-- `note_affinity(entityId, rating, note?)` → taste layer, its own table
+- `find_paths(fromQid, toQid, maxHops?)` → routes with per-hop citations
+- `note_affinity(qid, rating, note?)` → taste layer, its own table
 
 Hold back `assert_edge` (model-proposed hypotheses) until corroboration is
 visibly working.

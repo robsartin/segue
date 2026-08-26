@@ -156,9 +156,24 @@ class ArchitectureTest {
                   + " its Javadoc.");
 
   /**
+   * A call to {@code name} on an owner assignable to {@code owner}.
+   *
+   * <p>Assignability, not the exact owner, for the same reason {@link #noPrintStackTrace} needs it:
+   * javac encodes the call-site owner as the <em>static type of the receiver expression</em>. A
+   * field declared {@code SqliteAssertionLog} rather than {@code AssertionLog} compiles an owner of
+   * the implementation, and the exact-owner form would miss it — which is the shape a bypass would
+   * most plausibly take, since a class reaching around {@code IngestService} is a class that has
+   * already helped itself to a concrete store.
+   */
+  private static DescribedPredicate<JavaCall<?>> callTo(String name, Class<?> owner) {
+    return JavaCall.Predicates.target(HasName.Predicates.name(name))
+        .and(JavaAccess.Predicates.targetOwner(JavaClass.Predicates.assignableTo(owner)));
+  }
+
+  /**
    * ADR 30: printStackTrace writes to stderr without touching System.err.
    *
-   * <p>Matched by target name and owner-assignability rather than {@code
+   * <p>Matched by {@link #callTo}, on target name and owner-assignability rather than {@code
    * callMethod(Throwable.class, "printStackTrace")}, because javac encodes the call-site owner as
    * the caught variable's static type — {@code catch (RuntimeException e) { e.printStackTrace(); }}
    * compiles an owner of {@code RuntimeException}, not {@code Throwable}, so the exact-owner form
@@ -168,11 +183,7 @@ class ArchitectureTest {
   static final ArchRule noPrintStackTrace =
       noClasses()
           .should()
-          .callMethodWhere(
-              JavaCall.Predicates.target(HasName.Predicates.name("printStackTrace"))
-                  .and(
-                      JavaAccess.Predicates.targetOwner(
-                          JavaClass.Predicates.assignableTo(Throwable.class))))
+          .callMethodWhere(callTo("printStackTrace", Throwable.class))
           .because("ADR 30: SLF4J is the only logging API, and stack traces belong in a logger");
 
   /** ADR 30: no competing logging API. */
@@ -196,9 +207,37 @@ class ArchitectureTest {
           .because("ADR 32: adapters are siblings, not collaborators");
 
   /**
-   * ADR 19: the graph is a derived projection, so only {@code ingest} replays claims into it via
-   * {@code GraphStore.record}. Everything else appends to the log; nothing edits the graph
-   * directly.
+   * The three writes that put a claim somewhere durable: both halves of {@code IngestService.apply}
+   * and the log append that must precede them.
+   */
+  private static final DescribedPredicate<JavaCall<?>> APPLIES_A_CLAIM =
+      callTo("record", GraphStore.class)
+          .or(callTo("upsertNode", GraphStore.class))
+          .or(callTo("append", AssertionLog.class))
+          .as("applies a claim: GraphStore.record, GraphStore.upsertNode or AssertionLog.append");
+
+  /**
+   * ADR 19: the graph is a derived projection, so only {@code ingest} writes claims — appending to
+   * the log first and applying to the graph second. Everything else hands the claim to {@link
+   * IngestService} and touches no store itself.
+   *
+   * <p><b>All three writes, not just one.</b> This rule matched only {@code GraphStore.record}
+   * until issue #44. That left {@code AssertionLog.append} and {@code GraphStore.upsertNode}
+   * unguarded while ADR 32's table, {@code IngestService}'s Javadoc and {@code SegueService}'s
+   * Javadoc all said otherwise — an invariant documented, believed and unenforced, which is the
+   * worst of the three states. Nothing was violating it; nothing would have stopped the next one.
+   *
+   * <p>The gap mattered most at {@code append}. A claim that reached the graph without passing
+   * through the log would vanish at the next boot, because {@link
+   * com.robsartin.segue.ingest.GraphProjector} rebuilds the graph from the log and from nothing
+   * else — silent data loss that no test would have noticed and that ADR 19 exists to make
+   * impossible.
+   *
+   * <p><b>No exception is needed for replay.</b> {@code GraphProjector} does apply logged claims to
+   * the graph, and it does so from inside {@code ingest}, so the package clause already covers it —
+   * unlike {@link SegueApplication}'s stdout exemption, which had to name a class because the class
+   * sat outside the package the rule fences. If a legitimate applier ever appears elsewhere, name
+   * it the way that one is named; do not widen the package.
    */
   @ArchTest
   static final ArchRule onlyIngestAppliesClaimsToTheGraph =
@@ -206,12 +245,10 @@ class ArchitectureTest {
           .that()
           .resideOutsideOfPackage("..ingest..")
           .should()
-          .callMethodWhere(
-              JavaCall.Predicates.target(HasName.Predicates.name("record"))
-                  .and(
-                      JavaAccess.Predicates.targetOwner(
-                          JavaClass.Predicates.assignableTo(GraphStore.class))))
-          .because("ADR 19: the log is the source of truth and only ingest projects it");
+          .callMethodWhere(APPLIES_A_CLAIM)
+          .because(
+              "ADR 19: the log is the source of truth and only ingest projects it — a graph write"
+                  + " that skipped the log would be gone at the next boot");
 
   /**
    * The taste layer, by type rather than by package.
