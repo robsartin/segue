@@ -1,65 +1,55 @@
-# Segue — engine bake-off
+# Segue
 
-One domain model, one port, two graph engines, four queries. The point is to
-decide **empirically** whether Gremlin or RDF/SPARQL is the better home for a
-provenance-first affinity graph, before committing to either.
+A personal interest graph, with receipts.
 
-## The bet this tests
+A segue is how one thing leads into the next, and that move is the whole point. You put the things
+you care about into segue — people, bands, films, books, places — and it pulls in their real
+relationships from Wikidata. Then you ask it how two of them connect, and it answers with the
+**route**, hop by hop, with the source behind every hop. Not "these are similar": *this* person
+scored *that* film, which *this other* person directed.
 
-Your design has three properties that most graph examples don't:
+Segue runs as an [MCP](https://modelcontextprotocol.io) server. You drive it from an MCP client —
+Claude Code, Claude Desktop, or anything else that speaks the protocol — which calls its six tools
+on your behalf. There is no UI, and whether that is pleasant enough is the open question the project
+exists to answer.
 
-1. **Multigraph** — Nick Cave both *wrote* and *scored* The Proposition. Two
-   relationships, one pair of nodes.
-2. **Provenance-first** — every edge carries who claimed it, when, and how much
-   you trust them. Corroboration across sources is a first-class signal.
-3. **Bitemporal** — when a fact was true in the world is independent of when you
-   learned it.
+**New here? Start with [the user guide](docs/user-guide.md)** — it takes you from an unbuilt
+checkout to a graph you can ask questions of, with every example captured from a real run.
 
-Engines differ sharply on 2 and 3. That's what the four queries measure.
+## What it gives you
 
-## Layout
+Ask for the routes between Nick Cave and the director John Hillcoat, and among the answers are these
+two:
 
-```
-domain/     records + the Wikidata-derived edge vocabulary. No dependencies.
-port/       GraphStore — the seam that makes the engine choice reversible.
-tinker/     Apache TinkerPop / Gremlin, on the in-memory TinkerGraph.
-jena/       Apache Jena, one named graph per assertion.
-```
-
-`NodeKind` has six constants — PERSON, GROUP, WORK, PLACE, EVENT, CONCEPT — and
-that is deliberate. "Musician", "novelist", "director" are roles, expressed as
-edges. One Nick Cave node is all three at once and the enum never grows.
-
-## Running it
-
-```bash
-./gradlew check    # format, tests, coverage, arch rules
+```mermaid
+graph LR
+    NC["Nick Cave<br/>Q192668"]
+    TP["The Proposition<br/>Q180337"]
+    JH["John Hillcoat<br/>Q552814"]
+    NC -- "COMPOSED_FOR" --> TP
+    NC -- "WROTE_SCREENPLAY_FOR" --> TP
+    JH -- "DIRECTED" --> TP
 ```
 
-No infrastructure: TinkerGraph and Jena's TxnMem dataset are both in-process.
+**What that diagram shows.** Three entities. Nick Cave has two separate arrows to the film *The
+Proposition* — one labelled `COMPOSED_FOR`, one labelled `WROTE_SCREENPLAY_FOR`. John Hillcoat has
+one arrow to the same film, labelled `DIRECTED`. Cave and Hillcoat have no direct connection; the
+film is the bridge, and there are two distinct ways across it.
 
-## Run it as an MCP server
+Two relationships between one pair of nodes, kept apart rather than collapsed, and each hop carrying
+the Wikidata claim that backs it. That is a multigraph with provenance on every edge, and it is the
+property most of the design decisions are protecting. [The full response, with citations, is in the
+user guide](docs/user-guide.md#6-ask-for-the-route).
 
-A Spring Boot MCP server exposing six tools (ADR 26) over **both** transports
-ADR 28 commits to. Build the jar once:
+## Quick start
 
 ```bash
 ./gradlew bootJar
+java -Dspring.profiles.active=stdio -jar build/libs/segue-*.jar
 ```
 
-Which transport you get is a launch-time choice, and the two are mutually
-exclusive: the `stdio` profile starts no HTTP listener at all, and without it no
-process reads stdin.
-
-### stdio — for a client that launches segue as a subprocess
-
-```bash
-java -Dspring.profiles.active=stdio -jar build/libs/segue-0.1.0-SNAPSHOT.jar
-```
-
-The server speaks newline-delimited JSON-RPC over stdin/stdout and logs
-structured JSON to stderr — nothing else is allowed to touch stdout (ADR 28,
-ADR 30). Point an MCP client at it with a config block like:
+That is the stdio transport, which is what an MCP client launching segue as a subprocess wants.
+Point a client at it:
 
 ```json
 {
@@ -69,244 +59,119 @@ ADR 30). Point an MCP client at it with a config block like:
       "args": [
         "-Dspring.profiles.active=stdio",
         "-jar",
-        "/absolute/path/to/segue-0.1.0-SNAPSHOT.jar"
+        "/absolute/path/to/segue/build/libs/segue-0.1.0-SNAPSHOT.jar"
       ]
     }
   }
 }
 ```
 
-### Streamable HTTP — for a client that connects to a running segue
+A plain `java -jar build/libs/segue-*.jar` starts the Streamable HTTP transport instead — bound to
+loopback, refusing any non-loopback `Origin` or `Host`, with no authentication because there is
+nothing to authenticate to a server only you can reach. Both transports, both config blocks and the
+`curl` handshake are in
+[the user guide's "Connect a client" section](docs/user-guide.md#connect-a-client).
 
-No profile: HTTP is what a plain launch gives you.
+Your graph lives in one SQLite file, `~/.segue/segue.db` by default; `SEGUE_DB` moves it.
 
-```bash
-java -jar build/libs/segue-0.1.0-SNAPSHOT.jar
-```
+## The six tools
 
-The MCP endpoint is `http://127.0.0.1:8080/mcp`; `SEGUE_HTTP_PORT` moves it.
-A client config block for it looks like:
+| Tool | What it does |
+|---|---|
+| `search_entities` | Free-text search for candidates carrying Wikidata QIDs |
+| `add_entity` | Fetch one QID's canonical identity and put it in the graph |
+| `expand_entity` | Discover an entity's relationships and record them as edges |
+| `get_entity` | One entity, its neighbours grouped by relationship, and your rating |
+| `find_paths` | Every route between two entities, ranked, with citations |
+| `note_affinity` | Record what you think of one entity, 1 to 5 |
 
-```json
-{
-  "mcpServers": {
-    "segue": {
-      "type": "http",
-      "url": "http://127.0.0.1:8080/mcp"
-    }
-  }
-}
-```
+Six, and a seventh needs an ADR saying why —
+[ADR 26, on the MCP tool surface](docs/adr/0026-mcp-tool-surface.md). What each one is for, and the
+traps in each, are in [the user guide's tool reference](docs/user-guide.md#the-six-tools).
 
-To drive it by hand, remember the two things every Streamable HTTP client has to
-do: send `Accept: application/json, text/event-stream` on every POST, and echo
-back the `Mcp-Session-Id` the `initialize` response returns.
+## The ideas underneath
 
-```bash
-curl -si -X POST http://127.0.0.1:8080/mcp \
-  -H 'Content-Type: application/json' \
-  -H 'Accept: application/json, text/event-stream' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"curl","version":"1"}}}'
-```
+Three properties shape almost every decision in the codebase.
 
-**It is deliberately reachable only from this machine.** The server binds to
-`127.0.0.1`, and it refuses any request whose `Origin` or `Host` is not loopback
-— 403 and 421 respectively. That is not belt-and-braces: binding to loopback
-alone would still let a web page open in your own browser POST to
-`localhost:8080`, which is the DNS-rebinding attack. There is no authentication,
-because there is nothing to authenticate to a server only you can reach. Making
-segue reachable from anywhere else is a code change to the allowlist plus a
-decision about auth — see `docs/adr/0037-streamable-http-transport-on-the-servlet-stack.md`.
+- **It is a multigraph.** Two entities can be connected by several different relationships at once,
+  and collapsing them loses real answers — as the diagram above shows.
+- **Provenance is first class.** Every edge records who claimed it, when, and how much that claim is
+  trusted. Corroboration across sources is a signal the ranking uses, so a well-sourced long route
+  outranks a shaky short one ([ADR 31](docs/adr/0031-path-ranking-by-confidence.md)).
+- **Time has two dimensions.** When something was true in the world is independent of when segue
+  learned it, and the two are never conflated ([ADR 20](docs/adr/0020-bitemporal-time-model.md)).
 
-### Either way
+Two more decisions are worth knowing before you read any code. The append-only assertion log is the
+source of truth and the graph is a projection of it
+([ADR 19](docs/adr/0019-assertion-log-source-of-truth.md)). And entity kinds are a closed set of six
+— PERSON, GROUP, WORK, PLACE, EVENT, CONCEPT — because "musician", "novelist" and "director" are
+*roles*, expressed as edges. One Nick Cave node is all three at once and the enum never grows
+([ADR 21](docs/adr/0021-six-kind-ontology.md)).
 
-Six tools are exposed — `search_entities`, `add_entity`, `expand_entity`,
-`get_entity`, `find_paths`, `note_affinity` — documented in
-`docs/adr/0026-mcp-tool-surface.md`. The tool surface, the protocol revision and
-the graph behind them are identical on both transports. `SEGUE_DB` overrides
-where the data lives (defaults to `~/.segue/segue.db`).
+## The taste layer, and your privacy
 
-### The taste layer
+`note_affinity(qid, rating, note?)` records what you think of one entity: a required integer rating
+from 1 to 5, and optionally a note in your own words. Reading it back is part of `get_entity`; there
+is no separate read tool and no way to list everything you have rated
+([ADR 39](docs/adr/0039-affinity-capture-and-read.md) argues both).
 
-`note_affinity(qid, rating, note?)` records what you think of one entity: a
-required integer rating from 1 to 5, and optionally a note in your own words.
-Reading it back is part of `get_entity`, which returns the affinity beside the
-entity's neighbours; there is no separate read tool, and no way to list
-everything you have rated (ADR 39 argues both).
+It **never touches the graph**. Affinity lives in its own table behind its own port, carries no
+provenance and no corroboration, and is not an assertion — so the world graph can be exported or
+shared with none of it attached. Re-rating overwrites; there is no history. Rating something
+requires a Wikidata QID, so something Wikidata does not have cannot be rated at all. That is an
+accepted cost of having one identity spine
+([ADR 33](docs/adr/0033-taste-layer-separation.md), [ADR 22](docs/adr/0022-wikidata-identity-and-vocabulary.md)).
 
-Three things about it are decisions rather than details, and all three are ADR 33
-and ADR 39:
-
-- **It never touches the graph.** Affinity lives in its own table behind its own
-  port, carries no provenance and no corroboration, and is not an assertion. The
-  world graph can be exported or shared without any of it attached, which matters
-  here: the graph is public-shaped, the taste layer is not.
-- **The entity must already be in the graph, under a Wikidata QID.** One identity
-  spine (ADR 22), so every rating joins to real world facts. The accepted cost:
-  something Wikidata does not have cannot be rated at all.
-- **Re-rating overwrites.** One row per entity, latest rating wins, with an
-  `updated_at` stamp saying when it last changed. No history, so deleting the
-  taste layer wholesale stays a single `DELETE`.
-
-Affinity is personal data (ADR 16). It is never logged — not the rating, not the
-note, not in an error message — and it lives in `~/.segue/segue.db`, outside this
-repository. **Never put a real rating or note in a fixture, an ADR, a commit
-message or an example here**; this repository is public, and that, not repository
+Affinity is personal data ([ADR 16](docs/adr/0016-privacy-and-data-handling.md)). It is never
+logged — not the rating, not the note, not in an error message — and it lives in the SQLite file
+under your home directory, outside this repository. **Never put a real rating or note in a fixture,
+an ADR, a commit message or an example here**; this repository is public, and that, not repository
 visibility, is the actual boundary (issue #37).
 
-## The four queries, and why each one
+## Building and testing
 
-| | Query | Why it's here |
-|---|---|---|
-| Q1 | Shortest paths, each hop citing its sources | The payoff feature. Also where the engines diverge most. |
-| Q2 | Everything source X said after time T | The blast-radius query for when a source turns out wrong. |
-| Q3 | Relationships valid on a given date | Band tenures. Tests that time travel actually works. |
-| Q4 | Edges backed by ≥N distinct sources | What stops model hypotheses becoming facts. |
+```bash
+./gradlew check    # format, tests, coverage, architecture rules — the full CI gate
+```
 
-## Findings
+No infrastructure to stand up: the graph engines are in-process and the store is one SQLite file.
+`./gradlew liveTest` runs the tagged tests that call the real Wikidata API; they are excluded from
+`check` on purpose.
 
-**Q1 — paths. Gremlin wins decisively.**
+The suite is layered — domain record invariants with no store, a contract test run against both
+graph adapters, and ArchUnit rules that enforce the ADRs mechanically. `docs/developer-guide.md`
+covers building, testing and extending segue in detail.
 
-| | non-comment lines at slice 0 |
+## Documentation
+
+| Document | For |
 |---|---|
-| Gremlin | 27 |
-| Jena | 81 |
+| [User guide](docs/user-guide.md) | Getting segue running and actually using it |
+| `docs/developer-guide.md` | Building, testing and extending it |
+| [Architecture decision records](docs/adr/README.md) | Every design choice, with its alternatives and consequences |
+| [The engine bake-off](docs/engine-bake-off.md) | The two-engine comparison that chose the graph database |
 
-Gremlin's implementation is one traversal:
+### Why the bake-off has its own page
 
-```java
-g.V().has(ENTITY, P_QID, fromQid)
- .repeat(__.bothE().otherV().simplePath())
- .until(__.or(__.has(P_QID, toQid), __.loops().is(P.gte(maxHops))))
- .has(P_QID, toQid)
- .path()
-```
+This README used to open with it. Segue started as an experiment to decide, empirically, whether
+Gremlin or RDF/SPARQL was the better home for a provenance-first graph: one domain model, one port,
+two engines, four queries. That experiment is finished, it produced a genuine finding, and
+[ADR 18](docs/adr/0018-graph-engine-gremlin.md) rests on it — so none of it has been deleted. But it
+is a decision record about storage, and a decision record is the wrong front door for a project that
+has since grown a Wikidata ingest, an MCP server on two transports and a taste layer. It now lives
+at [docs/engine-bake-off.md](docs/engine-bake-off.md), unabridged.
 
-SPARQL 1.1 property paths can test *that* two entities are connected —
-`?a (afp:X|^afp:X)* ?b` — but there is no standard way to get the path **back**.
-So a citable explanation requires hand-rolled depth-first enumeration, a
-neighbour cache to stop it being quadratic (one SPARQL round trip per node
-expanded), and a reconstruction pass. That's the 81 lines, and none of it is
-incidental.
+## Status
 
-**And the failure mode matters more than the line count.**
+Slice 0 — the domain model and the engine bake-off — is complete, and so are the increments built on
+it: the source-adapter SPI, the Wikidata ingest with reverse lookup, the MCP server on both
+transports, and the taste layer. Remaining work is tracked as GitHub issues.
 
-The first working run exposed a bug that only running could have found. The
-obvious neighbour query for the RDF walk is `SELECT DISTINCT ?other` — which
-walks **nodes**. Nick Cave reaches The Proposition two ways (`COMPOSED_FOR` and
-`WROTE_SCREENPLAY_FOR`), and `DISTINCT ?other` collapses those into one
-neighbour: one route silently disappeared, the engine backfilled with a longer
-detour, and the reconstruction step had to *guess* which relationship it had
-walked. It returned plausible answers, not errors.
+The notable thing *not* built is recommendations. They need routes to filter, and until the
+vocabulary grew its first non-collaboration edge there were not enough routes to filter — see
+[ADR 38](docs/adr/0038-award-received-as-the-first-non-collaboration-edge.md). The limits you will
+actually hit today are written down honestly in
+[the user guide](docs/user-guide.md#honest-limits).
 
-Gremlin never had this bug and structurally cannot: `bothE().otherV()` steps
-through edges by construction, so parallel edges are distinct paths without
-anyone thinking about it. The RDF adapter now carries `(predicate, other,
-direction)` through the whole enumeration — which is most of why its Q1 grew
-from 27 lines to 81.
-
-On a graph whose entire premise is "record everything, including several
-relationships between the same two things," an engine whose natural traversal
-idiom quietly drops parallel edges is inviting the wrong kind of failure.
-
-**Q4 — corroboration. RDF wins on kind, not on line count.**
-
-The whole query, executed and indexable by the engine:
-
-```sparql
-SELECT ?f ?p ?t (COUNT(DISTINCT ?src) AS ?n) WHERE {
-  GRAPH ?g { ?f ?p ?t }
-  ?g af:source ?src .
-}
-GROUP BY ?f ?p ?t
-HAVING (COUNT(DISTINCT ?src) >= 2)
-```
-
-The Gremlin equivalent is fewer lines of Java but it is `g.E().toList().stream()`
-— a **full edge scan in application memory**, because provenance is packed into
-an opaque edge property the traversal engine cannot see. Same for Q2.
-
-That opacity isn't laziness, it's structural: property-graph edges are
-single-valued and nothing can point at an edge. The alternatives are to encode
-(what this does — cheap paths, opaque provenance) or to reify every relationship
-as a Claim vertex (queryable provenance, but every logical hop becomes three
-graph hops and Q1 gets much worse). RDF named graphs avoid the choice entirely.
-
-**Two things RDF gets for free that are easy to miss:**
-
-- *No merge code.* Two sources claiming the same relationship are simply two
-  named graphs holding the same triple. The Gremlin adapter needs explicit
-  find-then-append logic for this, plus the codec.
-- *Graph-level retraction.* Dropping everything a bad source said is a DELETE on
-  the graphs it owns, with no risk of removing a claim another source also makes.
-  In the property graph it's a scan-and-rewrite of every affected edge's blob.
-
-**Entity IRIs are real Wikidata IRIs** in the Jena adapter
-(`http://www.wikidata.org/entity/Q...`), so a Wikidata dump or a federated SPARQL
-query loads into the same store with no identifier mapping at all. That is a
-bigger deal for slice 1 than it looks.
-
-## The recommendation
-
-**Gremlin, unless you expect provenance queries to become the main event.**
-
-Paths are the feature you're building this for, and the gap on Q1 is not close —
-it's the difference between stating your intent and implementing a graph
-algorithm. Q2 and Q4 degrading to full scans is real but survivable: a personal
-affinity graph won't outgrow a scan over tens of thousands of edges for years,
-and by then the assertion log lets you project into a second store for exactly
-those queries.
-
-Take RDF instead if, when you read the two adapters, the named-graph model makes
-you think "that's what I meant" — the retraction and corroboration semantics are
-genuinely better, and Wikidata ingest is free. The tell is whether you find
-yourself wanting to *audit* the graph more often than *walk* it.
-
-Either way the `GraphStore` port means this is an afternoon to revisit, not a
-rewrite.
-
-## Verification status
-
-**Runs green.** Java 25 (Temurin), macOS aarch64, compiled at `release 21`.
-`./gradlew check` runs formatting, the whole test suite, coverage and the
-architecture rules. Both engines return identical results for all four queries, including
-identical full route sets between Cave and Hillcoat.
-
-The suite is layered: domain record invariants and the reference edge fold run
-without a store; `GraphStoreContract` runs the four queries against both
-`TinkerGraphStore` and `JenaGraphStore`, so the cross-engine comparison is a
-merge gate rather than a program someone remembers to run; `ArchitectureTest`
-enforces the ADRs mechanically.
-
-Coverage is gated at 80% line/instruction and 65% branch, and comfortably
-clears both; `build/reports/jacoco/` has the current numbers.
-
-*(Historically: originally verified under Maven 3.9.13 with 22 hand-rolled
-checks in a `main()` method. The build is now Gradle and those checks are real
-tests.)*
-
-Two real bugs were found by running it, neither caught by inspection:
-
-1. `Property.map(LocalDate::parse)` — TinkerPop's `Property` is **not** a
-   `java.util.Optional`. It has `orElse`, `orElseGet` and `ifPresent` but no
-   `map`. Hard compile error, now a `dateProperty()` helper.
-2. The `DISTINCT ?other` multigraph bug described above — which passed the
-   original test suite, because that suite only compared the *shortest* path
-   between engines rather than the full route set. The comparison is now
-   signature-based over every route.
-
-The SPARQL was independently replayed against an equivalent rdflib dataset
-(`verification/`) and agrees with the Java in every case.
-
-**The QIDs in `Fixture` are placeholders** in the Q9000xx range, not real
-Wikidata identifiers. Slice 1 replaces them via `wbsearchentities`; nothing
-depends on their values.
-
-## Deliberately not here
-
-This README covers slice 0 — the part that answers the engine question, which
-is complete. The `SourceAdapter` SPI, the Wikidata ingest, and the MCP server on
-both transports (see "Run it as an MCP server" above) have since landed as later increments,
-tracked as GitHub issues and ADRs rather than narrated here. The open risk
-remains #4 from the original plan: whether MCP is a pleasant *authoring*
-interface or whether you want a UI within ten minutes.
+The open risk is unchanged from the original plan: whether MCP is a pleasant *authoring* interface,
+or whether you want a UI within ten minutes.
