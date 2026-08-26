@@ -10,8 +10,11 @@ claimed it. The payoff feature is **explanation**: "you like this because
 X → Y → Z", with every hop citable to a source.
 
 Slice 0 — the domain model plus a two-engine bake-off that answered the
-graph-database question — is complete. Ingest and the MCP interface are not
-built yet; the increments that build on slice 0 are tracked as GitHub issues.
+graph-database question — is complete, and so are the increments built on it:
+Wikidata ingest, the MCP server on both transports, and (increment 5) the taste
+layer. Remaining work is tracked as GitHub issues; recommendations are the
+notable thing NOT built, because they need routes to filter and issue #32 is why
+there currently are none.
 
 ## Build and run
 
@@ -59,18 +62,21 @@ Full reasoning: `docs/adr/0018-graph-engine-gremlin.md`. All decisions are recor
 
 ```
 domain/   records + Wikidata-derived edge vocabulary. NO third-party deps.
-port/     GraphStore, AssertionLog, SourceAdapter, EntityResolver — the seams.
+port/     GraphStore, AssertionLog, AffinityStore, SourceAdapter, EntityResolver
+          — the seams.
 tinker/   Gremlin adapter (the chosen one).
 jena/     RDF adapter (reference implementation, keep it working).
-sqlite/   SqliteAssertionLog — the append-only log persisted to one file (ADR 24).
+sqlite/   SqliteAssertionLog — the append-only log persisted to one file (ADR 24)
+          — and SqliteAffinityStore, the taste layer's own table in that same
+          file (ADR 33, ADR 39).
 wikidata/ The first source: resolution and expansion. Plain Java, no Spring.
 ingest/   IngestService (the only write path) and GraphProjector (boot replay).
 support/  Plain-Java cross-cutting helpers with no project dependencies of their
           own — currently UuidV7, the RFC 9562 v7 id generator used for request
           correlation.
-mcp/      The five MCP tools (EntityTools, GraphTools), SegueService (the facade
-          they call), CorrelationId. Spring-only package (ADR 32) — annotated
-          with the starter's @McpTool, but plain enough to unit test.
+mcp/      The six MCP tools (EntityTools, GraphTools, TasteTools), SegueService
+          (the facade they call), CorrelationId. Spring-only package (ADR 32) —
+          annotated with the starter's @McpTool, but plain enough to unit test.
 app/      SegueApplication, SegueConfiguration (all wiring lives here),
           SegueProperties, application.yaml. The other Spring-only package;
           owns the stdio/HTTP transport profiles.
@@ -97,6 +103,17 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   vs `provenance.assertedAt` (when we learned it). Never conflate them.
 - **Model-generated edges use a `llm:` source prefix** and stay quarantined until
   a real source corroborates. `EdgeRecord.isUncorroboratedHypothesis()`.
+- **Affinity is not an assertion, and the two layers never meet below
+  `SegueService`.** A rating lives in the `affinity` table behind `AffinityStore`,
+  carries no `Provenance` and no corroboration, and never reaches the graph or the
+  log. `note_affinity` is the only writer; `IngestService` never sees a rating.
+  Two ArchUnit rules enforce it in both directions
+  (`affinityNeverTouchesTheWorldFactLayer`,
+  `theWorldFactLayerNeverTouchesAffinity`). ADR 33 and ADR 39.
+- **A rating is a required integer 1-5; the note is optional; re-rating
+  overwrites.** Negative affinity is 1-2, not a separate concept. One row per
+  entity keyed by qid, with `updated_at` — there is no history table, and taste
+  drift is deliberately not retained (ADR 39).
 
 ## Gotchas already paid for
 - **Never put real affinity data in the repository.** ADR 33 makes taste personal data, and this
@@ -226,6 +243,24 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   *effective* default protocol is the deprecated `SSE`, not `streamable`, no
   matter what the property metadata claims — so `spring.ai.mcp.server.protocol`
   is set explicitly (ADR 37).
+- **Affinity is personal data and never reaches a log line — including one
+  nobody wrote.** ADR 30 puts a logger in every service class, so the reflex that
+  makes the rest of `SegueService` good makes `noteAffinity` wrong; that method
+  deliberately logs nothing at all, on the happy path and on all three refusals,
+  and its error strings never echo the rating or the note back. Less obviously,
+  **sqlite-jdbc logs every statement it executes through SLF4J at TRACE** — the
+  SQL text, never the bound parameters. The affinity write is a `PreparedStatement`
+  with `?` placeholders and must stay one: concatenating values into that SQL would
+  put a rating and a note into a driver log line with no logging call in this
+  repository at all. `AffinityIsNeverLoggedTest` asserts both halves — this
+  project's loggers are silent, and no logger anywhere carries a value.
+- **The taste layer's classes deliberately have no package of their own.**
+  `AffinityRecord` sits in `domain`, `AffinityStore` in `port`,
+  `SqliteAffinityStore` in `sqlite`, `TasteTools` in `mcp` — each where its
+  layer's convention puts it. The ArchUnit rules therefore match on type name
+  rather than on package, which is why they read differently from every other rule
+  in `ArchitectureTest`. A fifth package for four classes would make the rule
+  easier to write and the codebase harder to read.
 
 ## Known open issues
 
@@ -291,9 +326,11 @@ Six tools, no more:
 - `search_entities(query, kind?)` → candidates with QIDs and disambiguation
 - `add_entity(qid)` → upsert, returns id
 - `expand_entity(entityId, sources?, maxNew?)` → runs adapters, returns new edges
-- `get_entity(entityId)` → node plus neighbours grouped by edge type
+- `get_entity(entityId)` → node plus neighbours grouped by edge type, plus this
+  entity's affinity if it has been rated (ADR 39: the taste layer's read path is
+  here, and there is no seventh tool)
 - `find_paths(from, to, maxHops)` → routes with per-hop citations
-- `note_affinity(entityId, rating, note)` → taste layer, its own table
+- `note_affinity(entityId, rating, note?)` → taste layer, its own table
 
 Hold back `assert_edge` (model-proposed hypotheses) until corroboration is
 visibly working.
@@ -301,7 +338,11 @@ visibly working.
 **Keep the taste layer separate from the world-facts layer.** "I like this" is a
 claim about the user with its own dimensions (rating, first-heard-where, seen-live-when);
 Wilco's lineup is a claim about the world. Separate tables so recommendations can
-be re-derived by traversing the world graph filtered through affinity.
+be re-derived by traversing the world graph filtered through affinity. Landed in
+increment 5: `AffinityStore`, `SqliteAffinityStore`, `TasteTools`, and the
+`affinity` field on `get_entity`. Recommendations themselves are NOT built —
+they need routes to filter, and issue #32 is why twelve dogfooding pairs
+currently return none.
 
 ### The open risk
 

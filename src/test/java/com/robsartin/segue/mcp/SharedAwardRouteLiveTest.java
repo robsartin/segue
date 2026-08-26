@@ -3,9 +3,11 @@ package com.robsartin.segue.mcp;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.ingest.IngestService;
+import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.GraphStore;
 import com.robsartin.segue.port.SourceAdapters;
+import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import com.robsartin.segue.wikidata.WikidataClient;
@@ -57,12 +59,16 @@ class SharedAwardRouteLiveTest {
 
   private AssertionLog log;
   private GraphStore graph;
+  // Required by SegueService since increment 5, and unused by these tests: a route query
+  // reads the world-fact layer only. In-memory so it dies with the test (ADR 33).
+  private AffinityStore affinity;
   private SegueService service;
 
   @BeforeEach
   void setUp() {
     log = SqliteAssertionLog.inMemory();
     graph = new TinkerGraphStore();
+    affinity = SqliteAffinityStore.inMemory();
     WikidataEntityResolver resolver = new WikidataEntityResolver(new WikidataClient());
     service =
         new SegueService(
@@ -72,11 +78,14 @@ class SharedAwardRouteLiveTest {
             new SourceAdapters(
                 List.of(
                     new WikidataSourceAdapter(
-                        resolver, WikidataClient.queryService(), Clock.systemUTC()))));
+                        resolver, WikidataClient.queryService(), Clock.systemUTC()))),
+            affinity,
+            Clock.systemUTC());
   }
 
   @AfterEach
   void tearDown() {
+    affinity.close();
     graph.close();
     log.close();
   }

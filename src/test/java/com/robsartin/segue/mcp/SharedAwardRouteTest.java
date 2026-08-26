@@ -3,9 +3,11 @@ package com.robsartin.segue.mcp;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.ingest.IngestService;
+import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.GraphStore;
 import com.robsartin.segue.port.SourceAdapters;
+import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import com.robsartin.segue.wikidata.StubWikidataServer;
@@ -62,6 +64,9 @@ class SharedAwardRouteTest {
 
   private AssertionLog log;
   private GraphStore graph;
+  // Required by SegueService since increment 5, and unused by these tests: a route query
+  // reads the world-fact layer only. In-memory so it dies with the test (ADR 33).
+  private AffinityStore affinity;
   private SegueService service;
   private StubWikidataServer actionApi;
   private StubWikidataServer queryService;
@@ -76,6 +81,7 @@ class SharedAwardRouteTest {
   void setUp() {
     log = SqliteAssertionLog.inMemory();
     graph = new TinkerGraphStore();
+    affinity = SqliteAffinityStore.inMemory();
     actionApi = new StubWikidataServer();
     queryService = new StubWikidataServer();
     WikidataEntityResolver resolver =
@@ -88,13 +94,16 @@ class SharedAwardRouteTest {
             new SourceAdapters(
                 List.of(
                     new WikidataSourceAdapter(
-                        resolver, new WikidataClient(queryService.baseUri()), FIXED))));
+                        resolver, new WikidataClient(queryService.baseUri()), FIXED))),
+            affinity,
+            FIXED);
   }
 
   @AfterEach
   void tearDown() {
     queryService.close();
     actionApi.close();
+    affinity.close();
     graph.close();
     log.close();
   }

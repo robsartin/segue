@@ -5,10 +5,13 @@ import com.robsartin.segue.ingest.IngestService;
 import com.robsartin.segue.mcp.EntityTools;
 import com.robsartin.segue.mcp.GraphTools;
 import com.robsartin.segue.mcp.SegueService;
+import com.robsartin.segue.mcp.TasteTools;
+import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.EntityResolver;
 import com.robsartin.segue.port.GraphStore;
 import com.robsartin.segue.port.SourceAdapters;
+import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import com.robsartin.segue.wikidata.WikidataClient;
@@ -108,10 +111,26 @@ public class SegueConfiguration {
     return new IngestService(assertionLog, graphStore);
   }
 
+  /**
+   * The taste layer's store (ADR 33, ADR 39): the same SQLite file as the assertion log, its own
+   * table, its own connection, and no relationship to {@link #assertionLog} beyond the path they
+   * share. Nothing in {@code ingest} is given this bean, and nothing in the graph layer can ask for
+   * it — that is the separation ADR 33 exists for, expressed as wiring.
+   */
+  @Bean(destroyMethod = "close")
+  AffinityStore affinityStore(SegueProperties properties) {
+    return new SqliteAffinityStore(properties.database());
+  }
+
   @Bean
   SegueService segueService(
-      EntityResolver resolver, GraphStore graph, IngestService ingest, SourceAdapters adapters) {
-    return new SegueService(resolver, graph, ingest, adapters);
+      EntityResolver resolver,
+      GraphStore graph,
+      IngestService ingest,
+      SourceAdapters adapters,
+      AffinityStore affinityStore,
+      Clock clock) {
+    return new SegueService(resolver, graph, ingest, adapters, affinityStore, clock);
   }
 
   /**
@@ -188,7 +207,8 @@ public class SegueConfiguration {
         .build();
   }
 
-  // The five MCP tools (Task 7 / ADR 26). Registering them as beans here — the same way as every
+  // The six MCP tools (Task 7 / ADR 26; the sixth arrived with the taste layer, ADR 39).
+  // Registering them as beans here — the same way as every
   // other collaborator in this class — is what makes the starter's annotation scanner find their
   // @McpTool methods; see EntityTools' Javadoc and the task-7 report for how that was confirmed.
   @Bean
@@ -199,5 +219,12 @@ public class SegueConfiguration {
   @Bean
   GraphTools graphTools(SegueService segueService, SegueProperties properties) {
     return new GraphTools(segueService, properties.maxNewEdges());
+  }
+
+  // The sixth tool, and the taste layer's only writer (ADR 33). Its own bean and its own class
+  // for the same reason it has its own port and its own table: the boundary is the decision.
+  @Bean
+  TasteTools tasteTools(SegueService segueService) {
+    return new TasteTools(segueService);
   }
 }

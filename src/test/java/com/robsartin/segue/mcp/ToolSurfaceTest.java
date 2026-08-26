@@ -3,9 +3,9 @@ package com.robsartin.segue.mcp;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.app.SegueApplication;
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
@@ -16,7 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 /**
- * Proves the five-tool surface (ADR 26) without starting a transport — no stdio process, no
+ * Proves the six-tool surface (ADR 26) without starting a transport — no stdio process, no
  * listening socket, just Spring context refresh.
  *
  * <p>Discovery is confirmed two ways, and deliberately not just one:
@@ -70,16 +70,61 @@ class ToolSurfaceTest {
     assertThat(beansWithMcpTools)
         .as("beans the ServerAnnotatedMethodBeanPostProcessor found carrying @McpTool methods")
         .extracting(Object::getClass)
-        .contains(EntityTools.class, GraphTools.class);
+        .contains(EntityTools.class, GraphTools.class, TasteTools.class);
   }
 
   @Test
-  @DisplayName("exactly the five tools ADR 26 specifies exist, named exactly")
-  void fiveToolsWithTheSpecifiedNames() {
+  @DisplayName("exactly the six tools ADR 26 specifies exist, named exactly")
+  void sixToolsWithTheSpecifiedNames() {
     assertThat(allTools())
         .extracting(McpTool::name)
         .containsExactlyInAnyOrder(
-            "search_entities", "add_entity", "expand_entity", "get_entity", "find_paths");
+            "search_entities",
+            "add_entity",
+            "expand_entity",
+            "get_entity",
+            "find_paths",
+            "note_affinity");
+  }
+
+  @Test
+  @DisplayName("the taste layer adds one tool and no more - the read is not a seventh")
+  void theTasteLayerAddsOneToolAndNoMore() {
+    // ADR 39 exposes reading affinity on get_entity rather than as a seventh tool, precisely so
+    // that this count stays at ADR 26's six. A get_affinity or list_affinity appearing here is
+    // an ADR-level change, and should fail this test until an ADR says otherwise.
+    assertThat(allTools()).hasSize(6);
+    assertThat(allTools())
+        .extracting(McpTool::name)
+        .doesNotContain("get_affinity", "list_affinity");
+  }
+
+  @Test
+  @DisplayName("note_affinity is annotated as a write: not read-only, not destructive, idempotent")
+  void noteAffinityIsAnnotatedAccordingly() {
+    // Idempotent because ADR 39 chose overwrite: sending the same rating twice leaves exactly
+    // the state one call would have left, give or take the updated-at stamp.
+    McpTool.McpAnnotations annotations = toolNamed("note_affinity").annotations();
+    assertThat(annotations.readOnlyHint()).isFalse();
+    assertThat(annotations.destructiveHint()).isFalse();
+    assertThat(annotations.idempotentHint()).isTrue();
+  }
+
+  @Test
+  @DisplayName("note_affinity's description states the 1-5 scale and the add_entity prerequisite")
+  void noteAffinityDescriptionStatesTheScaleAndThePrerequisite() {
+    String description = toolNamed("note_affinity").description();
+
+    assertThat(description).contains("1").contains("5");
+    assertThat(description).containsIgnoringCase("add_entity");
+  }
+
+  @Test
+  @DisplayName("get_entity's description tells a model that it is where affinity is read back")
+  void getEntityDescriptionMentionsAffinity() {
+    // The read path is only discoverable from the schema if the tool carrying it says so; a
+    // model that never learns get_entity returns affinity will never look for it there.
+    assertThat(toolNamed("get_entity").description()).containsIgnoringCase("affinity");
   }
 
   @Test
@@ -112,12 +157,7 @@ class ToolSurfaceTest {
   @Test
   @DisplayName("every tool returns CallToolResult directly, opting out of framework conversion")
   void everyToolReturnsCallToolResultDirectly() {
-    for (var method :
-        Stream.concat(
-                Arrays.stream(EntityTools.class.getDeclaredMethods()),
-                Arrays.stream(GraphTools.class.getDeclaredMethods()))
-            .filter(m -> m.getAnnotation(McpTool.class) != null)
-            .toList()) {
+    for (Method method : toolMethods().toList()) {
       assertThat(method.getReturnType())
           .as("return type of %s", method.getName())
           .isEqualTo(io.modelcontextprotocol.spec.McpSchema.CallToolResult.class);
@@ -176,19 +216,15 @@ class ToolSurfaceTest {
     assertThat(allTools()).extracting(McpTool::name).doesNotContain("assert_edge");
   }
 
-  @Test
-  @DisplayName("note_affinity is deferred to the taste layer (ADR 33), not a tool yet")
-  void noteAffinityIsDeferred() {
-    assertThat(allTools()).extracting(McpTool::name).doesNotContain("note_affinity");
+  private static List<McpTool> allTools() {
+    return toolMethods().map(method -> method.getAnnotation(McpTool.class)).toList();
   }
 
-  private static List<McpTool> allTools() {
-    return Stream.concat(
-            Arrays.stream(EntityTools.class.getDeclaredMethods()),
-            Arrays.stream(GraphTools.class.getDeclaredMethods()))
-        .map(method -> method.getAnnotation(McpTool.class))
-        .filter(Objects::nonNull)
-        .toList();
+  /** Every {@code @McpTool} method on the three tool classes - the whole published surface. */
+  private static Stream<Method> toolMethods() {
+    return Stream.of(EntityTools.class, GraphTools.class, TasteTools.class)
+        .flatMap(type -> Arrays.stream(type.getDeclaredMethods()))
+        .filter(method -> method.getAnnotation(McpTool.class) != null);
   }
 
   private static McpTool toolNamed(String name) {

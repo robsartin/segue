@@ -45,6 +45,12 @@ data into a structure whose whole purpose is to be traversed and cited.
   leak it, and none of them is prevented by repository visibility.)*
 - **v1 is a rating and a free-text note.** `CLAUDE.md` floats first-heard-where and
   seen-live-when; the note absorbs them until a real need argues for columns.
+  *(Amended 2026-08-25, issue #5. Still true, and no longer the whole story: **ADR 39** settles what
+  this ADR left open — the rating is a required integer from 1 to 5 with negative affinity expressed
+  as 1-2, the note is optional, re-rating overwrites in place with an `updated_at` stamp rather than
+  keeping a history, the entity must already be in the graph under its Wikidata QID, and the rating
+  is read back on `get_entity` rather than through a seventh tool. Read ADR 39 before adding a
+  dimension here.)*
 
 ## Alternatives considered
 

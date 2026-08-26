@@ -28,7 +28,7 @@ Six tools, no more:
 | `search_entities(query, kind?)` | candidates with QIDs and disambiguation; writes nothing |
 | `add_entity(qid)` | upsert, returns id |
 | `expand_entity(entityId, sources?, maxNew?)` | runs adapters, returns new edges |
-| `get_entity(entityId)` | node plus neighbours grouped by edge type |
+| `get_entity(entityId)` | node plus neighbours grouped by edge type, plus this entity's affinity if it has been rated |
 | `find_paths(from, to, maxHops)` | ranked routes with per-hop citations |
 | `note_affinity(entityId, rating, note)` | taste layer, its own tables |
 
@@ -37,7 +37,16 @@ end-state across increments, not what increment 4a ships. `note_affinity` lands
 with the taste layer in increment 5 (ADR 33) and is out of scope here — the five
 tools above the `note_affinity` row are what increment 4a's server actually
 exposes. `ToolSurfaceTest.noteAffinityIsDeferred()` mirrors the existing
-`assertEdgeIsNotAToolYet()` check so this stays true.
+`assertEdgeIsNotAToolYet()` check so this stays true. *(Superseded by the amendment
+below: increment 5 shipped the sixth tool, and `noteAffinityIsDeferred()` was replaced by
+`sixToolsWithTheSpecifiedNames()`. `assertEdgeIsNotAToolYet()` still stands.)*
+
+**Amendment (2026-08-25, increment 5 / ADR 39).** `note_affinity` has landed, so the server now
+exposes the full six. Reading affinity back is surfaced on `get_entity` — the `get_entity` row above
+says so — rather than as a seventh tool, precisely so this table stays six rows long; ADR 39 argues
+that choice against both a dedicated `get_affinity` and a bulk `list_affinity`, the latter on ADR
+16's data minimisation. `ToolSurfaceTest.theTasteLayerAddsOneToolAndNoMore()` asserts the count, so
+adding either is a change to this ADR before it is a change to the code.
 
 - **`assert_edge` is deliberately absent** until corroboration is visibly working.
   When it arrives its assertions carry the `llm:` prefix of ADR 23.

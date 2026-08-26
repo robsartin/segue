@@ -2,8 +2,10 @@ package com.robsartin.segue.mcp;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.robsartin.segue.domain.AffinityRecord;
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.Candidate;
+import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
@@ -11,6 +13,7 @@ import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.fixture.Fixture;
 import com.robsartin.segue.fixture.FixtureSourceAdapter;
 import com.robsartin.segue.ingest.IngestService;
+import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.EntityResolver;
 import com.robsartin.segue.port.ExpandContext;
@@ -18,10 +21,14 @@ import com.robsartin.segue.port.ExpandResult;
 import com.robsartin.segue.port.GraphStore;
 import com.robsartin.segue.port.SourceAdapter;
 import com.robsartin.segue.port.SourceAdapters;
+import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import com.robsartin.segue.wikidata.WikidataUnavailableException;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,16 +41,27 @@ import org.junit.jupiter.api.Test;
 /**
  * The facade every MCP tool calls. Runs entirely against a fixture-backed adapter and an in-memory
  * SQLite log — no network reaches these tests.
+ *
+ * <p>Every rating and note in the affinity section below is invented. ADR 33 (as amended by issue
+ * #37) names a fixture written from real ratings as one of the few ways this public repository
+ * could leak the only personal data segue holds.
  */
 class SegueServiceTest {
 
   private static final Provenance WIKIDATA =
       new Provenance("wikidata", "S-1", Instant.parse("2026-08-24T09:00:00Z"), 1.0);
 
+  /** Invented, like every rating and note in this file — see the class Javadoc. */
+  private static final Instant RATED_AT = Instant.parse("2026-08-25T12:00:00Z");
+
+  private static final Instant RE_RATED_AT = Instant.parse("2026-09-01T08:30:00Z");
+
   private AssertionLog log;
   private GraphStore graph;
   private IngestService ingest;
   private StubEntityResolver resolver;
+  private AffinityStore affinity;
+  private SettableClock clock;
 
   @BeforeEach
   void setUp() {
@@ -51,16 +69,20 @@ class SegueServiceTest {
     graph = new TinkerGraphStore();
     ingest = new IngestService(log, graph);
     resolver = new StubEntityResolver();
+    affinity = SqliteAffinityStore.inMemory();
+    clock = new SettableClock(RATED_AT);
   }
 
   @AfterEach
   void tearDown() {
+    affinity.close();
     graph.close();
     log.close();
   }
 
   private SegueService service(SourceAdapter... adapters) {
-    return new SegueService(resolver, graph, ingest, new SourceAdapters(List.of(adapters)));
+    return new SegueService(
+        resolver, graph, ingest, new SourceAdapters(List.of(adapters)), affinity, clock);
   }
 
   // ---- search -------------------------------------------------------------
@@ -438,6 +460,146 @@ class SegueServiceTest {
     assertThat(result.detail()).contains("Q404");
   }
 
+  @Test
+  @DisplayName("getEntity reports no affinity for an entity that has never been rated")
+  void getEntityWithoutAffinityReportsNone() {
+    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Unrated", WIKIDATA));
+
+    ToolResult<EntityView> result = service().getEntity("Q1");
+
+    assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
+    // Null, not a zero or a default rating: "I have never said" and "I rated it lowest" are
+    // different answers and a recommendation that confused them would be wrong in both
+    // directions.
+    assertThat(result.payload().affinity()).isNull();
+  }
+
+  @Test
+  @DisplayName("getEntity surfaces the affinity once the entity has been rated (ADR 39's read)")
+  void getEntitySurfacesAffinity() {
+    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Rated", WIKIDATA));
+    service().noteAffinity("Q1", 4, "an invented note");
+
+    ToolResult<EntityView> result = service().getEntity("Q1");
+
+    assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
+    assertThat(result.payload().affinity())
+        .isEqualTo(new AffinityView(4, "an invented note", RATED_AT));
+  }
+
+  // ---- noteAffinity -------------------------------------------------------
+
+  @Test
+  @DisplayName("noteAffinity records a rating and a note against an entity in the graph")
+  void noteAffinityRecordsRatingAndNote() {
+    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Rated", WIKIDATA));
+
+    ToolResult<AffinityView> result = service().noteAffinity("Q1", 5, "an invented note");
+
+    assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
+    assertThat(result.payload()).isEqualTo(new AffinityView(5, "an invented note", RATED_AT));
+    assertThat(affinity.find("Q1"))
+        .contains(new AffinityRecord("Q1", 5, "an invented note", RATED_AT));
+  }
+
+  @Test
+  @DisplayName("the note is optional; a rating on its own is a complete entry")
+  void noteAffinityAcceptsARatingWithNoNote() {
+    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Rated", WIKIDATA));
+
+    ToolResult<AffinityView> result = service().noteAffinity("Q1", 2, null);
+
+    assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
+    assertThat(result.payload()).isEqualTo(new AffinityView(2, null, RATED_AT));
+  }
+
+  @Test
+  @DisplayName("a blank note is stored as no note at all, not as whitespace")
+  void noteAffinityTreatsABlankNoteAsAbsent() {
+    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Rated", WIKIDATA));
+
+    ToolResult<AffinityView> result = service().noteAffinity("Q1", 3, "   ");
+
+    assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
+    assertThat(result.payload().note()).isNull();
+  }
+
+  @Test
+  @DisplayName("re-rating overwrites in place and moves updated-at (ADR 39: no history)")
+  void reRatingOverwritesAndMovesUpdatedAt() {
+    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Rated", WIKIDATA));
+    service().noteAffinity("Q1", 2, "an invented first impression");
+
+    clock.set(RE_RATED_AT);
+    ToolResult<AffinityView> second = service().noteAffinity("Q1", 5, "an invented second look");
+
+    assertThat(second.outcome()).isEqualTo(ToolResult.Outcome.OK);
+    assertThat(affinity.find("Q1"))
+        .contains(new AffinityRecord("Q1", 5, "an invented second look", RE_RATED_AT));
+  }
+
+  @Test
+  @DisplayName("rating an entity the graph has never seen is a readable error, not an exception")
+  void noteAffinityOnAnUnknownEntityIsAnError() {
+    ToolResult<AffinityView> result = service().noteAffinity("Q404", 4, null);
+
+    assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.ERROR);
+    assertThat(result.detail()).contains("Q404").containsIgnoringCase("add it");
+    assertThat(result.payload()).isNull();
+    assertThat(affinity.find("Q404")).isEmpty();
+  }
+
+  @Test
+  @DisplayName("something that is not a QID is rejected before the graph is consulted (ADR 22)")
+  void noteAffinityRejectsANonQid() {
+    ToolResult<AffinityView> result = service().noteAffinity("that-band-from-the-radio", 4, null);
+
+    assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.ERROR);
+    assertThat(result.detail()).containsIgnoringCase("not a qid");
+  }
+
+  @Test
+  @DisplayName("a rating outside 1-5 is rejected at both ends, and nothing is stored")
+  void noteAffinityRejectsRatingsOutsideTheScale() {
+    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Rated", WIKIDATA));
+
+    ToolResult<AffinityView> tooLow = service().noteAffinity("Q1", 0, null);
+    ToolResult<AffinityView> tooHigh = service().noteAffinity("Q1", 6, null);
+
+    assertThat(tooLow.outcome()).isEqualTo(ToolResult.Outcome.ERROR);
+    assertThat(tooLow.detail()).contains("1 to 5");
+    assertThat(tooHigh.outcome()).isEqualTo(ToolResult.Outcome.ERROR);
+    assertThat(affinity.find("Q1")).isEmpty();
+  }
+
+  @Test
+  @DisplayName("the rejection never echoes the rating back, because affinity is personal data")
+  void noteAffinityRejectionDoesNotEchoTheRating() {
+    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Rated", WIKIDATA));
+
+    ToolResult<AffinityView> result = service().noteAffinity("Q1", 9, "an invented note");
+
+    assertThat(result.detail()).doesNotContain("9").doesNotContain("an invented note");
+  }
+
+  @Test
+  @DisplayName("affinity never reaches the graph or the assertion log — the ADR 33 invariant")
+  void affinityNeverReachesTheGraphOrTheLog() {
+    NodeAssertion node = new NodeAssertion("Q1", NodeKind.PERSON, "Rated", WIKIDATA);
+    ingest.record(node);
+    int logSizeBefore = log.readAll().size();
+
+    service().noteAffinity("Q1", 5, "an invented note");
+
+    // The log is byte-for-byte what it was: no rating assertion, no "me" source, no llm: prefix.
+    assertThat(log.readAll()).containsExactly((LoggedAssertion) node);
+    assertThat(log.readAll()).hasSize(logSizeBefore);
+    // And the graph gained neither an edge nor a "me" node to hang one off.
+    assertThat(graph.edgeCount()).isZero();
+    assertThat(graph.edges("Q1")).isEmpty();
+    assertThat(graph.node("Q1")).contains(node.toNode());
+  }
+
   // ---- findPaths ----------------------------------------------------------
 
   @Test
@@ -508,6 +670,37 @@ class SegueServiceTest {
   }
 
   // ---- test doubles ---------------------------------------------------------
+
+  /**
+   * A clock whose instant the test moves by hand, so "updated-at moved" is an assertion about a
+   * value rather than about wall-clock time passing between two fast method calls.
+   */
+  private static final class SettableClock extends Clock {
+    private Instant instant;
+
+    private SettableClock(Instant instant) {
+      this.instant = instant;
+    }
+
+    private void set(Instant instant) {
+      this.instant = instant;
+    }
+
+    @Override
+    public ZoneId getZone() {
+      return ZoneOffset.UTC;
+    }
+
+    @Override
+    public Clock withZone(ZoneId zone) {
+      return this;
+    }
+
+    @Override
+    public Instant instant() {
+      return instant;
+    }
+  }
 
   private static final class StubEntityResolver implements EntityResolver {
     private final Map<String, NodeAssertion> byQid = new HashMap<>();

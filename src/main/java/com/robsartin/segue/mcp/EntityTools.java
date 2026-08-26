@@ -113,7 +113,12 @@ public class EntityTools {
           together, every MEMBER_OF edge together, and so on. Neighbours only appear once \
           expand_entity has been run for this entity; a freshly added entity that has not been \
           expanded yet has none. Read-only; this never calls out to Wikidata. Returns an error \
-          result if the QID has not been added yet — call add_entity first.\
+          result if the QID has not been added yet — call add_entity first.
+
+          This is also where affinity is read back: if the user has rated this entity with \
+          note_affinity, the result carries their rating, their note if they wrote one, and when \
+          it last changed. The affinity field is absent for an entity they have never rated, \
+          which means "they have not said" and not "they dislike it".\
           """,
       annotations =
           @McpTool.McpAnnotations(

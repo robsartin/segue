@@ -40,7 +40,7 @@ No infrastructure: TinkerGraph and Jena's TxnMem dataset are both in-process.
 
 ## Run it as an MCP server
 
-A Spring Boot MCP server exposing five tools (ADR 26) over **both** transports
+A Spring Boot MCP server exposing six tools (ADR 26) over **both** transports
 ADR 28 commits to. Build the jar once:
 
 ```bash
@@ -120,11 +120,39 @@ decision about auth — see `docs/adr/0037-streamable-http-transport-on-the-serv
 
 ### Either way
 
-Five tools are exposed — `search_entities`, `add_entity`, `expand_entity`,
-`get_entity`, `find_paths` — documented in `docs/adr/0026-mcp-tool-surface.md`.
-The tool surface, the protocol revision and the graph behind them are identical
-on both transports. `SEGUE_DB` overrides where the assertion log lives (defaults
-to `~/.segue/segue.db`).
+Six tools are exposed — `search_entities`, `add_entity`, `expand_entity`,
+`get_entity`, `find_paths`, `note_affinity` — documented in
+`docs/adr/0026-mcp-tool-surface.md`. The tool surface, the protocol revision and
+the graph behind them are identical on both transports. `SEGUE_DB` overrides
+where the data lives (defaults to `~/.segue/segue.db`).
+
+### The taste layer
+
+`note_affinity(qid, rating, note?)` records what you think of one entity: a
+required integer rating from 1 to 5, and optionally a note in your own words.
+Reading it back is part of `get_entity`, which returns the affinity beside the
+entity's neighbours; there is no separate read tool, and no way to list
+everything you have rated (ADR 39 argues both).
+
+Three things about it are decisions rather than details, and all three are ADR 33
+and ADR 39:
+
+- **It never touches the graph.** Affinity lives in its own table behind its own
+  port, carries no provenance and no corroboration, and is not an assertion. The
+  world graph can be exported or shared without any of it attached, which matters
+  here: the graph is public-shaped, the taste layer is not.
+- **The entity must already be in the graph, under a Wikidata QID.** One identity
+  spine (ADR 22), so every rating joins to real world facts. The accepted cost:
+  something Wikidata does not have cannot be rated at all.
+- **Re-rating overwrites.** One row per entity, latest rating wins, with an
+  `updated_at` stamp saying when it last changed. No history, so deleting the
+  taste layer wholesale stays a single `DELETE`.
+
+Affinity is personal data (ADR 16). It is never logged — not the rating, not the
+note, not in an error message — and it lives in `~/.segue/segue.db`, outside this
+repository. **Never put a real rating or note in a fixture, an ADR, a commit
+message or an example here**; this repository is public, and that, not repository
+visibility, is the actual boundary (issue #37).
 
 ## The four queries, and why each one
 

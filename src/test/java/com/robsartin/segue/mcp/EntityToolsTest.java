@@ -11,8 +11,10 @@ import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.EntityResolver;
 import com.robsartin.segue.port.GraphStore;
 import com.robsartin.segue.port.SourceAdapters;
+import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import com.robsartin.segue.tinker.TinkerGraphStore;
+import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
@@ -40,7 +42,13 @@ class EntityToolsTest {
     try {
       IngestService ingest = new IngestService(log, graph);
       SegueService service =
-          new SegueService(new NoOpEntityResolver(), graph, ingest, new SourceAdapters(List.of()));
+          new SegueService(
+              new NoOpEntityResolver(),
+              graph,
+              ingest,
+              new SourceAdapters(List.of()),
+              SqliteAffinityStore.inMemory(),
+              Clock.systemUTC());
       EntityTools entityTools = new EntityTools(service);
 
       // SegueService.search requires a non-null query — a programmer error, not a modelled

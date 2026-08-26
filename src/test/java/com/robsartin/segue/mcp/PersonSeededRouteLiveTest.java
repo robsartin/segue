@@ -6,6 +6,7 @@ import com.robsartin.segue.ingest.IngestService;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.GraphStore;
 import com.robsartin.segue.port.SourceAdapters;
+import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import com.robsartin.segue.wikidata.WikidataClient;
@@ -63,7 +64,11 @@ class PersonSeededRouteLiveTest {
             new SourceAdapters(
                 List.of(
                     new WikidataSourceAdapter(
-                        resolver, WikidataClient.queryService(), Clock.systemUTC()))));
+                        resolver, WikidataClient.queryService(), Clock.systemUTC()))),
+            // This test walks the world graph and never rates anything; the taste layer is
+            // present only because the facade owns both ports (ADR 33).
+            SqliteAffinityStore.inMemory(),
+            Clock.systemUTC());
   }
 
   @AfterEach

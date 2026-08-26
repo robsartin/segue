@@ -115,8 +115,8 @@ class StreamableHttpTransportTest {
             null);
     assertThat(toolsList.statusCode()).isEqualTo(200);
     assertThat(resultOf(toolsList).at("/result/tools"))
-        .as("the same five tools ADR 26 exposes on stdio — one surface, two transports")
-        .hasSize(5);
+        .as("the same six tools ADR 26 exposes on stdio — one surface, two transports")
+        .hasSize(6);
 
     HttpResponse<String> call =
         post(
