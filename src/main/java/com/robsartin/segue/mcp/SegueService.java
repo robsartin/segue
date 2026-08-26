@@ -136,9 +136,16 @@ public final class SegueService {
    * <p>Neighbour fetches that fail once are not retried for the same neighbour within this call —
    * that is the bound on how many calls a dense, partly-unreachable entity can trigger, alongside
    * {@code maxNewEdges} bounding the assertions considered at all. A neighbour fetch that throws
-   * {@link WikidataUnavailableException} is treated exactly like one that returned empty: counted
-   * as skipped and the call continues, rather than aborting a 30-round-trip expansion after some
-   * assertions are already committed.
+   * {@link WikidataUnavailableException} is treated exactly like one that returned empty: the
+   * neighbour is skipped and the call continues, rather than aborting a 30-round-trip expansion
+   * after some assertions are already committed.
+   *
+   * <p>What is reported as skipped is the count of <em>distinct</em> neighbours, not of the
+   * assertions dropped along with them. Both are defensible numbers; only one matches the name
+   * {@link ExpansionSummary#skippedNeighbors()} and the sentence it is rendered into, and this
+   * graph is a multigraph by design — Nick Cave both wrote and scored The Proposition, so two
+   * assertions can name one pair of nodes. Counting per assertion told a calling model that two
+   * entities were lost when one was.
    */
   public ToolResult<ExpansionSummary> expandEntity(String qid, int maxNewEdges) {
     Objects.requireNonNull(qid, "qid");
@@ -178,15 +185,22 @@ public final class SegueService {
 
     int nodesAdded = 0;
     int edgesAdded = 0;
-    int skipped = 0;
+    // Does double duty, deliberately: it is the memo that stops one neighbour being fetched twice
+    // in a single call, and it is also the number reported as skippedNeighbors. Keeping a separate
+    // counter is what made the two disagree — the counter incremented per dropped assertion while
+    // the field, and the sentence built from it, both said "neighbour".
     Set<String> unresolvableNeighbors = new HashSet<>();
     for (AssertionRecord assertion : bounded) {
       String neighbor = neighborOf(assertion, qid);
       if (neighbor != null) {
         if (unresolvableNeighbors.contains(neighbor)) {
-          skipped++;
           continue;
         }
+        // Note what this re-read buys beyond skipping a round trip: it is also why nodesAdded
+        // does not have the counting bug skippedNeighbors had. A neighbour recorded on the first
+        // assertion that names it is in the graph by the time the second one is examined, so the
+        // increment below cannot fire twice for one entity. edgesAdded needs no such guard —
+        // assertions ARE what it counts, and two of them between one pair are two claims.
         if (graph.node(neighbor).isEmpty()) {
           // An adapter that already knows this entity spares a round trip. That is not a
           // micro-optimisation since ADR 36: expanding a person now discovers seventy-odd
@@ -204,7 +218,6 @@ public final class SegueService {
           }
           if (resolved.isEmpty()) {
             unresolvableNeighbors.add(neighbor);
-            skipped++;
             continue;
           }
           ingest.record(resolved.get());
@@ -215,8 +228,10 @@ public final class SegueService {
       edgesAdded++;
     }
 
+    int skippedNeighbors = unresolvableNeighbors.size();
     ExpansionSummary summary =
-        new ExpansionSummary(qid, nodesAdded, edgesAdded, skipped, truncated, sourceUnavailable);
+        new ExpansionSummary(
+            qid, nodesAdded, edgesAdded, skippedNeighbors, truncated, sourceUnavailable);
     List<String> reasons = new ArrayList<>();
     if (sourceUnavailable) {
       reasons.add("a source was unavailable and could not be reached");
@@ -224,8 +239,8 @@ public final class SegueService {
     if (truncated) {
       reasons.add("the result was truncated at the bound of " + maxNewEdges);
     }
-    if (skipped > 0) {
-      reasons.add(skipped + " neighbour(s) could not be resolved and were skipped");
+    if (skippedNeighbors > 0) {
+      reasons.add(skippedNeighbors + " neighbour(s) could not be resolved and were skipped");
     }
     if (reasons.isEmpty()) {
       return ToolResult.ok(
@@ -316,6 +331,12 @@ public final class SegueService {
   /**
    * What one expansion produced, and how much of it it could not resolve.
    *
+   * @param nodesAdded entities newly recorded by this call, counted once each
+   * @param edgesAdded assertions recorded by this call — per assertion, not per pair of nodes, so
+   *     two sources claiming the same relationship count twice and are merged downstream by {@code
+   *     GraphStore.record}
+   * @param skippedNeighbors distinct entities this call could not identify, counted once each
+   *     however many assertions named them
    * @param truncated the adapter or the {@code maxNewEdges} bound cut the result short
    * @param sourceUnavailable at least one source could not be reached at all
    */
