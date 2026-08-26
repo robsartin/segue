@@ -118,6 +118,18 @@ tasks.register<Test>("liveTest") {
     outputs.upToDateWhen { false }
 }
 
+tasks.register<JavaExec>("resolveNames") {
+    group = "application"
+    description =
+        "Resolves a name list to Wikidata QIDs, for bulk seeding. Needs network. See ADR 40. " +
+            "Example: ./gradlew resolveNames --args=\"--list \$HOME/names.csv\""
+    mainClass.set("com.robsartin.segue.seed.SeedCli")
+    classpath = sourceSets["main"].runtimeClasspath
+    // Never up-to-date: the list, and Wikidata, both change under it. The tool is resumable, so
+    // re-running it is cheap — it skips every name an earlier run already answered.
+    outputs.upToDateWhen { false }
+}
+
 spotless {
     java {
         googleJavaFormat(libs.versions.googleJavaFormat.get())

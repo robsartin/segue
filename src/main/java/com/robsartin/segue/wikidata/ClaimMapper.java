@@ -223,8 +223,21 @@ public final class ClaimMapper {
 
   /** The entity's {@code P31} values, for {@link KindMapper}. */
   public static List<String> instanceOf(JsonNode entity) {
+    return itemValues(entity, INSTANCE_OF);
+  }
+
+  /**
+   * The item ids this entity states for one property, in the order Wikidata returns them.
+   *
+   * <p>Not every property that is worth READING is worth storing as an edge. {@code P106}
+   * (occupation) is the example: it is excluded from {@link EdgeTypes} because "novelist" is a
+   * 36,000-item hub that would make every novelist adjacent to every other (issue #32), and it is
+   * still the only thing that separates two humans with the same name, because {@code P31} says
+   * {@code Q5} for both. Reading it creates no edge.
+   */
+  public static List<String> itemValues(JsonNode entity, String property) {
     List<String> out = new ArrayList<>();
-    for (JsonNode statement : entity.path("claims").path(INSTANCE_OF)) {
+    for (JsonNode statement : entity.path("claims").path(property)) {
       String qid = statement.at("/mainsnak/datavalue/value/id").asText(null);
       if (qid != null && !qid.isBlank()) {
         out.add(qid);
@@ -233,13 +246,52 @@ public final class ClaimMapper {
     return List.copyOf(out);
   }
 
-  /** The English label, or null. */
+  /**
+   * The English label, falling back to the multilingual one.
+   *
+   * <p><b>The fallback is not a nicety.</b> Wikidata has been moving proper names out of every
+   * per-language label into the {@code mul} (multilingual) code — a person's name is the same
+   * string in most languages, so storing it two hundred times was the anomaly. A request for {@code
+   * languages=en} then returns an EMPTY labels object for exactly the best-documented entities, and
+   * reading only {@code /labels/en} reported them as if Wikidata had never heard of them. Callers
+   * must ask for {@code languages=en|mul} or there is nothing here to fall back to.
+   *
+   * <p>Found by bulk-seeding a real list (issue #49): a search for a well-known novelist skipped
+   * him entirely and settled on an academic with the same surname, because the well-known one had
+   * no English label to match against. The same gap made {@code fetch(qid)} — and therefore {@code
+   * add_entity} — return empty for him.
+   */
   public static String label(JsonNode entity) {
-    return entity.at("/labels/en/value").asText(null);
+    String english = entity.at("/labels/en/value").asText(null);
+    return english != null ? english : entity.at("/labels/mul/value").asText(null);
   }
 
-  /** The English description — what makes disambiguation possible — or null. */
+  /**
+   * The English description — what makes disambiguation possible — or null.
+   *
+   * <p>No {@code mul} fallback: a description is a gloss written in a language, not a name, so
+   * Wikidata has no reason to move it.
+   */
   public static String description(JsonNode entity) {
     return entity.at("/descriptions/en/value").asText(null);
+  }
+
+  /**
+   * Every other name Wikidata records for this entity, English and multilingual.
+   *
+   * <p>An alias is Wikidata's own claim that a thing is also called that, which is what makes an
+   * act billed under an earlier name findable under it.
+   */
+  public static List<String> aliases(JsonNode entity) {
+    List<String> out = new ArrayList<>();
+    for (String language : List.of("en", "mul")) {
+      for (JsonNode alias : entity.at("/aliases/" + language)) {
+        String value = alias.path("value").asText(null);
+        if (value != null && !value.isBlank() && !out.contains(value)) {
+          out.add(value);
+        }
+      }
+    }
+    return List.copyOf(out);
   }
 }

@@ -21,6 +21,7 @@ Everything here was checked against the source in `src/main/java/com/robsartin/s
 - [Adding a source adapter](#adding-a-source-adapter)
 - [The testing strategy](#the-testing-strategy)
 - [The build and the gate](#the-build-and-the-gate)
+- [Bulk seeding](#bulk-seeding)
 - [How to read an ADR against the code](#how-to-read-an-adr-against-the-code)
 
 ## What segue is, in one pass
@@ -603,6 +604,46 @@ They are not optional either, and the reason is specific: a fixture asserts what
 wrote. The live smoke test caught a wrong QID on its first run — a plan had used an identifier that
 belonged to a different person entirely, and every fixture-backed test would have carried that error
 forever. **Run `./gradlew liveTest` deliberately when you touch ingest.**
+
+## Bulk seeding
+
+`seed` turns a list of names into a `name → QID` mapping. It is a **dev-side tool**, not a seventh
+MCP tool: ADR 26 pins the surface at six, and importing nine hundred names is a batch job with a
+resume file rather than a conversation. ADR 40 is the decision.
+
+```bash
+./gradlew resolveNames --args="--list $HOME/names.csv"
+```
+
+The list is three columns — `name,kind,status`. Output is a mapping file and a review file beside
+it, plus a summary in the log. **None of those files may enter this repository.** A list of who
+someone listens to, reads and watches is the personal data ADR 33 governs, this repository is
+public, and `*.csv` is gitignored beside `*.db`. Every name in a test, a fixture or a document here
+is invented, and that is not a style choice.
+
+### How it decides
+
+Names are folded first, so several spellings of one act cost one lookup — 913 rows are 887 acts.
+Then, per act, `search` on the literal spelling, one batched `wbgetentities` for every candidate the
+whole chunk produced, and a pure decision in `Adjudicator`. A fallback spelling — a stripped `(N)`
+suffix, a stripped honorific — is tried only if the literal one did not settle it, because a
+fallback is a guess about what the user meant.
+
+Auto-accept needs three independent signals to agree: the name (label or alias, with a label match
+outranking an alias match), the kind (`P31` for the `NodeKind`, and `P106` for a person's
+occupation), and a sitelink margin over the runner-up. Anything else goes to review with the reason
+and the best candidate, so a person can accept or correct a line without repeating the search.
+
+`P106` here is a **resolver filter, not an edge**. Issue #32 kept it out of the graph vocabulary
+because "novelist" is a 36,000-item hub; reading it to choose between six humans with one name
+creates no edge.
+
+### Two things this is not allowed to do
+
+It never writes. `ArchitectureTest.seedNeverOpensAStore` forbids `seed` from depending on `sqlite`,
+`tinker`, `jena`, `ingest`, `mcp` or `app`, so it cannot open the database even to read it, and
+cannot quietly become an MCP tool. It also never needs the network in `check`: the judgement is a
+pure function, and everything that speaks HTTP is tested against `StubWikidataServer`.
 
 ## How to read an ADR against the code
 

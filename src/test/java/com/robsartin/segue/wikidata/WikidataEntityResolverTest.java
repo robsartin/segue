@@ -142,4 +142,52 @@ class WikidataEntityResolverTest {
           .isEqualTo("wikidata");
     }
   }
+
+  @Test
+  @DisplayName("a label Wikidata stores as multilingual is still a label")
+  void readsTheMulLabel() {
+    // Wikidata has been moving proper names out of every per-language label and into the
+    // "mul" (multilingual) code, because a person's name is the same string in most of them.
+    // A request for languages=en then returns an EMPTY labels object for exactly the
+    // best-documented entities, and fetch() reported them as if Wikidata had never heard of
+    // them — add_entity(qid) on a famous person simply failed. Found while bulk-seeding a real
+    // list (issue #49); the invented QID below stands in for that shape.
+    try (StubWikidataServer stub = new StubWikidataServer()) {
+      stub.enqueueBody(
+          """
+          {"entities":{"Q90000501":{"id":"Q90000501",
+            "labels":{"mul":{"language":"mul","value":"Marguerite Vale"}},
+            "claims":{"P31":[{"mainsnak":{"snaktype":"value",
+              "datavalue":{"value":{"id":"Q5"}}}}]}}}}
+          """);
+      EntityResolver resolver =
+          new WikidataEntityResolver(new WikidataClient(stub.baseUri()), FIXED);
+
+      Optional<NodeAssertion> fetched = resolver.fetch("Q90000501");
+
+      assertThat(fetched).isPresent();
+      assertThat(fetched.orElseThrow().label()).isEqualTo("Marguerite Vale");
+      assertThat(fetched.orElseThrow().kind()).isEqualTo(NodeKind.PERSON);
+      // And the request has to ask for it, or there is nothing to fall back to.
+      assertThat(stub.lastQuery()).contains("languages=en%7Cmul");
+    }
+  }
+
+  @Test
+  @DisplayName("an English label still wins over the multilingual one")
+  void prefersTheEnglishLabel() {
+    try (StubWikidataServer stub = new StubWikidataServer()) {
+      stub.enqueueBody(
+          """
+          {"entities":{"Q90000502":{"id":"Q90000502",
+            "labels":{"en":{"language":"en","value":"The Tin Lanterns"},
+                      "mul":{"language":"mul","value":"Tin Lanterns"}},
+            "claims":{}}}}
+          """);
+      EntityResolver resolver =
+          new WikidataEntityResolver(new WikidataClient(stub.baseUri()), FIXED);
+
+      assertThat(resolver.fetch("Q90000502").orElseThrow().label()).isEqualTo("The Tin Lanterns");
+    }
+  }
 }
