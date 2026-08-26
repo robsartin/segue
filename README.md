@@ -97,7 +97,9 @@ Three properties shape almost every decision in the codebase.
   and collapsing them loses real answers — as the diagram above shows.
 - **Provenance is first class.** Every edge records who claimed it, when, and how much that claim is
   trusted. Corroboration across sources is a signal the ranking uses, so a well-sourced long route
-  outranks a shaky short one ([ADR 31](docs/adr/0031-path-ranking-by-confidence.md)).
+  outranks a shaky short one — but only among routes that explain the same amount, because a route
+  through a node half the graph touches is demoted whatever its sources say
+  ([ADR 31](docs/adr/0031-path-ranking-by-confidence.md)).
 - **Time has two dimensions.** When something was true in the world is independent of when segue
   learned it, and the two are never conflated ([ADR 20](docs/adr/0020-bitemporal-time-model.md)).
 

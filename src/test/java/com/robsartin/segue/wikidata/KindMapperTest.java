@@ -96,4 +96,73 @@ class KindMapperTest {
     assertThat(KindMapper.fromInstanceOf(List.of("Q13473501"))) // collective
         .isEqualTo(NodeKind.GROUP);
   }
+
+  @Test
+  @DisplayName("the specific ways Wikidata says 'work' all map to WORK")
+  void theWaysWikidataSaysWork() {
+    // Same class of bug as the bands above, found the same way and with worse consequences.
+    // Issue #52 is about award hubs dominating routes, and the rule that demotes them is
+    // "a high-degree CONCEPT intermediate is a hub". That rule is only honest if CONCEPT
+    // means "we could not place this", not "this is a work we forgot to whitelist". Measured
+    // over every CONCEPT node in a real 25,815-node graph that could ever BE an intermediate
+    // (degree >= 2, 1,416 of them): 1,058 were works, and one of them — Saturday Night Live
+    // 50th Anniversary Special, a television special connecting 14 seeds — is the single best
+    // connector in the graph. Every QID below was looked up and confirmed by label AND
+    // description before it was written down.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q105543609"))) // musical work/composition
+        .isEqualTo(NodeKind.WORK);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q21191270"))) // television series episode
+        .isEqualTo(NodeKind.WORK);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q110039749"))) // Saturday Night Live sketch
+        .isEqualTo(NodeKind.WORK);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q506240"))) // television film
+        .isEqualTo(NodeKind.WORK);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q24862"))) // short film
+        .isEqualTo(NodeKind.WORK);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q1261214"))) // television special
+        .isEqualTo(NodeKind.WORK);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q15416"))) // television program
+        .isEqualTo(NodeKind.WORK);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q58483083"))) // dramatico-musical work
+        .isEqualTo(NodeKind.WORK);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q55850593"))) // music track with vocals
+        .isEqualTo(NodeKind.WORK);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q193977"))) // music video
+        .isEqualTo(NodeKind.WORK);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q1259759"))) // miniseries
+        .isEqualTo(NodeKind.WORK);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q202866"))) // animated film
+        .isEqualTo(NodeKind.WORK);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q10590726"))) // video album
+        .isEqualTo(NodeKind.WORK);
+  }
+
+  @Test
+  @DisplayName("the remaining ways Wikidata says 'group' map to GROUP too")
+  void theOtherWaysWikidataSaysGroup() {
+    // The same sweep turned up four more group classes on nodes a route can pass through.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q414147"))) // academy of sciences
+        .isEqualTo(NodeKind.GROUP);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q56816954"))) // heavy metal band
+        .isEqualTo(NodeKind.GROUP);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q18510489"))) // comedy troupe
+        .isEqualTo(NodeKind.GROUP);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q178790"))) // labor union
+        .isEqualTo(NodeKind.GROUP);
+  }
+
+  @Test
+  @DisplayName("an award is still a CONCEPT, which is what makes 'high-degree CONCEPT' mean 'hub'")
+  void awardsStayConcepts() {
+    // ADR 38 chose CONCEPT for award nodes deliberately, and issue #52 depends on that choice
+    // staying true: the whitelist grew above to stop works masquerading as concepts, NOT to
+    // start placing awards. If an award class is ever added here, the hub rule in PathRanking
+    // silently stops firing.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q618779"))) // award
+        .isEqualTo(NodeKind.CONCEPT);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q1046088"))) // hall of fame
+        .isEqualTo(NodeKind.CONCEPT);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q378427"))) // literary award
+        .isEqualTo(NodeKind.CONCEPT);
+  }
 }

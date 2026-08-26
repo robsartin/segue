@@ -89,7 +89,8 @@ should read this ADR as having answered them:
    confident, so a meaningless route through a 16,552-item node would rank *top*. Either ADR 31
    gains a second dimension — specificity, as inverse hub degree — or hub properties never become
    edges. Registering P166 needed neither, because a 127-item node is not a hub. Amending ADR 31
-   remains an amendment to a deliberate earlier decision. **Open.**
+   remains an amendment to a deliberate earlier decision. **~~Open.~~ Answered, 2026-08-26, issue
+   #52 — see the amendment below.**
 4. **The truncation conflict.** `ReverseClaims` orders by `DESC(?sitelinks)` and keeps the top *n*,
    and hubs have the most sitelinks — so a hub property would make `maxNewEdges` preferentially keep
    the useless edges. Measured for P166 and it does not arise (see Consequences), but the conflict is
@@ -99,6 +100,47 @@ should read this ADR as having answered them:
    against the design's own prescription for occupation. This ADR neither honours nor amends that
    invariant; it registers a property that is not a role. **Open, and to be resolved deliberately
    rather than by drift.**
+
+**Amendment (2026-08-26, issue #52): the award decision stands, and it was measured against too
+narrow a sample.**
+
+Nothing here is withdrawn. P166 remains registered, DIRECT, not `fallbackOnly`, and an award node
+remains a `CONCEPT` — that last one is load-bearing for the fix below and must stay true. What
+this amendment adds is the distinction the evidence above could not see.
+
+**The Hugo sample was not representative.** This ADR argued from *Hugo Award for Best Novel* at 127
+recipients against genre at 16,552 and concluded that awards are specific. A curated seeding of 272
+acts (30,685 edges, 25,590 nodes) showed the real axis is not size at all: it is **an award for a
+work versus recognition of a career**. A Hugo says "this novel". A Walk of Fame star says "this
+person was famous" — barely a relationship, and precisely the kind everyone notable accumulates, so
+it connects everyone to everyone. Of the 25,525 nodes shared by two or more seeds, only 26 were
+shared by ten or more, and they were nearly all of the second kind: a Walk of Fame star (76 edges),
+the Rock and Roll Hall of Fame (64), the Grammy Lifetime Achievement Award (39), the Kennedy Center
+Honors (25).
+
+**Two fixes were measured and rejected before the third was chosen.**
+
+- **A global recipient-count threshold at ingest** — option 1 of the issue, and the natural
+  extension of this ADR's own argument. It does not separate them: the Rock and Roll Hall of Fame
+  has 410 recipients globally and connects 64 seeds, while the Inkpot Award has 717 and connects 9.
+  *Hugo Best Novel* (127) and the *Grammy Hall of Fame* (139) are near-identical in size and behave
+  oppositely. Global size is simply not the signal; **in-graph** degree is.
+- **Excluding career-recognition awards by P31 class** — semantically the right idea and only
+  partially true in the data. It catches the Walk of Fame (`commemorative plaque`), the halls of
+  fame (`hall of fame`), the Grammy Lifetime (`lifetime achievement award`), the Presidential Medal
+  (`civil decoration`) and the CBE (`grade of an order`) — and **the Kennedy Center Honors is P31
+  `award` and nothing else**, with 25 seeds. Time 100 and the National Medal of Arts escape it too.
+
+**The fix is in ranking, not in ingest: ADR 31 gains a specificity dimension.** The edges stay;
+routes through a high-degree `CONCEPT` intermediate are demoted. This is why "an award node is a
+`CONCEPT`" above is now enforced by a test rather than merely recorded — a `KindMapper` entry that
+placed awards elsewhere would switch the rule off silently. See ADR 31's amendment for the rule,
+the threshold and the composition with confidence.
+
+**Open question 1 is still open.** This answers how ranking survives a hub, not how the next
+property is *selected*. Registering genre or occupation is still not licensed by this: at 16,552
+and 35,977 items they would flood the bound before ranking ever saw them (question 4), which is a
+different failure from the one issue #52 fixed.
 
 ## Alternatives considered
 

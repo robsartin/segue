@@ -171,12 +171,13 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   **Do not "complete" this with genre, occupation, movement or record label.** They were
   measured, not guessed: P106 → "novelist" is a **35,977**-item node, P136 → "science
   fiction" **16,552**, the biggest P264 label **11,350**, against **127** for P166 → "Hugo
-  Award for Best Novel". A hub edge is perfectly confident, so ADR 31 would rank a
-  meaningless route through it *top*, and `DESC(?sitelinks)` truncation would keep it over
-  the specific edges. ADR 38 records five questions it deliberately leaves **OPEN** — the
-  general hub-degree rule, whether shared-kind is an edge or a node attribute, the ADR 31
-  specificity dimension, the truncation conflict, and the roles-as-edges invariant. Adding
-  a property is answering question 1; do it in an ADR, not in passing.
+  Award for Best Novel". A hub edge is perfectly confident, and
+  `DESC(?sitelinks)` truncation would keep it over the specific edges. ADR 38 records five
+  questions it deliberately leaves **OPEN** — the general hub-degree rule, whether shared-kind
+  is an edge or a node attribute, the ADR 31 specificity dimension, the truncation conflict,
+  and the roles-as-edges invariant. **Question 3 is now answered (issue #52, ADR 31's
+  amendment); the other four are not.** Adding a property is answering question 1; do it in an
+  ADR, not in passing.
 - **A forward-heavy property spends the `maxNewEdges` bound before the reverse pass sees
   it.** ADR 36 concatenates forward claims first (they carry references and qualifiers;
   truthy triples do not), so a novelist's dozen P166 awards are kept ahead of every
@@ -266,12 +267,18 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   callers now ask for `languages=en|mul` and `ClaimMapper.label` falls back. Found by
   bulk-seeding a real list (issue #49), not by any test — a fixture asserts whatever its
   author wrote, and every fixture here had an `en` label.
-- **`KindMapper`'s whitelist did not cover how Wikidata says "band".** Q215380 "musical
-  group" is the one everybody assumes; acts typed as rock band, musical duo, a cappella
-  group, orchestra, choir, string quartet, collective or group of humans all fell through
-  to CONCEPT. Those classes were MEASURED against a real list of nine hundred acts and
-  added (issue #49), which is the growth path the class's own note asks for. Add the next
-  one the same way — from data, with the label AND description confirmed, never guessed.
+- **`KindMapper`'s whitelist did not cover how Wikidata says "band", and did not cover how it
+  says "work" either.** Q215380 "musical group" is the one everybody assumes; acts typed as rock
+  band, musical duo, a cappella group, orchestra, choir, string quartet, collective or group of
+  humans all fell through to CONCEPT (issue #49). The same sweep run over works found the bigger
+  hole: of the 1,416 CONCEPT nodes in a real graph that could ever be a route's INTERMEDIATE,
+  **1,058 were works** — 667 of them "musical work/composition" alone, plus television series
+  episodes, television specials, television films and short films (issue #52). Both sets were
+  MEASURED against real data and added, which is the growth path the class's own note asks for.
+  Add the next one the same way — from data, with the label AND description confirmed, never
+  guessed. **Never add an award class.** ADR 38 puts awards in CONCEPT deliberately and ADR 31's
+  specificity rule reads "high-degree CONCEPT" as "hub"; placing awards anywhere else turns that
+  rule off without failing anything. `KindMapperTest` pins it.
 - **The bulk seeding tool's input and output never enter this repository.** A list of who
   someone listens to, reads and watches IS the personal data ADR 33 governs, and this repo
   is PUBLIC. `*.csv` is gitignored beside `*.db`; every name in a test, fixture, doc or
@@ -295,6 +302,16 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   `GraphStore.paths(from, to, maxHops)` returns every route untruncated and the shared
   `PathRanking` orders them weakest-confidence-first (hop count as tiebreak) above the
   port, so the trustworthy Cave→McCarthy route now outranks the model's 0.30 shortcut.
+- ~~Career-recognition awards are hubs and dominate routes.~~ **Fixed (issue #52, ADR 31's
+  specificity amendment.)** `PathRanking` now orders by hub-free-ness first and weakest
+  confidence second: a route through a `CONCEPT` intermediate at or above
+  `PathRanking.HUB_DEGREE` in-graph edges is demoted, because a Walk of Fame star is perfectly
+  true and says nothing. Kind is what makes it safe — the busiest nodes are the expanded seeds
+  themselves, and those are legitimate connectors. `SegueService` passes the degree lookup down
+  as a `ToIntFunction<String>` so `domain` stays graph-free (ADR 18). Two things it does NOT do:
+  it does not keep hub edges out of the graph, and it says nothing about a busy GROUP — the
+  American Academy of Arts and Sciences connects 21 seeds through `MEMBER_OF` and is career
+  recognition by another name. Left open on purpose.
 - Validity conflict resolution is first-writer-wins in both adapters. Deliberately
   deferred, not solved.
 - Provenance in the Gremlin adapter is packed into an opaque edge property
