@@ -110,8 +110,30 @@ class ArchitectureTest {
           .resideInAnyPackage("..tinker..", "..jena..", "..sqlite..", "..wikidata..")
           .should()
           .dependOnClassesThat()
-          .resideInAnyPackage("..ingest..", "..mcp..", "..app..")
+          .resideInAnyPackage("..ingest..", "..mcp..", "..app..", "..seed..")
           .because("ADR 32: adapters are the bottom of the dependency graph");
+
+  /**
+   * ADR 40: the bulk seeding tool resolves names and reports; it never opens a store.
+   *
+   * <p>This is the whole safety argument for a committed tool that reads a private list. It cannot
+   * write a claim to the graph, because it never sees a {@code GraphStore} or an {@code
+   * AssertionLog} — {@link #onlyIngestAppliesClaimsToTheGraph} already forbids the calls, and this
+   * forbids reaching the objects at all, so it cannot open {@code ~/.segue/segue.db} even to read
+   * it. It also cannot become a seventh MCP tool by accident: {@code mcp} is on the same list.
+   */
+  @ArchTest
+  static final ArchRule seedNeverOpensAStore =
+      noClasses()
+          .that()
+          .resideInAPackage("..seed..")
+          .should()
+          .dependOnClassesThat()
+          .resideInAnyPackage(
+              "..sqlite..", "..tinker..", "..jena..", "..ingest..", "..mcp..", "..app..")
+          .because(
+              "ADR 40: the seeding tool resolves and reports — it never writes the graph, never"
+                  + " opens the database, and is deliberately not an MCP tool (ADR 26)");
 
   /**
    * ADR 28: stdout belongs to the MCP protocol and nothing else — with one named exception.

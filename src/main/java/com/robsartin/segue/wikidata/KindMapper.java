@@ -30,6 +30,21 @@ public final class KindMapper {
     put("Q2088357", NodeKind.GROUP); // musical ensemble
     put("Q4830453", NodeKind.GROUP); // business
     put("Q891723", NodeKind.GROUP); // public company
+    // Wikidata does not settle on "musical group" for acts. These are the other classes a real
+    // list of nine hundred acts actually used, measured while building the bulk seeding tool
+    // (issue #49) rather than guessed — which is what the note above asks for. Every one was
+    // looked up and confirmed by label AND description before it was written down. Without them
+    // a quarter of the bands on that list resolved to CONCEPT.
+    put("Q5741069", NodeKind.GROUP); // rock band
+    put("Q9212979", NodeKind.GROUP); // musical duo
+    put("Q19351429", NodeKind.GROUP); // a cappella group
+    put("Q42998", NodeKind.GROUP); // orchestra
+    put("Q131186", NodeKind.GROUP); // choir
+    put("Q1538570", NodeKind.GROUP); // gospel choir
+    put("Q207338", NodeKind.GROUP); // string quartet
+    put("Q163740", NodeKind.GROUP); // nonprofit organization
+    put("Q16334295", NodeKind.GROUP); // group of humans
+    put("Q13473501", NodeKind.GROUP); // collective
     // works
     put("Q11424", NodeKind.WORK); // film
     put("Q482994", NodeKind.WORK); // album

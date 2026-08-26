@@ -23,6 +23,7 @@ there currently are none.
 ./gradlew test            # tests only
 ./gradlew spotlessApply   # fix formatting
 ./gradlew liveTest        # tagged live tests against the real Wikidata API; excluded from check
+./gradlew resolveNames --args="--list $HOME/names.csv"   # bulk name→QID (ADR 40); needs network
 ```
 
 Gradle, not Maven. The wrapper is pinned to 9.7.1 and committed; **Gradle 9.1.0 is the
@@ -70,6 +71,9 @@ sqlite/   SqliteAssertionLog — the append-only log persisted to one file (ADR 
           — and SqliteAffinityStore, the taste layer's own table in that same
           file (ADR 33, ADR 39).
 wikidata/ The first source: resolution and expansion. Plain Java, no Spring.
+seed/     The bulk seeding tool (ADR 40): a name list to name→QID, run as
+          `./gradlew resolveNames`. Dev-side, plain Java, resolves and reports —
+          it never opens a store and is deliberately NOT an MCP tool.
 ingest/   IngestService (the only write path) and GraphProjector (boot replay).
 support/  Plain-Java cross-cutting helpers with no project dependencies of their
           own — currently UuidV7, the RFC 9562 v7 id generator used for request
@@ -254,6 +258,29 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   put a rating and a note into a driver log line with no logging call in this
   repository at all. `AffinityIsNeverLoggedTest` asserts both halves — this
   project's loggers are silent, and no logger anywhere carries a value.
+- **Wikidata moved many proper names to the `mul` language code**, so
+  `wbgetentities&languages=en` returns an EMPTY labels object for exactly the
+  best-documented entities — a famous novelist, a famous naturalist. Reading only
+  `/labels/en` reported them as if Wikidata had never heard of them, which meant
+  `fetch(qid)` returned empty and `add_entity` on such a person simply failed. Both
+  callers now ask for `languages=en|mul` and `ClaimMapper.label` falls back. Found by
+  bulk-seeding a real list (issue #49), not by any test — a fixture asserts whatever its
+  author wrote, and every fixture here had an `en` label.
+- **`KindMapper`'s whitelist did not cover how Wikidata says "band".** Q215380 "musical
+  group" is the one everybody assumes; acts typed as rock band, musical duo, a cappella
+  group, orchestra, choir, string quartet, collective or group of humans all fell through
+  to CONCEPT. Those classes were MEASURED against a real list of nine hundred acts and
+  added (issue #49), which is the growth path the class's own note asks for. Add the next
+  one the same way — from data, with the label AND description confirmed, never guessed.
+- **The bulk seeding tool's input and output never enter this repository.** A list of who
+  someone listens to, reads and watches IS the personal data ADR 33 governs, and this repo
+  is PUBLIC. `*.csv` is gitignored beside `*.db`; every name in a test, fixture, doc or
+  commit message is invented. ADR 40.
+- **`P106` is read by the resolver and is still not an edge.** Issue #32 kept occupation
+  out of the graph vocabulary because "novelist" is a 36k-degree hub. `seed` reads it to
+  tell a musician from a minister — `P31` is Q5 for both — which creates no edge and does
+  not reopen #32.
+
 - **The taste layer's classes deliberately have no package of their own.**
   `AffinityRecord` sits in `domain`, `AffinityStore` in `port`,
   `SqliteAffinityStore` in `sqlite`, `TasteTools` in `mcp` — each where its

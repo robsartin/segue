@@ -19,3 +19,10 @@ _to_delete/
 *.db
 *.db-journal
 *.db-wal
+
+# The bulk seeding tool's input and output (issue #49, ADR 40). A list of who someone listens to,
+# reads and watches IS the personal data ADR 33 governs, and so is the name-to-QID mapping derived
+# from it. Both belong outside the working tree; this line is the second lock, not the first.
+# No exception is currently needed — if a committed CSV ever is, name it here with an explicit
+# negation and say in the commit message why it carries no personal data.
+*.csv

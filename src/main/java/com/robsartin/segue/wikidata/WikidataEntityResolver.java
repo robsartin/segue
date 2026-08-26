@@ -105,7 +105,10 @@ public final class WikidataEntityResolver implements EntityResolver {
             Map.of(
                 "action", "wbgetentities",
                 "ids", qid,
-                "languages", "en",
+                // en|mul, not en: Wikidata stores many proper names only under the multilingual
+                // code, and languages=en returns an empty labels object for them, which read as
+                // "no such entity". See ClaimMapper.label.
+                "languages", "en|mul",
                 "format", "json"));
     JsonNode entity = response.at("/entities/" + qid);
     if (entity.isMissingNode() || entity.has("missing")) {

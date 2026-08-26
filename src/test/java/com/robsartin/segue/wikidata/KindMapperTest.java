@@ -63,4 +63,37 @@ class KindMapperTest {
     // stops an obscure class shadowing "human".
     assertThat(KindMapper.fromInstanceOf(List.of("Q99999999", "Q5"))).isEqualTo(NodeKind.PERSON);
   }
+
+  @Test
+  @DisplayName("the specific ways Wikidata says 'band' all map to GROUP")
+  void theWaysWikidataSaysBand() {
+    // Q215380 "musical group" is the one everybody assumes. It is not the only one in use, and
+    // an act typed with any of the others fell through to CONCEPT — which then failed the bulk
+    // seeding tool's kind check and sent a perfectly good band to review (issue #49). These
+    // classes were MEASURED against a real list of nine hundred acts, not guessed, which is the
+    // growth path this class's own note asks for; every QID was looked up and confirmed by
+    // label AND description before it was written down.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q5741069"))) // rock band
+        .isEqualTo(NodeKind.GROUP);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q9212979"))) // musical duo
+        .isEqualTo(NodeKind.GROUP);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q19351429"))) // a cappella group
+        .isEqualTo(NodeKind.GROUP);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q42998"))) // orchestra
+        .isEqualTo(NodeKind.GROUP);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q131186"))) // choir
+        .isEqualTo(NodeKind.GROUP);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q1538570"))) // gospel choir
+        .isEqualTo(NodeKind.GROUP);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q207338"))) // string quartet
+        .isEqualTo(NodeKind.GROUP);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q163740"))) // nonprofit organization
+        .isEqualTo(NodeKind.GROUP);
+    // A loose collective of session players is typed neither as a band nor as an organisation.
+    // It is still, unambiguously, a group of people — which is all NodeKind.GROUP claims.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q16334295"))) // group of humans
+        .isEqualTo(NodeKind.GROUP);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q13473501"))) // collective
+        .isEqualTo(NodeKind.GROUP);
+  }
 }
