@@ -1,0 +1,15 @@
+{
+  "entities": {
+    "Q7612859": {
+      "id": "Q7612859",
+      "labels": { "en": { "language": "en", "value": "Steve Hofstetter" } },
+      "descriptions": { "en": { "language": "en", "value": "American comedian" } },
+      "claims": {
+        "P31": [
+          { "mainsnak": { "snaktype": "value", "property": "P31",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q5" } } },
+            "rank": "normal", "references": [] } ]
+      }
+    }
+  }
+}

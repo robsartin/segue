@@ -249,7 +249,7 @@ class ReverseClaimsTest {
       String sparql = URLDecoder.decode(stub.lastQuery(), StandardCharsets.UTF_8);
       for (String property :
           new String[] {
-            "P463", "P175", "P50", "P57", "P58", "P86", "P161", "P144", "P361", "P737"
+            "P463", "P175", "P50", "P57", "P58", "P86", "P161", "P144", "P361", "P737", "P166"
           }) {
         assertThat(sparql).contains("wdt:" + property + " ");
       }

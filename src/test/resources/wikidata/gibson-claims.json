@@ -1,0 +1,24 @@
+{
+  "entities": {
+    "Q188987": {
+      "id": "Q188987",
+      "labels": { "en": { "language": "en", "value": "William Gibson" } },
+      "descriptions": { "en": { "language": "en", "value": "American-Canadian speculative fiction writer" } },
+      "claims": {
+        "P31": [
+          { "mainsnak": { "snaktype": "value", "property": "P31",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q5" } } },
+            "rank": "normal", "references": [] } ],
+        "P166": [
+          { "mainsnak": { "snaktype": "value", "property": "P166",
+              "datavalue": { "type": "wikibase-entityid", "value": { "id": "Q255032" } } },
+            "rank": "normal",
+            "references": [
+              { "snaks": {
+                  "P854": [ { "snaktype": "value", "property": "P854",
+                      "datavalue": { "type": "string", "value": "https://www.thehugoawards.org/hugo-history/" } } ] },
+                "snaks-order": [ "P854" ] } ] } ]
+      }
+    }
+  }
+}
