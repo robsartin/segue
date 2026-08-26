@@ -139,6 +139,30 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   with the Query Service down. **Registering a property that is Wikidata's inverse
   of one already in `EdgeTypes` reintroduces this**; mark it `fallbackOnly` or do
   not register it. See ADR 36's issue-#33 amendment.
+- **The vocabulary modelled only collaboration, and that broke literature.** Every
+  Wikidata-backed edge type was people working *together* — co-credits on one work,
+  membership of one group — which models film and music well and single-authored novels
+  not at all. Three SF novelists added and expanded shared no node and `find_paths`
+  returned zero routes for every pair (issue #32). **Fixed (ADR 38) by registering exactly
+  one property: `RECEIVED_AWARD` (P166), DIRECT because Wikidata states it on the
+  recipient.** The three pairs now route through the Hugo, Nebula, Locus, Seiun and Bob
+  Morane; a comedian who shares no award still connects to nobody.
+  **Do not "complete" this with genre, occupation, movement or record label.** They were
+  measured, not guessed: P106 → "novelist" is a **35,977**-item node, P136 → "science
+  fiction" **16,552**, the biggest P264 label **11,350**, against **127** for P166 → "Hugo
+  Award for Best Novel". A hub edge is perfectly confident, so ADR 31 would rank a
+  meaningless route through it *top*, and `DESC(?sitelinks)` truncation would keep it over
+  the specific edges. ADR 38 records five questions it deliberately leaves **OPEN** — the
+  general hub-degree rule, whether shared-kind is an edge or a node attribute, the ADR 31
+  specificity dimension, the truncation conflict, and the roles-as-edges invariant. Adding
+  a property is answering question 1; do it in an ADR, not in passing.
+- **A forward-heavy property spends the `maxNewEdges` bound before the reverse pass sees
+  it.** ADR 36 concatenates forward claims first (they carry references and qualifiers;
+  truthy triples do not), so a novelist's dozen P166 awards are kept ahead of every
+  discovered work. Measured on William Gibson: at `maxNewEdges=15` the expansion is 12
+  award edges and 2 others; at the default 200 it is 12 of 118. Not the `DESC(?sitelinks)`
+  problem — awards never appear in a person's reverse answer at all — and deliberately not
+  reworked. See the issue-#32 note in ADR 36.
 - **`query.wikidata.org` holds only the main graph.** Scholarly articles live on
   `query-scholarly.wikidata.org`, so `AUTHORED` (P50) silently under-reports for an
   academic seed: Einstein returns 32 on the main endpoint against 117 in reality.

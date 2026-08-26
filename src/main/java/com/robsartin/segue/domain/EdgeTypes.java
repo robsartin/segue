@@ -68,6 +68,43 @@ public final class EdgeTypes {
   public static final EdgeType BASED_ON = register(EdgeType.direct("BASED_ON", "P144", "based on"));
   public static final EdgeType PART_OF = register(EdgeType.direct("PART_OF", "P361", "part of"));
 
+  // --- recognition -------------------------------------------------------
+
+  /**
+   * The award, prize or honour an entity received — and the first relation in this vocabulary that
+   * is not a collaboration.
+   *
+   * <p><b>Why it had to exist (issue #32).</b> Every other Wikidata-backed type here records people
+   * working <em>together</em>: co-credits on one work, membership of one group. That models music
+   * and film well, where a work has a director, a composer and a cast, and it models literature
+   * barely at all, because a novel has exactly one author. Three science-fiction novelists, added
+   * and expanded, produced three neighbourhoods with no node in common and {@code find_paths}
+   * returned nothing for any pair of them — not "these are distant", but "there is no route", which
+   * for the payoff feature is the same as being broken.
+   *
+   * <p><b>Registered DIRECT, because Wikidata states P166 on the recipient.</b> {@code person P166
+   * award}, so the subject stays on the left and the edge reads "William Gibson RECEIVED_AWARD Hugo
+   * Award for Best Novel". Inverting it would file the award as the recipient of the person, and
+   * every citation {@code find_paths} printed would read backwards.
+   *
+   * <p><b>Not {@code fallbackOnly}.</b> The issue-#33 condition is that a property is the other end
+   * of one already registered here; the award-side way of stating this fact is P1346 ("winner"),
+   * which this vocabulary does not register, so there is no second end being ingested and nothing
+   * to deduplicate.
+   *
+   * <p><b>Why an award and not a genre, an occupation or a label.</b> Those were the obvious
+   * candidates for the same problem and they were measured against the Query Service rather than
+   * argued about: P106 occupation → "novelist" is a <b>35,977</b>-item node, P136 genre → "science
+   * fiction" is <b>16,552</b>, the largest P264 record label is <b>11,350</b>, and P166 → "Hugo
+   * Award for Best Novel" is <b>127</b>. {@code Gibson → science fiction → Scalzi} is two hops at
+   * perfect confidence and explains nothing; {@code Gibson → Hugo Award for Best Novel → Scalzi} is
+   * the same shape and is a real segue. Two orders of magnitude is the whole argument, and ADR 38
+   * records both the numbers and the questions this deliberately leaves open — including the
+   * general hub-degree rule that would decide the next property mechanically.
+   */
+  public static final EdgeType RECEIVED_AWARD =
+      register(EdgeType.direct("RECEIVED_AWARD", "P166", "received"));
+
   // --- influence and affinity -------------------------------------------
   public static final EdgeType INFLUENCED_BY =
       register(EdgeType.direct("INFLUENCED_BY", "P737", "influenced by"));

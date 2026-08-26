@@ -29,7 +29,7 @@ class EdgeTypesTest {
   @Test
   @DisplayName("all() returns the expected number of entries")
   void allReturnsExpectedCount() {
-    assertThat(EdgeTypes.all()).hasSize(13);
+    assertThat(EdgeTypes.all()).hasSize(14);
   }
 
   @Test
@@ -42,6 +42,23 @@ class EdgeTypesTest {
     assertThat(EdgeTypes.HAS_PART.wikidataProperty()).isEqualTo("P527");
     assertThat(EdgeTypes.HAS_PART.wikidataInverted()).isFalse();
     assertThat(EdgeTypes.HAS_PART.symmetric()).isFalse();
+  }
+
+  @Test
+  @DisplayName("RECEIVED_AWARD is registered on P166, direct, and read on every pass")
+  void receivedAwardIsRegistered() {
+    // Issue #32. Wikidata states P166 on the RECIPIENT ("person P166 award"), so it is DIRECT:
+    // the subject stays on the left and the edge reads "William Gibson RECEIVED_AWARD Hugo Award
+    // for Best Novel". Inverting it would file the award as the recipient of the person.
+    //
+    // It is NOT fallbackOnly, and that was checked rather than assumed. The issue-#33 condition
+    // is "this property is the other end of one already registered here": the award-side way of
+    // stating the same fact is P1346 ("winner"), and P1346 is not in this vocabulary. So there is
+    // no second end being ingested and nothing to deduplicate.
+    assertThat(EdgeTypes.RECEIVED_AWARD.wikidataProperty()).isEqualTo("P166");
+    assertThat(EdgeTypes.RECEIVED_AWARD.wikidataInverted()).isFalse();
+    assertThat(EdgeTypes.RECEIVED_AWARD.wikidataFallbackOnly()).isFalse();
+    assertThat(EdgeTypes.RECEIVED_AWARD.symmetric()).isFalse();
   }
 
   @Test
@@ -113,7 +130,11 @@ class EdgeTypesTest {
   void directTypesAreFlagged() {
     List<EdgeType> direct =
         List.of(
-            EdgeTypes.MEMBER_OF, EdgeTypes.BASED_ON, EdgeTypes.PART_OF, EdgeTypes.INFLUENCED_BY);
+            EdgeTypes.MEMBER_OF,
+            EdgeTypes.BASED_ON,
+            EdgeTypes.PART_OF,
+            EdgeTypes.INFLUENCED_BY,
+            EdgeTypes.RECEIVED_AWARD);
 
     assertThat(direct).noneMatch(EdgeType::wikidataInverted);
     assertThat(direct).noneMatch(EdgeType::symmetric);

@@ -94,6 +94,18 @@ Two candidate mechanisms were measured against the live APIs rather than argued 
   director is stated on the film, so only the forward pass finds it when expanding the
   film and only the reverse pass finds it when expanding the director. Forward claims
   are concatenated first, so when the bound bites, better-evidenced claims survive.
+
+  **Note (2026-08-25, issue #32): this ordering, not the sitelinks ranking, is what a
+  forward-heavy property spends the bound on.** ADR 38 registers P166, which Wikidata
+  states on the recipient — so it adds nothing to the reverse answer for a person seed,
+  and `ORDER BY DESC(?sitelinks)` is untouched by it. But a decorated novelist states a
+  dozen awards on their own item, and forward-first means those twelve are kept before
+  any reverse-discovered work is considered. Measured on William Gibson: at
+  `maxNewEdges=15` the expansion is 12 award edges and 2 others, against 12 of 118 at the
+  default 200. Nothing here is changed in response — forward-first exists because forward
+  claims carry references and validity qualifiers that a truthy triple does not, and that
+  reasoning still holds. The measurement is recorded because it is the concrete form of a
+  question ADR 38 deliberately leaves open.
 - **Failure degrades in one direction only.** The Query Service is reached through the
   existing `WikidataClient`, so it inherits the User-Agent (ADR 16: repository URL, never
   an email address), the retry policy and `WikidataUnavailableException`. A Query Service
