@@ -24,7 +24,7 @@ there currently are none.
 ./gradlew spotlessApply   # fix formatting
 ./gradlew liveTest        # tagged live tests against the real Wikidata API; excluded from check
 ./gradlew resolveNames --args="--list $HOME/names.csv"   # bulk name→QID (ADR 40); needs network
-./gradlew exportGraph --args="--view neighbourhood --qid Q42 --out $HOME/one.graphml"  # ADR 41; read-only
+./gradlew exportGraph --args="--view neighbourhood --qid Q42 --out $HOME/one.graphml"  # ADR 41; read-only; the --out extension picks the format
 ```
 
 Gradle, not Maven. The wrapper is pinned to 9.7.1 and committed; **Gradle 9.1.0 is the
@@ -321,6 +321,19 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   in-memory `TinkerGraphStore` exactly as the app does at boot; nothing durable changes. Also:
   `SqliteAssertionLog`'s constructor CREATES the file and schema if absent, so `ExportCli` checks
   `Files.exists` first rather than conjuring an empty database and exporting nothing.
+
+- **The exporter's `--out` extension is an argument, not decoration.** `--format` used to default
+  to GraphML with the file name never read, so `--out route.dot` wrote GraphML into `route.dot`,
+  reported success, and failed minutes later inside Graphviz with `syntax error in line 1 near '>'`
+  — the XML declaration (issue #57). `.dot`/`.gv` now mean DOT and `.graphml`/`.xml` mean GraphML,
+  case-insensitively and from the file name only, whenever `--format` is absent; the residual
+  default for an unrecognised extension is **DOT**, because it renders in one already-installed
+  command where GraphML needs Gephi. A `--format` that CONTRADICTS the extension is **refused**,
+  naming both — not resolved by precedence, because obeying the flag rewrites the misnamed file
+  that caused the issue and obeying the extension overrules something typed on purpose, and nothing
+  in the parser can tell which of the two is the typo. **Don't add a `--force`**; it exists only to
+  recreate the failure. Adding a third format means adding its extensions to `OutputFormat` too.
+  ADR 41's issue-#57 amendment.
 
 - **`AffinityOverlay` is fenced by a rule written years before it.**
   `affinityNeverTouchesTheWorldFactLayer` matches taste-layer types by NAME (simple name contains

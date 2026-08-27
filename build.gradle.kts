@@ -134,7 +134,9 @@ tasks.register<JavaExec>("exportGraph") {
     group = "application"
     description =
         "Exports a bounded view of the graph to DOT or GraphML. Reads only; needs no network. " +
-            "See ADR 41. Example: ./gradlew exportGraph " +
+            "The format comes from --format, or from the --out extension when that is absent " +
+            "(.dot/.gv, .graphml/.xml; anything else means DOT); a --format that contradicts " +
+            "the extension is refused. See ADR 41. Example: ./gradlew exportGraph " +
             "--args=\"--view neighbourhood --qid Q42 --out \$HOME/one.graphml\""
     mainClass.set("com.robsartin.segue.export.ExportCli")
     classpath = sourceSets["main"].runtimeClasspath

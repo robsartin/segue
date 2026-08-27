@@ -17,7 +17,7 @@ class ExportCliTest {
   }
 
   @Test
-  @DisplayName("a neighbourhood needs an entity, and defaults to depth 1 and GraphML")
+  @DisplayName("a neighbourhood needs an entity, and defaults to depth 1")
   void parsesANeighbourhood() {
     Options options =
         parse("--view", "neighbourhood", "--qid", "Q900101", "--out", "/tmp/n.graphml");
@@ -166,5 +166,101 @@ class ExportCliTest {
                     "--out", "/tmp/n.graphml"))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("depth");
+  }
+
+  @Test
+  @DisplayName("an --out ending in .dot writes DOT, with no --format at all")
+  void infersDotFromTheExtension() {
+    Options options =
+        parse(
+            "--view",
+            "route",
+            "--from",
+            "Q900101",
+            "--to",
+            "Q900104",
+            "--out",
+            "/invented/route.dot");
+
+    assertThat(options.format()).isEqualTo(OutputFormat.DOT);
+  }
+
+  @Test
+  @DisplayName("an --out ending in .graphml writes GraphML, with no --format at all")
+  void infersGraphMlFromTheExtension() {
+    Options options = parse("--view", "full", "--all", "--out", "/invented/all.graphml");
+
+    assertThat(options.format()).isEqualTo(OutputFormat.GRAPHML);
+  }
+
+  @Test
+  @DisplayName("the second spelling of each format is honoured too: .gv is DOT, .xml is GraphML")
+  void infersTheAlternativeExtensions() {
+    Options dot = parse("--view", "full", "--all", "--out", "/invented/all.gv");
+    Options graphml = parse("--view", "full", "--all", "--out", "/invented/all.xml");
+
+    assertThat(dot.format()).isEqualTo(OutputFormat.DOT);
+    assertThat(graphml.format()).isEqualTo(OutputFormat.GRAPHML);
+  }
+
+  @Test
+  @DisplayName("the extension is read case-insensitively: .DOT is still DOT")
+  void infersRegardlessOfCase() {
+    Options dot = parse("--view", "full", "--all", "--out", "/invented/all.DOT");
+    Options graphml = parse("--view", "full", "--all", "--out", "/invented/all.GraphML");
+
+    assertThat(dot.format()).isEqualTo(OutputFormat.DOT);
+    assertThat(graphml.format()).isEqualTo(OutputFormat.GRAPHML);
+  }
+
+  @Test
+  @DisplayName("a dot in a directory name is not the file's extension")
+  void readsTheExtensionOfTheFileAndNotTheDirectory() {
+    Options fromTheFile = parse("--view", "full", "--all", "--out", "/invented/v1.dot/all.graphml");
+    Options noExtensionAtAll =
+        parse("--view", "full", "--all", "--out", "/invented/v1.graphml/all");
+
+    assertThat(fromTheFile.format()).isEqualTo(OutputFormat.GRAPHML);
+    assertThat(noExtensionAtAll.format()).isEqualTo(OutputFormat.DOT);
+  }
+
+  @Test
+  @DisplayName("an unrecognised extension still works, on the documented default")
+  void fallsBackToTheDocumentedDefault() {
+    Options unknown = parse("--view", "full", "--all", "--out", "/invented/all.txt");
+    Options none = parse("--view", "full", "--all", "--out", "/invented/all");
+
+    assertThat(unknown.format()).isEqualTo(OutputFormat.DOT);
+    assertThat(none.format()).isEqualTo(OutputFormat.DOT);
+  }
+
+  @Test
+  @DisplayName("--format that contradicts the extension is refused, naming both")
+  void refusesAFormatThatContradictsTheExtension() {
+    assertThatThrownBy(
+            () ->
+                parse(
+                    "--view", "full", "--all", "--format", "graphml", "--out", "/invented/all.dot"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("--format graphml")
+        .hasMessageContaining(".dot");
+  }
+
+  @Test
+  @DisplayName("--format that agrees with the extension is simply obeyed")
+  void acceptsAFormatThatAgreesWithTheExtension() {
+    Options options =
+        parse("--view", "full", "--all", "--format", "graphml", "--out", "/invented/all.GRAPHML");
+
+    assertThat(options.format()).isEqualTo(OutputFormat.GRAPHML);
+  }
+
+  @Test
+  @DisplayName("--format is obeyed when the extension names no format of its own")
+  void obeysTheFlagWhenTheExtensionSaysNothing() {
+    Options options =
+        parse("--view", "full", "--all", "--format", "graphml", "--out", "/invented/all.txt");
+
+    assertThat(options.format()).isEqualTo(OutputFormat.GRAPHML);
   }
 }
