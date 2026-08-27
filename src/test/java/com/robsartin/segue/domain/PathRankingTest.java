@@ -85,7 +85,7 @@ class PathRankingTest {
     PathResult throughSomethingSpecific = twoHopVia(quiet("Q900103", NodeKind.CONCEPT), 0.80);
 
     List<PathResult> ranked =
-        PathRanking.rank(List.of(throughAHub, throughSomethingSpecific), DEGREES);
+        PathRanking.rank(List.of(throughAHub, throughSomethingSpecific), DEGREES, NO_INSTITUTIONS);
 
     assertThat(ranked).containsExactly(throughSomethingSpecific, throughAHub);
   }
@@ -102,7 +102,9 @@ class PathRankingTest {
 
     List<PathResult> ranked =
         PathRanking.rank(
-            List.of(throughAHub, throughABusyPerson, throughABusyGroup, throughABusyWork), DEGREES);
+            List.of(throughAHub, throughABusyPerson, throughABusyGroup, throughABusyWork),
+            DEGREES,
+            NO_INSTITUTIONS);
 
     assertThat(ranked)
         .containsExactly(throughABusyPerson, throughABusyGroup, throughABusyWork, throughAHub);
@@ -120,7 +122,8 @@ class PathRankingTest {
         new PathResult(List.of(hop(START, hub("Q900206", NodeKind.CONCEPT), 0.80)));
     PathResult passingThroughAHub = twoHopVia(hub("Q900207", NodeKind.CONCEPT), 1.00);
 
-    List<PathResult> ranked = PathRanking.rank(List.of(passingThroughAHub, endingAtAHub), DEGREES);
+    List<PathResult> ranked =
+        PathRanking.rank(List.of(passingThroughAHub, endingAtAHub), DEGREES, NO_INSTITUTIONS);
 
     assertThat(ranked).containsExactly(endingAtAHub, passingThroughAHub);
   }
@@ -142,7 +145,7 @@ class PathRankingTest {
                     new Provenance("llm:claude", "chat#1", Instant.EPOCH, 0.30))));
 
     List<PathResult> ranked =
-        PathRanking.rank(List.of(guessedButSpecific, sourcedThroughAHub), DEGREES);
+        PathRanking.rank(List.of(guessedButSpecific, sourcedThroughAHub), DEGREES, NO_INSTITUTIONS);
 
     assertThat(ranked).containsExactly(sourcedThroughAHub, guessedButSpecific);
   }
@@ -169,10 +172,79 @@ class PathRankingTest {
 
     List<PathResult> ranked =
         PathRanking.rank(
-            List.of(hubbyAndWeak, specificAndWeak, hubbyAndStrong, specificAndStrong), DEGREES);
+            List.of(hubbyAndWeak, specificAndWeak, hubbyAndStrong, specificAndStrong),
+            DEGREES,
+            NO_INSTITUTIONS);
 
     assertThat(ranked)
         .containsExactly(specificAndStrong, specificAndWeak, hubbyAndStrong, hubbyAndWeak);
+  }
+
+  // ---- recognition institutions (issue #66) --------------------------------
+
+  @Test
+  @DisplayName("a body one is ELECTED to is a hub however quiet it is, and a band never is")
+  void recognitionInstitutionsAreHubsWhateverTheirDegree() {
+    // Issue #66. The academy is BELOW the degree threshold and the band is above it, which is
+    // the measured shape: on a real graph the Writers Guild of America West carries 11 edges
+    // and so does Mötley Crüe, so no degree can separate them. The class can.
+    PathResult throughAnAcademy = twoHopVia(quiet("Q900108", NodeKind.GROUP, ELECTED_TO), 1.00);
+    PathResult throughABand = twoHopVia(hub("Q900212", NodeKind.GROUP, PLAYED_IN), 0.80);
+
+    List<PathResult> ranked =
+        PathRanking.rank(List.of(throughAnAcademy, throughABand), DEGREES, INSTITUTIONS);
+
+    assertThat(ranked).containsExactly(throughABand, throughAnAcademy);
+  }
+
+  @Test
+  @DisplayName("the class decides, so an institution the kind mapper never placed is a hub too")
+  void theClassIsJudgedWhateverKindItWasMappedTo() {
+    // "High-degree CONCEPT" means "we could not place this and half the graph touches it".
+    // A stated class means something on its own, so it needs no kind and no degree to back
+    // it up — a learned society that fell through the whitelist is still an election.
+    PathResult throughAnUnplacedAcademy =
+        twoHopVia(quiet("Q900111", NodeKind.CONCEPT, ELECTED_TO), 1.00);
+    PathResult throughAFilm = twoHopVia(quiet("Q900112", NodeKind.WORK, MADE), 0.80);
+
+    List<PathResult> ranked =
+        PathRanking.rank(List.of(throughAnUnplacedAcademy, throughAFilm), DEGREES, INSTITUTIONS);
+
+    assertThat(ranked).containsExactly(throughAFilm, throughAnUnplacedAcademy);
+  }
+
+  @Test
+  @DisplayName("an academy at the END of a route is not demoted, any more than a hub award is")
+  void anInstitutionEndpointIsNotAnIntermediate() {
+    // The same exemption ADR 31's amendment granted a hub: "what connects me to the Royal
+    // Society" is a fair question. The confidences are the discriminator — if the endpoint
+    // counted, both routes would carry one institution and the 1.00 route would win.
+    PathResult endingAtAnAcademy =
+        new PathResult(List.of(hop(START, quiet("Q900113", NodeKind.GROUP, ELECTED_TO), 0.80)));
+    PathResult passingThroughAnAcademy =
+        twoHopVia(quiet("Q900114", NodeKind.GROUP, ELECTED_TO), 1.00);
+
+    List<PathResult> ranked =
+        PathRanking.rank(
+            List.of(passingThroughAnAcademy, endingAtAnAcademy), DEGREES, INSTITUTIONS);
+
+    assertThat(ranked).containsExactly(endingAtAnAcademy, passingThroughAnAcademy);
+  }
+
+  @Test
+  @DisplayName("a node states several classes, and one recognition class among them is enough")
+  void oneRecognitionClassAmongSeveralIsEnough() {
+    // Measured: every institution in the graph also wears a broad organization class, and the
+    // recognition one is not always first — the American Academy of Arts and Sciences states
+    // learned society, academic publisher, nonprofit organization, in that order.
+    PathResult throughAnAcademy =
+        twoHopVia(quiet("Q900115", NodeKind.GROUP, PLAYED_IN, MADE, ELECTED_TO), 1.00);
+    PathResult throughABand = twoHopVia(hub("Q900213", NodeKind.GROUP, PLAYED_IN), 0.80);
+
+    List<PathResult> ranked =
+        PathRanking.rank(List.of(throughAnAcademy, throughABand), DEGREES, INSTITUTIONS);
+
+    assertThat(ranked).containsExactly(throughABand, throughAnAcademy);
   }
 
   // ---- specificity helpers --------------------------------------------------
@@ -185,15 +257,30 @@ class PathRankingTest {
   private static final ToIntFunction<String> DEGREES =
       qid -> qid.startsWith("Q9002") ? PathRanking.HUB_DEGREE : PathRanking.HUB_DEGREE - 1;
 
+  /**
+   * Invented classes too, for the same reason (issue #66): the domain is told which classes mean
+   * "elected, not collaborating" through a {@code Predicate}, so its own tests need no Wikidata
+   * vocabulary at all. The real class table is pinned by {@code RecognitionInstitutionsTest}.
+   */
+  private static final String ELECTED_TO = "Q900801";
+
+  private static final String PLAYED_IN = "Q900802";
+  private static final String MADE = "Q900803";
+
+  private static final java.util.function.Predicate<String> INSTITUTIONS = ELECTED_TO::equals;
+
+  /** No class means recognition, so ranking is the issue-#52 order exactly. */
+  private static final java.util.function.Predicate<String> NO_INSTITUTIONS = classQid -> false;
+
   private static final NodeRecord START = new NodeRecord("Q900101", NodeKind.PERSON, "start");
   private static final NodeRecord END = new NodeRecord("Q900102", NodeKind.PERSON, "end");
 
-  private static NodeRecord hub(String qid, NodeKind kind) {
-    return new NodeRecord(qid, kind, "busy " + qid);
+  private static NodeRecord hub(String qid, NodeKind kind, String... statedClasses) {
+    return new NodeRecord(qid, kind, "busy " + qid, List.of(statedClasses));
   }
 
-  private static NodeRecord quiet(String qid, NodeKind kind) {
-    return new NodeRecord(qid, kind, "quiet " + qid);
+  private static NodeRecord quiet(String qid, NodeKind kind, String... statedClasses) {
+    return new NodeRecord(qid, kind, "quiet " + qid, List.of(statedClasses));
   }
 
   /** START -> the given intermediate -> END, both hops at the same confidence. */

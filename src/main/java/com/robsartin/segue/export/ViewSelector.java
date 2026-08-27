@@ -8,6 +8,7 @@ import com.robsartin.segue.domain.PathResult;
 import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.GraphStore;
+import com.robsartin.segue.wikidata.RecognitionInstitutions;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -75,13 +76,19 @@ public final class ViewSelector {
    *
    * <p>One route, not every route: a picture of forty overlapping paths explains less than the
    * single best-evidenced one, and which one is best is a question ADR 31 has already answered.
-   * That ordering is applied here through the shared {@link PathRanking}, degree lookup included,
-   * so the exported route cannot disagree with the one the MCP tool returns.
+   * That ordering is applied here through the shared {@link PathRanking}, degree lookup and
+   * recognition-class table included, so the exported route cannot disagree with the one the MCP
+   * tool returns. The ranking is shared; the two call sites that feed it are not, which is why the
+   * exporter pins the wiring in a test of its own.
    */
   public GraphView route(String fromQid, String toQid, int maxHops) {
     NodeRecord from = require(fromQid);
     NodeRecord to = require(toQid);
-    List<PathResult> ranked = PathRanking.rank(graph.paths(fromQid, toQid, maxHops), degrees());
+    List<PathResult> ranked =
+        PathRanking.rank(
+            graph.paths(fromQid, toQid, maxHops),
+            degrees(),
+            RecognitionInstitutions::isRecognitionInstitution);
     String what = "route " + describe(from) + " to " + describe(to);
     if (ranked.isEmpty()) {
       return new GraphView(what + ": no route within " + maxHops + " hop(s)", List.of(), List.of());

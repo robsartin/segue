@@ -92,6 +92,36 @@ class ViewSelectorTest {
   }
 
   @Test
+  @DisplayName("and it demotes a route through an academy too, so a picture cannot disagree")
+  void demotesARouteThroughABodyOneIsElectedTo() {
+    // Issue #66. The ranking is shared, but the two call sites that supply it with the graph's
+    // shape are not, so this is the exporter's half of the same wiring. Its own graph, because
+    // adding a sixth node to the shared fixture would move every count in this file.
+    //
+    // The class QIDs are real and the entities are invented: Q955824 is "learned society",
+    // Q5741069 is "rock band". The academy hop is the BETTER evidenced of the two, which is
+    // what made it win before.
+    FakeAssertionLog log =
+        new FakeAssertionLog()
+            .with(
+                node(WREN, NodeKind.PERSON, "Wren Alderman"),
+                node(MARLOW, NodeKind.PERSON, "Ida Marlow"),
+                node(KETTLES, NodeKind.GROUP, "The Paper Kettles", List.of("Q5741069")),
+                node(PRIZE, NodeKind.GROUP, "Northwood Academy", List.of("Q955824")),
+                edge(WREN, PRIZE, "MEMBER_OF"),
+                edge(MARLOW, PRIZE, "MEMBER_OF"),
+                edge(WREN, KETTLES, "MEMBER_OF", secondSource()),
+                edge(MARLOW, KETTLES, "MEMBER_OF", secondSource()));
+    try (TinkerGraphStore ownGraph = new TinkerGraphStore()) {
+      GraphProjector.project(log, ownGraph);
+
+      GraphView view = new ViewSelector(ownGraph, log).route(WREN, MARLOW, 2);
+
+      assertThat(qids(view)).containsExactly(WREN, KETTLES, MARLOW);
+    }
+  }
+
+  @Test
   @DisplayName("no route within the hop bound is an empty view that says so, not a failure")
   void reportsNoRoute() {
     GraphView view = selector.route(HOLLOW_TIDE, PRIZE, 1);

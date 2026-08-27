@@ -4,7 +4,7 @@ date: "2026-08-24"
 topic: path-ranking-by-confidence
 tags: [project, graph, trust]
 supersedes: []
-related: [quarantine-model-generated-assertions, graph-engine-gremlin, mcp-tool-surface, six-kind-ontology, award-received-as-the-first-non-collaboration-edge]
+related: [quarantine-model-generated-assertions, graph-engine-gremlin, mcp-tool-surface, six-kind-ontology, award-received-as-the-first-non-collaboration-edge, store-p31-and-rederive-kind-at-projection]
 ---
 # 31. Rank paths by weakest confidence, not by hop count
 
@@ -123,8 +123,121 @@ a route.
 - **Two things it deliberately does not do.** It does not stop hub edges being ingested — ADR 38's
   award vocabulary is untouched, and a hub route is still returned, merely last. And it says
   nothing about a busy `GROUP`: the American Academy of Arts and Sciences connects 21 seeds
-  through `MEMBER_OF` and is career recognition by another name. Left open on purpose, because
-  the measurement that would settle it is membership, not awards.
+  through `MEMBER_OF` and is career recognition by another name. ~~Left open on purpose, because
+  the measurement that would settle it is membership, not awards.~~ **Answered, 2026-08-27, issue
+  #66 — see the second amendment below.**
+
+**Amendment (2026-08-27, issue #66): a `GROUP` can be a hub too, and its own stated class says so.**
+
+Nothing above is withdrawn. `HUB_DEGREE` is unchanged, it still applies to `CONCEPT` intermediates
+only, and the composition with confidence — specificity first, the model-guess line above both —
+is exactly as the amendment above set it. What this adds is a *second* way for an intermediate to
+be a hub, sitting beside the degree test rather than replacing it.
+
+**The measurement, because the last paragraph of the amendment above says which one would settle
+it.** Every `GROUP` shared by five or more of the 815 seeds on the real list, on a 54,448-node graph
+re-seeded with `P31` on 99.97% of nodes — 80 of them. Sorted by seeds, the top of the list and the
+institutions further down:
+
+| seeds | degree | of them by `MEMBER_OF` | node | stated `P31` |
+|---|---|---|---|---|
+| 33 | 33 | **33** | American Academy of Arts and Sciences | learned society, academic publisher, nonprofit organization |
+| 24 | 495 | 2 | The Beatles | musical group |
+| 19 | 19 | 0 | Guns N' Roses | musical group |
+| 16 | 16 | 0 | Kiss | musical group |
+| 15 | 15 | 0 | The Clash | musical group, rock band |
+| 11 | 11 | 0 | Mötley Crüe | heavy metal band |
+| 11 | 11 | **11** | Writers Guild of America West | **labor union**, nonprofit organization |
+| 10 | 10 | **10** | Writers Guild of America, East | **labor union** |
+| 8 | 8 | **8** | American Academy of Arts and Letters | **academy of sciences**, award |
+| 7 | 7 | 5 | Monty Python | theatre comedy group, comedy troupe |
+| 6 | 6 | **6** | SAG-AFTRA | **labor union**, nonprofit organization |
+| 5 | 18 | 5 | Traveling Wilburys | musical group |
+| 5 | 90 | 5 | Eagles | musical group |
+
+Five of the 80 are institutions. The other 75 are bands, plus Monty Python.
+
+- **Degree cannot do it, and this is not close.** The institutions run from 6 to 33 edges and the
+  bands that must keep working run from 11 to 19 — *interleaved*, not separated. The Writers Guild
+  of America West and Mötley Crüe both carry exactly 11. Any threshold that catches SAG-AFTRA at 6
+  also catches all three bands the issue names, and any threshold that spares them loses four of
+  the five institutions. A `GROUP`-specific `HUB_DEGREE` was the fallback if the classes had not
+  separated; the numbers refuse it outright.
+- **The edge type cannot do it either**, though it looked like the obvious signal — every seed
+  reaches all five institutions by `MEMBER_OF` and reaches most bands by something else. It fails
+  on the exceptions: Monty Python (5 of 7), the Traveling Wilburys (5 of 5) and the Eagles (5 of 5)
+  are all reached by `MEMBER_OF` and all three are collaborations. A rule reading the edge would
+  demote a supergroup for being a group.
+- **The class does it cleanly.** Three classes — `Q955824` learned society, `Q414147` academy of
+  sciences, `Q178790` labor union — cover all five institutions and match no band anywhere in the
+  graph. The band classes (`musical group`, `rock band`, `heavy metal band`, `band`, `solo musical
+  project`) and Monty Python's (`theatre comedy group`, `comedy troupe`) are disjoint from them.
+
+**The decision.** An intermediate that states one of those classes is a hub, exactly as a
+high-degree `CONCEPT` is, and is demoted the same way. Three things follow from it being a *class*
+rather than a threshold:
+
+- **No degree test.** "High-degree `CONCEPT`" means "we could not place this, and half the graph
+  touches it" — degree is standing in for a meaning the node never stated. A stated class is the
+  meaning. Election to the Royal Society is recognition of a career at four members or four
+  hundred, so the rule fires at any size — which it has to, since four of the five institutions are
+  below `HUB_DEGREE` and one is below half of it.
+- **No kind test.** Nothing checks for `GROUP`, though every measured institution is one. A learned
+  society that `KindMapper`'s whitelist has not learned falls through to `CONCEPT` and needs the
+  same treatment; making the rule depend on the whitelist would reintroduce the coupling the
+  amendment above already had to pay for once.
+- **Any stated class counts, not the first.** `KindMapper` takes the first class it recognises; this
+  takes any. Real institutions wear several and the recognition class is not reliably in front — the
+  American Academy of Arts and Sciences states learned society, academic publisher, nonprofit
+  organization, in that order.
+
+**What was deliberately left out, and it is the trap.** All five institutions also state a broad
+organization class — `Q163740` nonprofit organization or `Q43229` organization — and a table built
+from what they have in common would have included it. It would have been wrong: **ABBA states
+`Q43229`** at 498 edges, and the Vienna Philharmonic states `Q163740`. Only classes that say what
+the body IS are listed.
+
+### The architecture, and it is ADR 31's own precedent applied twice
+
+`PathRanking` is in `domain`, so it may not hold Wikidata's vocabulary any more than it may hold a
+graph. **The class test arrives as a `java.util.function.Predicate<String>` over a class qid**,
+beside the `ToIntFunction<String>` the amendment above introduced, and the table it comes from —
+`RecognitionInstitutions` — lives in `wikidata` beside `KindMapper`, which is where deciding what a
+class MEANS already belongs (ADR 42). The values themselves need no lookup at all: ADR 42 put the
+raw `P31` on `NodeRecord`, so the ranking reads the classes off the node it is already holding.
+
+**There is deliberately no degrees-only overload.** A caller supplying half the specificity rule
+would silently rank an academy above the film two people actually made, which is the bug this
+amendment fixes. Either both signals are supplied or neither is — `rank(paths)` still exists and
+still means "no view of the graph at all", for the contract tests that compare two engines rather
+than judge a route.
+
+### Consequences of the second amendment
+
+- **Measured on the real graph, before and after.** Tom Hanks ↔ Conan O'Brien led with *Writers
+  Guild of America West* (`MEMBER_OF`, 1.00) and now leads with *The Great Buck Howard*, the film
+  they were both in (`ACTED_IN`, 0.80). Charles Darwin ↔ Kurt Vonnegut led with the *American
+  Academy of Arts and Sciences* and now leads with *Henry David Thoreau*. Both are the amendment
+  above's argument repeating itself: the institution routes are all 1.00 and the informative ones
+  0.80, so confidence alone could never have reached them.
+- **The bands are untouched, checked rather than assumed.** Cheap Trick ↔ Scorpions still routes
+  through Mötley Crüe, Red Hot Chili Peppers ↔ Nine Inch Nails through The Clash — over the Rock
+  and Roll Hall of Fame, which the degree rule demotes — and The Rolling Stones ↔ Counting Crows
+  through Guns N' Roses.
+- **This one will not drift the way `HUB_DEGREE` does.** The threshold beside it names the tail of
+  a distribution on a personal-scale graph and has to be re-measured as the graph grows. A class is
+  a property of the node, stated by the source; adding seeds does not change what a labor union is.
+  The table grows the way `KindMapper`'s does — from measurement, with the label and description
+  confirmed, never guessed.
+- **It does not touch ingest**, exactly as the amendment above did not. Guild and academy edges are
+  still recorded, still returned, and merely returned last.
+- **It leaves a smaller neighbour visible and unfixed.** Three award nodes in the graph are
+  classified `GROUP` rather than `CONCEPT`, because they state a nonprofit class the whitelist knows
+  and an award class it does not — the Canadian Songwriters Hall of Fame (3 seeds) and the National
+  Inventors Hall of Fame (1) among them. They are career recognition wearing the wrong kind, so the
+  degree rule cannot see them either. At 3 seeds and below they change no ranking today, and adding
+  `award` to this table is a different decision from the one measured here — recorded so the next
+  person finds it rather than rediscovers it.
 
 ## Alternatives considered
 

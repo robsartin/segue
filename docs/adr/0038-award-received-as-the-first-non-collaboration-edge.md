@@ -142,6 +142,24 @@ property is *selected*. Registering genre or occupation is still not licensed by
 and 35,977 items they would flood the bound before ranking ever saw them (question 4), which is a
 different failure from the one issue #52 fixed.
 
+**Amendment (2026-08-27, issue #66): `MEMBER_OF` can carry recognition too, and the P31 idea
+rejected above is right one layer up.**
+
+Nothing here changes: P166 is still the only non-collaboration property registered, an award node
+is still a `CONCEPT`, and no vocabulary is added. This records one correction and one boundary.
+
+**The correction.** The amendment above rejected "excluding career-recognition awards by P31 class"
+because the classes only *partly* separate awards — the Kennedy Center Honors is P31 `award` and
+nothing else. That reasoning was about awards, at ingest, and it does not carry to the membership
+question this ADR's own final paragraph pointed at. Measured on the re-seeded graph, the P31 classes
+separate *institutions* from *bands* completely: three classes cover every academy and guild in the
+graph and match no band anywhere in it, where degree and edge type both fail. ADR 31's second
+amendment (issue #66) is where the measurement and the rule live.
+
+**The boundary.** That is a *ranking* rule, like the first one. `MEMBER_OF` stays registered exactly
+as it is, a guild edge is still ingested and still returned, and this is not a precedent for
+filtering any property at ingest by the class of the node at its far end.
+
 ## Alternatives considered
 
 - **Register genre (P136) as well, or instead.** It is the property a reader would name first, it

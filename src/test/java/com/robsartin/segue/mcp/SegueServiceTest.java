@@ -748,6 +748,47 @@ class SegueServiceTest {
     assertThat(result.payload().get(0).hops().get(0).to().qid()).isEqualTo("Q900304");
   }
 
+  @Test
+  @DisplayName("findPaths demotes a route through an academy, and never one through a band")
+  void findPathsDemotesRoutesThroughABodyOneIsElectedTo() {
+    // Issue #66. Only this class knows the Wikidata class vocabulary the rule reads, so this is
+    // where the wiring is pinned. The people and the two bodies are invented; the CLASSES are
+    // real, because they are the thing under test — Q955824 is "learned society" and Q5741069
+    // is "rock band", both confirmed by label and description.
+    //
+    // The academy is deliberately the QUIETER of the two: three members against the band's
+    // eleven, which is above HUB_DEGREE. On the real graph the two populations interleave
+    // exactly like this, so a rule reading degree would have demoted the band and kept the
+    // academy — the wrong way round.
+    ingest.record(new NodeAssertion("Q900601", NodeKind.PERSON, "Ada Vance", WIKIDATA));
+    ingest.record(new NodeAssertion("Q900602", NodeKind.PERSON, "Bruno Kell", WIKIDATA));
+    ingest.record(
+        new NodeAssertion(
+            "Q900603", NodeKind.GROUP, "Northwood Academy", List.of("Q955824"), WIKIDATA));
+    ingest.record(
+        new NodeAssertion(
+            "Q900604", NodeKind.GROUP, "The Quiet Ferry", List.of("Q5741069"), WIKIDATA));
+    ingest.record(new NodeAssertion("Q900605", NodeKind.PERSON, "Cyd Rowe", WIKIDATA));
+    ingest.record(edge("Q900605", "MEMBER_OF", "Q900603", 1.00));
+    for (int i = 0; i < PathRanking.HUB_DEGREE; i++) {
+      String player = "Q9006" + (10 + i);
+      ingest.record(new NodeAssertion(player, NodeKind.PERSON, "Player " + i, WIKIDATA));
+      ingest.record(edge(player, "MEMBER_OF", "Q900604", 1.00));
+    }
+    // Election is the better-evidenced claim, exactly as a referenced award statement is, and
+    // under confidence alone it therefore won.
+    ingest.record(edge("Q900601", "MEMBER_OF", "Q900603", 1.00));
+    ingest.record(edge("Q900602", "MEMBER_OF", "Q900603", 1.00));
+    ingest.record(edge("Q900601", "MEMBER_OF", "Q900604", 0.80));
+    ingest.record(edge("Q900602", "MEMBER_OF", "Q900604", 0.80));
+
+    ToolResult<List<PathView>> result = service().findPaths("Q900601", "Q900602", 2);
+
+    assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
+    assertThat(result.payload()).hasSize(2);
+    assertThat(result.payload().get(0).hops().get(0).to().qid()).isEqualTo("Q900604");
+  }
+
   private static AssertionRecord edge(String from, String type, String to, double confidence) {
     return new AssertionRecord(
         from,
