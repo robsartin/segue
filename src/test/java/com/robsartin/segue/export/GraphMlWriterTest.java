@@ -7,6 +7,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -83,6 +84,34 @@ class GraphMlWriterTest {
     assertThat(node.getAttribute("id")).isEqualTo("Q901");
     assertThat(dataValue(node, "kind")).isEqualTo("PERSON");
     assertThat(dataValue(node, "label")).isEqualTo("Wren Alderman");
+  }
+
+  @Test
+  @DisplayName("density is DOT's problem: a dense view keeps every typeCode, and reports nothing")
+  void keepsEveryTypeCodeHoweverDenseTheViewIs() throws Exception {
+    GraphView dense = star(DotWriter.LABEL_BUDGET + 1);
+
+    Document document = parse(render(dense));
+
+    NodeList edges = document.getElementsByTagName("edge");
+    assertThat(edges.getLength()).isEqualTo(dense.edges().size());
+    for (int i = 0; i < edges.getLength(); i++) {
+      assertThat(dataValue((Element) edges.item(i), "typeCode")).isEqualTo("ACTED_IN");
+    }
+    assertThat(new GraphMlWriter().note(dense)).isEmpty();
+  }
+
+  /** An invented hub with {@code edges} spokes — the shape that makes DOT labels collide. */
+  private static GraphView star(int edges) {
+    List<ViewNode> nodes = new ArrayList<>();
+    List<ViewEdge> spokes = new ArrayList<>();
+    nodes.add(new ViewNode("Q900100", NodeKind.PERSON, "Wren Alderman"));
+    for (int i = 1; i <= edges; i++) {
+      String qid = "Q9001" + String.format("%02d", i);
+      nodes.add(new ViewNode(qid, NodeKind.WORK, "Invented Work " + i));
+      spokes.add(new ViewEdge("Q900100", qid, "ACTED_IN", 1.0, "invented"));
+    }
+    return new GraphView("an invented star", nodes, spokes);
   }
 
   @Test

@@ -230,6 +230,71 @@ class ExportRunTest {
     assertThat(fileExistedWhenNoted.get(0)).isFalse();
   }
 
+  @Test
+  @DisplayName("a picture too dense to label says so, and says it before the file exists")
+  void reportsThatEdgeLabelsWereDropped() throws IOException {
+    denseInventedStar();
+    Options options =
+        new Options(
+            ViewKind.NEIGHBOURHOOD,
+            OutputFormat.DOT,
+            dir.resolve("unused.db"),
+            out("dense.dot"),
+            null,
+            null,
+            4,
+            WREN,
+            1,
+            null,
+            false);
+
+    run(options, null);
+
+    int said = indexOfNoteContaining("edge label");
+    assertThat(said).as("a note saying the labels were dropped").isNotNegative();
+    assertThat(fileExistedWhenNoted.get(said))
+        .as("the operator hears it while the file still does not exist")
+        .isFalse();
+  }
+
+  @Test
+  @DisplayName("a picture that kept its labels says nothing about them")
+  void staysQuietWhenTheLabelsFit() throws IOException {
+    Path out = out("route.dot");
+    Options options =
+        new Options(
+            ViewKind.ROUTE,
+            OutputFormat.DOT,
+            dir.resolve("unused.db"),
+            out,
+            WREN,
+            MARLOW,
+            4,
+            null,
+            1,
+            null,
+            false);
+
+    run(options, null);
+
+    assertThat(notes).noneMatch(note -> note.contains("edge label"));
+    assertThat(Files.readString(out)).contains("label=\"MEMBER_OF\"");
+  }
+
+  /** One invented hub with more spokes than {@link DotWriter#LABEL_BUDGET}. */
+  private void denseInventedStar() {
+    graph.close();
+    FakeAssertionLog log =
+        new FakeAssertionLog().with(node(WREN, NodeKind.PERSON, "Wren Alderman"));
+    for (int i = 1; i <= DotWriter.LABEL_BUDGET + 1; i++) {
+      String qid = "Q9002" + String.format("%02d", i);
+      log.with(node(qid, NodeKind.WORK, "Invented Work " + i), edge(WREN, qid, "ACTED_IN"));
+    }
+    graph = new TinkerGraphStore();
+    GraphProjector.project(log, graph);
+    selector = new ViewSelector(graph, log);
+  }
+
   private int indexOfNoteContaining(String fragment) {
     for (int i = 0; i < notes.size(); i++) {
       if (notes.get(i).contains(fragment)) {

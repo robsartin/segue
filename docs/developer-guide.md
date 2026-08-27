@@ -764,7 +764,9 @@ This is the part to preserve when changing anything here.
   with no database and no network.
 - **They meet in two trivial places**: the `OutputFormat` enum, which maps a command-line word — or
   an `--out` extension — to a writer, and `ExportRun`, which selects, optionally decorates, reports
-  the size and hands over.
+  the size, passes on whatever the writer says it had to do to the view, and hands over. That last
+  one is `ViewWriter.note(GraphView)`: `ExportRun` prints it without knowing which format answered,
+  which is how the suppression below gets reported without a format concern leaking in here.
 
 Adding JSON is a third enum constant, its extensions, and a third writer. If you ever find yourself asking a
 question about DOT inside `ViewSelector`, that is the bug.
@@ -851,6 +853,37 @@ build, so changing a fill without checking fails the build rather than the reade
 **In GraphML the same `P31` arrives as an `instanceOf` attribute** — raw QIDs, space-separated — and
 nothing else: no tooltip, no fill, no shade. Gephi shows attributes on hover and filters and colours
 on them natively, so "select every album" is a filter there and a colour here.
+
+### What an edge says, and when it stops saying it out loud
+
+**Every DOT edge carries a `tooltip`** naming the relationship and both of its ends —
+`Steve Martin -RECEIVED_AWARD-> Writers Guild of America Award` — which Graphviz turns into an
+`xlink:title` in SVG exactly as it does for a node. The endpoints are in there because in a hub the
+edges lie on top of each other, and "which one did I just point at" is the question; the SVG's own
+`<title>` answers it in QIDs.
+
+**Above `DotWriter.LABEL_BUDGET` — 40 — edges, the visible label is dropped and the tooltip is all
+there is.** Measured on slices of one real depth-1 neighbourhood under `sfdp` (issue #70): 26 edges
+reads cleanly, 38 has a couple of pairs touching, 51 starts overprinting, and at 144 the hub is a
+block of text with the entity's own name buried in it. The count is of **edges**, because a label is
+drawn per edge — and that is also why nothing here asks what `ViewKind` it is. A `route` keeps its
+labels because a route is two or four edges, which is the same rule that keeps them on a small
+`subgraph`.
+
+**When it drops them it says so**, before the file exists, beside the counts:
+
+```
+132 node(s), 144 edge(s)
+144 edge(s) is past the 40 this picture can label legibly, so the DOT edge labels are dropped.
+Each edge keeps its type in a tooltip — render with -Tsvg and hover — and GraphML carries
+typeCode on every edge whatever the size
+```
+
+That sentence comes from `DotWriter.note`, not from `ExportRun`, so the class that stays
+format-blind can report a format's decision without learning what format it is holding. **GraphML
+is untouched by any of this** — `typeCode` is an attribute there at every size, which is why the
+note points at it. There is deliberately no flag to force labels back on: the picture it would
+produce is the one that made this a bug.
 
 ## How to read an ADR against the code
 

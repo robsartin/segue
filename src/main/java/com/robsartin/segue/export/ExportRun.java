@@ -70,6 +70,12 @@ public final class ExportRun {
               + " not in this export");
     }
 
+    // Then whatever the format itself has to say about this view — DOT drops its edge labels on a
+    // view too dense to draw them (issue #70), and a tool that loses information silently invites
+    // someone to wonder where it went. Asked here rather than answered here: which format is
+    // holding the pen is deliberately not this class's business.
+    writer.note(view).ifPresent(notes);
+
     try (Writer out = Files.newBufferedWriter(options.out(), StandardCharsets.UTF_8)) {
       writer.write(view, out);
     }
