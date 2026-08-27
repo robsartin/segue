@@ -410,10 +410,21 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   `PathRanking.HUB_DEGREE` in-graph edges is demoted, because a Walk of Fame star is perfectly
   true and says nothing. Kind is what makes it safe — the busiest nodes are the expanded seeds
   themselves, and those are legitimate connectors. `SegueService` passes the degree lookup down
-  as a `ToIntFunction<String>` so `domain` stays graph-free (ADR 18). Two things it does NOT do:
-  it does not keep hub edges out of the graph, and it says nothing about a busy GROUP — the
-  American Academy of Arts and Sciences connects 21 seeds through `MEMBER_OF` and is career
-  recognition by another name. Left open on purpose.
+  as a `ToIntFunction<String>` so `domain` stays graph-free (ADR 18). It does NOT keep hub edges
+  out of the graph — a hub route is still returned, merely last.
+- ~~A busy GROUP is a hub too and nothing demotes it.~~ **Fixed (issue #66, ADR 31's second
+  amendment.)** An intermediate that STATES a recognition class — `Q955824` learned society,
+  `Q414147` academy of sciences, `Q178790` labor union — is a hub whatever its degree and whatever
+  kind it was mapped to, so "we were both elected to this" no longer outranks "we made this
+  together". **Neither degree nor edge type could have done it**, and both were measured on the
+  real graph before the class was chosen: the institutions carry 6-33 edges and the bands that must
+  keep working carry 11-19 (the Writers Guild of America West and Mötley Crüe both carry exactly
+  11), and `MEMBER_OF` reaches the Traveling Wilburys, the Eagles and Monty Python as readily as it
+  reaches an academy. **Never add a broad organization class to `RecognitionInstitutions`** —
+  `Q163740` nonprofit and `Q43229` organization are worn by every institution AND by ABBA and the
+  Vienna Philharmonic. The table lives in `wikidata` beside `KindMapper` and reaches `domain` as a
+  `Predicate<String>`, the same way the degree does; there is deliberately no degrees-only overload,
+  because half the rule silently prefers the academy.
 - Validity conflict resolution is first-writer-wins in both adapters. Deliberately
   deferred, not solved.
 - Provenance in the Gremlin adapter is packed into an opaque edge property

@@ -17,6 +17,7 @@ import com.robsartin.segue.port.ExpandResult;
 import com.robsartin.segue.port.GraphStore;
 import com.robsartin.segue.port.SourceAdapter;
 import com.robsartin.segue.port.SourceAdapters;
+import com.robsartin.segue.wikidata.RecognitionInstitutions;
 import com.robsartin.segue.wikidata.WikidataUnavailableException;
 import java.time.Clock;
 import java.util.ArrayList;
@@ -438,7 +439,8 @@ public final class SegueService {
       return error("unknown entity: " + toQid + " — add it before searching for routes");
     }
     List<PathResult> raw = graph.paths(fromQid, toQid, maxHops);
-    List<PathResult> ranked = PathRanking.rank(raw, degreeLookup());
+    List<PathResult> ranked =
+        PathRanking.rank(raw, degreeLookup(), RecognitionInstitutions::isRecognitionInstitution);
     List<PathView> views = ViewMapper.toPathViews(ranked);
     // Truncation is observed, not inferred: ranking sorts and then caps, so the two sizes
     // differ exactly when the cap dropped something. MAX_PATHS is named in the sentence below
