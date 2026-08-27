@@ -299,9 +299,30 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   trips per expansion), and it does not touch `nodesAdded` — a correction is not a discovery.
   **It is also not the same rule as `described.putIfAbsent`**, which resolves two sources
   disagreeing within one call and stays first-writer-wins. Same-source-across-runs and
-  two-sources-within-one-call are different questions; don't unify them. **Nodes only correct
-  themselves when an expansion touches them again**, so a mapper improvement still wants a
-  re-seed to propagate.
+  two-sources-within-one-call are different questions; don't unify them. **A mapper improvement
+  now also reaches existing nodes at the next boot**, because the claim stores its P31 — see the
+  next bullet; before ADR 42 it needed a re-seed.
+- **A node claim stores the raw `P31` beside the kind derived from it, and both projections
+  re-derive the kind from it, always.** `KindMapper.rederive` is the single rule;
+  `GraphProjector` (boot replay) and `LogProjection` (the exporter's fold) both call it, so a
+  graph and a picture of that graph cannot disagree about what a node is. **This is what makes a
+  `KindMapper` improvement free**: it corrects every affected node at the next boot, offline,
+  instead of costing a 17-minute re-seed (issues #55 and #60, ADR 42). A claim that states no
+  classes keeps its recorded kind; a claim that states classes takes the mapper's answer *even
+  when that answer is CONCEPT*, or the whitelist becomes a ratchet where additions propagate and
+  corrections never do. The log is never rewritten — re-derivation is the projection's job.
+  The list is one space-separated column (`instance_of`, beside `node_kind`) and one packed
+  literal on a graph vertex; no escaping, because `NodeRecord` validates every value as a QID.
+  **ORDER is part of the value** — the mapper takes the first class it recognises — so never
+  store it as a set.
+
+- **ADR 42 shipped a schema change with no migration, and that was a one-off.** It was
+  affordable only because every one of the 265,046 assertions was a regenerable Wikidata world
+  fact and `affinity` had 0 rows. **A rating is first-person data with no external source**, so
+  the next schema change needs a real migration path. Deleting the file also reset every
+  `assertedAt` to the re-seed (ADR 20 treats assertion time as real); that was noise on a
+  two-day-old graph and will not be next time.
+
 - **The bulk seeding tool's input and output never enter this repository.** A list of who
   someone listens to, reads and watches IS the personal data ADR 33 governs, and this repo
   is PUBLIC. `*.csv` is gitignored beside `*.db`; every name in a test, fixture, doc or

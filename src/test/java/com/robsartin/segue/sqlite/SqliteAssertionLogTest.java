@@ -10,6 +10,7 @@ import com.robsartin.segue.domain.Provenance;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -53,6 +54,38 @@ class SqliteAssertionLogTest {
       // Exact equality proves every field, both validity dates, the null sourceRef, the
       // sub-second instant, and the confidence all survive the round trip.
       assertThat(log.readAll()).containsExactly(node, datedEdge, openEdge);
+    }
+  }
+
+  @Test
+  @DisplayName("a node claim's P31 classes round-trip, in the order the source stated them")
+  void roundTripsInstanceOfClasses() {
+    // Issue #60: without this the derived kind is the only thing kept, and every KindMapper
+    // improvement needs the entity fetched from Wikidata again to take effect.
+    NodeAssertion node =
+        new NodeAssertion(
+            "Q16473", NodeKind.PERSON, "Steve Martin", List.of("Q5", "Q177220"), WIKIDATA);
+
+    try (SqliteAssertionLog log = SqliteAssertionLog.inMemory()) {
+      log.append(node);
+
+      assertThat(log.readAll())
+          .singleElement()
+          .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.type(NodeAssertion.class))
+          .extracting(NodeAssertion::instanceOf)
+          .isEqualTo(List.of("Q5", "Q177220"));
+    }
+  }
+
+  @Test
+  @DisplayName("a source that states no classes reads back with an empty list, not a null")
+  void roundTripsAbsentInstanceOf() {
+    NodeAssertion node = new NodeAssertion("Q5593", NodeKind.PERSON, "Pablo Picasso", WIKIDATA);
+
+    try (SqliteAssertionLog log = SqliteAssertionLog.inMemory()) {
+      log.append(node);
+
+      assertThat(log.readAll()).containsExactly(node);
     }
   }
 

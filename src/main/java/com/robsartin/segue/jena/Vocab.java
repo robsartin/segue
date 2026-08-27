@@ -20,6 +20,7 @@ public final class Vocab {
   public static final String RDFS = "http://www.w3.org/2000/01/rdf-schema#";
 
   public static final String P_KIND = SG + "kind";
+  public static final String P_INSTANCE_OF = SG + "instanceOf";
   public static final String P_SOURCE = SG + "source";
   public static final String P_SOURCE_REF = SG + "sourceRef";
   public static final String P_ASSERTED_AT = SG + "assertedAt";

@@ -1,8 +1,10 @@
 package com.robsartin.segue.ingest;
 
 import com.robsartin.segue.domain.LoggedAssertion;
+import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.GraphStore;
+import com.robsartin.segue.wikidata.KindMapper;
 import java.util.List;
 
 /**
@@ -18,6 +20,17 @@ import java.util.List;
  *
  * <p>Replay is fatal on the first failure, naming the sequence number: a log that will not project
  * is a corruption to surface at boot, not to limp past.
+ *
+ * <p><b>Node kinds are re-derived here, always, from the {@code P31} classes the claim carries</b>
+ * (ADR 42, issue #60). Replay is the moment the derived state is rebuilt, so it is the moment to
+ * rebuild it with today's rules rather than the rules that happened to be compiled in when the
+ * claim was first written down. The log is not touched: it keeps saying what the source said and
+ * what was made of it at the time, which is what ADR 19 means by append-only.
+ *
+ * <p><b>Always on, deliberately, and not a flag.</b> An opt-in correction is one every future
+ * caller has to remember, and the cost of forgetting is invisible - a graph that looks right and
+ * quietly holds a stale classification. That was already the shape of issue #55. The rule itself
+ * lives in {@link KindMapper#rederive}, which is also what {@code LogProjection} calls.
  */
 public final class GraphProjector {
 
@@ -34,7 +47,7 @@ public final class GraphProjector {
     for (int i = 0; i < assertions.size(); i++) {
       LoggedAssertion assertion = assertions.get(i);
       try {
-        IngestService.apply(store, assertion);
+        IngestService.apply(store, rederived(assertion));
         applied++;
       } catch (RuntimeException e) {
         // Sequence is 1-based, matching the log's own autoincrement.
@@ -42,5 +55,10 @@ public final class GraphProjector {
       }
     }
     return applied;
+  }
+
+  /** A node claim with today's kind; anything else unchanged. */
+  private static LoggedAssertion rederived(LoggedAssertion assertion) {
+    return assertion instanceof NodeAssertion node ? KindMapper.rederive(node) : assertion;
   }
 }

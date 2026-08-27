@@ -46,6 +46,11 @@ final class InventedGraph {
     return new NodeAssertion(qid, kind, label, sourced());
   }
 
+  /** A node claim that also recorded the classes its kind was derived from (issue #60). */
+  static NodeAssertion node(String qid, NodeKind kind, String label, List<String> instanceOf) {
+    return new NodeAssertion(qid, kind, label, instanceOf, sourced());
+  }
+
   static AssertionRecord edge(String from, String to, String type) {
     return edge(from, to, type, sourced());
   }

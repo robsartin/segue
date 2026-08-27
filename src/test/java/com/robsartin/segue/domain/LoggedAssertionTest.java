@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -45,5 +46,17 @@ class LoggedAssertionTest {
     assertThatNullPointerException().isThrownBy(() -> new NodeAssertion("Q1", null, "x", WIKIDATA));
     assertThatNullPointerException()
         .isThrownBy(() -> new NodeAssertion("Q1", NodeKind.WORK, "x", null));
+  }
+
+  @Test
+  @DisplayName("a node claim carries the P31 values it was classified from, into the projection")
+  void nodeAssertionCarriesInstanceOf() {
+    // Issue #60: the claim keeps the raw fact beside the derived classification, so a later
+    // projection can re-derive the kind without going back to Wikidata.
+    NodeAssertion claim =
+        new NodeAssertion("Q5593", NodeKind.PERSON, "Pablo Picasso", List.of("Q5"), WIKIDATA);
+
+    assertThat(claim.instanceOf()).containsExactly("Q5");
+    assertThat(claim.toNode().instanceOf()).containsExactly("Q5");
   }
 }

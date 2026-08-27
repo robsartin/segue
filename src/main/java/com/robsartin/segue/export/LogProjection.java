@@ -7,6 +7,7 @@ import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.port.AssertionLog;
+import com.robsartin.segue.wikidata.KindMapper;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -26,6 +27,11 @@ import java.util.Map;
  * {@link Provenance}, which is what makes {@code corroboration()} countable (ADR 19); different
  * types between one pair stay separate edges, because the store is a multigraph. A later node claim
  * about an entity overwrites an earlier one, matching {@code upsertNode}.
+ *
+ * <p><b>Node kinds are re-derived from the classes the claim recorded</b>, through the same {@link
+ * KindMapper#rederive} the boot projection uses (issue #60, ADR 42). Not a second rule: an exported
+ * picture that disagreed with the running graph about what a node IS would be worse than no
+ * picture, and DOT colours and shapes every node by its kind.
  *
  * <p>It is not a {@code GraphStore} and must not become one. It answers "what is in the log",
  * nothing else; anything that needs a traversal uses the real engine, so that an exported route is
@@ -52,7 +58,7 @@ public record LogProjection(
 
     for (LoggedAssertion assertion : log.readAll()) {
       switch (assertion) {
-        case NodeAssertion claim -> nodes.put(claim.qid(), claim.toNode());
+        case NodeAssertion claim -> nodes.put(claim.qid(), KindMapper.rederive(claim).toNode());
         case AssertionRecord claim ->
             byEdge.computeIfAbsent(claim.edgeKey(), key -> new ArrayList<>()).add(claim);
       }

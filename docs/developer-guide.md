@@ -361,8 +361,18 @@ nobody described is left alone rather than fetched (that would be a round trip e
 neighbour of every expansion), and a refresh never increments `nodesAdded`, which answers how much
 the graph grew. Note it is a different rule from the `described.putIfAbsent` first-writer-wins one a
 few lines above it in the same method: that one settles two sources disagreeing *within one call*,
-this one re-reads the *same* source *across runs*. Nodes correct themselves only when an expansion
-touches them again, so a `KindMapper` improvement still wants a re-seed to propagate.
+this one re-reads the *same* source *across runs*.
+
+**And a node also corrects itself at the next boot, from the classes it stored** (issue #60, ADR
+42). A node claim carries the raw `P31` values beside the kind derived from them, so both
+projections — `GraphProjector` at boot and `LogProjection` in the exporter — re-derive the kind
+through `KindMapper.rederive` with no network at all. A `KindMapper` improvement therefore reaches
+every node the graph already has for free, rather than only the ones an expansion happens to touch
+again. The log is not rewritten: it keeps what the source said and what was made of it at the time,
+and the projection is the part that is rebuilt. Two limits worth knowing: a claim that states no
+classes keeps its recorded kind (not every source is Wikidata), and claims written before ADR 42
+have no classes to re-derive from, which is why the graph was re-seeded once more when that ADR
+landed.
 
 ### Three couplings that must stay coupled
 
