@@ -6,6 +6,8 @@ import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.Provenance;
+import com.robsartin.segue.domain.Retraction;
+import com.robsartin.segue.domain.Retractions;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.wikidata.KindMapper;
 import java.util.ArrayList;
@@ -33,6 +35,12 @@ import java.util.Map;
  * picture that disagreed with the running graph about what a node IS would be worse than no
  * picture, and DOT colours and shapes every node by its kind.
  *
+ * <p><b>Retractions are honoured through the same shared rule</b>, {@link Retractions} (ADR 44,
+ * issue #68), and for a stronger version of the same argument: a picture still showing edges the
+ * graph has dropped is not a stale detail, it is a false record of what is in the graph - and an
+ * export is the artefact somebody keeps, mails or opens in Gephi weeks later. {@code
+ * GraphProjector} asks the identical question of the identical log.
+ *
  * <p>It is not a {@code GraphStore} and must not become one. It answers "what is in the log",
  * nothing else; anything that needs a traversal uses the real engine, so that an exported route is
  * the route {@code find_paths} would give.
@@ -56,11 +64,21 @@ public record LogProjection(
     Map<String, NodeRecord> nodes = new LinkedHashMap<>();
     Map<String, List<AssertionRecord>> byEdge = new LinkedHashMap<>();
 
-    for (LoggedAssertion assertion : log.readAll()) {
+    List<LoggedAssertion> logged = log.readAll();
+    Retractions retractions = Retractions.in(logged);
+    for (int i = 0; i < logged.size(); i++) {
+      LoggedAssertion assertion = logged.get(i);
+      if (!retractions.survives(i, assertion)) {
+        continue;
+      }
       switch (assertion) {
         case NodeAssertion claim -> nodes.put(claim.qid(), KindMapper.rederive(claim).toNode());
         case AssertionRecord claim ->
             byEdge.computeIfAbsent(claim.edgeKey(), key -> new ArrayList<>()).add(claim);
+        // Retractions never survive the rule above; they describe the fold rather than appear
+        // in it. Reaching this arm would mean Retractions.survives had changed its mind.
+        case Retraction retraction ->
+            throw new IllegalStateException("a retraction is not projected: " + retraction.qid());
       }
     }
 

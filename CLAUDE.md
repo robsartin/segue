@@ -26,6 +26,7 @@ there currently are none.
 ./gradlew resolveNames --args="--list $HOME/names.csv"   # bulk name→QID (ADR 40); needs network
 ./gradlew exportGraph --args="--view neighbourhood --qid Q42 --out $HOME/one.graphml"  # ADR 41; read-only; the --out extension picks the format
 ./gradlew listRatings --args="--sort recent --out $HOME/ratings.txt"   # ADR 43; read-only; the OUTPUT IS PERSONAL DATA
+./gradlew retractEntity --args="--qid Q12345 --reason 'wrong entity' --dry-run"   # ADR 44; appends a retraction; --dry-run reports and writes nothing
 ```
 
 Gradle, not Maven. The wrapper is pinned to 9.7.1 and committed; **Gradle 9.1.0 is the
@@ -88,6 +89,11 @@ ratings/  The taste-layer reader (ADR 43): every rating with its label, note and
           seventh MCP tool. Its output IS personal data; *.txt is gitignored.
           The tightest fence of the three tools — sqlite only, no engine, no
           projection, no network.
+retract/  The retraction tool (ADR 44): appends one Retraction claim so the
+          projection stops showing an entity and its edges, run as `./gradlew
+          retractEntity`. Dev-side, plain Java, offline, and NOT a seventh MCP
+          tool. The only dev tool that WRITES — and it may write exactly one kind
+          of row, through IngestService, holding no GraphStore at all.
 ingest/   IngestService (the only write path) and GraphProjector (boot replay).
 support/  Plain-Java cross-cutting helpers with no project dependencies of their
           own — currently UuidV7, the RFC 9562 v7 id generator used for request
@@ -117,6 +123,12 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   assertion log is the source of truth; the graph is a derived projection.
 - **Validity dates live on the assertion, not the edge** — sources are allowed to
   disagree about when something was true.
+- **Retraction is a new claim, never a deletion.** A `Retraction` row is appended
+  and the log is never edited; both projections omit what it retracts. The unit is
+  the ENTITY (its node claims and every edge touching it), it reaches backwards
+  only by log position, and it carries no `Provenance` — it is a first-person act
+  like affinity, so it holds a reason and a `retractedAt` and nothing else. There
+  is no un-retract: re-add the entity and the newer claims stand. ADR 44.
 - **Two independent time dimensions**: `validFrom`/`validTo` (true in the world)
   vs `provenance.assertedAt` (when we learned it). Never conflate them.
 - **Model-generated edges use a `llm:` source prefix** and stay quarantined until
@@ -395,6 +407,25 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   truncated answer that kept the best is worth far more than one holding an arbitrary fifty. No
   ADR: ADR 27 already required this and ADR 31's cap is unchanged, so it was a bug against the
   decisions rather than a new one.
+
+- **A retraction is honoured by the FOLD, never applied to a store.** `Retractions` in `domain`
+  is the one rule, and `GraphProjector` (boot replay) and `LogProjection` (the exporter's fold)
+  both call it — the same two-call-site shape ADR 42 gave `KindMapper.rederive`, and
+  `BothFoldsAgreeTest` is what stops them drifting. `IngestService.apply` THROWS if handed a
+  retraction: it is unreachable through either projection, and silently ignoring it would leave a
+  graph holding edges somebody took back out. Consequences worth knowing: "replayed N assertions"
+  is deliberately no longer the row count; a running server is stale until it restarts, because
+  `GraphStore` has no remove and ADR 41 already refused to widen the port for a dev tool; and
+  retraction does NOT cascade, so the neighbours a wrong expansion discovered stay as edgeless
+  nodes. `Labels.forQids` (the ratings tool) deliberately does not apply the rule — see ADR 44's
+  consequences.
+
+- **ADR 44 is the migration ADR 42 promised.** `SqliteAssertionLog` adds a `reason` column with
+  `ALTER TABLE ... ADD COLUMN`, guarded by `PRAGMA table_info` rather than a version table, and it
+  was tested against a copy of the live 131,672-row database as well as from a hand-written old
+  schema. `source_id` and `confidence` are `NOT NULL` and mean nothing for a `RETRACT` row, so they
+  carry fixed padding (`(retraction)`, `1.0`) that `readRow` never reads back — relaxing a
+  `NOT NULL` in SQLite means rebuilding the whole table.
 
 - **The taste layer's classes deliberately have no package of their own.**
   `AffinityRecord` sits in `domain`, `AffinityStore` in `port`,

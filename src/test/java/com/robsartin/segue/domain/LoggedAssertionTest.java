@@ -10,7 +10,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * ADR 24: nodes are logged as assertions too, so replay can reconstruct them. A sealed {@link
- * LoggedAssertion} permits exactly the node and edge claims; replay dispatches on the pattern.
+ * LoggedAssertion} permits the node and edge claims and, since ADR 44, the retraction that takes
+ * some of them back out of the projection; replay dispatches on the pattern.
  */
 class LoggedAssertionTest {
 
@@ -29,10 +30,19 @@ class LoggedAssertionTest {
   }
 
   @Test
-  @DisplayName("the sealed hierarchy permits exactly two claim kinds")
-  void permitsExactlyTwo() {
+  @DisplayName("the sealed hierarchy permits the two claim kinds and the retraction")
+  void permitsExactlyThree() {
     assertThat(LoggedAssertion.class.getPermittedSubclasses())
-        .containsExactlyInAnyOrder(NodeAssertion.class, AssertionRecord.class);
+        .containsExactlyInAnyOrder(NodeAssertion.class, AssertionRecord.class, Retraction.class);
+  }
+
+  @Test
+  @DisplayName("a retraction is logged like any other row")
+  void aRetractionIsLogged() {
+    LoggedAssertion retraction =
+        new Retraction("Q5593", "wrong entity", Instant.parse("2026-08-27T10:00:00Z"));
+
+    assertThat(retraction).isInstanceOf(LoggedAssertion.class);
   }
 
   @Test

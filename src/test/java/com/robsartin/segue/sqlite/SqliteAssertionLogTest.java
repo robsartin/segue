@@ -7,6 +7,7 @@ import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.Provenance;
+import com.robsartin.segue.domain.Retraction;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -100,6 +101,94 @@ class SqliteAssertionLogTest {
     }
     try (SqliteAssertionLog reopened = new SqliteAssertionLog(db)) {
       assertThat(reopened.readAll()).containsExactly((LoggedAssertion) node);
+    }
+  }
+
+  @Test
+  @DisplayName("a retraction round-trips like any other row")
+  void roundTripsARetraction() {
+    // ADR 44: a retraction is appended, never applied to the rows it retracts. The log after
+    // one still holds every original claim - that is the whole decision, seen at the storage
+    // layer.
+    NodeAssertion node = new NodeAssertion("Q900101", NodeKind.PERSON, "Wren Alderman", WIKIDATA);
+    AssertionRecord edge =
+        new AssertionRecord("Q900101", "Q900102", "MEMBER_OF", null, null, WIKIDATA);
+    Retraction retraction =
+        new Retraction(
+            "Q900101",
+            "resolved to the wrong entity",
+            Instant.parse("2026-08-27T11:22:33.456789Z"));
+
+    try (SqliteAssertionLog log = SqliteAssertionLog.inMemory()) {
+      log.append(node);
+      log.append(edge);
+      log.append(retraction);
+
+      assertThat(log.readAll()).containsExactly(node, edge, retraction);
+    }
+  }
+
+  @Test
+  @DisplayName(
+      "an existing database written before ADR 44 gains the reason column and keeps its rows")
+  void migratesADatabaseWrittenBeforeRetractionsExisted(@TempDir Path dir) throws Exception {
+    // The real database holds tens of thousands of world facts and, unlike ADR 42's change,
+    // deleting and re-seeding is no longer automatically available: ADR 42's own note says the
+    // next schema change gets a migration, because affinity cannot be regenerated. This is that
+    // migration, driven from a file created with the OLD schema rather than from a mock.
+    Path db = dir.resolve("segue.db");
+    writeSchemaWithoutReason(db);
+
+    NodeAssertion existing =
+        new NodeAssertion("Q900101", NodeKind.PERSON, "Wren Alderman", WIKIDATA);
+    Retraction retraction =
+        new Retraction("Q900101", "invented", Instant.parse("2026-08-27T11:22:33Z"));
+
+    try (SqliteAssertionLog log = new SqliteAssertionLog(db)) {
+      log.append(existing);
+      log.append(retraction);
+
+      assertThat(log.readAll()).containsExactly(existing, retraction);
+    }
+  }
+
+  @Test
+  @DisplayName("opening an already-migrated database twice does not try to add the column again")
+  void theMigrationIsIdempotent(@TempDir Path dir) throws Exception {
+    Path db = dir.resolve("segue.db");
+    writeSchemaWithoutReason(db);
+
+    try (SqliteAssertionLog log = new SqliteAssertionLog(db)) {
+      log.append(new Retraction("Q900101", "invented", Instant.parse("2026-08-27T11:22:33Z")));
+    }
+    try (SqliteAssertionLog reopened = new SqliteAssertionLog(db)) {
+      assertThat(reopened.readAll()).hasSize(1);
+    }
+  }
+
+  /** The assertion table exactly as it stood before ADR 44 - no {@code reason} column. */
+  private static void writeSchemaWithoutReason(Path db) throws Exception {
+    try (java.sql.Connection conn = java.sql.DriverManager.getConnection("jdbc:sqlite:" + db);
+        java.sql.Statement st = conn.createStatement()) {
+      st.execute(
+          """
+          CREATE TABLE assertion (
+            seq         INTEGER PRIMARY KEY AUTOINCREMENT,
+            kind        TEXT NOT NULL,
+            qid         TEXT NOT NULL,
+            to_qid      TEXT,
+            type_code   TEXT,
+            node_kind   TEXT,
+            instance_of TEXT,
+            label       TEXT,
+            valid_from  TEXT,
+            valid_to    TEXT,
+            source_id   TEXT NOT NULL,
+            source_ref  TEXT,
+            asserted_at TEXT NOT NULL,
+            confidence  REAL NOT NULL
+          )
+          """);
     }
   }
 

@@ -8,6 +8,7 @@ import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.Provenance;
+import com.robsartin.segue.domain.Retraction;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.GraphStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
@@ -102,5 +103,40 @@ class IngestServiceTest {
       assertThat(rebuilt.node("Q1")).isEqualTo(graph.node("Q1"));
       assertThat(rebuilt.edges("Q1")).hasSameSizeAs(graph.edges("Q1"));
     }
+  }
+
+  @Test
+  @DisplayName("a retraction is appended to the log and applied to no graph at all")
+  void retractAppendsAndTouchesNoGraph() {
+    // ADR 44. A retraction has no graph half: GraphStore has no way to remove anything, and
+    // widening the port to give it one - for a dev tool, on the port that exists to keep the
+    // engine choice reversible - is what ADR 41 already refused. The graph catches up the way
+    // ADR 24 says it always does, by being rebuilt from the log.
+    ingest.record(new NodeAssertion("Q900101", NodeKind.PERSON, "Wren Alderman", WIKIDATA));
+    Retraction retraction =
+        new Retraction("Q900101", "wrong entity", Instant.parse("2026-08-27T12:00:00Z"));
+
+    IngestService.retract(log, retraction);
+
+    assertThat(log.readAll()).element(1).isEqualTo(retraction);
+    assertThat(graph.node("Q900101"))
+        .as("the running graph is stale until the next boot")
+        .isPresent();
+  }
+
+  @Test
+  @DisplayName("record refuses a retraction rather than appending one it cannot apply")
+  void recordRefusesARetraction() {
+    // record()'s contract is log-then-graph, and there is no graph step for a retraction. It
+    // refuses BEFORE appending: a half-done write here would leave a retraction in the log that
+    // the caller was told had failed.
+    Retraction retraction =
+        new Retraction("Q900101", "wrong entity", Instant.parse("2026-08-27T12:00:00Z"));
+
+    assertThatThrownBy(() -> ingest.record(retraction))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("retract");
+
+    assertThat(log.readAll()).isEmpty();
   }
 }
