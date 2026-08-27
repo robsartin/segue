@@ -197,6 +197,22 @@ class ViewSelectorTest {
   }
 
   @Test
+  @DisplayName("node attributes travel: the classes the claim recorded reach the view")
+  void carriesTheClassesAClaimRecorded() {
+    FakeAssertionLog log =
+        new FakeAssertionLog()
+            .with(
+                node(HOLLOW_TIDE, NodeKind.WORK, "Hollow Tide", List.of("Q482994", "Q105543609")));
+    try (TinkerGraphStore classified = new TinkerGraphStore()) {
+      GraphProjector.project(log, classified);
+
+      GraphView view = new ViewSelector(classified, log).neighbourhood(HOLLOW_TIDE, 1);
+
+      assertThat(view.nodes().get(0).instanceOf()).containsExactly("Q482994", "Q105543609");
+    }
+  }
+
+  @Test
   @DisplayName("no view carries affinity of its own accord — that takes AffinityOverlay and a flag")
   void neverSelectsAffinity() {
     assertThat(selector.full().carriesAffinity()).isFalse();

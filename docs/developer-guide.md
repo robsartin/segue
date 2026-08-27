@@ -156,6 +156,7 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `onlyIngestAppliesClaimsToTheGraph` | calling `GraphStore.record`, `GraphStore.upsertNode` or `AssertionLog.append` from outside `ingest` | [ADR 19](adr/0019-assertion-log-source-of-truth.md) |
 | `seedNeverOpensAStore` | `seed` depending on `sqlite`, `tinker`, `jena`, `ingest`, `mcp` or `app` — it resolves names and must not open the database even to read it | [ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md) |
 | `theExporterOnlyReads` | `export` calling `GraphStore.record`/`upsertNode` or `AssertionLog.append`, or depending on `IngestService` at all | [ADR 41](adr/0041-graph-exporter-views-and-formats.md) |
+| `theExporterNeverSpeaksToANetwork` | `export` depending on `java.net`, `javax.net` or `WikidataClient` — an export is a pure function of the database file | [ADR 41](adr/0041-graph-exporter-views-and-formats.md) |
 | `nothingWritesToStandardOut` | reading `System.out` anywhere except the one named exception, `SegueApplication` | [ADR 28](adr/0028-mcp-transports.md) |
 | `nothingWritesToStandardError`, `noPrintStackTrace`, `noJavaUtilLogging` | bypassing SLF4J | [ADR 30](adr/0030-structured-logging.md) |
 | `affinityNeverTouchesTheWorldFactLayer` | a taste-layer type depending on the log, the graph, `IngestService` or the claim records | [ADR 33](adr/0033-taste-layer-separation.md) |
@@ -794,6 +795,12 @@ here could route a claim through the one legitimate writer. `GraphProjector` is 
 allowed: the bounded views need a projection, and the exporter replays the log into a throwaway
 in-memory `TinkerGraphStore` exactly as the application does at boot. Nothing durable changes.
 
+It never fetches. `ArchitectureTest.theExporterNeverSpeaksToANetwork` forbids `export` from
+depending on `java.net`, `javax.net` or the project's HTTP client, so an export is a pure function
+of one database file. That rule arrived with the tooltips below, because that is the change that
+creates the temptation: the name of a Wikidata class is one HTTP call away, and one call per node is
+132 round trips for a depth-1 neighbourhood.
+
 It carries no affinity unless asked. [ADR 33](adr/0033-taste-layer-separation.md) is why a
 world-fact export is uncontroversial — the world graph can be shared or made public without
 carrying personal data — and `--include-affinity` is what makes that stop being true. The tool says
@@ -805,7 +812,7 @@ so at the point of export, before the view exists and long before the file does.
 For DOT, use `sfdp` or `neato` above a few hundred nodes. `dot` is a hierarchical layout for
 directed acyclic structures and degrades badly on a dense multigraph. Above a few thousand nodes,
 stop using Graphviz: that is what the GraphML writer is for, and why it carries `kind`, `label`,
-`typeCode`, `confidence` and `sourceId` as attributes a tool can filter and colour on.
+`instanceOf`, `typeCode`, `confidence` and `sourceId` as attributes a tool can filter and colour on.
 
 ### Why DOT says the kind twice
 
@@ -817,6 +824,33 @@ apart and light enough for black labels at WCAG AAA; `DotWriter.fill` records wh
 PERSON and GROUP get the most-separated pair. GraphML gets none of this on purpose: it already
 carries `kind` as an attribute and Gephi colours on it natively, so there the presentation stays
 the reader's.
+
+### What a node is, not just which kind it is
+
+Every node claim stores its raw `P31` (ADR 42), and the exporter spends it twice.
+
+**In DOT, every node carries a `tooltip`** naming the classes it is an instance of. Graphviz turns
+that into an `xlink:title` in SVG, so `dot -Tsvg` and then hovering a node says "concert tour" or
+"television special" — the channel with no budget, and the only one that reaches the long tail. A
+real graph has 861 distinct classes and the top 40 still only cover 96.6%; six fills were never
+going to describe that. The names come from `ClassLabels`, a table in the source of about 45 classes
+read from Wikidata's own `labels/en`, and **an unknown class shows as its bare QID** rather than a
+guess — useless and true beats useful and sometimes wrong. Adding a class to that table is one line
+and needs the label AND description confirmed, exactly like `KindMapper`'s whitelist.
+
+**WORK, and only WORK, is shaded by its class.** Four shades of the one yellow — album, musical
+work/composition, single, film — with every other WORK class keeping plain WORK yellow. WORK is 81%
+of a real graph and 106 classes wide and those four are 31/21/14/10% of it; PERSON is one class at
+100%, GROUP is 75% "musical group", and CONCEPT's 458 classes are too flat for four shades to be
+honest. The shades move along one lightness ladder and never change hue, and the whole ten-fill set
+was re-scored under the three colour-blindness simulations: the palette's worst pair is unchanged
+(ΔE 11.9, PLACE against CONCEPT), no shade comes nearer another kind than ΔE 17.3, and black labels
+stay AAA everywhere (7.55:1 at worst). `PaletteSeparationTest` re-runs that arithmetic on every
+build, so changing a fill without checking fails the build rather than the reader.
+
+**In GraphML the same `P31` arrives as an `instanceOf` attribute** — raw QIDs, space-separated — and
+nothing else: no tooltip, no fill, no shade. Gephi shows attributes on hover and filters and colours
+on them natively, so "select every album" is a filter there and a colour here.
 
 ## How to read an ADR against the code
 

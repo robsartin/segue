@@ -314,6 +314,34 @@ class ArchitectureTest {
                   + " writes the graph, and cannot reach the one class that is allowed to");
 
   /**
+   * ADR 41: the exporter is offline as well as read-only.
+   *
+   * <p>An export is a pure function of one database file, which is what makes it reproducible, fast
+   * and safe to run against a graph nobody is watching. The pressure on that came with issue #63: a
+   * DOT tooltip names the Wikidata class a node is an instance of, the graph stores only the class
+   * QID (ADR 42), and the label is one HTTP call away. {@code ClassLabels} is an offline table for
+   * exactly that reason, and this rule is what stops the next person reaching for the network
+   * instead — a lookup per node would turn a one-second export of a 132-node neighbourhood into 132
+   * round trips, and a `full` export into tens of thousands.
+   *
+   * <p>It names {@code java.net} rather than the project's own HTTP client because the temptation
+   * is to write a fresh one here. {@code wikidata} as a whole is deliberately NOT banned: {@code
+   * LogProjection} calls {@code KindMapper.rederive}, which is a static table and no more a network
+   * call than this one is.
+   */
+  @ArchTest
+  static final ArchRule theExporterNeverSpeaksToANetwork =
+      noClasses()
+          .that()
+          .resideInAPackage("..export..")
+          .should()
+          .dependOnClassesThat()
+          .resideInAnyPackage("java.net..", "javax.net..", "..wikidata.WikidataClient")
+          .because(
+              "ADR 41: an export is a pure function of the database file — a class label fetched at"
+                  + " export time would make a picture depend on the internet being up");
+
+  /**
    * The taste layer, by type rather than by package.
    *
    * <p>Every other rule in this class names a package, because every other boundary in this project

@@ -104,7 +104,7 @@ class GraphMlWriterTest {
     Document document = parse(render(oneRelationship()));
 
     NodeList keys = document.getElementsByTagName("key");
-    assertThat(keys.getLength()).isEqualTo(5);
+    assertThat(keys.getLength()).isEqualTo(6);
     for (int i = 0; i < keys.getLength(); i++) {
       Element key = (Element) keys.item(i);
       assertThat(key.getAttribute("attr.name")).isEqualTo(key.getAttribute("id"));
@@ -146,6 +146,44 @@ class GraphMlWriterTest {
 
     Element node = (Element) document.getElementsByTagName("node").item(0);
     assertThat(dataValue(node, "label")).isEqualTo("Salt & <Pepper> \"Trio\"");
+  }
+
+  @Test
+  @DisplayName("the classes a claim recorded travel as an attribute, for Gephi to filter on")
+  void writesInstanceOfAsItsOwnAttribute() throws Exception {
+    GraphView view =
+        new GraphView(
+            "a made-up view",
+            List.of(
+                new ViewNode(
+                    "Q901", NodeKind.WORK, "Hollow Tide", List.of("Q482994", "Q105543609"))),
+            List.of());
+    Document document = parse(render(view));
+
+    assertThat(dataValue((Element) document.getElementsByTagName("node").item(0), "instanceOf"))
+        .isEqualTo("Q482994 Q105543609");
+  }
+
+  @Test
+  @DisplayName("a node whose source stated no classes carries no instanceOf at all")
+  void omitsInstanceOfWhenNothingWasStated() throws Exception {
+    Document document = parse(render(oneRelationship()));
+
+    assertThat(dataValue((Element) document.getElementsByTagName("node").item(0), "instanceOf"))
+        .isNull();
+  }
+
+  @Test
+  @DisplayName(
+      "no tooltip here: Gephi shows attributes natively, so presentation stays the reader's")
+  void writesNoPresentation() throws Exception {
+    GraphView view =
+        new GraphView(
+            "a made-up view",
+            List.of(new ViewNode("Q901", NodeKind.WORK, "Hollow Tide", List.of("Q482994"))),
+            List.of());
+
+    assertThat(render(view)).doesNotContain("tooltip").doesNotContain("fillcolor");
   }
 
   @Test
