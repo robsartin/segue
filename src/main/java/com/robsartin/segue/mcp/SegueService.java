@@ -152,6 +152,15 @@ public final class SegueService {
    *       neighbour fetches, not built in this increment.)
    * </ul>
    *
+   * <p><b>Identity an adapter supplies inline is recorded whether or not the graph already holds
+   * the node</b> (issue #55). A node's kind comes from a whitelist that grows as it is measured
+   * against real data, so recording only for absent nodes froze every old node at whatever the
+   * mapper said the day it was discovered, and the graph ended up holding two different kinds for
+   * one class of entity. The refresh costs nothing because the source volunteered the identity in
+   * the same response; an existing neighbour that nobody described is left alone rather than
+   * fetched, since that would be a round trip each for every neighbour of every expansion. It is
+   * not counted in {@link ExpansionSummary#nodesAdded()} — a correction is not a discovery.
+   *
    * <p>Neighbour fetches that fail once are not retried for the same neighbour within this call —
    * that is the bound on how many calls a dense, partly-unreachable entity can trigger, alongside
    * {@code maxNewEdges} bounding the assertions considered at all. A neighbour fetch that throws
@@ -209,23 +218,26 @@ public final class SegueService {
     // counter is what made the two disagree — the counter incremented per dropped assertion while
     // the field, and the sentence built from it, both said "neighbour".
     Set<String> unresolvableNeighbors = new HashSet<>();
+    // Every neighbour whose identity this call has already recorded — see the note further down.
+    Set<String> identityRecorded = new HashSet<>();
     for (AssertionRecord assertion : bounded) {
       String neighbor = neighborOf(assertion, qid);
       if (neighbor != null) {
         if (unresolvableNeighbors.contains(neighbor)) {
           continue;
         }
-        // Note what this re-read buys beyond skipping a round trip: it is also why nodesAdded
-        // does not have the counting bug skippedNeighbors had. A neighbour recorded on the first
-        // assertion that names it is in the graph by the time the second one is examined, so the
-        // increment below cannot fire twice for one entity. edgesAdded needs no such guard —
+        // This re-read is now the definition of "new" and nothing else. It still cannot let
+        // nodesAdded double-count — a neighbour recorded on the first assertion naming it is in
+        // the graph by the time the second one is examined — but it no longer decides whether
+        // identity is recorded at all; see issue #55 below. edgesAdded needs no such guard:
         // assertions ARE what it counts, and two of them between one pair are two claims.
-        if (graph.node(neighbor).isEmpty()) {
-          // An adapter that already knows this entity spares a round trip. That is not a
-          // micro-optimisation since ADR 36: expanding a person now discovers seventy-odd
-          // works in one query, and fetching each of them one at a time afterwards would cost
-          // more than the whole expansion used to.
-          Optional<NodeAssertion> resolved = Optional.ofNullable(described.get(neighbor));
+        boolean isNew = graph.node(neighbor).isEmpty();
+        // An adapter that already knows this entity spares a round trip. That is not a
+        // micro-optimisation since ADR 36: expanding a person now discovers seventy-odd
+        // works in one query, and fetching each of them one at a time afterwards would cost
+        // more than the whole expansion used to.
+        Optional<NodeAssertion> resolved = Optional.ofNullable(described.get(neighbor));
+        if (isNew) {
           if (resolved.isEmpty()) {
             try {
               resolved = resolver.fetch(neighbor);
@@ -239,8 +251,36 @@ public final class SegueService {
             unresolvableNeighbors.add(neighbor);
             continue;
           }
+        }
+        // Issue #55. Identity the source volunteered is recorded even when the node already
+        // exists, and the fetch above is deliberately NOT reached for one that does. Kinds come
+        // from KindMapper's whitelist, which grows every time it is measured against real data
+        // (issues #49 and #52); recording only for absent nodes froze each node's kind at
+        // whatever the mapper said on the run that first saw it, so 73% of the CONCEPT nodes in
+        // a real graph were works or groups the mapper had since learned to classify — and ADR
+        // 31's hub rule then vetoed routes through them. GraphStore.upsertNode is
+        // last-writer-wins and ADR 19 says a changed belief is a new claim, so re-recording is
+        // the correction. It is free ONLY because the source already handed the identity over
+        // in the same response; fetching identity for existing neighbours would be hundreds of
+        // extra round trips per expansion and is a different decision, not this one.
+        //
+        // Not the same rule as described.putIfAbsent above, which stays first-writer-wins.
+        // That one settles a disagreement between two sources WITHIN one call, where the later
+        // writer has no claim to be the better one. This one refreshes from the SAME source
+        // ACROSS runs, where the later reading is by construction the better one. Do not
+        // unify them.
+        //
+        // Once per neighbour per call, not once per assertion. The graph re-read used to supply
+        // that for free — a neighbour recorded on the first assertion naming it was present by
+        // the second — and it no longer does, because the refresh fires whether or not the node
+        // is there. This graph is a multigraph by design (Nick Cave both wrote and scored The
+        // Proposition), so without the memo one pair of nodes would append the same identity
+        // claim to the log twice, and a replay would apply it twice.
+        if (resolved.isPresent() && identityRecorded.add(neighbor)) {
           ingest.record(resolved.get());
-          nodesAdded++;
+          if (isNew) {
+            nodesAdded++;
+          }
         }
       }
       ingest.record(assertion);
@@ -425,7 +465,9 @@ public final class SegueService {
   /**
    * What one expansion produced, and how much of it it could not resolve.
    *
-   * @param nodesAdded entities newly recorded by this call, counted once each
+   * @param nodesAdded entities newly recorded by this call, counted once each — an existing node
+   *     whose identity this call refreshed (issue #55) is not among them, because the number
+   *     answers how much the graph grew and a corrected node is not a discovered one
    * @param edgesAdded assertions recorded by this call — per assertion, not per pair of nodes, so
    *     two sources claiming the same relationship count twice and are merged downstream by {@code
    *     GraphStore.record}

@@ -286,6 +286,22 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   guessed. **Never add an award class.** ADR 38 puts awards in CONCEPT deliberately and ADR 31's
   specificity rule reads "high-degree CONCEPT" as "hub"; placing awards anywhere else turns that
   rule off without failing anything. `KindMapperTest` pins it.
+- **A better `KindMapper` does not reach nodes the graph already has unless something re-records
+  them.** `expandEntity` used to record a neighbour's identity only when the node was absent, so
+  every node's kind was frozen at whatever the mapper said on the run that discovered it and the
+  same class of entity ended up with two kinds depending on when it arrived — 73% of the CONCEPT
+  nodes with degree ≥ 2 in a real graph were works or groups the mapper had since learned to
+  classify, and ADR 31's hub rule was vetoing routes through them (issue #55). It now re-records
+  identity an adapter supplied inline (`ExpandResult.neighbors`) whether or not the node exists;
+  ADR 19 already says a changed belief is a new claim and `upsertNode` is last-writer-wins, so
+  this was a bug against the ADRs rather than a new decision. Two limits that are the whole
+  design: it never *fetches* identity for an existing neighbour (that would be hundreds of round
+  trips per expansion), and it does not touch `nodesAdded` — a correction is not a discovery.
+  **It is also not the same rule as `described.putIfAbsent`**, which resolves two sources
+  disagreeing within one call and stays first-writer-wins. Same-source-across-runs and
+  two-sources-within-one-call are different questions; don't unify them. **Nodes only correct
+  themselves when an expansion touches them again**, so a mapper improvement still wants a
+  re-seed to propagate.
 - **The bulk seeding tool's input and output never enter this repository.** A list of who
   someone listens to, reads and watches IS the personal data ADR 33 governs, and this repo
   is PUBLIC. `*.csv` is gitignored beside `*.db`; every name in a test, fixture, doc or
