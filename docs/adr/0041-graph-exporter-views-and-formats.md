@@ -107,8 +107,8 @@ the database.
   throwaway in-memory `TinkerGraphStore`, exactly as the application does at boot. What the
   rule guarantees is that nothing *durable* changes.
 
-- **Two formats, for two different jobs.** DOT carries `NodeKind` as node shape and the type
-  code as an edge label; it is for looking at, and the documentation says to use `sfdp` or
+- **Two formats, for two different jobs.** DOT carries `NodeKind` as node shape *and* fill and
+  the type code as an edge label; it is for looking at, and the documentation says to use `sfdp` or
   `neato` rather than `dot` above a few hundred nodes. GraphML is for working in — Gephi and
   Cytoscape survive scale where Graphviz will not — and it carries the attributes that make
   filtering possible: `kind` and `label` on a node, `typeCode`, `confidence` and `sourceId`
@@ -155,6 +155,18 @@ name says. Hit twice in the first two minutes of real use.
 Not free: `--out` now has a semantic consequence beyond where the bytes land, so adding a third
 format means adding its extensions here too, and an operator who *wants* GraphML in a `.txt` file
 must say `--format graphml`. Both are cheaper than the failure above.
+
+**Amendment (2026-08-27, issue #59): DOT encodes `NodeKind` twice, as shape and as fill.**
+
+Shape alone is unreadable at the 132 nodes of a real depth-1 neighbourhood and gone entirely in a
+thumbnail. Colour is added *beside* the shape rather than instead of it: shape survives greyscale
+printing and colour-blind viewing, colour survives being scaled down, and neither survives both.
+The fills are six of the seven chromatic **Okabe-Ito** colours, tinted for black text at WCAG AAA,
+with PERSON and GROUP — the pair that most needs telling apart — given the most separated pair in
+the set under simulated protanopia, deuteranopia and tritanopia. `DotWriter.fill` carries the
+working. **GraphML is deliberately unchanged**: it already carries `kind` as an attribute and Gephi
+colours on it natively, so presentation stays the reader's. DOT is the format that bakes
+presentation into the file, which is why this is a DOT-only concern.
 
 ## Alternatives considered
 
