@@ -71,6 +71,27 @@ public abstract class GraphStoreContract {
   }
 
   @Test
+  @DisplayName("the classes a node was classified from survive the round trip, in order")
+  void instanceOfSurvivesTheRoundTrip() {
+    // Issue #60 puts the raw P31 on the node beside the derived kind. A store that dropped it
+    // would leave a record field that only ever reads back empty - and both engines have to
+    // keep the ORDER, because the mapping takes the first class it recognises.
+    store.upsertNode(
+        new NodeRecord("Q100003", NodeKind.WORK, "Probe Song", List.of("Q134556", "Q7366")));
+
+    assertThat(store.node("Q100003").orElseThrow().instanceOf())
+        .containsExactly("Q134556", "Q7366");
+  }
+
+  @Test
+  @DisplayName("a node stating no classes reads back with an empty list, not a null")
+  void absentInstanceOfReadsBackEmpty() {
+    store.upsertNode(new NodeRecord("Q100004", NodeKind.PERSON, "Classless Probe"));
+
+    assertThat(store.node("Q100004").orElseThrow().instanceOf()).isEmpty();
+  }
+
+  @Test
   @DisplayName("Q1: Cave reaches Hillcoat in two hops, through a film")
   void pathsCrossFromMusicIntoFilm() {
     List<PathResult> ranked = PathRanking.rank(store.paths(Fixture.CAVE, Fixture.HILLCOAT, 4));

@@ -1,5 +1,6 @@
 package com.robsartin.segue.wikidata;
 
+import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -121,6 +122,34 @@ public final class KindMapper {
         .filter(Objects::nonNull)
         .findFirst()
         .orElse(NodeKind.CONCEPT);
+  }
+
+  /**
+   * The same claim with its kind re-derived from the {@code P31} values it recorded.
+   *
+   * <p>This is what makes an improvement to the whitelist above reach entities the graph already
+   * has. Before issue #60 the derived kind was the only thing kept, so every one of the 17 classes
+   * added by issues #49 and #52 could only take effect by fetching each entity from Wikidata again
+   * - which is issue #55, and which cost two full re-seeds. A claim that carries its own {@code
+   * P31} can be re-derived by any projection, offline and for free.
+   *
+   * <p><b>A claim that states no classes is returned untouched.</b> Not every source is Wikidata:
+   * one that classifies without stating classes has nothing to re-derive from, and its own answer
+   * is the best available rather than a gap to fill with {@link NodeKind#CONCEPT}.
+   *
+   * <p><b>When classes ARE stated, this list is the authority, including when it answers
+   * CONCEPT.</b> Keeping a stale kind whenever the mapping came back CONCEPT would make the
+   * whitelist a ratchet - additions would propagate and corrections never would - and a class
+   * removed because it was wrong has to reach existing nodes exactly as a class added does.
+   *
+   * <p>It lives here, beside the table it re-applies, rather than in either projection: {@code
+   * GraphProjector} and {@code LogProjection} both call it, and two copies of this rule would be
+   * free to disagree about a graph and a picture of that graph.
+   */
+  public static NodeAssertion rederive(NodeAssertion claim) {
+    return claim.instanceOf().isEmpty()
+        ? claim
+        : claim.withKind(fromInstanceOf(claim.instanceOf()));
   }
 
   /** Whether this class is in the whitelist, so callers can report what they could not map. */

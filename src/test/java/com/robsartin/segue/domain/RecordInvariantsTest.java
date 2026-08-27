@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatNoException;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -87,6 +88,31 @@ class RecordInvariantsTest {
   void hypothesisIsIdentifiedBySourcePrefix() {
     assertThat(new Provenance("llm:claude", "turn-1", WHEN, 0.30).isHypothesis()).isTrue();
     assertThat(new Provenance("wikidata", "S-1", WHEN, 1.00).isHypothesis()).isFalse();
+  }
+
+  @Test
+  @DisplayName("a node keeps the raw P31 classes it was classified from")
+  void keepsInstanceOfClasses() {
+    NodeRecord node =
+        new NodeRecord("Q16473", NodeKind.PERSON, "Steve Martin", List.of("Q5", "Q177220"));
+
+    assertThat(node.instanceOf()).containsExactly("Q5", "Q177220");
+  }
+
+  @Test
+  @DisplayName("a source that states no P31 leaves the list empty rather than null")
+  void instanceOfDefaultsToEmpty() {
+    assertThat(new NodeRecord("Q16473", NodeKind.PERSON, "Steve Martin").instanceOf()).isEmpty();
+  }
+
+  @Test
+  @DisplayName("a P31 value that is not a Wikidata identifier is rejected")
+  void rejectsNonWikidataInstanceOf() {
+    // The stored encoding separates these with a space and does not escape, exactly as
+    // ProvenanceCodec relies on Provenance forbidding its own separators.
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> new NodeRecord("Q16473", NodeKind.PERSON, "x", List.of("human")))
+        .withMessageContaining("instanceOf");
   }
 
   @Test

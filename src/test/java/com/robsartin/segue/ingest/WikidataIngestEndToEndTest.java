@@ -55,6 +55,42 @@ class WikidataIngestEndToEndTest {
   }
 
   @Test
+  @DisplayName("the P31 a fetch read reaches the log, and the rebuilt graph re-derives from it")
+  void instanceOfSurvivesIngestAndReplay() throws IOException {
+    // The whole loop of issue #60 in one test: the adapter reads P31, the log keeps it, and a
+    // graph rebuilt from that log alone is classified from it - with the source unreachable.
+    Path dbFile = tempDir.resolve("classes.db");
+    NodeAssertion fetched;
+
+    try (StubWikidataServer stub = new StubWikidataServer();
+        AssertionLog log = new SqliteAssertionLog(dbFile);
+        GraphStore graph = new TinkerGraphStore()) {
+
+      stub.enqueueBody(resource("/wikidata/proposition-claims.json"));
+      fetched =
+          new WikidataEntityResolver(new WikidataClient(stub.baseUri()), FIXED)
+              .fetch("Q180337")
+              .orElseThrow();
+
+      assertThat(fetched.instanceOf()).containsExactly("Q11424");
+      new IngestService(log, graph).record(fetched);
+    }
+
+    // Nothing above is still open, and no stub is running: this is the offline half.
+    try (AssertionLog reopened = new SqliteAssertionLog(dbFile);
+        GraphStore rebuilt = new TinkerGraphStore()) {
+
+      assertThat(reopened.readAll()).containsExactly(fetched);
+
+      GraphProjector.project(reopened, rebuilt);
+
+      NodeRecord projected = rebuilt.node("Q180337").orElseThrow();
+      assertThat(projected.instanceOf()).containsExactly("Q11424");
+      assertThat(projected.kind()).isEqualTo(NodeKind.WORK);
+    }
+  }
+
+  @Test
   @DisplayName("a Wikidata expansion becomes a graph that survives a restart")
   void expansionBecomesADurableGraph() throws IOException {
     Path dbFile = tempDir.resolve("ingest.db");

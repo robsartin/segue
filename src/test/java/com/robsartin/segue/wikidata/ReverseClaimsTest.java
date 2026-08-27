@@ -12,6 +12,7 @@ import java.io.InputStream;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -147,14 +148,40 @@ class ReverseClaimsTest {
 
       assertThat(result.neighbors())
           .contains(
+              // The P31 the query already returns inline rides along on the claim, so the
+              // kind can be re-derived later with no network at all (issue #60, ADR 42).
               new NodeAssertion(
-                  "Q180337", NodeKind.WORK, "The Proposition", nodeProvenance("Q180337")),
+                  "Q180337",
+                  NodeKind.WORK,
+                  "The Proposition",
+                  List.of("Q11424"),
+                  nodeProvenance("Q180337")),
               new NodeAssertion(
                   "Q2715462",
                   NodeKind.WORK,
                   "And the Ass Saw the Angel",
+                  List.of("Q7725634"),
                   nodeProvenance("Q2715462")));
       assertThat(stub.requestCount()).isEqualTo(1);
+    }
+  }
+
+  @Test
+  @DisplayName("an entity's several P31 values are all kept, in the order they arrived")
+  void severalClassesAreAllKept() throws IOException {
+    // Jubilee Street is both a single and a song in the fixture. KindMapper takes the first
+    // class it RECOGNISES, so the order these are stored in is load-bearing rather than
+    // decorative - a set would have made re-derivation depend on hash order (issue #60).
+    try (StubWikidataServer stub = new StubWikidataServer()) {
+      stub.enqueueBody(resource("/wikidata/cave-reverse.json"));
+
+      ReverseClaims.Result result = lookupAgainst(stub).lookup(CAVE, 200, ASSERTED_AT);
+
+      assertThat(result.neighbors())
+          .filteredOn(n -> n.qid().equals("Q6301911"))
+          .singleElement()
+          .extracting(NodeAssertion::instanceOf)
+          .isEqualTo(List.of("Q134556", "Q7366"));
     }
   }
 

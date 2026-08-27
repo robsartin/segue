@@ -101,6 +101,9 @@ class WikidataEntityResolverTest {
       assertThat(node.qid()).isEqualTo("Q180337");
       assertThat(node.label()).isEqualTo("The Proposition");
       assertThat(node.kind()).isEqualTo(NodeKind.WORK); // P31 = Q11424, film
+      // ...and the P31 that produced it is kept beside it, so a projection can re-derive the
+      // kind when the mapping improves without fetching this entity again (issue #60, ADR 42).
+      assertThat(node.instanceOf()).containsExactly("Q11424");
       assertThat(node.provenance().sourceId()).isEqualTo("wikidata");
       assertThat(node.provenance().assertedAt()).isEqualTo(PULL);
     }

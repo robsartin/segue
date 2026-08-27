@@ -11,6 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.robsartin.segue.domain.EdgeRecord;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.export.InventedGraph.FakeAssertionLog;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -28,6 +29,20 @@ class LogProjectionTest {
 
     assertThat(projection.nodes()).containsOnlyKeys(WREN);
     assertThat(projection.nodes().get(WREN).kind()).isEqualTo(NodeKind.PERSON);
+  }
+
+  @Test
+  @DisplayName("the exported fold re-derives a node's kind from its stored classes too")
+  void rederivesKindFromStoredClasses() {
+    // The same correction the boot projection makes (issue #60), because an exported picture
+    // that disagreed with the running graph about what a node IS would be worse than no
+    // picture: DOT colours and shapes nodes by kind.
+    LogProjection projection =
+        LogProjection.of(
+            new FakeAssertionLog()
+                .with(node(KETTLES, NodeKind.CONCEPT, "The Paper Kettles", List.of("Q5741069"))));
+
+    assertThat(projection.nodes().get(KETTLES).kind()).isEqualTo(NodeKind.GROUP);
   }
 
   @Test

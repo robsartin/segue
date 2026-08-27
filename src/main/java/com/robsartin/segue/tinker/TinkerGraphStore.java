@@ -33,6 +33,10 @@ import org.apache.tinkerpop.gremlin.tinkergraph.structure.TinkerGraph;
  *   <li>Vertices carry {@code qid}, {@code kind}, {@code name}. The property is {@code name} and
  *       not {@code label} because {@code label} is reserved in TinkerPop - it is the element label,
  *       and using it as a property key is an error that only surfaces at runtime.
+ *   <li>{@code instanceOf} - the source's raw classes, Wikidata's P31 - is packed into one
+ *       property, space-separated. Vertex properties are single-valued here for the same reason
+ *       edge properties are, and no escaping is needed because {@link NodeRecord} validates every
+ *       value as a QID (issue #60, ADR 42).
  *   <li>Edge label IS the relationship type code, which is what makes multiple relationship types
  *       between the same pair natural.
  *   <li>Provenance is packed into one edge property. See {@link ProvenanceCodec} for why, and what
@@ -45,6 +49,8 @@ public final class TinkerGraphStore implements GraphStore {
   private static final String P_QID = "qid";
   private static final String P_KIND = "kind";
   private static final String P_NAME = "name";
+  private static final String P_INSTANCE_OF = "instanceOf";
+  private static final String CLASS_SEP = " ";
   private static final String P_SOURCES = "sources";
   private static final String P_VALID_FROM = "validFrom";
   private static final String P_VALID_TO = "validTo";
@@ -74,6 +80,9 @@ public final class TinkerGraphStore implements GraphStore {
         .coalesce(__.unfold(), __.addV(ENTITY).property(P_QID, node.qid()))
         .property(P_KIND, node.kind().name())
         .property(P_NAME, node.label())
+        // Written on every upsert, empty included: upsert is last-writer-wins (ADR 19), so a
+        // later claim that states no classes must not leave an earlier claim's behind.
+        .property(P_INSTANCE_OF, String.join(CLASS_SEP, node.instanceOf()))
         .iterate();
   }
 
@@ -216,7 +225,12 @@ public final class TinkerGraphStore implements GraphStore {
   // ---- mapping ----------------------------------------------------------
 
   private NodeRecord toNode(Vertex v) {
-    return new NodeRecord(v.value(P_QID), NodeKind.valueOf(v.value(P_KIND)), v.value(P_NAME));
+    String packed = v.<String>property(P_INSTANCE_OF).orElse("");
+    return new NodeRecord(
+        v.value(P_QID),
+        NodeKind.valueOf(v.value(P_KIND)),
+        v.value(P_NAME),
+        packed.isEmpty() ? List.of() : List.of(packed.split(CLASS_SEP)));
   }
 
   private EdgeRecord toEdge(Edge e) {

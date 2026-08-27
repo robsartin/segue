@@ -54,6 +54,12 @@ import org.apache.jena.system.Txn;
  */
 public final class JenaGraphStore implements GraphStore {
 
+  /**
+   * Separator for the packed {@code sg:instanceOf} literal. No escaping, because {@link NodeRecord}
+   * validates every value as a QID - the same argument the SQLite log makes for the same list.
+   */
+  private static final String CLASS_SEP = " ";
+
   private final Dataset ds = DatasetFactory.createTxnMem();
 
   @Override
@@ -72,8 +78,19 @@ public final class JenaGraphStore implements GraphStore {
           Resource subject = def.createResource(Vocab.entity(node.qid()));
           def.removeAll(subject, def.createProperty(Vocab.RDFS + "label"), null);
           def.removeAll(subject, def.createProperty(Vocab.P_KIND), null);
+          def.removeAll(subject, def.createProperty(Vocab.P_INSTANCE_OF), null);
           def.add(subject, def.createProperty(Vocab.RDFS + "label"), node.label());
           def.add(subject, def.createProperty(Vocab.P_KIND), node.kind().name());
+          // One packed literal rather than one triple per class, which is the more RDF-ish
+          // shape and the wrong one here: a SELECT over several triples has no defined order,
+          // and the mapping from classes to a kind takes the FIRST class it recognises, so
+          // order is part of the value (issue #60, ADR 42).
+          if (!node.instanceOf().isEmpty()) {
+            def.add(
+                subject,
+                def.createProperty(Vocab.P_INSTANCE_OF),
+                String.join(CLASS_SEP, node.instanceOf()));
+          }
         });
   }
 
@@ -155,8 +172,9 @@ public final class JenaGraphStore implements GraphStore {
         new ParameterizedSparqlString(
             Vocab.PREFIXES
                 + """
-                SELECT ?label ?kind WHERE {
+                SELECT ?label ?kind ?classes WHERE {
                   ?e rdfs:label ?label ; sg:kind ?kind .
+                  OPTIONAL { ?e sg:instanceOf ?classes }
                 }
                 """);
     pss.setIri("e", Vocab.entity(qid));
@@ -167,11 +185,14 @@ public final class JenaGraphStore implements GraphStore {
             ResultSet rs = qe.execSelect();
             if (!rs.hasNext()) return Optional.<NodeRecord>empty();
             QuerySolution s = rs.next();
+            String packed =
+                s.getLiteral("classes") == null ? "" : s.getLiteral("classes").getString();
             return Optional.of(
                 new NodeRecord(
                     qid,
                     NodeKind.valueOf(s.getLiteral("kind").getString()),
-                    s.getLiteral("label").getString()));
+                    s.getLiteral("label").getString(),
+                    packed.isEmpty() ? List.of() : List.of(packed.split(CLASS_SEP))));
           }
         });
   }

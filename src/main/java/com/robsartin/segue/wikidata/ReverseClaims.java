@@ -233,12 +233,18 @@ final class ReverseClaims {
       if (label == null) {
         continue;
       }
-      NodeKind kind = KindMapper.fromInstanceOf(List.copyOf(classes.getOrDefault(qid, Set.of())));
+      // The P31 values this query already returned inline, kept on the claim beside the kind
+      // they produced (issue #60, ADR 42) - the reverse lookup is the cheapest place in the
+      // system to learn them, and throwing them away is what made a better KindMapper need a
+      // re-seed to take effect.
+      List<String> instanceOf = List.copyOf(classes.getOrDefault(qid, Set.of()));
+      NodeKind kind = KindMapper.fromInstanceOf(instanceOf);
       // Confidence 1.00 and the qid as the reference, matching WikidataEntityResolver.fetch:
       // this is the same claim from the same source, and it would be odd for an entity's
       // identity to be graded differently depending on which call happened to learn it.
       out.add(
-          new NodeAssertion(qid, kind, label, new Provenance(SOURCE_ID, qid, assertedAt, 1.00)));
+          new NodeAssertion(
+              qid, kind, label, instanceOf, new Provenance(SOURCE_ID, qid, assertedAt, 1.00)));
     }
     return List.copyOf(out);
   }

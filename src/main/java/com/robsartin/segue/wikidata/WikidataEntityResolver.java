@@ -86,9 +86,14 @@ public final class WikidataEntityResolver implements EntityResolver {
     if (label == null || label.isBlank()) {
       return Optional.empty();
     }
-    NodeKind kind = KindMapper.fromInstanceOf(ClaimMapper.instanceOf(entity));
+    // Both the classes and the kind they imply: the claim keeps the raw fact beside the
+    // derived one, so a projection can re-derive it later without fetching this entity again
+    // (issue #60, ADR 42).
+    List<String> instanceOf = ClaimMapper.instanceOf(entity);
+    NodeKind kind = KindMapper.fromInstanceOf(instanceOf);
     return Optional.of(
-        new NodeAssertion(qid, kind, label, new Provenance(SOURCE_ID, qid, clock.instant(), 1.00)));
+        new NodeAssertion(
+            qid, kind, label, instanceOf, new Provenance(SOURCE_ID, qid, clock.instant(), 1.00)));
   }
 
   /** The raw entity node, or null when Wikidata does not have it. Shared with the adapter. */

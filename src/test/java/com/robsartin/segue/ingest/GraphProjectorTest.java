@@ -11,6 +11,7 @@ import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -61,6 +62,73 @@ class GraphProjectorTest {
           .singleElement()
           .extracting(e -> e.sources().get(0).assertedAt())
           .isEqualTo(nanosecondPrecision);
+    }
+  }
+
+  @Test
+  @DisplayName("a KindMapper improvement corrects an existing node on re-projection alone")
+  void replayRederivesKindFromStoredClasses() {
+    // The point of issue #60, and the whole reason P31 is stored.
+    //
+    // This is the log a run BEFORE the issue-#52 sweep would have written: the mapper of the
+    // day did not know Q56816954 (heavy metal band), so it derived CONCEPT and that was the
+    // only thing kept. Under ADR 19 the log is append-only, so the claim cannot be edited -
+    // and before this change the node stayed CONCEPT until something fetched the entity from
+    // Wikidata again, which is what cost two full re-seeds (issue #55).
+    //
+    // Today's mapper knows the class. Nothing here touches the network, nothing re-records the
+    // claim, and nothing rewrites the log: replaying it is enough.
+    try (AssertionLog log = SqliteAssertionLog.inMemory();
+        TinkerGraphStore store = new TinkerGraphStore()) {
+      log.append(
+          new NodeAssertion(
+              "Q900001", NodeKind.CONCEPT, "Ninebark Sermon", List.of("Q56816954"), WIKIDATA));
+
+      GraphProjector.project(log, store);
+
+      assertThat(store.node("Q900001").orElseThrow().kind()).isEqualTo(NodeKind.GROUP);
+      // The log itself is untouched: it still says what the source said and what we made of
+      // it at the time. Re-derivation is the projection's job, not a rewrite of history.
+      assertThat(log.readAll())
+          .singleElement()
+          .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.type(NodeAssertion.class))
+          .extracting(NodeAssertion::kind)
+          .isEqualTo(NodeKind.CONCEPT);
+    }
+  }
+
+  @Test
+  @DisplayName("a class the mapper still does not know projects as CONCEPT, not as it was logged")
+  void replayDoesNotInventAKindForAnUnknownClass() {
+    // The counterfactual for the test above: the correction comes from the mapper knowing the
+    // class, not from re-projection flattering the data. It is also the reverse direction -
+    // if a class is ever REMOVED from the whitelist because it was wrong, the removal has to
+    // reach existing nodes the same way the addition does.
+    try (AssertionLog log = SqliteAssertionLog.inMemory();
+        TinkerGraphStore store = new TinkerGraphStore()) {
+      log.append(
+          new NodeAssertion(
+              "Q900002", NodeKind.PERSON, "Marisol Kettleby", List.of("Q999999999"), WIKIDATA));
+
+      GraphProjector.project(log, store);
+
+      assertThat(store.node("Q900002").orElseThrow().kind()).isEqualTo(NodeKind.CONCEPT);
+    }
+  }
+
+  @Test
+  @DisplayName("a source that states no classes keeps the kind it recorded")
+  void replayKeepsTheRecordedKindWhenThereIsNothingToRederiveFrom() {
+    // Not every source is Wikidata. One that classifies without stating classes - the fixture
+    // adapter, or any future similarity source - has nothing to re-derive from, and its claim
+    // is the best answer available rather than a gap to fill with CONCEPT.
+    try (AssertionLog log = SqliteAssertionLog.inMemory();
+        TinkerGraphStore store = new TinkerGraphStore()) {
+      log.append(new NodeAssertion("Q900003", NodeKind.PERSON, "Marisol Kettleby", WIKIDATA));
+
+      GraphProjector.project(log, store);
+
+      assertThat(store.node("Q900003").orElseThrow().kind()).isEqualTo(NodeKind.PERSON);
     }
   }
 

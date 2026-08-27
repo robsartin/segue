@@ -43,6 +43,7 @@ public final class SqliteAssertionLog implements AssertionLog {
         to_qid      TEXT,
         type_code   TEXT,
         node_kind   TEXT,
+        instance_of TEXT,
         label       TEXT,
         valid_from  TEXT,
         valid_to    TEXT,
@@ -54,13 +55,24 @@ public final class SqliteAssertionLog implements AssertionLog {
       """;
 
   private static final String INSERT =
-      "INSERT INTO assertion (kind, qid, to_qid, type_code, node_kind, label, valid_from,"
-          + " valid_to, source_id, source_ref, asserted_at, confidence) VALUES"
-          + " (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+      "INSERT INTO assertion (kind, qid, to_qid, type_code, node_kind, instance_of, label,"
+          + " valid_from, valid_to, source_id, source_ref, asserted_at, confidence) VALUES"
+          + " (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
   private static final String SELECT_ALL =
-      "SELECT kind, qid, to_qid, type_code, node_kind, label, valid_from, valid_to, source_id,"
-          + " source_ref, asserted_at, confidence FROM assertion ORDER BY seq";
+      "SELECT kind, qid, to_qid, type_code, node_kind, instance_of, label, valid_from, valid_to,"
+          + " source_id, source_ref, asserted_at, confidence FROM assertion ORDER BY seq";
+
+  /**
+   * The separator for the packed {@code instance_of} list: a space, with no escaping. Every value
+   * is a QID, which {@link com.robsartin.segue.domain.NodeRecord} validates at construction, so no
+   * value can contain the separator. That is {@code ProvenanceCodec}'s argument reached from the
+   * other end - it forbids its separators in the free text it packs, where here the whole value is
+   * constrained and nothing has to be forbidden. It also keeps the column readable in a SQL client
+   * ("Q5 Q177220"), which a JSON array would not, and needs no library in an adapter that
+   * deliberately touches only {@code java.sql}.
+   */
+  private static final String CLASS_SEP = " ";
 
   private final Connection conn;
 
@@ -107,9 +119,10 @@ public final class SqliteAssertionLog implements AssertionLog {
           ps.setString(3, null);
           ps.setString(4, null);
           ps.setString(5, n.kind().name());
-          ps.setString(6, n.label());
-          ps.setString(7, null);
+          ps.setString(6, encodeClasses(n.instanceOf()));
+          ps.setString(7, n.label());
           ps.setString(8, null);
+          ps.setString(9, null);
           bindProvenance(ps, n.provenance());
         }
         case AssertionRecord e -> {
@@ -119,8 +132,9 @@ public final class SqliteAssertionLog implements AssertionLog {
           ps.setString(4, e.typeCode());
           ps.setString(5, null);
           ps.setString(6, null);
-          ps.setString(7, isoOrNull(e.validFrom()));
-          ps.setString(8, isoOrNull(e.validTo()));
+          ps.setString(7, null);
+          ps.setString(8, isoOrNull(e.validFrom()));
+          ps.setString(9, isoOrNull(e.validTo()));
           bindProvenance(ps, e.provenance());
         }
       }
@@ -157,6 +171,7 @@ public final class SqliteAssertionLog implements AssertionLog {
               rs.getString("qid"),
               NodeKind.valueOf(rs.getString("node_kind")),
               rs.getString("label"),
+              decodeClasses(rs.getString("instance_of")),
               provenance);
       case "EDGE" ->
           new AssertionRecord(
@@ -171,10 +186,20 @@ public final class SqliteAssertionLog implements AssertionLog {
   }
 
   private static void bindProvenance(PreparedStatement ps, Provenance p) throws SQLException {
-    ps.setString(9, p.sourceId());
-    ps.setString(10, p.sourceRef());
-    ps.setString(11, p.assertedAt().toString());
-    ps.setDouble(12, p.confidence());
+    ps.setString(10, p.sourceId());
+    ps.setString(11, p.sourceRef());
+    ps.setString(12, p.assertedAt().toString());
+    ps.setDouble(13, p.confidence());
+  }
+
+  private static String encodeClasses(List<String> classes) {
+    // Null rather than "" when a source states none, so the column reads as absent in a SQL
+    // client and matches every edge row, which has no classes to state.
+    return classes.isEmpty() ? null : String.join(CLASS_SEP, classes);
+  }
+
+  private static List<String> decodeClasses(String packed) {
+    return packed == null || packed.isBlank() ? List.of() : List.of(packed.split(CLASS_SEP));
   }
 
   private static String isoOrNull(LocalDate date) {
