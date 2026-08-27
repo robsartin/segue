@@ -43,7 +43,7 @@ public final class ExportCli {
           + ViewKind.names()
           + "> --out <file> [--format <"
           + OutputFormat.names()
-          + ">] [--db <segue.db>]"
+          + ">, inferred from the --out extension when absent] [--db <segue.db>]"
           + " [route: --from <QID> --to <QID> [--max-hops <n>]]"
           + " [neighbourhood: --qid <QID> [--depth <n>]]"
           + " [subgraph: --qids <file>]"
@@ -60,6 +60,10 @@ public final class ExportCli {
    * repository; {@code *.dot} and {@code *.graphml} are gitignored as the second lock, not the
    * first.
    *
+   * @param format resolved rather than taken: {@code --format} if given, otherwise whatever the
+   *     {@code out} extension names, otherwise {@link OutputFormat#DEFAULT}. A {@code --format}
+   *     that disagrees with the extension never reaches here — it is refused. See {@code
+   *     formatFor}.
    * @param database the assertion log to read. Defaults exactly as the server's does — {@code
    *     SEGUE_DB} if set, otherwise {@code ${user.home}/.segue/segue.db}. That default is stated
    *     twice, here and in {@code application.yaml}, because this tool is plain Java and ADR 32
@@ -97,7 +101,7 @@ public final class ExportCli {
    */
   static Options parse(String[] args, String envDatabase, String userHome) {
     ViewKind view = null;
-    OutputFormat format = OutputFormat.GRAPHML;
+    OutputFormat requestedFormat = null;
     Path database = null;
     Path out = null;
     String fromQid = null;
@@ -119,7 +123,7 @@ public final class ExportCli {
           i++;
           switch (flag) {
             case "--view" -> view = ViewKind.parse(value);
-            case "--format" -> format = OutputFormat.parse(value);
+            case "--format" -> requestedFormat = OutputFormat.parse(value);
             case "--db" -> database = Path.of(value);
             case "--out" -> out = Path.of(value);
             case "--from" -> fromQid = value;
@@ -176,7 +180,7 @@ public final class ExportCli {
 
     return new Options(
         view,
-        format,
+        formatFor(requestedFormat, out),
         database != null ? database : defaultDatabase(envDatabase, userHome),
         out,
         fromQid,
@@ -203,6 +207,42 @@ public final class ExportCli {
     } else {
       log.info(line);
     }
+  }
+
+  /**
+   * Which format to write, from the two places the caller can say so.
+   *
+   * <p><b>The extension is an argument, not decoration.</b> An {@code --out} ending in {@code .dot}
+   * states the intent as plainly as {@code --format dot} does, and the old behaviour — default to
+   * GraphML and ignore the name — wrote XML into a file called {@code route.dot}, reported success,
+   * and failed minutes later inside Graphviz with a syntax error on the XML declaration (issue
+   * #57). A tool that is handed the answer and discards it has produced a file that lies about
+   * itself to every program downstream.
+   *
+   * <p><b>A contradiction is refused rather than resolved.</b> When {@code --format} and the
+   * extension disagree, one of the two is a mistake and nothing here can know which; obeying either
+   * one silently reintroduces the same misnamed file. There is deliberately no override flag: the
+   * refusal costs one re-run, and the alternative costs a confusing failure in another tool. Fix
+   * the flag or rename the file — both are one edit.
+   */
+  private static OutputFormat formatFor(OutputFormat requested, Path out) {
+    OutputFormat named = OutputFormat.forPath(out).orElse(null);
+    if (requested == null) {
+      return named != null ? named : OutputFormat.DEFAULT;
+    }
+    if (named != null && named != requested) {
+      throw usage(
+          "--format "
+              + requested.spelling()
+              + " contradicts the "
+              + OutputFormat.extensionOf(out)
+              + " extension of --out "
+              + out
+              + ", which names "
+              + named.spelling()
+              + ". Change one — a file whose name says otherwise fails later, in another tool");
+    }
+    return requested;
   }
 
   private static Path defaultDatabase(String envDatabase, String userHome) {

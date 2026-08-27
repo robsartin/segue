@@ -116,6 +116,46 @@ the database.
   hub intermediates, so "show me every edge below 1.00" is exactly the question these files
   get opened to ask.
 
+**Amendment (2026-08-27, issue #57): the `--out` extension is an argument, and a contradiction
+is refused.**
+
+Nothing above is withdrawn; the format enum is still the only place a word becomes a writer. What
+the original decision missed is that `--out` names a format too. `--format` defaulted to GraphML
+and the file name was never read, so
+
+```bash
+./gradlew exportGraph --args="--view route --from Q… --to Q… --out $HOME/route.dot"
+```
+
+wrote GraphML into `route.dot`, reported success, and failed minutes later inside Graphviz with
+`syntax error in line 1 near '>'` — the XML declaration — and a lexer warning about `50t` from an
+XML text node. Neither message points at the real problem, which is that the file is not what its
+name says. Hit twice in the first two minutes of real use.
+
+- **The extension is read when `--format` is absent.** `.dot` and `.gv` name DOT; `.graphml` and
+  `.xml` name GraphML. Case-insensitively, and from the file name only, so a dot in a directory
+  name is not an extension. The caller already stated the intent; discarding it was the bug.
+
+- **A disagreement between `--format` and the extension is a usage error naming both.** Not a
+  precedence rule — a precedence rule has to pick a winner, and *neither* answer is safe: obeying
+  the flag writes the misnamed file that caused this issue, and obeying the extension silently
+  overrules something the operator typed on purpose. The two arguments are one statement made
+  twice, and when they differ one of them is a typo that nothing here can identify. Refusing costs
+  one re-run; the message says which flag, which extension, and that changing either fixes it.
+  **There is deliberately no `--force`**: an escape hatch for "write XML into a `.dot` file" exists
+  to serve a case nobody has, and every use of it recreates the failure above.
+
+- **The residual default becomes DOT.** It applies only when neither source says anything —
+  `--out /tmp/graph` — which is now a rare path rather than the common one. DOT wins it because it
+  renders in one command with a tool that is already installed, where GraphML needs Gephi before it
+  shows anything; the first look at a new export should not require an install. GraphML remains the
+  better format for the job it was chosen for, and every documented example that wants it names a
+  `.graphml` file and gets it by inference.
+
+Not free: `--out` now has a semantic consequence beyond where the bytes land, so adding a third
+format means adding its extensions here too, and an operator who *wants* GraphML in a `.txt` file
+must say `--format graphml`. Both are cheaper than the failure above.
+
 ## Alternatives considered
 
 - **Put it in `seed`, since that is where the other dev tool lives** — one package for

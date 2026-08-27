@@ -699,8 +699,8 @@ tool, and it is **read-only**: it never appends to the log and never writes the 
 # one entity and its edges, to depth 2
 ./gradlew exportGraph --args="--view neighbourhood --qid Q42 --depth 2 --out $HOME/one.graphml"
 
-# the best route between two entities, as find_paths ranks it
-./gradlew exportGraph --args="--view route --from Q42 --to Q7 --format dot --out $HOME/route.dot"
+# the best route between two entities, as find_paths ranks it — the .dot names the format
+./gradlew exportGraph --args="--view route --from Q42 --to Q7 --out $HOME/route.dot"
 
 # only the entities on a list, and the edges between them
 ./gradlew exportGraph --args="--view subgraph --qids $HOME/names-qids.csv --out $HOME/seeds.graphml"
@@ -714,6 +714,33 @@ tool, and it is **read-only**: it never appends to the log and never writes the 
 the working tree, and a tool that picks a path for you is a tool that writes one into the
 repository.
 
+### The format comes from the file name unless you say otherwise
+
+`--out` names a format as plainly as `--format` does, so the extension is read (issue #57, ADR 41's
+amendment):
+
+| what you pass | what gets written |
+|---|---|
+| `--out r.dot`, `--out r.gv` | DOT |
+| `--out r.graphml`, `--out r.xml` | GraphML |
+| `--out r.txt`, `--out r` | DOT, the residual default |
+| `--out r.dot --format dot` | DOT — the two agree |
+| `--out r.dot --format graphml` | **refused**, naming both the flag and the extension |
+
+Case does not matter (`.DOT` is `.dot`) and only the file name is read, so `graphs.dot/r.graphml`
+is GraphML.
+
+**A contradiction is refused rather than resolved, and there is no override flag.** Neither answer
+is safe: obeying `--format` writes the misnamed file that produced issue #57 — GraphML in
+`route.dot`, success reported, then `syntax error in line 1 near '>'` inside Graphviz on the XML
+declaration — and obeying the extension silently overrules something typed on purpose. When the two
+disagree one of them is a typo, and nothing in the parser can tell which. Fix the flag or rename
+the file; either is one edit.
+
+The residual default is **DOT**, and it applies only when neither the flag nor the extension says
+anything. It renders in one command with a tool that is already installed, where GraphML needs
+Gephi first. Every example above that wants GraphML says so in the file name.
+
 ### The split that matters: selection, then serialisation
 
 This is the part to preserve when changing anything here.
@@ -724,10 +751,11 @@ This is the part to preserve when changing anything here.
 - **A `ViewWriter` turns a `GraphView` into bytes.** `DotWriter` and `GraphMlWriter` are pure
   functions of the view: no store, no query, no clock, so both unit-test against invented fixtures
   with no database and no network.
-- **They meet in two trivial places**: the `OutputFormat` enum, which maps a command-line word to a
-  writer, and `ExportRun`, which selects, optionally decorates, reports the size and hands over.
+- **They meet in two trivial places**: the `OutputFormat` enum, which maps a command-line word — or
+  an `--out` extension — to a writer, and `ExportRun`, which selects, optionally decorates, reports
+  the size and hands over.
 
-Adding JSON is a third enum constant and a third writer. If you ever find yourself asking a
+Adding JSON is a third enum constant, its extensions, and a third writer. If you ever find yourself asking a
 question about DOT inside `ViewSelector`, that is the bug.
 
 ### Why two readers
