@@ -3,6 +3,7 @@ package com.robsartin.segue.mcp;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.app.SegueApplication;
+import com.robsartin.segue.domain.PathRanking;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.List;
@@ -125,6 +126,20 @@ class ToolSurfaceTest {
     // The read path is only discoverable from the schema if the tool carrying it says so; a
     // model that never learns get_entity returns affinity will never look for it there.
     assertThat(toolNamed("get_entity").description()).containsIgnoringCase("affinity");
+  }
+
+  @Test
+  @DisplayName("find_paths' description warns that a dense pair's result can be capped")
+  void findPathsDescriptionStatesTheCap() {
+    // Issue #65. The result now reports its own truncation, but a model plans the call from
+    // the schema — and this description opened with "Find every route", which is a promise the
+    // tool cannot keep on a dense pair. expand_entity's description already says it will report
+    // stopping early; this one has to as well, or the two tools tell different stories about
+    // the same kind of shortfall.
+    String description = toolNamed("find_paths").description();
+
+    assertThat(description).contains(String.valueOf(PathRanking.MAX_PATHS));
+    assertThat(description).containsIgnoringCase("best-ranked");
   }
 
   @Test

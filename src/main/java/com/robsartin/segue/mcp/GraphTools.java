@@ -87,7 +87,7 @@ public class GraphTools {
       name = "find_paths",
       description =
           """
-          Find every route between two entities already in the graph, up to maxHops relationships \
+          Find routes between two entities already in the graph, up to maxHops relationships \
           apart, ranked most-trustworthy-first — a route built on well-corroborated edges outranks \
           a shorter one resting on a single unconfirmed source. Each route comes back hop by hop \
           with the assertion(s) that back it, so it is directly citable: this is the "you like \
@@ -96,7 +96,12 @@ public class GraphTools {
           An empty result means no route exists within maxHops hops, not that the two entities are \
           unrelated at a greater distance — try a larger maxHops. Both entities must already be in \
           the graph (add_entity first); this returns an error, not an empty result, if either one \
-          has not been added. maxHops defaults to 4 if omitted.\
+          has not been added. maxHops defaults to 4 if omitted.
+
+          At most 50 routes come back. A densely connected pair can have many more, and the \
+          result says so when that happens, reporting how many exist — so the capped count is \
+          never mistaken for the total. The 50 kept are the best-ranked ones rather than an \
+          arbitrary slice, because the ranking above is applied before the cap.\
           """,
       annotations =
           @McpTool.McpAnnotations(
