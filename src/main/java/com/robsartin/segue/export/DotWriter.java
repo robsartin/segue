@@ -3,15 +3,23 @@ package com.robsartin.segue.export;
 import com.robsartin.segue.domain.NodeKind;
 import java.io.IOException;
 import java.io.Writer;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Graphviz DOT: the format you look at, as opposed to the one you work in.
  *
  * <p>Shape <b>and</b> fill carry {@link NodeKind}, so the six kinds read apart without a legend,
- * and an edge is labelled with its type code. That is all — confidence and source id are on the
- * edge in {@link GraphMlWriter}, where a tool can filter on them; in DOT they would be decoration
- * on a picture that is already crowded.
+ * and an edge says its type. That is all — confidence and source id are on the edge in {@link
+ * GraphMlWriter}, where a tool can filter on them; in DOT they would be decoration on a picture
+ * that is already crowded.
+ *
+ * <p><b>Every edge carries a {@code tooltip} too</b>, naming the relationship and both its ends —
+ * {@code Wren Alderman -MEMBER_OF-> The Paper Kettles} — and above {@link #LABEL_BUDGET} edges the
+ * visible label is dropped and the tooltip is all there is. See {@link #labelEdges} for the
+ * measurements; {@link #note} is what says so out loud.
  *
  * <p><b>Every node also carries a {@code tooltip}: what it is an instance of.</b> Graphviz turns it
  * into an {@code xlink:title} in SVG, so hovering a node says "concert tour" or "television
@@ -39,6 +47,23 @@ public final class DotWriter implements ViewWriter {
 
   private static final String NL = "\n";
 
+  /**
+   * The most edges this format will draw a label on. Above it, every edge label is dropped and the
+   * type survives in the tooltip alone.
+   *
+   * <p><b>Measured, on slices of one real depth-1 neighbourhood laid out with {@code sfdp}</b>
+   * (issue #70): at 26 edges every label is legible; at 38 a couple of pairs touch; at 51 labels
+   * begin overprinting each other and the node labels underneath them; at 144 — an ordinary depth-1
+   * neighbourhood — the hub is a solid block of text and even the entity at its centre cannot be
+   * read. 40 is the last count at which the picture still reads.
+   *
+   * <p><b>Edges, not nodes, because a label is drawn per edge.</b> That is also why this needs no
+   * {@link ViewKind}: a route keeps its labels because a route is four edges, not because it is a
+   * route, and the same rule keeps them on a small subgraph and drops them from a large one. One
+   * rule about the picture beats two rules about where the picture came from.
+   */
+  static final int LABEL_BUDGET = 40;
+
   @Override
   public String extension() {
     return "dot";
@@ -46,6 +71,12 @@ public final class DotWriter implements ViewWriter {
 
   @Override
   public void write(GraphView view, Writer out) throws IOException {
+    boolean labelEdges = labelEdges(view);
+    Map<String, String> labels = new HashMap<>();
+    for (ViewNode node : view.nodes()) {
+      labels.put(node.qid(), label(node));
+    }
+
     out.write("digraph \"" + escape(view.description()) + "\" {" + NL);
     out.write("  graph [overlap=false, splines=true];" + NL);
     out.write("  node [style=filled, fillcolor=white, fontcolor=black];" + NL);
@@ -70,12 +101,58 @@ public final class DotWriter implements ViewWriter {
               + escape(edge.fromQid())
               + "\" -> \""
               + escape(edge.toQid())
-              + "\" [label=\""
-              + escape(edge.typeCode())
+              + "\" ["
+              + (labelEdges ? "label=\"" + escape(edge.typeCode()) + "\", " : "")
+              + "tooltip=\""
+              + escape(describe(edge, labels))
               + "\"];"
               + NL);
     }
     out.write("}" + NL);
+  }
+
+  /**
+   * The sentence the operator gets when this writer has taken something out of the picture, and
+   * nothing at all when it has not.
+   *
+   * <p>It names both counts so the reader can see the rule rather than only its verdict, and it
+   * says where the type went: hovering the SVG, or {@code typeCode} in GraphML, which carries every
+   * one of them however dense the view is.
+   */
+  @Override
+  public Optional<String> note(GraphView view) {
+    if (labelEdges(view)) {
+      return Optional.empty();
+    }
+    return Optional.of(
+        view.edges().size()
+            + " edge(s) is past the "
+            + LABEL_BUDGET
+            + " this picture can label legibly, so the DOT edge labels are dropped. Each edge"
+            + " keeps its type in a tooltip — render with -Tsvg and hover — and GraphML carries"
+            + " typeCode on every edge whatever the size");
+  }
+
+  /** True while the picture can still carry a label on every edge. */
+  private static boolean labelEdges(GraphView view) {
+    return view.edges().size() <= LABEL_BUDGET;
+  }
+
+  /**
+   * What an edge says on hover: the relationship and both of the things it joins.
+   *
+   * <p>The type alone would do while the labels are visible. It does not once they are gone — the
+   * edges that most need identifying are the ones fanning out of a hub, drawn on top of each other,
+   * where "which of these did I just point at" is the whole question. The endpoints are named the
+   * way the picture names them, so the tooltip and the two nodes agree; a QID that somehow has no
+   * node stands for itself rather than for a guess (the view's own invariant says there is none).
+   */
+  private static String describe(ViewEdge edge, Map<String, String> labels) {
+    return labels.getOrDefault(edge.fromQid(), edge.fromQid())
+        + " -"
+        + edge.typeCode()
+        + "-> "
+        + labels.getOrDefault(edge.toQid(), edge.toQid());
   }
 
   /**

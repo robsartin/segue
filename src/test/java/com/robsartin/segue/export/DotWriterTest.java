@@ -5,8 +5,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.robsartin.segue.domain.NodeKind;
 import java.io.IOException;
 import java.io.StringWriter;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -256,7 +258,79 @@ class DotWriterTest {
                     new ViewNode("Q902", NodeKind.GROUP, "The Paper Kettles")),
                 List.of(new ViewEdge("Q901", "Q902", "MEMBER_OF", 1.0, "invented"))));
 
-    assertThat(dot).contains("\"Q901\" -> \"Q902\" [label=\"MEMBER_OF\"]");
+    assertThat(dot).contains("\"Q901\" -> \"Q902\" [label=\"MEMBER_OF\", ");
+  }
+
+  @Test
+  @DisplayName("an edge tooltip names the relationship and both of its ends")
+  void tooltipsEdgesWithTheWholeRelationship() throws IOException {
+    String dot =
+        render(
+            view(
+                List.of(
+                    new ViewNode("Q901", NodeKind.PERSON, "Wren Alderman"),
+                    new ViewNode("Q902", NodeKind.GROUP, "The Paper Kettles")),
+                List.of(new ViewEdge("Q901", "Q902", "MEMBER_OF", 1.0, "invented"))));
+
+    assertThat(dot).contains("tooltip=\"Wren Alderman -MEMBER_OF-> The Paper Kettles\"");
+  }
+
+  @Test
+  @DisplayName("a picture too dense to label keeps every edge tooltip and drops every edge label")
+  void dropsEdgeLabelsOnADenseView() throws IOException {
+    GraphView dense = star(DotWriter.LABEL_BUDGET + 1);
+
+    String dot = render(dense);
+
+    assertThat(dot.lines().filter(line -> line.contains(" -> ")).count())
+        .isEqualTo(dense.edges().size());
+    assertThat(
+            dot.lines().filter(line -> line.contains(" -> ") && line.contains("tooltip=")).count())
+        .isEqualTo(dense.edges().size());
+    assertThat(dot.lines().filter(line -> line.contains(" -> ") && line.contains("label=")).count())
+        .isZero();
+  }
+
+  @Test
+  @DisplayName("a picture that can carry its labels keeps them, right up to the budget")
+  void keepsEdgeLabelsRightUpToTheBudget() throws IOException {
+    GraphView asDenseAsItGets = star(DotWriter.LABEL_BUDGET);
+
+    String dot = render(asDenseAsItGets);
+
+    assertThat(dot.lines().filter(line -> line.contains(" -> ") && line.contains("label=")).count())
+        .isEqualTo(DotWriter.LABEL_BUDGET);
+  }
+
+  @Test
+  @DisplayName("dropping the labels is reported, so nobody has to wonder where they went")
+  void saysSoWhenItDropsTheLabels() {
+    Optional<String> note = new DotWriter().note(star(DotWriter.LABEL_BUDGET + 1));
+
+    assertThat(note).isPresent();
+    assertThat(note.get())
+        .contains(String.valueOf(DotWriter.LABEL_BUDGET + 1))
+        .contains(String.valueOf(DotWriter.LABEL_BUDGET))
+        .contains("tooltip");
+  }
+
+  @Test
+  @DisplayName("a picture that kept its labels has nothing to report")
+  void saysNothingWhenItKeepsTheLabels() {
+    assertThat(new DotWriter().note(star(DotWriter.LABEL_BUDGET))).isEmpty();
+  }
+
+  /** An invented hub with {@code edges} spokes — the shape that makes labels collide. */
+  private static GraphView star(int edges) {
+    List<ViewNode> nodes = new ArrayList<>();
+    List<ViewEdge> spokes = new ArrayList<>();
+    nodes.add(new ViewNode("Q900100", NodeKind.PERSON, "Wren Alderman"));
+    for (int i = 1; i <= edges; i++) {
+      String qid = "Q9001" + String.format("%02d", i);
+      nodes.add(new ViewNode(qid, NodeKind.WORK, "Invented Work " + i));
+      spokes.add(new ViewEdge("Q900100", qid, "ACTED_IN", 1.0, "invented"));
+    }
+    return new GraphView("an invented star", nodes, spokes);
   }
 
   @Test

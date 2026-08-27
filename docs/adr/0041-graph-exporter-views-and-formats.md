@@ -232,6 +232,47 @@ Not free: `ClassLabels` is a hand-maintained sample of a long tail, so a class o
 QID until someone adds it, and the four shaded QIDs are a second place (beside `KindMapper`) where a
 Wikidata class id appears in the source. Both were preferred to the alternatives above.
 
+**Amendment (2026-08-27, issue #70): DOT tooltips every edge, and stops labelling them above 40.**
+
+The #59 amendment made a 132-node depth-1 neighbourhood readable as a *shape* and left it
+unreadable as a *picture*: 144 edge labels land on top of each other around the hub, and they
+overprint the node labels underneath, so the entity the neighbourhood is *of* cannot be read. The
+exporter was emitting a label per edge whatever the density, while already knowing the counts — it
+prints them before it writes.
+
+- **Every edge carries a `tooltip`, always**, naming the relationship and both of its ends:
+  `Steve Martin -RECEIVED_AWARD-> Writers Guild of America Award`. Same mechanism the #63
+  amendment proved for nodes — Graphviz renders it as `xlink:title` in SVG — and same argument: the
+  hover channel has no budget, so it can say more than a label ever could. The endpoints are in it
+  because the edges that most need identifying are the ones fanning out of a hub drawn on top of
+  each other, where "which of these did I just point at" is the whole question; the SVG's own
+  `<title>` answers that in QIDs, which no reader can use.
+
+- **The visible label is dropped above 40 edges.** Measured on slices of that same neighbourhood
+  under `sfdp`: 26 edges, every label legible; 38, a couple of pairs touching; 51, labels
+  overprinting each other and the nodes; 144, a solid block. 40 is the last count at which the
+  picture still reads.
+
+- **The threshold is on edges, not nodes, and deliberately not on `ViewKind`.** A label is drawn
+  per edge, so edges are the thing being counted. And a `route` keeps its labels because a route is
+  two or four edges, *not* because it is a route — which is the same rule that keeps them on a
+  ten-node subgraph and drops them from a large one, instead of one rule about the picture plus a
+  second about where the picture came from. The view kind is available at write time and is not
+  worth spending: it would answer a question the edge count already answers, and answer it wrong
+  for the small `subgraph` and the pathological `route`.
+
+- **Suppression is reported, through the writer rather than around it.** `ViewWriter` gains
+  `Optional<String> note(GraphView)` — anything this format had to do to this view — and
+  `ExportRun` emits it beside the counts, before the file exists. The alternative was for
+  `ExportRun` to ask whether it is holding a `DotWriter`, which puts a format concern in the one
+  class this ADR keeps format-blind. `GraphMlWriter` inherits the empty default and says nothing,
+  which is correct: **GraphML is unchanged**, and its `typeCode` attribute carries every edge type
+  at every size. The note says so, so the operator has somewhere to go.
+
+Not free: an operator who wants labels on a dense view cannot ask for them — there is no flag,
+because the picture that flag produces is the one this issue is about. The tooltip needs an SVG and
+a pointer, so a PNG of a dense view has the edge types nowhere; that is what GraphML is for.
+
 ## Alternatives considered
 
 - **Put it in `seed`, since that is where the other dev tool lives** — one package for
