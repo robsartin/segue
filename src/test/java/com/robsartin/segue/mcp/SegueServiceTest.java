@@ -759,6 +759,59 @@ class SegueServiceTest {
   }
 
   @Test
+  @DisplayName("findPaths reports partial when more routes exist than the cap returns")
+  void findPathsOverTheCapReportsTruncation() {
+    // Issue #65. Every entity below is invented. One pair joined by MAX_PATHS + 1 distinct
+    // two-hop routes, which is one more than the ranking is allowed to return.
+    int routes = PathRanking.MAX_PATHS + 1;
+    ingest.record(new NodeAssertion("Q900501", NodeKind.PERSON, "Cleo Marsh", WIKIDATA));
+    ingest.record(new NodeAssertion("Q900502", NodeKind.PERSON, "Dov Ellery", WIKIDATA));
+    for (int i = 0; i < routes; i++) {
+      String middle = "Q9005" + (10 + i);
+      ingest.record(new NodeAssertion(middle, NodeKind.WORK, "Reel " + i, WIKIDATA));
+      ingest.record(edge("Q900501", "ACTED_IN", middle, 1.00));
+      ingest.record(edge("Q900502", "ACTED_IN", middle, 1.00));
+    }
+
+    ToolResult<List<PathView>> result = service().findPaths("Q900501", "Q900502", 2);
+
+    // The cap still applies; what changes is that the caller is told it did.
+    assertThat(result.payload()).hasSize(PathRanking.MAX_PATHS);
+    assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.PARTIAL);
+    // Legible to a model: how many exist, how many came back, how many were dropped, and
+    // that the kept ones are the best-ranked rather than an arbitrary slice (ADR 31).
+    assertThat(result.detail())
+        .isEqualTo(
+            routes
+                + " route(s) from Q900501 to Q900502, more than the cap of "
+                + PathRanking.MAX_PATHS
+                + ": the "
+                + PathRanking.MAX_PATHS
+                + " best-ranked are returned and 1 omitted");
+  }
+
+  @Test
+  @DisplayName("findPaths at exactly the cap is ok, worded as before — nothing was omitted")
+  void findPathsAtTheCapIsUnchanged() {
+    // The boundary the truncation report must not claim: MAX_PATHS routes is a complete
+    // answer that happens to fill the cap. Invented entities, as above.
+    ingest.record(new NodeAssertion("Q900601", NodeKind.PERSON, "Esme Faro", WIKIDATA));
+    ingest.record(new NodeAssertion("Q900602", NodeKind.PERSON, "Fitz Loew", WIKIDATA));
+    for (int i = 0; i < PathRanking.MAX_PATHS; i++) {
+      String middle = "Q9006" + (10 + i);
+      ingest.record(new NodeAssertion(middle, NodeKind.WORK, "Take " + i, WIKIDATA));
+      ingest.record(edge("Q900601", "ACTED_IN", middle, 1.00));
+      ingest.record(edge("Q900602", "ACTED_IN", middle, 1.00));
+    }
+
+    ToolResult<List<PathView>> result = service().findPaths("Q900601", "Q900602", 2);
+
+    assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
+    assertThat(result.payload()).hasSize(PathRanking.MAX_PATHS);
+    assertThat(result.detail()).isEqualTo("50 route(s) from Q900601 to Q900602");
+  }
+
+  @Test
   @DisplayName("findPaths on a pair with no route returns ok with an empty payload")
   void findPathsNoRouteReturnsEmptyOk() {
     ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Alone", WIKIDATA));

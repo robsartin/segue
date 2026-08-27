@@ -414,6 +414,16 @@ public final class SegueService {
    * add_entity}'d reads identically to two entities the graph knows are unrelated — both return
    * {@code ok} with zero routes — and a model that forgot to add one would report "these things are
    * unrelated" rather than the actual problem.
+   *
+   * <p><b>A result cut short by {@link PathRanking#MAX_PATHS} comes back {@code partial}, naming
+   * how many routes exist</b> (issue #65). This was the one place the tool surface claimed a
+   * completeness it did not have: the cap was applied and the count reported was the capped one, so
+   * a dense pair returned "50 route(s)" whether the graph held fifty or two hundred, and a model
+   * reading that would reasonably report fifty as the number of routes. It was seen twice on the
+   * real graph without anyone noticing. Everything else here already reported shortfall — {@link
+   * #expandEntity} has a {@code truncated} flag, the reverse-claims query fetches one more than its
+   * bound so truncation is an observation — and ADR 27 exists to make exactly this readable rather
+   * than silent.
    */
   public ToolResult<List<PathView>> findPaths(String fromQid, String toQid, int maxHops) {
     Objects.requireNonNull(fromQid, "fromQid");
@@ -429,9 +439,34 @@ public final class SegueService {
     }
     List<PathResult> raw = graph.paths(fromQid, toQid, maxHops);
     List<PathResult> ranked = PathRanking.rank(raw, degreeLookup());
-    return ToolResult.ok(
-        ranked.size() + " route(s) from " + fromQid + " to " + toQid,
-        ViewMapper.toPathViews(ranked));
+    List<PathView> views = ViewMapper.toPathViews(ranked);
+    // Truncation is observed, not inferred: ranking sorts and then caps, so the two sizes
+    // differ exactly when the cap dropped something. MAX_PATHS is named in the sentence below
+    // but never consulted to DECIDE this — the same reason ReverseClaims fetches maxNewEdges + 1
+    // rather than guessing whether it was cut short.
+    int omitted = raw.size() - ranked.size();
+    if (omitted == 0) {
+      return ToolResult.ok(ranked.size() + " route(s) from " + fromQid + " to " + toQid, views);
+    }
+    // Say what was kept as well as what was lost. A truncated answer whose remainder is the
+    // BEST routes is worth far more to a model than one holding an arbitrary fifty, and ADR
+    // 31 ranks — model guesses last, then hub intermediates, then confidence — before the cap
+    // applies, so that is a property of the result rather than a hopeful description of it.
+    String detail =
+        raw.size()
+            + " route(s) from "
+            + fromQid
+            + " to "
+            + toQid
+            + ", more than the cap of "
+            + PathRanking.MAX_PATHS
+            + ": the "
+            + ranked.size()
+            + " best-ranked are returned and "
+            + omitted
+            + " omitted";
+    log.warn("findPaths({}, {}) partial: {}", fromQid, toQid, detail);
+    return ToolResult.partial(withCorrelation(detail), views);
   }
 
   /**

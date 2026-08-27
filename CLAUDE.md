@@ -361,6 +361,18 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   "Affinity"), not by package, so the exporter's affinity decorator is covered automatically. Don't
   rename it to dodge that; the fence is the right one.
 
+- **`find_paths` capped at 50 routes and reported the capped count as the answer.** A pair with
+  two hundred routes said "50 route(s)" with nothing marking the shortfall, so a model reading it
+  would report fifty as the number of routes; it happened twice on the real graph before anyone
+  noticed (issue #65). It now returns `partial` and names the true count. **The general rule is
+  the one everything else here already followed**: a bound that can bite must be reported by the
+  result that hit it, and it must be OBSERVED rather than assumed — `findPaths` compares the ranked
+  size against the raw one, exactly as `ReverseClaims` fetches `maxNewEdges + 1`. The detail also
+  says the survivors are the BEST routes, because ADR 31 ranks before the cap applies, and a
+  truncated answer that kept the best is worth far more than one holding an arbitrary fifty. No
+  ADR: ADR 27 already required this and ADR 31's cap is unchanged, so it was a bug against the
+  decisions rather than a new one.
+
 - **The taste layer's classes deliberately have no package of their own.**
   `AffinityRecord` sits in `domain`, `AffinityStore` in `port`,
   `SqliteAffinityStore` in `sqlite`, `TasteTools` in `mcp` — each where its
