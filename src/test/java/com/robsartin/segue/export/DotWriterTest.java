@@ -5,7 +5,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.robsartin.segue.domain.NodeKind;
 import java.io.IOException;
 import java.io.StringWriter;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -51,12 +55,12 @@ class DotWriterTest {
                     new ViewNode("Q906", NodeKind.CONCEPT, "Invented Prize")),
                 List.of()));
 
-    assertThat(dot).contains("\"Q901\" [label=\"Wren Alderman\", shape=ellipse]");
-    assertThat(dot).contains("\"Q902\" [label=\"The Paper Kettles\", shape=box]");
-    assertThat(dot).contains("\"Q903\" [label=\"Hollow Tide\", shape=note]");
-    assertThat(dot).contains("\"Q904\" [label=\"Bracken Hall\", shape=house]");
-    assertThat(dot).contains("\"Q905\" [label=\"The Bracken Sessions\", shape=diamond]");
-    assertThat(dot).contains("\"Q906\" [label=\"Invented Prize\", shape=octagon]");
+    assertThat(dot).contains("\"Q901\" [label=\"Wren Alderman\", shape=ellipse,");
+    assertThat(dot).contains("\"Q902\" [label=\"The Paper Kettles\", shape=box,");
+    assertThat(dot).contains("\"Q903\" [label=\"Hollow Tide\", shape=note,");
+    assertThat(dot).contains("\"Q904\" [label=\"Bracken Hall\", shape=house,");
+    assertThat(dot).contains("\"Q905\" [label=\"The Bracken Sessions\", shape=diamond,");
+    assertThat(dot).contains("\"Q906\" [label=\"Invented Prize\", shape=octagon,");
   }
 
   @Test
@@ -66,6 +70,50 @@ class DotWriterTest {
       String dot = render(view(List.of(new ViewNode("Q901", kind, "x")), List.of()));
       assertThat(dot).as("shape for %s", kind).containsPattern("shape=\\w+");
     }
+  }
+
+  @Test
+  @DisplayName("node fill is chosen by NodeKind, so kind survives being scaled down to a thumbnail")
+  void fillsNodesByKind() throws IOException {
+    String dot =
+        render(
+            view(
+                List.of(
+                    new ViewNode("Q901", NodeKind.PERSON, "Wren Alderman"),
+                    new ViewNode("Q902", NodeKind.GROUP, "The Paper Kettles"),
+                    new ViewNode("Q903", NodeKind.WORK, "Hollow Tide"),
+                    new ViewNode("Q904", NodeKind.PLACE, "Bracken Hall"),
+                    new ViewNode("Q905", NodeKind.EVENT, "The Bracken Sessions"),
+                    new ViewNode("Q906", NodeKind.CONCEPT, "Invented Prize")),
+                List.of()));
+
+    assertThat(dot).contains("shape=ellipse, fillcolor=\"#84C2EC\"");
+    assertThat(dot).contains("shape=box, fillcolor=\"#EAB26C\"");
+    assertThat(dot).contains("shape=note, fillcolor=\"#F2E87A\"");
+    assertThat(dot).contains("shape=house, fillcolor=\"#6CB194\"");
+    assertThat(dot).contains("shape=diamond, fillcolor=\"#DC886C\"");
+    assertThat(dot).contains("shape=octagon, fillcolor=\"#D598B8\"");
+  }
+
+  @Test
+  @DisplayName("every NodeKind has a fill, and no two kinds share one")
+  void hasADistinctFillForEveryKind() throws IOException {
+    Set<String> fills = new LinkedHashSet<>();
+    for (NodeKind kind : NodeKind.values()) {
+      String dot = render(view(List.of(new ViewNode("Q901", kind, "x")), List.of()));
+      Matcher matcher = Pattern.compile("fillcolor=\"(#[0-9A-Fa-f]{6})\"").matcher(dot);
+      assertThat(matcher.find()).as("a fill for %s", kind).isTrue();
+      fills.add(matcher.group(1));
+    }
+    assertThat(fills).as("one fill per kind, none shared").hasSize(NodeKind.values().length);
+  }
+
+  @Test
+  @DisplayName("the graph-level default states the dark text the fills are chosen against")
+  void declaresDarkText() throws IOException {
+    String dot = render(view(List.of(), List.of()));
+
+    assertThat(dot).contains("fontcolor=black");
   }
 
   @Test

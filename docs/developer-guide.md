@@ -797,6 +797,17 @@ directed acyclic structures and degrades badly on a dense multigraph. Above a fe
 stop using Graphviz: that is what the GraphML writer is for, and why it carries `kind`, `label`,
 `typeCode`, `confidence` and `sourceId` as attributes a tool can filter and colour on.
 
+### Why DOT says the kind twice
+
+A DOT node carries `NodeKind` as **both** its shape and its fill, and that redundancy is the point:
+shape survives greyscale printing and colour-blind viewing, colour survives being scaled down, and
+neither survives both. The fills are tinted Okabe-Ito colours — the established colour-universal
+palette from Okabe and Ito's "Color Universal Design", not one picked by eye — dark enough to stay
+apart and light enough for black labels at WCAG AAA; `DotWriter.fill` records which six and why
+PERSON and GROUP get the most-separated pair. GraphML gets none of this on purpose: it already
+carries `kind` as an attribute and Gephi colours on it natively, so there the presentation stays
+the reader's.
+
 ## How to read an ADR against the code
 
 One thing looks like drift and is not: an ADR's Context section records what was measured **at the
