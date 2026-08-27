@@ -22,6 +22,7 @@ Everything here was checked against the source in `src/main/java/com/robsartin/s
 - [The testing strategy](#the-testing-strategy)
 - [The build and the gate](#the-build-and-the-gate)
 - [Bulk seeding](#bulk-seeding)
+- [Looking at the graph](#looking-at-the-graph)
 - [How to read an ADR against the code](#how-to-read-an-adr-against-the-code)
 
 ## What segue is, in one pass
@@ -67,6 +68,8 @@ graph TD
   port["port<br/>GraphStore, AssertionLog, AffinityStore, SourceAdapter, EntityResolver"]
   domain["domain<br/>records + EdgeTypes"]
   support["support<br/>UuidV7"]
+  seed["seed<br/>SeedCli, SeedResolver, Adjudicator"]
+  export["export<br/>ViewSelector, DotWriter, GraphMlWriter"]
 
   app --> mcp
   app --> ingest
@@ -90,6 +93,14 @@ graph TD
   wikidata --> port
   wikidata --> domain
   port --> domain
+  seed --> port
+  seed --> domain
+  seed --> wikidata
+  export --> port
+  export --> domain
+  export --> ingest
+  export --> sqlite
+  export --> tinker
 ```
 
 **What the diagram shows.** Dependencies point downward and never back up. `domain` sits at the
@@ -100,6 +111,15 @@ sibling adapter. `ingest` depends on `port` and `domain`. `mcp` depends on `inge
 almost everything, because wiring is its job. `support` depends on nothing and is used only by
 `mcp`. Two things a reader might expect and will not find: `app` does not import `jena` at all —
 the reference engine is reachable only from tests — and nothing imports `domain` from `app`.
+
+`seed` and `export` are the two dev-side tools. Neither is reachable from the application — nothing
+imports either, and both are entered through their own `main` behind a Gradle `JavaExec` task — and
+their arrows are the interesting part. `seed` reaches `wikidata` and stops: it may not touch
+`sqlite`, `tinker`, `jena`, `ingest`, `mcp` or `app`, which is the fence that makes a tool reading a
+private list of names safe ([ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)). `export` reaches
+`sqlite`, `tinker` and `ingest`, because reading the graph is its whole job. Two tools with opposite
+relationships to the store cannot share a package and keep either fence meaningful, which is why
+[ADR 41](adr/0041-graph-exporter-views-and-formats.md) made them siblings.
 
 ### What each package is for
 
@@ -115,6 +135,8 @@ the reference engine is reachable only from tests — and nothing imports `domai
 | `support` | Cross-cutting plain-Java helpers with no project dependencies — currently `UuidV7`. | nothing |
 | `mcp` | The tool classes, `SegueService`, the view records, `CorrelationId`. Spring-aware. | `ingest`, `port`, `domain`, `support` |
 | `app` | Entry point, all bean wiring, `application.yaml`, transport profiles. Spring-aware. | everything it wires |
+| `seed` | The bulk seeding tool ([ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)): a name list to `name → QID`, run as `./gradlew resolveNames`. Plain Java, never opens a store. | `port`, `domain`, `wikidata` |
+| `export` | The graph exporter ([ADR 41](adr/0041-graph-exporter-views-and-formats.md)): `ViewSelector` and the two writers, run as `./gradlew exportGraph`. Plain Java, read-only. | `port`, `domain`, `ingest`, `sqlite`, `tinker` |
 
 ### Which rules a machine enforces
 
@@ -132,6 +154,8 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `noPackageCycles` | any dependency cycle between slices of `com.robsartin.segue` | [ADR 32](adr/0032-layering-and-archunit.md) |
 | `springOnlyInAppAndMcp` | `org.springframework.*` anywhere outside `app` and `mcp` | [ADR 25](adr/0025-source-adapter-spi.md), [ADR 32](adr/0032-layering-and-archunit.md) |
 | `onlyIngestAppliesClaimsToTheGraph` | calling `GraphStore.record`, `GraphStore.upsertNode` or `AssertionLog.append` from outside `ingest` | [ADR 19](adr/0019-assertion-log-source-of-truth.md) |
+| `seedNeverOpensAStore` | `seed` depending on `sqlite`, `tinker`, `jena`, `ingest`, `mcp` or `app` — it resolves names and must not open the database even to read it | [ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md) |
+| `theExporterOnlyReads` | `export` calling `GraphStore.record`/`upsertNode` or `AssertionLog.append`, or depending on `IngestService` at all | [ADR 41](adr/0041-graph-exporter-views-and-formats.md) |
 | `nothingWritesToStandardOut` | reading `System.out` anywhere except the one named exception, `SegueApplication` | [ADR 28](adr/0028-mcp-transports.md) |
 | `nothingWritesToStandardError`, `noPrintStackTrace`, `noJavaUtilLogging` | bypassing SLF4J | [ADR 30](adr/0030-structured-logging.md) |
 | `affinityNeverTouchesTheWorldFactLayer` | a taste-layer type depending on the log, the graph, `IngestService` or the claim records | [ADR 33](adr/0033-taste-layer-separation.md) |
@@ -564,6 +588,8 @@ target and the coverage thresholds all live in `build.gradle.kts`; read them the
 ./gradlew test            # tests only
 ./gradlew spotlessApply   # fix formatting
 ./gradlew liveTest        # tagged live tests against the real Wikidata API
+./gradlew resolveNames    # bulk name to QID, the seeding tool (ADR 40); needs network
+./gradlew exportGraph     # a bounded view of the graph to DOT or GraphML (ADR 41); read-only
 ```
 
 ### What `./gradlew check` actually runs
@@ -644,6 +670,86 @@ It never writes. `ArchitectureTest.seedNeverOpensAStore` forbids `seed` from dep
 `tinker`, `jena`, `ingest`, `mcp` or `app`, so it cannot open the database even to read it, and
 cannot quietly become an MCP tool. It also never needs the network in `check`: the judgement is a
 pure function, and everything that speaks HTTP is tested against `StubWikidataServer`.
+
+## Looking at the graph
+
+`export` turns the graph into a picture. It is a **dev-side tool** like `seed`, not a seventh MCP
+tool, and it is **read-only**: it never appends to the log and never writes the graph.
+[ADR 41](adr/0041-graph-exporter-views-and-formats.md) is the decision.
+
+```bash
+# one entity and its edges, to depth 2
+./gradlew exportGraph --args="--view neighbourhood --qid Q42 --depth 2 --out $HOME/one.graphml"
+
+# the best route between two entities, as find_paths ranks it
+./gradlew exportGraph --args="--view route --from Q42 --to Q7 --format dot --out $HOME/route.dot"
+
+# only the entities on a list, and the edges between them
+./gradlew exportGraph --args="--view subgraph --qids $HOME/names-qids.csv --out $HOME/seeds.graphml"
+
+# everything — needs the explicit flag, and prints its size first
+./gradlew exportGraph --args="--view full --all --out $HOME/all.graphml"
+```
+
+`--db` defaults the way the server's does: `SEGUE_DB` if set, otherwise
+`${user.home}/.segue/segue.db`. `--out` has no default, deliberately — the output belongs outside
+the working tree, and a tool that picks a path for you is a tool that writes one into the
+repository.
+
+### The split that matters: selection, then serialisation
+
+This is the part to preserve when changing anything here.
+
+- **`ViewSelector` chooses what goes in the picture.** It produces a `GraphView` — a description, a
+  list of `ViewNode`, a list of `ViewEdge` — and mentions no format anywhere. This is the durable
+  layer: the stated destination for this work is an interactive app, and a UI reuses it whole.
+- **A `ViewWriter` turns a `GraphView` into bytes.** `DotWriter` and `GraphMlWriter` are pure
+  functions of the view: no store, no query, no clock, so both unit-test against invented fixtures
+  with no database and no network.
+- **They meet in two trivial places**: the `OutputFormat` enum, which maps a command-line word to a
+  writer, and `ExportRun`, which selects, optionally decorates, reports the size and hands over.
+
+Adding JSON is a third enum constant and a third writer. If you ever find yourself asking a
+question about DOT inside `ViewSelector`, that is the bug.
+
+### Why two readers
+
+`route` and `neighbourhood` go through `GraphStore` — the real traversal and the shared
+`PathRanking`, so an exported route is the route `find_paths` returns rather than a second
+implementation that drifts.
+
+`full` and `subgraph` go through `LogProjection`, which folds `AssertionLog.readAll()`. `GraphStore`
+has no enumerate-all method and adding one would widen the port that exists to make the engine
+choice reversible; [ADR 19](adr/0019-assertion-log-source-of-truth.md) makes the log the right place
+to ask, because the graph is its projection. `LogProjection` performs the same fold the graph does,
+so the two paths cannot disagree about what an edge is.
+
+One number looks like a contradiction and is not: a depth-2 neighbourhood of 179 nodes carried 227
+edges, while a subgraph over those same 179 nodes carried 256. The neighbourhood walks outward and
+never traverses the edges *between* two nodes at its frontier; the subgraph keeps every edge whose
+ends are both on the list.
+
+### Two things this is not allowed to do
+
+It never writes. `ArchitectureTest.theExporterOnlyReads` forbids `export` from calling
+`GraphStore.record`, `GraphStore.upsertNode` or `AssertionLog.append`, and from depending on
+`IngestService` at all — the second half is the one no other rule covers, and without it a class
+here could route a claim through the one legitimate writer. `GraphProjector` is deliberately
+allowed: the bounded views need a projection, and the exporter replays the log into a throwaway
+in-memory `TinkerGraphStore` exactly as the application does at boot. Nothing durable changes.
+
+It carries no affinity unless asked. [ADR 33](adr/0033-taste-layer-separation.md) is why a
+world-fact export is uncontroversial — the world graph can be shared or made public without
+carrying personal data — and `--include-affinity` is what makes that stop being true. The tool says
+so at the point of export, before the view exists and long before the file does. `*.dot` and
+`*.graphml` are gitignored beside `*.csv` and `*.db`; that is the second lock, not the first.
+
+### Which layout engine
+
+For DOT, use `sfdp` or `neato` above a few hundred nodes. `dot` is a hierarchical layout for
+directed acyclic structures and degrades badly on a dense multigraph. Above a few thousand nodes,
+stop using Graphviz: that is what the GraphML writer is for, and why it carries `kind`, `label`,
+`typeCode`, `confidence` and `sourceId` as attributes a tool can filter and colour on.
 
 ## How to read an ADR against the code
 

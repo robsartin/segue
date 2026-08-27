@@ -24,6 +24,7 @@ there currently are none.
 ./gradlew spotlessApply   # fix formatting
 ./gradlew liveTest        # tagged live tests against the real Wikidata API; excluded from check
 ./gradlew resolveNames --args="--list $HOME/names.csv"   # bulk name→QID (ADR 40); needs network
+./gradlew exportGraph --args="--view neighbourhood --qid Q42 --out $HOME/one.graphml"  # ADR 41; read-only
 ```
 
 Gradle, not Maven. The wrapper is pinned to 9.7.1 and committed; **Gradle 9.1.0 is the
@@ -74,6 +75,12 @@ wikidata/ The first source: resolution and expansion. Plain Java, no Spring.
 seed/     The bulk seeding tool (ADR 40): a name list to name→QID, run as
           `./gradlew resolveNames`. Dev-side, plain Java, resolves and reports —
           it never opens a store and is deliberately NOT an MCP tool.
+export/   The graph exporter (ADR 41): four bounded views — route,
+          neighbourhood, subgraph, full — to DOT or GraphML, run as
+          `./gradlew exportGraph`. Dev-side, plain Java, READ-ONLY, and NOT an
+          MCP tool. Selection (ViewSelector) knows no format; writers know no
+          graph. A sibling of seed rather than part of it, because seed may not
+          open a store and this reads one.
 ingest/   IngestService (the only write path) and GraphProjector (boot replay).
 support/  Plain-Java cross-cutting helpers with no project dependencies of their
           own — currently UuidV7, the RFC 9562 v7 id generator used for request
@@ -287,6 +294,22 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   out of the graph vocabulary because "novelist" is a 36k-degree hub. `seed` reads it to
   tell a musician from a minister — `P31` is Q5 for both — which creates no edge and does
   not reopen #32.
+
+- **The exporter reads and cannot write, and that is an ArchUnit rule, not a promise.**
+  `theExporterOnlyReads` forbids `export` from calling `GraphStore.record`, `GraphStore.upsertNode`
+  or `AssertionLog.append` AND from depending on `IngestService` at all. The second half is the one
+  no other rule covers: `onlyIngestAppliesClaimsToTheGraph` already blocks the three calls from
+  everywhere outside `ingest`, but without the `IngestService` ban a class in `export` could route a
+  claim through the one legitimate writer and break nothing. `GraphProjector` is deliberately NOT
+  banned — the bounded views need a traversal, so the tool replays the log into a throwaway
+  in-memory `TinkerGraphStore` exactly as the app does at boot; nothing durable changes. Also:
+  `SqliteAssertionLog`'s constructor CREATES the file and schema if absent, so `ExportCli` checks
+  `Files.exists` first rather than conjuring an empty database and exporting nothing.
+
+- **`AffinityOverlay` is fenced by a rule written years before it.**
+  `affinityNeverTouchesTheWorldFactLayer` matches taste-layer types by NAME (simple name contains
+  "Affinity"), not by package, so the exporter's affinity decorator is covered automatically. Don't
+  rename it to dodge that; the fence is the right one.
 
 - **The taste layer's classes deliberately have no package of their own.**
   `AffinityRecord` sits in `domain`, `AffinityStore` in `port`,

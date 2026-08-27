@@ -21,6 +21,7 @@ import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
+import com.tngtech.archunit.lang.conditions.ArchConditions;
 import com.tngtech.archunit.library.dependencies.SlicesRuleDefinition;
 import java.util.Set;
 
@@ -271,6 +272,46 @@ class ArchitectureTest {
           .because(
               "ADR 19: the log is the source of truth and only ingest projects it — a graph write"
                   + " that skipped the log would be gone at the next boot");
+
+  /**
+   * ADR 41: the graph exporter reads. It has no way to write, and that is the point.
+   *
+   * <p>The mirror of {@link #onlyIngestAppliesClaimsToTheGraph}, aimed at one package instead of at
+   * everything outside another, and it forbids one thing more. Half of it — the three durable
+   * writes — the rule above already covers from the other direction; the additional half is that
+   * {@code export} may not depend on {@link IngestService} <b>at all</b>, which nothing else says.
+   * That half is what completes the guarantee: without it a class here could reach the one
+   * legitimate writer and route a claim through it, breaking no other rule in this file.
+   *
+   * <p><b>Why the exporter is not in {@code seed}.</b> The other dev-side tool is fenced by {@link
+   * #seedNeverOpensAStore}, which forbids {@code seed} from depending on {@code sqlite}, {@code
+   * tinker}, {@code jena}, {@code ingest}, {@code mcp} or {@code app} — it must not open a store
+   * even to read one. This tool's entire job is reading a store. Two tools with opposite
+   * relationships to the database cannot share a package and keep either fence meaningful, so they
+   * are siblings with a rule each.
+   *
+   * <p><b>{@code GraphProjector} is deliberately not forbidden.</b> The bounded views traverse, so
+   * they need a projection, and the exporter builds one by replaying the log into a throwaway
+   * in-memory {@code TinkerGraphStore} — exactly what the application does at boot. That replay
+   * writes to an object that never reaches a disk and is discarded when the process exits, and
+   * reusing it is what keeps an exported route identical to the one {@code find_paths} returns
+   * rather than a second traversal that can drift. What this rule guarantees is that nothing
+   * durable changes: no claim reaches the log, the database or a store the exporter did not create
+   * itself.
+   */
+  @ArchTest
+  static final ArchRule theExporterOnlyReads =
+      noClasses()
+          .that()
+          .resideInAPackage("..export..")
+          .should(
+              ArchConditions.callMethodWhere(APPLIES_A_CLAIM)
+                  .or(
+                      ArchConditions.dependOnClassesThat(
+                          JavaClass.Predicates.equivalentTo(IngestService.class))))
+          .because(
+              "ADR 41: the exporter is a read-only tool — it never appends to the log, never"
+                  + " writes the graph, and cannot reach the one class that is allowed to");
 
   /**
    * The taste layer, by type rather than by package.

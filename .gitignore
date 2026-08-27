@@ -26,3 +26,10 @@ _to_delete/
 # No exception is currently needed — if a committed CSV ever is, name it here with an explicit
 # negation and say in the commit message why it carries no personal data.
 *.csv
+
+# The graph exporter's output (issue #50, ADR 41). A world-fact export carries no personal data
+# (ADR 33) and would still be a large derived artefact with no business in git; run with
+# --include-affinity and it IS personal data, exactly like the seeding tool's files above.
+# Write these outside the working tree; this line is the second lock, not the first.
+*.dot
+*.graphml

@@ -130,6 +130,20 @@ tasks.register<JavaExec>("resolveNames") {
     outputs.upToDateWhen { false }
 }
 
+tasks.register<JavaExec>("exportGraph") {
+    group = "application"
+    description =
+        "Exports a bounded view of the graph to DOT or GraphML. Reads only; needs no network. " +
+            "See ADR 41. Example: ./gradlew exportGraph " +
+            "--args=\"--view neighbourhood --qid Q42 --out \$HOME/one.graphml\""
+    mainClass.set("com.robsartin.segue.export.ExportCli")
+    classpath = sourceSets["main"].runtimeClasspath
+    // sqlite-jdbc loads a native library, the same grant tasks.test makes.
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
+    // Never up-to-date: the graph changes under it, and the point is to look at it now.
+    outputs.upToDateWhen { false }
+}
+
 spotless {
     java {
         googleJavaFormat(libs.versions.googleJavaFormat.get())
