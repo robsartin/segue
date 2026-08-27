@@ -24,6 +24,7 @@ Everything here was checked against the source in `src/main/java/com/robsartin/s
 - [Bulk seeding](#bulk-seeding)
 - [Looking at the graph](#looking-at-the-graph)
 - [Looking at what you have rated](#looking-at-what-you-have-rated)
+- [Taking something back out](#taking-something-back-out)
 - [How to read an ADR against the code](#how-to-read-an-adr-against-the-code)
 
 ## What segue is, in one pass
@@ -72,6 +73,7 @@ graph TD
   seed["seed<br/>SeedCli, SeedResolver, Adjudicator"]
   export["export<br/>ViewSelector, DotWriter, GraphMlWriter"]
   ratings["ratings<br/>RatingsCli, RatingsRun, RatingsTable"]
+  retract["retract<br/>RetractCli, RetractRun"]
 
   app --> mcp
   app --> ingest
@@ -106,6 +108,10 @@ graph TD
   ratings --> port
   ratings --> domain
   ratings --> sqlite
+  retract --> port
+  retract --> domain
+  retract --> ingest
+  retract --> sqlite
 ```
 
 **What the diagram shows.** Dependencies point downward and never back up. `domain` sits at the
@@ -117,23 +123,27 @@ almost everything, because wiring is its job. `support` depends on nothing and i
 `mcp`. Two things a reader might expect and will not find: `app` does not import `jena` at all —
 the reference engine is reachable only from tests — and nothing imports `domain` from `app`.
 
-`seed`, `export` and `ratings` are the three dev-side tools. None is reachable from the application
-— nothing imports any of them, and each is entered through its own `main` behind a Gradle
-`JavaExec` task — and their arrows are the interesting part, because each has a different
+`seed`, `export`, `ratings` and `retract` are the four dev-side tools. None is reachable from the
+application — nothing imports any of them, and each is entered through its own `main` behind a
+Gradle `JavaExec` task — and their arrows are the interesting part, because each has a different
 relationship with the data and a different fence to match.
 
 - **`seed` reaches `wikidata` and stops.** It may not touch `sqlite`, `tinker`, `jena`, `ingest`,
-  `mcp` or `app`: it cannot open the database even to read it, which is the fence that makes a tool
-  reading a private list of names safe ([ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)).
+  `mcp`, `app` or `retract`: it cannot open the database even to read it, which is the fence that
+  makes a tool reading a private list of names safe
+  ([ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)).
 - **`export` reaches `sqlite`, `tinker` and `ingest`**, because reading the graph is its whole job,
   and it may build a throwaway projection ([ADR 41](adr/0041-graph-exporter-views-and-formats.md)).
-- **`ratings` reaches `sqlite` and nothing else** — the tightest of the three, because it needs the
+- **`ratings` reaches `sqlite` and nothing else** — the tightest of the four, because it needs the
   least: a bulk read of the `affinity` table and the node claims in the log, no traversal and no
   projection ([ADR 43](adr/0043-listing-your-own-ratings.md)).
+- **`retract` reaches `sqlite` and `ingest`, and is the only one that writes.** It appends one
+  `Retraction` through `IngestService` and may not hold a `GraphStore` at all — a retraction has no
+  graph half ([ADR 44](adr/0044-retraction-as-a-new-claim.md)).
 
 Tools with opposite relationships to the store cannot share a package and keep any fence
-meaningful, which is why ADR 41 made the first two siblings and ADR 43 added a third rather than a
-view.
+meaningful, which is why ADR 41 made the first two siblings, ADR 43 added a third rather than a
+view, and ADR 44 a fourth rather than a mode of one of them.
 
 ### What each package is for
 
@@ -152,6 +162,7 @@ view.
 | `seed` | The bulk seeding tool ([ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)): a name list to `name → QID`, run as `./gradlew resolveNames`. Plain Java, never opens a store. | `port`, `domain`, `wikidata` |
 | `export` | The graph exporter ([ADR 41](adr/0041-graph-exporter-views-and-formats.md)): `ViewSelector` and the two writers, run as `./gradlew exportGraph`. Plain Java, read-only. | `port`, `domain`, `ingest`, `sqlite`, `tinker` |
 | `ratings` | The taste-layer reader ([ADR 43](adr/0043-listing-your-own-ratings.md)): every rating with its label, note and `updated_at`, run as `./gradlew listRatings`. Plain Java, read-only, offline. | `port`, `domain`, `sqlite` |
+| `retract` | The retraction tool ([ADR 44](adr/0044-retraction-as-a-new-claim.md)): appends one `Retraction` claim so the projection stops showing an entity and its edges, run as `./gradlew retractEntity`. Plain Java, offline, and the only dev tool that writes. | `port`, `domain`, `ingest`, `sqlite` |
 
 ### Which rules a machine enforces
 
@@ -169,12 +180,14 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `noPackageCycles` | any dependency cycle between slices of `com.robsartin.segue` | [ADR 32](adr/0032-layering-and-archunit.md) |
 | `springOnlyInAppAndMcp` | `org.springframework.*` anywhere outside `app` and `mcp` | [ADR 25](adr/0025-source-adapter-spi.md), [ADR 32](adr/0032-layering-and-archunit.md) |
 | `onlyIngestAppliesClaimsToTheGraph` | calling `GraphStore.record`, `GraphStore.upsertNode` or `AssertionLog.append` from outside `ingest` | [ADR 19](adr/0019-assertion-log-source-of-truth.md) |
-| `seedNeverOpensAStore` | `seed` depending on `sqlite`, `tinker`, `jena`, `ingest`, `mcp` or `app` — it resolves names and must not open the database even to read it | [ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md) |
-| `theExporterOnlyReads` | `export` calling `GraphStore.record`/`upsertNode` or `AssertionLog.append`, or depending on `IngestService` at all | [ADR 41](adr/0041-graph-exporter-views-and-formats.md) |
+| `seedNeverOpensAStore` | `seed` depending on `sqlite`, `tinker`, `jena`, `ingest`, `mcp`, `app` or `retract` — it resolves names and must not open the database even to read it | [ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md) |
+| `theExporterOnlyReads` | `export` calling `GraphStore.record`/`upsertNode` or `AssertionLog.append`, or depending on `IngestService` or the `retract` package at all | [ADR 41](adr/0041-graph-exporter-views-and-formats.md) |
 | `theExporterNeverSpeaksToANetwork` | `export` depending on `java.net`, `javax.net` or `WikidataClient` — an export is a pure function of the database file | [ADR 41](adr/0041-graph-exporter-views-and-formats.md) |
 | `theRatingsToolOnlyReads` | `ratings` calling the three world-fact writes **or `AffinityStore.put`** — the only rule anywhere guarding the rating write | [ADR 43](adr/0043-listing-your-own-ratings.md) |
-| `theRatingsToolOpensNothingElse` | `ratings` depending on `tinker`, `jena`, `ingest`, `mcp`, `app`, `seed`, `export`, `java.net` or `javax.net` | [ADR 43](adr/0043-listing-your-own-ratings.md) |
+| `theRatingsToolOpensNothingElse` | `ratings` depending on `tinker`, `jena`, `ingest`, `mcp`, `app`, `seed`, `export`, `retract`, `java.net` or `javax.net` | [ADR 43](adr/0043-listing-your-own-ratings.md) |
 | `onlyTheRatingsToolReadsEveryRating` | calling `AffinityStore.readAll` from outside `ratings` — the bulk read exists for the owner's dev tool and for nothing on the MCP surface | [ADR 16](adr/0016-privacy-and-data-handling.md), [ADR 39](adr/0039-affinity-capture-and-read.md), [ADR 43](adr/0043-listing-your-own-ratings.md) |
+| `theRetractionToolWritesOnlyRetractions` | `retract` calling the three world-fact writes, `AffinityStore.put` or `AffinityStore.readAll` — it appends a retraction through `IngestService` and writes nothing else, least of all a rating | [ADR 44](adr/0044-retraction-as-a-new-claim.md) |
+| `theRetractionToolOpensNothingElse` | `retract` depending on `GraphStore` **as a type**, on `AffinityStore`, or on `tinker`, `jena`, `mcp`, `app`, `seed`, `export`, `ratings`, `java.net` or `javax.net` — a retraction has no graph half, so the tool must not be able to hold one | [ADR 44](adr/0044-retraction-as-a-new-claim.md) |
 | `nothingWritesToStandardOut` | reading `System.out` anywhere except the one named exception, `SegueApplication` | [ADR 28](adr/0028-mcp-transports.md) |
 | `nothingWritesToStandardError`, `noPrintStackTrace`, `noJavaUtilLogging` | bypassing SLF4J | [ADR 30](adr/0030-structured-logging.md) |
 | `affinityNeverTouchesTheWorldFactLayer` | a taste-layer type depending on the log, the graph, `IngestService` or the claim records | [ADR 33](adr/0033-taste-layer-separation.md) |
@@ -252,10 +265,35 @@ sequence number: a log that will not project is corruption to surface at boot, n
 
 ### Nodes are claims too
 
-`LoggedAssertion` is a sealed interface permitting exactly `NodeAssertion` and `AssertionRecord`.
-That is what makes replay complete — a mutable node table would be state not derived from the log,
-which would break the invariant quietly. `IngestService.apply` pattern-matches on the two:
-`NodeAssertion` becomes `graph.upsertNode`, `AssertionRecord` becomes `graph.record`.
+`LoggedAssertion` is a sealed interface permitting `NodeAssertion`, `AssertionRecord` and
+`Retraction`. Nodes being claims is what makes replay complete — a mutable node table would be
+state not derived from the log, which would break the invariant quietly. `IngestService.apply`
+pattern-matches on the two claim kinds: `NodeAssertion` becomes `graph.upsertNode`,
+`AssertionRecord` becomes `graph.record`. It **throws** on the third; see below.
+
+### The fold has a second rule, and both projections apply it
+
+Two things now happen between reading a row and applying it, and both are shared rules called from
+`GraphProjector` and from `LogProjection` (the exporter's fold):
+
+| rule | lives in | what it does | ADR |
+| --- | --- | --- | --- |
+| `KindMapper.rederive` | `wikidata` | re-derives a node's kind from the `P31` classes the claim stored | [42](adr/0042-store-p31-and-rederive-kind-at-projection.md) |
+| `Retractions.survives` | `domain` | drops the rows a retraction reaches, and the retraction row itself | [44](adr/0044-retraction-as-a-new-claim.md) |
+
+One rule, two callers, in both cases for the same reason: a graph and a picture of that graph must
+not be able to disagree. `BothFoldsAgreeTest` runs one deliberately awkward log through both and
+compares the node and edge sets, and it was confirmed to fail when either fold stops applying the
+rule. `Retractions` sits in `domain` rather than beside a caller because, unlike `KindMapper`, a
+retraction is nobody's vocabulary — it is the log's own.
+
+`IngestService.apply` throws if it is ever handed a `Retraction`. That is unreachable through
+either projection, and it is a guard rather than a path: reaching it means a caller replayed the
+log without applying the rule, which would produce a graph still holding edges somebody took back
+out. A silent no-op there is the one response that would hide exactly that.
+
+One visible consequence: the boot log line "replayed N assertions" is deliberately no longer the
+row count. On a log with retractions in it, the difference is the point.
 
 ### Where the graph engine sits
 
@@ -991,6 +1029,71 @@ data is a pure function of one local file.
 
 The join between the two layers happens above both ports and nowhere else (ADR 33). Here the class
 names say which side of that line each one is on — rename either and the build tells you.
+
+## Taking something back out
+
+```bash
+# what would this remove? Nothing is written.
+./gradlew retractEntity --args="--qid Q12345 --reason 'resolved to the painters, not the band' --dry-run"
+
+# do it
+./gradlew retractEntity --args="--qid Q12345 --reason 'resolved to the painters, not the band'"
+```
+
+### It is a claim, not a deletion
+
+Nothing is removed from the log, ever. `retractEntity` appends one `Retraction` row and the
+projections stop showing what it retracts — the same shape ADR 42 gave node kinds, where a later
+row changes what the projection *says* without rewriting what was *recorded*. Read
+[ADR 44](adr/0044-retraction-as-a-new-claim.md) before changing anything here; the reason deletion
+was refused is the whole decision, and it is short.
+
+### What it reaches, and what it leaves
+
+The unit is the **entity**: its node claims, and every edge claim with it at either end. Not one
+edge (the case this exists for is a wrongly-*resolved* entity, where the whole expansion is wrong),
+and not one expansion (that would leave the wrong identity in the graph, still findable and still
+rateable — and an expansion is not identifiable from what the log records).
+
+It reaches **backwards only**, by position in the log. Claims appended after a retraction stand,
+which is why re-adding an entity is how it comes back and why there is no un-retract verb.
+
+It does **not cascade**. Retract a wrongly-expanded group and the neighbours that expansion
+discovered stay behind as nodes with no edges. Their claims are not wrong, and cascading would
+delete neighbours that correct expansions also reached. An orphan node is invisible to `find_paths`
+and shows up in a `full` or `subgraph` export.
+
+### Three things this is not allowed to do
+
+| it cannot | rule | why |
+| --- | --- | --- |
+| write anything but a retraction | `theRetractionToolWritesOnlyRetractions` | no graph write, no direct `AssertionLog.append`, and never `AffinityStore.put` — a retraction is about the world-fact layer, and a rating is the one thing here that cannot be regenerated |
+| hold a `GraphStore` at all | `theRetractionToolOpensNothingElse` | a retraction has no graph half; `GraphStore` cannot remove anything and ADR 41 already refused to widen that port for a dev tool. `IngestService.retract` is static so that satisfying a constructor could never become the reason this tool held a graph |
+| reach a network, an engine or a sibling tool | `theRetractionToolOpensNothingElse` | a decision about your own graph is a pure function of one local file; a dependency on `seed`, `export` or `ratings` would let this inherit a different fence |
+
+### Why this is not a seventh MCP tool
+
+`ToolSurfaceTest.retractIsNotATool` is what says so, beside `assertEdgeIsNotAToolYet`. The reason
+is not tool-count arithmetic: the caller of an MCP tool is a language model, and a model that
+proposes retractions of its own is a different and much larger question than "can a wrong entity be
+taken back out". ADR 26 already holds back `assert_edge` because a model cannot tell a plausible
+relationship from one it knows; a tool that *removes* claims hands the same faculty a stronger
+verb. ADR 44 leaves that question closed and does not decide it either way.
+
+### The graph you are looking at right now is stale
+
+A retraction changes the projection, and the projection is rebuilt at boot. A running server keeps
+the old edges until it restarts — the tool's last line says so. That is ADR 24's contract reached
+from the other side, not an oversight.
+
+### The migration, and the one that is coming
+
+`SqliteAssertionLog` gained a `reason` column, added with `ALTER TABLE ... ADD COLUMN` and guarded
+by reading `PRAGMA table_info` rather than a version table: "does this column exist" has an exact
+answer here, and a version number is a second source of truth a hand-edited file can contradict.
+This is the real migration ADR 42 said the next schema change would need, and it was tested against
+a copy of the live database as well as from a fixture that writes the old schema by hand. Do the
+same for the next one.
 
 ## How to read an ADR against the code
 

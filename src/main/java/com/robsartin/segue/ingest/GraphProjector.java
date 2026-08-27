@@ -2,6 +2,7 @@ package com.robsartin.segue.ingest;
 
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
+import com.robsartin.segue.domain.Retractions;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.GraphStore;
 import com.robsartin.segue.wikidata.KindMapper;
@@ -31,6 +32,12 @@ import java.util.List;
  * caller has to remember, and the cost of forgetting is invisible - a graph that looks right and
  * quietly holds a stale classification. That was already the shape of issue #55. The rule itself
  * lives in {@link KindMapper#rederive}, which is also what {@code LogProjection} calls.
+ *
+ * <p><b>Retractions are honoured here too</b> (ADR 44, issue #68), through the same shared-rule
+ * shape: {@link Retractions} decides which rows reach the graph, and {@code LogProjection} asks it
+ * the same question about the same log. A retraction is a claim like any other and is never applied
+ * to a store - it changes what the fold produces, not what the log holds - so the claims it reaches
+ * are skipped before {@link IngestService#apply} ever sees them.
  */
 public final class GraphProjector {
 
@@ -43,9 +50,13 @@ public final class GraphProjector {
    */
   public static long project(AssertionLog log, GraphStore store) {
     List<LoggedAssertion> assertions = log.readAll();
+    Retractions retractions = Retractions.in(assertions);
     long applied = 0;
     for (int i = 0; i < assertions.size(); i++) {
       LoggedAssertion assertion = assertions.get(i);
+      if (!retractions.survives(i, assertion)) {
+        continue;
+      }
       try {
         IngestService.apply(store, rederived(assertion));
         applied++;

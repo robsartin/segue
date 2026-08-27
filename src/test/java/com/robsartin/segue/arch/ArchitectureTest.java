@@ -132,7 +132,13 @@ class ArchitectureTest {
           .should()
           .dependOnClassesThat()
           .resideInAnyPackage(
-              "..sqlite..", "..tinker..", "..jena..", "..ingest..", "..mcp..", "..app..")
+              "..sqlite..",
+              "..tinker..",
+              "..jena..",
+              "..ingest..",
+              "..mcp..",
+              "..app..",
+              "..retract..")
           .because(
               "ADR 40: the seeding tool resolves and reports — it never writes the graph, never"
                   + " opens the database, and is deliberately not an MCP tool (ADR 26)");
@@ -309,10 +315,18 @@ class ArchitectureTest {
               ArchConditions.callMethodWhere(APPLIES_A_CLAIM)
                   .or(
                       ArchConditions.dependOnClassesThat(
-                          JavaClass.Predicates.equivalentTo(IngestService.class))))
+                          JavaClass.Predicates.equivalentTo(IngestService.class)))
+                  // ADR 44 added a fourth dev-side tool, and it is the first one that writes.
+                  // Without this clause the exporter could reach RetractRun and append a
+                  // retraction through it, inheriting a looser fence than its own — the exact
+                  // shape theRatingsToolOpensNothingElse already refuses for its siblings.
+                  .or(
+                      ArchConditions.dependOnClassesThat(
+                          JavaClass.Predicates.resideInAPackage("..retract.."))))
           .because(
               "ADR 41: the exporter is a read-only tool — it never appends to the log, never"
-                  + " writes the graph, and cannot reach the one class that is allowed to");
+                  + " writes the graph, and cannot reach the one class that is allowed to,"
+                  + " nor the one dev-side tool that is (ADR 44)");
 
   /**
    * ADR 41: the exporter is offline as well as read-only.
@@ -398,6 +412,7 @@ class ArchitectureTest {
               "..app..",
               "..seed..",
               "..export..",
+              "..retract..",
               "java.net..",
               "javax.net..")
           .because(
@@ -430,6 +445,76 @@ class ArchitectureTest {
           .because(
               "ADR 16, ADR 39 and ADR 43: the owner may enumerate their taste layer from a dev-side"
                   + " tool; nothing on the MCP surface may enumerate it at all");
+
+  /**
+   * ADR 44: the retraction tool writes exactly one thing, and cannot write anything else.
+   *
+   * <p>The fourth dev-side tool, and the first one that <b>writes</b> - which is why its fence is
+   * shaped differently from the other three. {@code seed} may not open a store at all, {@code
+   * export} and {@code ratings} may read one; this appends. What it may append is one retraction,
+   * through {@link IngestService#retract}, which is the only reason it is allowed to depend on
+   * {@code ingest} at all.
+   *
+   * <p>So the four durable writes are all forbidden <em>here</em> as well as from wherever else
+   * they are already forbidden: {@code AssertionLog.append} directly (it must go through {@code
+   * ingest}, so that {@link #onlyIngestAppliesClaimsToTheGraph} keeps meaning what it says), both
+   * halves of the graph write, and {@code AffinityStore.put}. That last one matters most: a
+   * retraction is about the world-fact layer, and ADR 33 keeps the taste layer out of it entirely.
+   * A rating is the one thing in segue that cannot be regenerated, and the tool whose whole purpose
+   * is removing things must be unable to touch it.
+   */
+  @ArchTest
+  static final ArchRule theRetractionToolWritesOnlyRetractions =
+      noClasses()
+          .that()
+          .resideInAPackage("..retract..")
+          .should(
+              ArchConditions.callMethodWhere(
+                  APPLIES_A_CLAIM
+                      .or(callTo("put", AffinityStore.class))
+                      .or(callTo("readAll", AffinityStore.class))))
+          .because(
+              "ADR 44: retraction appends one claim through IngestService and writes nothing"
+                  + " else — not the graph, not the log directly, and never the taste layer");
+
+  /**
+   * ADR 44: the retraction tool sees a log and nothing else.
+   *
+   * <p>{@code GraphStore} is named as a <em>type</em>, not just as two forbidden calls, and that is
+   * the clause worth reading twice. A retraction has no graph half: the port cannot remove
+   * anything, and widening the port that exists to keep the engine choice reversible (ADR 18) so a
+   * dev tool could is what ADR 41 already refused. The graph catches up by being rebuilt from the
+   * log (ADR 24). So this tool has no business holding a graph at all, and {@link
+   * IngestService#retract} is static precisely so that satisfying a constructor could not become
+   * the reason it held one.
+   *
+   * <p>The sibling tools are banned for the reason ADR 43 gives: a dependency on one would let this
+   * one inherit the sibling's different fence. {@code java.net} because a decision about your own
+   * graph is a pure function of one local file, and nothing about it leaves the machine.
+   */
+  @ArchTest
+  static final ArchRule theRetractionToolOpensNothingElse =
+      noClasses()
+          .that()
+          .resideInAPackage("..retract..")
+          .should()
+          .dependOnClassesThat(
+              JavaClass.Predicates.equivalentTo(GraphStore.class)
+                  .or(JavaClass.Predicates.equivalentTo(AffinityStore.class))
+                  .or(
+                      JavaClass.Predicates.resideInAnyPackage(
+                          "..tinker..",
+                          "..jena..",
+                          "..mcp..",
+                          "..app..",
+                          "..seed..",
+                          "..export..",
+                          "..ratings..",
+                          "java.net..",
+                          "javax.net..")))
+          .because(
+              "ADR 44: retraction is a decision about the log, made offline, from a tool that"
+                  + " cannot hold a graph, a rating, an engine or a network connection");
 
   /**
    * The taste layer, by type rather than by package.

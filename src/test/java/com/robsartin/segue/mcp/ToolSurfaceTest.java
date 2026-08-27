@@ -231,6 +231,19 @@ class ToolSurfaceTest {
     assertThat(allTools()).extracting(McpTool::name).doesNotContain("assert_edge");
   }
 
+  @Test
+  @DisplayName("retract is deliberately absent, per ADR 44")
+  void retractIsNotATool() {
+    // ADR 44 built retraction as a fourth dev-side tool, after ADR 40, ADR 41 and ADR 43 - and
+    // for the heaviest reason of the four: the caller of an MCP tool is a language model, and a
+    // model that can propose retractions of its own is a different and much larger question,
+    // which ADR 44 deliberately leaves closed. A retract_entity appearing here is that question
+    // being reopened, and should fail this test until an ADR says otherwise.
+    assertThat(allTools())
+        .extracting(McpTool::name)
+        .doesNotContain("retract", "retract_entity", "remove_entity");
+  }
+
   private static List<McpTool> allTools() {
     return toolMethods().map(method -> method.getAnnotation(McpTool.class)).toList();
   }

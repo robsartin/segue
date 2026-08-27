@@ -3,6 +3,7 @@ package com.robsartin.segue.ingest;
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
+import com.robsartin.segue.domain.Retraction;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.GraphStore;
 import java.util.List;
@@ -33,8 +34,35 @@ public final class IngestService {
   /** Append one claim to the log, then apply it to the graph. */
   public void record(LoggedAssertion assertion) {
     Objects.requireNonNull(assertion, "assertion");
+    if (assertion instanceof Retraction) {
+      // Refused before the append, not after: this method's whole contract is log-then-graph,
+      // and a retraction has no graph half. Appending one here and then failing would leave a
+      // retraction in the log that the caller had been told did not happen.
+      throw new IllegalArgumentException("a retraction is appended by retract(), not record()");
+    }
     log.append(assertion);
     apply(graph, assertion);
+  }
+
+  /**
+   * Append a retraction (ADR 44). The third write path, and the only one that touches no graph.
+   *
+   * <p><b>Static, and taking the log, deliberately.</b> Every other write here is log-then-graph,
+   * and a retraction has no graph half: {@link GraphStore} cannot remove anything, and widening the
+   * port that exists to keep the engine choice reversible (ADR 18) so that a dev-side tool can is
+   * what ADR 41 already refused. So the running graph is stale until the next boot rebuilds it from
+   * the log, which is exactly the contract ADR 24 already gives replay.
+   *
+   * <p>Requiring an {@code IngestService} instance would mean handing the retraction tool a {@code
+   * GraphStore} it must never touch, purely so a constructor could be satisfied - the opposite of
+   * the fence that tool needs. This way the append still happens inside {@code ingest}, so {@code
+   * onlyIngestAppliesClaimsToTheGraph} holds unchanged and the tool can be forbidden a graph
+   * outright.
+   */
+  public static void retract(AssertionLog log, Retraction retraction) {
+    Objects.requireNonNull(log, "log");
+    Objects.requireNonNull(retraction, "retraction");
+    log.append(retraction);
   }
 
   /** Record a batch in order; each claim is logged and applied before the next is considered. */
@@ -54,6 +82,15 @@ public final class IngestService {
     switch (assertion) {
       case NodeAssertion node -> graph.upsertNode(node.toNode());
       case AssertionRecord edge -> graph.record(edge);
+      // Unreachable, and a guard rather than a path. A retraction is honoured by the FOLD - both
+      // projections drop it and everything it retracts before they get here (ADR 44) - so
+      // reaching this line means a caller replayed the log without applying that rule, which
+      // would produce a graph still holding the edges somebody took back out. Silently ignoring
+      // it is the one response that would hide exactly that.
+      case Retraction retraction ->
+          throw new IllegalStateException(
+              "a retraction is honoured by the projection's fold, never applied to a graph: "
+                  + retraction.qid());
     }
   }
 }

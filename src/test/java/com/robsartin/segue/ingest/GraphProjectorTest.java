@@ -7,6 +7,7 @@ import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.Provenance;
+import com.robsartin.segue.domain.Retraction;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import com.robsartin.segue.tinker.TinkerGraphStore;
@@ -19,6 +20,8 @@ import org.junit.jupiter.api.Test;
 class GraphProjectorTest {
 
   private static final Provenance WIKIDATA = new Provenance("wikidata", "ref", Instant.EPOCH, 1.0);
+
+  private static final Instant RETRACTED_AT = Instant.parse("2026-08-27T12:00:00Z");
 
   @Test
   @DisplayName("replaying node then edge claims rebuilds the projected graph")
@@ -155,6 +158,86 @@ class GraphProjectorTest {
       assertThatThrownBy(() -> GraphProjector.project(log, store))
           .isInstanceOf(IllegalStateException.class)
           .hasMessageContaining("sequence 2");
+    }
+  }
+
+  @Test
+  @DisplayName("replay honours a retraction: the entity and its edges are not in the rebuilt graph")
+  void replayHonoursARetraction() {
+    // ADR 44 and the motivating case for it: an entity resolved to the wrong QID and then
+    // expanded leaves its edges in the graph with no way out. The log is not edited - see
+    // theLogStillHoldsEveryOriginalClaim below, which is the same log read straight back.
+    try (AssertionLog log = SqliteAssertionLog.inMemory();
+        TinkerGraphStore store = new TinkerGraphStore()) {
+      log.append(new NodeAssertion("Q900101", NodeKind.GROUP, "The Wrong Ones", WIKIDATA));
+      log.append(new NodeAssertion("Q900102", NodeKind.WORK, "A Painting", WIKIDATA));
+      log.append(new AssertionRecord("Q900101", "Q900102", "PERFORMED", null, null, WIKIDATA));
+      log.append(new Retraction("Q900101", "resolved to the painters, not the band", RETRACTED_AT));
+
+      GraphProjector.project(log, store);
+
+      assertThat(store.node("Q900101")).isEmpty();
+      assertThat(store.edgeCount()).isZero();
+      assertThat(store.node("Q900102")).isPresent();
+    }
+  }
+
+  @Test
+  @DisplayName("the log still holds every original claim after a retraction has been replayed")
+  void theLogStillHoldsEveryOriginalClaim() {
+    // The acceptance criterion of issue #68 stated as a test. Retraction is a new claim, not a
+    // deletion: everything ADR 19 rests on - replay reproducing the graph, the audit trail,
+    // ADR 42's offline re-derivation - would become conditional on nobody having deleted
+    // anything if this were false.
+    NodeAssertion wrong = new NodeAssertion("Q900101", NodeKind.GROUP, "The Wrong Ones", WIKIDATA);
+    AssertionRecord edge =
+        new AssertionRecord("Q900101", "Q900102", "PERFORMED", null, null, WIKIDATA);
+    Retraction retraction = new Retraction("Q900101", "wrong entity", RETRACTED_AT);
+
+    try (AssertionLog log = SqliteAssertionLog.inMemory();
+        TinkerGraphStore store = new TinkerGraphStore()) {
+      log.append(wrong);
+      log.append(new NodeAssertion("Q900102", NodeKind.WORK, "A Painting", WIKIDATA));
+      log.append(edge);
+      log.append(retraction);
+
+      GraphProjector.project(log, store);
+
+      assertThat(log.readAll()).contains(wrong, edge, retraction);
+    }
+  }
+
+  @Test
+  @DisplayName("a claim recorded after a retraction is replayed: re-adding is the way back")
+  void replayHonoursClaimsMadeAfterARetraction() {
+    try (AssertionLog log = SqliteAssertionLog.inMemory();
+        TinkerGraphStore store = new TinkerGraphStore()) {
+      log.append(new NodeAssertion("Q900101", NodeKind.GROUP, "The Wrong Ones", WIKIDATA));
+      log.append(new Retraction("Q900101", "wrong entity", RETRACTED_AT));
+      log.append(new NodeAssertion("Q900101", NodeKind.GROUP, "The Right Ones", WIKIDATA));
+      log.append(new NodeAssertion("Q900102", NodeKind.WORK, "A Song", WIKIDATA));
+      log.append(new AssertionRecord("Q900101", "Q900102", "PERFORMED", null, null, WIKIDATA));
+
+      GraphProjector.project(log, store);
+
+      assertThat(store.node("Q900101").orElseThrow().label()).isEqualTo("The Right Ones");
+      assertThat(store.edgeCount()).isEqualTo(1);
+    }
+  }
+
+  @Test
+  @DisplayName("a retraction is never applied to a store, and the applier says so if asked")
+  void aRetractionIsNeverAppliedToAStore() {
+    // The guard in IngestService.apply. Unreachable through either projection - both drop
+    // retractions in the fold - so this is what proves the guard is a refusal rather than a
+    // silent no-op that would leave a graph holding edges somebody took back out.
+    try (TinkerGraphStore store = new TinkerGraphStore()) {
+      assertThatThrownBy(
+              () ->
+                  IngestService.apply(
+                      store, new Retraction("Q900101", "wrong entity", RETRACTED_AT)))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("Q900101");
     }
   }
 }

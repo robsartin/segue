@@ -161,6 +161,21 @@ tasks.register<JavaExec>("listRatings") {
     outputs.upToDateWhen { false }
 }
 
+tasks.register<JavaExec>("retractEntity") {
+    group = "application"
+    description =
+        "Retracts one entity: appends a retraction claim so the projection stops showing that " +
+            "entity and its edges. The log is never edited — every original claim stays in it. " +
+            "Needs no network. See ADR 44. Example: ./gradlew retractEntity " +
+            "--args=\"--qid Q12345 --reason 'resolved to the wrong entity' --dry-run\""
+    mainClass.set("com.robsartin.segue.retract.RetractCli")
+    classpath = sourceSets["main"].runtimeClasspath
+    // sqlite-jdbc loads a native library, the same grant tasks.test makes.
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
+    // Never up-to-date: the log changes under it, and re-running it is a deliberate act.
+    outputs.upToDateWhen { false }
+}
+
 spotless {
     java {
         googleJavaFormat(libs.versions.googleJavaFormat.get())

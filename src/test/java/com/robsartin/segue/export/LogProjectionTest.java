@@ -10,12 +10,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.domain.EdgeRecord;
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.domain.Retraction;
 import com.robsartin.segue.export.InventedGraph.FakeAssertionLog;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class LogProjectionTest {
+
+  private static final Instant WHEN_RETRACTED = Instant.parse("2026-02-01T00:00:00Z");
 
   @Test
   @DisplayName("node claims become nodes, and the last claim about an entity wins")
@@ -99,6 +103,62 @@ class LogProjectionTest {
 
     assertThat(projection.nodes()).isEmpty();
     assertThat(projection.edges()).isEmpty();
+    assertThat(projection.danglingEdges()).isZero();
+  }
+
+  @Test
+  @DisplayName("a retracted entity leaves the exported fold, edges and all")
+  void honoursARetraction() {
+    // ADR 44, and the half of it that matters most: the exporter's fold and the boot replay
+    // apply the same rule, so a picture of the graph cannot still show edges the graph has
+    // dropped. GraphProjectorTest.replayHonoursARetraction is the other half.
+    LogProjection projection =
+        LogProjection.of(
+            new FakeAssertionLog()
+                .with(
+                    node(WREN, NodeKind.PERSON, "Wren Alderman"),
+                    node(KETTLES, NodeKind.GROUP, "The Paper Kettles"),
+                    node(HOLLOW_TIDE, NodeKind.GROUP, "Hollow Tide"),
+                    edge(WREN, KETTLES, "MEMBER_OF"),
+                    edge(WREN, HOLLOW_TIDE, "MEMBER_OF"),
+                    new Retraction(WREN, "resolved to the wrong Wren", WHEN_RETRACTED)));
+
+    assertThat(projection.nodes()).containsOnlyKeys(KETTLES, HOLLOW_TIDE);
+    assertThat(projection.edges()).isEmpty();
+  }
+
+  @Test
+  @DisplayName("claims made after a retraction are projected: re-adding is how you come back")
+  void honoursClaimsMadeAfterARetraction() {
+    LogProjection projection =
+        LogProjection.of(
+            new FakeAssertionLog()
+                .with(
+                    node(WREN, NodeKind.CONCEPT, "Wren Alderman"),
+                    new Retraction(WREN, "wrong entity", WHEN_RETRACTED),
+                    node(WREN, NodeKind.PERSON, "Wren Alderman"),
+                    node(KETTLES, NodeKind.GROUP, "The Paper Kettles"),
+                    edge(WREN, KETTLES, "MEMBER_OF")));
+
+    assertThat(projection.nodes().get(WREN).kind()).isEqualTo(NodeKind.PERSON);
+    assertThat(projection.edges()).hasSize(1);
+  }
+
+  @Test
+  @DisplayName("a retraction does not make the edges it removed look dangling")
+  void aRetractedEdgeIsNotCountedAsDangling() {
+    // danglingEdges means "the log names an entity nobody ever claimed as a node", which is a
+    // corruption worth reporting. An edge a retraction removed is not that, and counting it
+    // there would put a frightening number in front of an operator who did nothing wrong.
+    LogProjection projection =
+        LogProjection.of(
+            new FakeAssertionLog()
+                .with(
+                    node(WREN, NodeKind.PERSON, "Wren Alderman"),
+                    node(KETTLES, NodeKind.GROUP, "The Paper Kettles"),
+                    edge(WREN, KETTLES, "MEMBER_OF"),
+                    new Retraction(WREN, "wrong entity", WHEN_RETRACTED)));
+
     assertThat(projection.danglingEdges()).isZero();
   }
 }
