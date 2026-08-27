@@ -12,6 +12,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -62,6 +64,14 @@ public final class SqliteAffinityStore implements AffinityStore {
 
   private static final String SELECT_ONE =
       "SELECT qid, rating, note, updated_at FROM affinity WHERE qid = ?";
+
+  /**
+   * Ordered by {@code qid} because the port promises determinism and nothing more: the two
+   * orderings a person actually reads - by rating, and by when it last changed - belong to the
+   * caller, and ADR 43 keeps them there.
+   */
+  private static final String SELECT_ALL =
+      "SELECT qid, rating, note, updated_at FROM affinity ORDER BY qid";
 
   private final Connection conn;
 
@@ -123,16 +133,37 @@ public final class SqliteAffinityStore implements AffinityStore {
         if (!rs.next()) {
           return Optional.empty();
         }
-        return Optional.of(
-            new AffinityRecord(
-                rs.getString("qid"),
-                rs.getInt("rating"),
-                rs.getString("note"),
-                Instant.parse(rs.getString("updated_at"))));
+        return Optional.of(read(rs));
       }
     } catch (SQLException e) {
       throw new IllegalStateException("cannot read affinity for " + qid, e);
     }
+  }
+
+  @Override
+  public List<AffinityRecord> readAll() {
+    List<AffinityRecord> ratings = new ArrayList<>();
+    try (PreparedStatement ps = conn.prepareStatement(SELECT_ALL);
+        ResultSet rs = ps.executeQuery()) {
+      while (rs.next()) {
+        ratings.add(read(rs));
+      }
+      return List.copyOf(ratings);
+    } catch (SQLException e) {
+      // No qid to name, and deliberately no count either: how much the user has rated is itself a
+      // fact about them (ADR 33), and this message is the likeliest string on this path to be
+      // logged by something upstream.
+      throw new IllegalStateException("cannot read the affinity table", e);
+    }
+  }
+
+  /** One row, read the same way by both readers so the two cannot disagree about a column. */
+  private static AffinityRecord read(ResultSet rs) throws SQLException {
+    return new AffinityRecord(
+        rs.getString("qid"),
+        rs.getInt("rating"),
+        rs.getString("note"),
+        Instant.parse(rs.getString("updated_at")));
   }
 
   @Override

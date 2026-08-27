@@ -146,6 +146,21 @@ tasks.register<JavaExec>("exportGraph") {
     outputs.upToDateWhen { false }
 }
 
+tasks.register<JavaExec>("listRatings") {
+    group = "application"
+    description =
+        "Lists every rating with its label, note and when it last changed. Reads only; needs no " +
+            "network. The output is personal data (ADR 33) — write it outside the working tree. " +
+            "See ADR 43. Example: ./gradlew listRatings " +
+            "--args=\"--sort recent --out \$HOME/ratings.txt\""
+    mainClass.set("com.robsartin.segue.ratings.RatingsCli")
+    classpath = sourceSets["main"].runtimeClasspath
+    // sqlite-jdbc loads a native library, the same grant tasks.test makes.
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
+    // Never up-to-date: the ratings change under it, and the point is to see them now.
+    outputs.upToDateWhen { false }
+}
+
 spotless {
     java {
         googleJavaFormat(libs.versions.googleJavaFormat.get())

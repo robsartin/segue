@@ -10,6 +10,7 @@ import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.ingest.IngestService;
+import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.GraphStore;
 import com.tngtech.archunit.base.DescribedPredicate;
@@ -340,6 +341,95 @@ class ArchitectureTest {
           .because(
               "ADR 41: an export is a pure function of the database file — a class label fetched at"
                   + " export time would make a picture depend on the internet being up");
+
+  /**
+   * ADR 43: the ratings tool reads, and it cannot write either layer.
+   *
+   * <p>The third dev-side tool, and the one whose fence needs a clause no other rule in this file
+   * has: <b>{@code AffinityStore.put}</b>. {@link #onlyIngestAppliesClaimsToTheGraph} guards the
+   * three world-fact writes from everywhere, and {@link #theExporterOnlyReads} repeats them at
+   * {@code export} - but nothing anywhere forbids writing a <em>rating</em>, because until now the
+   * only class outside {@code mcp} holding an {@code AffinityStore} looked up one qid at a time.
+   * This tool holds the whole table, and affinity is the one part of segue that cannot be
+   * regenerated from a source: a world fact deleted by accident comes back from Wikidata, and a
+   * rating deleted by accident is gone. The tool that reads all of it must be unable to touch any
+   * of it.
+   */
+  @ArchTest
+  static final ArchRule theRatingsToolOnlyReads =
+      noClasses()
+          .that()
+          .resideInAPackage("..ratings..")
+          .should(
+              ArchConditions.callMethodWhere(
+                  APPLIES_A_CLAIM.or(callTo("put", AffinityStore.class))))
+          .because(
+              "ADR 43: listing your ratings is a read — the tool never appends to the log, never"
+                  + " writes the graph, and never writes the taste layer it exists to display");
+
+  /**
+   * ADR 43: the ratings tool opens two stores in one file and nothing else.
+   *
+   * <p>The tightest of the three dev-tool fences, and it can be, because this tool needs the least:
+   * a bulk read of the {@code affinity} table and the node claims in the log, both through {@code
+   * sqlite}. No traversal, so no {@code tinker}; no projection, so no {@code ingest}; no picture,
+   * so no {@code export}. {@code seed} and {@code export} are banned as well as the application
+   * packages, because a dependency on a sibling tool would quietly let this one inherit the
+   * sibling's looser fence - {@code export} may use {@code GraphProjector}, and this may not.
+   *
+   * <p>{@code java.net} for the same reason {@link #theExporterNeverSpeaksToANetwork} names it:
+   * this tool joins qids to labels, a label is one HTTP call away, and a rating whose entity has
+   * left the graph is exactly the row that makes fetching one look like an improvement. It is not.
+   * A listing of personal data must be a pure function of one local file, with nothing leaving the
+   * machine.
+   */
+  @ArchTest
+  static final ArchRule theRatingsToolOpensNothingElse =
+      noClasses()
+          .that()
+          .resideInAPackage("..ratings..")
+          .should()
+          .dependOnClassesThat()
+          .resideInAnyPackage(
+              "..tinker..",
+              "..jena..",
+              "..ingest..",
+              "..mcp..",
+              "..app..",
+              "..seed..",
+              "..export..",
+              "java.net..",
+              "javax.net..")
+          .because(
+              "ADR 43: the ratings tool reads the affinity table and the log's node claims, offline"
+                  + " — it needs no engine, no projection and no network, and cannot become an MCP"
+                  + " tool by accident");
+
+  /**
+   * ADR 43, and the reason ADR 39's refusal survives: nothing but the dev tool may read every
+   * rating at once.
+   *
+   * <p>ADR 39 declined a bulk {@code list_affinity} because it is the single call that would put
+   * the whole taste layer in front of a model, and ADR 43 did not overturn that - it separated the
+   * audiences. The port now has a {@code readAll}, so the refusal is one method call away from
+   * being undone by a well-meaning addition to {@code SegueService}, and {@code ToolSurfaceTest}
+   * would not notice: a tool can grow a field without growing a row.
+   *
+   * <p>So the distinction is enforced where it actually lives, at the call. {@code find} stays
+   * available everywhere, which is what {@code get_entity} and {@code AffinityOverlay} use; the
+   * sweep is reserved to one package. If a future ADR gives the bulk read to somebody else, this
+   * rule is what it has to change - which is the point.
+   */
+  @ArchTest
+  static final ArchRule onlyTheRatingsToolReadsEveryRating =
+      noClasses()
+          .that()
+          .resideOutsideOfPackage("..ratings..")
+          .should()
+          .callMethodWhere(callTo("readAll", AffinityStore.class))
+          .because(
+              "ADR 16, ADR 39 and ADR 43: the owner may enumerate their taste layer from a dev-side"
+                  + " tool; nothing on the MCP surface may enumerate it at all");
 
   /**
    * The taste layer, by type rather than by package.
