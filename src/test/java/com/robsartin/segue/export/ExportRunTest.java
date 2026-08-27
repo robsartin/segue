@@ -219,6 +219,14 @@ class ExportRunTest {
                 : Optional.empty();
           }
 
+          // Deliberately unusable: the overlay asks only about the entities already in the view,
+          // and ADR 43 gave the bulk read to a dev tool that is not the exporter.
+          @Override
+          public List<AffinityRecord> readAll() {
+            throw new UnsupportedOperationException(
+                "the exporter never reads the whole taste layer");
+          }
+
           @Override
           public void close() {}
         };

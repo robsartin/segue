@@ -25,6 +25,7 @@ there currently are none.
 ./gradlew liveTest        # tagged live tests against the real Wikidata API; excluded from check
 ./gradlew resolveNames --args="--list $HOME/names.csv"   # bulk name→QID (ADR 40); needs network
 ./gradlew exportGraph --args="--view neighbourhood --qid Q42 --out $HOME/one.graphml"  # ADR 41; read-only; the --out extension picks the format
+./gradlew listRatings --args="--sort recent --out $HOME/ratings.txt"   # ADR 43; read-only; the OUTPUT IS PERSONAL DATA
 ```
 
 Gradle, not Maven. The wrapper is pinned to 9.7.1 and committed; **Gradle 9.1.0 is the
@@ -81,6 +82,12 @@ export/   The graph exporter (ADR 41): four bounded views — route,
           MCP tool. Selection (ViewSelector) knows no format; writers know no
           graph. A sibling of seed rather than part of it, because seed may not
           open a store and this reads one.
+ratings/  The taste-layer reader (ADR 43): every rating with its label, note and
+          updated_at, sortable by rating or recency, run as `./gradlew
+          listRatings`. Dev-side, plain Java, READ-ONLY, offline, and NOT a
+          seventh MCP tool. Its output IS personal data; *.txt is gitignored.
+          The tightest fence of the three tools — sqlite only, no engine, no
+          projection, no network.
 ingest/   IngestService (the only write path) and GraphProjector (boot replay).
 support/  Plain-Java cross-cutting helpers with no project dependencies of their
           own — currently UuidV7, the RFC 9562 v7 id generator used for request
@@ -355,6 +362,16 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   in the parser can tell which of the two is the typo. **Don't add a `--force`**; it exists only to
   recreate the failure. Adding a third format means adding its extensions to `OutputFormat` too.
   ADR 41's issue-#57 amendment.
+
+- **`AffinityStore.readAll` exists, and exactly one package may call it.** ADR 39 declined a bulk
+  `list_affinity` MCP tool on ADR 16 data-minimisation grounds — it is the one call that exposes
+  the whole taste layer to a model — and that reasoning STANDS. What it accidentally also did was
+  lock out the OWNER, who cannot regenerate a rating from any source. ADR 43 changed the caller,
+  not the surface: the port gained a bulk read, `./gradlew listRatings` uses it, and
+  `onlyTheRatingsToolReadsEveryRating` fails the build if anything outside `..ratings..` calls it.
+  Don't "expose it on `get_entity`" or add a field carrying it — `ToolSurfaceTest` counts TOOLS and
+  would not notice a new field, which is exactly why the fence is at the call site. Also new there:
+  `theRatingsToolOnlyReads` is the only rule in the project that forbids **`AffinityStore.put`**.
 
 - **`AffinityOverlay` is fenced by a rule written years before it.**
   `affinityNeverTouchesTheWorldFactLayer` matches taste-layer types by NAME (simple name contains

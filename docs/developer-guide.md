@@ -23,6 +23,7 @@ Everything here was checked against the source in `src/main/java/com/robsartin/s
 - [The build and the gate](#the-build-and-the-gate)
 - [Bulk seeding](#bulk-seeding)
 - [Looking at the graph](#looking-at-the-graph)
+- [Looking at what you have rated](#looking-at-what-you-have-rated)
 - [How to read an ADR against the code](#how-to-read-an-adr-against-the-code)
 
 ## What segue is, in one pass
@@ -70,6 +71,7 @@ graph TD
   support["support<br/>UuidV7"]
   seed["seed<br/>SeedCli, SeedResolver, Adjudicator"]
   export["export<br/>ViewSelector, DotWriter, GraphMlWriter"]
+  ratings["ratings<br/>RatingsCli, RatingsRun, RatingsTable"]
 
   app --> mcp
   app --> ingest
@@ -101,6 +103,9 @@ graph TD
   export --> ingest
   export --> sqlite
   export --> tinker
+  ratings --> port
+  ratings --> domain
+  ratings --> sqlite
 ```
 
 **What the diagram shows.** Dependencies point downward and never back up. `domain` sits at the
@@ -112,14 +117,23 @@ almost everything, because wiring is its job. `support` depends on nothing and i
 `mcp`. Two things a reader might expect and will not find: `app` does not import `jena` at all —
 the reference engine is reachable only from tests — and nothing imports `domain` from `app`.
 
-`seed` and `export` are the two dev-side tools. Neither is reachable from the application — nothing
-imports either, and both are entered through their own `main` behind a Gradle `JavaExec` task — and
-their arrows are the interesting part. `seed` reaches `wikidata` and stops: it may not touch
-`sqlite`, `tinker`, `jena`, `ingest`, `mcp` or `app`, which is the fence that makes a tool reading a
-private list of names safe ([ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)). `export` reaches
-`sqlite`, `tinker` and `ingest`, because reading the graph is its whole job. Two tools with opposite
-relationships to the store cannot share a package and keep either fence meaningful, which is why
-[ADR 41](adr/0041-graph-exporter-views-and-formats.md) made them siblings.
+`seed`, `export` and `ratings` are the three dev-side tools. None is reachable from the application
+— nothing imports any of them, and each is entered through its own `main` behind a Gradle
+`JavaExec` task — and their arrows are the interesting part, because each has a different
+relationship with the data and a different fence to match.
+
+- **`seed` reaches `wikidata` and stops.** It may not touch `sqlite`, `tinker`, `jena`, `ingest`,
+  `mcp` or `app`: it cannot open the database even to read it, which is the fence that makes a tool
+  reading a private list of names safe ([ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)).
+- **`export` reaches `sqlite`, `tinker` and `ingest`**, because reading the graph is its whole job,
+  and it may build a throwaway projection ([ADR 41](adr/0041-graph-exporter-views-and-formats.md)).
+- **`ratings` reaches `sqlite` and nothing else** — the tightest of the three, because it needs the
+  least: a bulk read of the `affinity` table and the node claims in the log, no traversal and no
+  projection ([ADR 43](adr/0043-listing-your-own-ratings.md)).
+
+Tools with opposite relationships to the store cannot share a package and keep any fence
+meaningful, which is why ADR 41 made the first two siblings and ADR 43 added a third rather than a
+view.
 
 ### What each package is for
 
@@ -137,6 +151,7 @@ relationships to the store cannot share a package and keep either fence meaningf
 | `app` | Entry point, all bean wiring, `application.yaml`, transport profiles. Spring-aware. | everything it wires |
 | `seed` | The bulk seeding tool ([ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)): a name list to `name → QID`, run as `./gradlew resolveNames`. Plain Java, never opens a store. | `port`, `domain`, `wikidata` |
 | `export` | The graph exporter ([ADR 41](adr/0041-graph-exporter-views-and-formats.md)): `ViewSelector` and the two writers, run as `./gradlew exportGraph`. Plain Java, read-only. | `port`, `domain`, `ingest`, `sqlite`, `tinker` |
+| `ratings` | The taste-layer reader ([ADR 43](adr/0043-listing-your-own-ratings.md)): every rating with its label, note and `updated_at`, run as `./gradlew listRatings`. Plain Java, read-only, offline. | `port`, `domain`, `sqlite` |
 
 ### Which rules a machine enforces
 
@@ -157,6 +172,9 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `seedNeverOpensAStore` | `seed` depending on `sqlite`, `tinker`, `jena`, `ingest`, `mcp` or `app` — it resolves names and must not open the database even to read it | [ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md) |
 | `theExporterOnlyReads` | `export` calling `GraphStore.record`/`upsertNode` or `AssertionLog.append`, or depending on `IngestService` at all | [ADR 41](adr/0041-graph-exporter-views-and-formats.md) |
 | `theExporterNeverSpeaksToANetwork` | `export` depending on `java.net`, `javax.net` or `WikidataClient` — an export is a pure function of the database file | [ADR 41](adr/0041-graph-exporter-views-and-formats.md) |
+| `theRatingsToolOnlyReads` | `ratings` calling the three world-fact writes **or `AffinityStore.put`** — the only rule anywhere guarding the rating write | [ADR 43](adr/0043-listing-your-own-ratings.md) |
+| `theRatingsToolOpensNothingElse` | `ratings` depending on `tinker`, `jena`, `ingest`, `mcp`, `app`, `seed`, `export`, `java.net` or `javax.net` | [ADR 43](adr/0043-listing-your-own-ratings.md) |
+| `onlyTheRatingsToolReadsEveryRating` | calling `AffinityStore.readAll` from outside `ratings` — the bulk read exists for the owner's dev tool and for nothing on the MCP surface | [ADR 16](adr/0016-privacy-and-data-handling.md), [ADR 39](adr/0039-affinity-capture-and-read.md), [ADR 43](adr/0043-listing-your-own-ratings.md) |
 | `nothingWritesToStandardOut` | reading `System.out` anywhere except the one named exception, `SegueApplication` | [ADR 28](adr/0028-mcp-transports.md) |
 | `nothingWritesToStandardError`, `noPrintStackTrace`, `noJavaUtilLogging` | bypassing SLF4J | [ADR 30](adr/0030-structured-logging.md) |
 | `affinityNeverTouchesTheWorldFactLayer` | a taste-layer type depending on the log, the graph, `IngestService` or the claim records | [ADR 33](adr/0033-taste-layer-separation.md) |
@@ -441,9 +459,12 @@ Mechanically:
 - The affinity table lives in the same SQLite file as the assertion log, on its own connection, with
   no foreign key to anything. The join between the two layers happens exactly once, in
   `SegueService.getEntity`, above both ports.
-- `AffinityStore` has no `append` and no `readAll`. Those absences are decisions, and the interface's
-  Javadoc explains each one.
-- `note_affinity` is the only writer. There is no read tool: `get_entity` carries the rating back.
+- `AffinityStore` has no `append`, and that absence is a decision the interface's Javadoc explains.
+  It does have a `readAll` — added by [ADR 43](adr/0043-listing-your-own-ratings.md) for the
+  `ratings` dev tool, and reserved to it by an ArchUnit rule. See
+  [Looking at what you have rated](#looking-at-what-you-have-rated).
+- `note_affinity` is the only writer. There is no read tool: `get_entity` carries the rating back,
+  and listing every rating is a Gradle task rather than a seventh tool.
 
 ### The two rules, and why they read differently
 
@@ -884,6 +905,92 @@ format-blind can report a format's decision without learning what format it is h
 is untouched by any of this** — `typeCode` is an attribute there at every size, which is why the
 note points at it. There is deliberately no flag to force labels back on: the picture it would
 produce is the one that made this a bug.
+
+## Looking at what you have rated
+
+`ratings` lists the taste layer for the person who owns it. It is the **third** dev-side tool,
+after `seed` and `export`, and like both of them it is deliberately not a seventh MCP tool.
+[ADR 43](adr/0043-listing-your-own-ratings.md) is the decision.
+
+```bash
+# what do I love — the default ordering
+./gradlew listRatings --args="--out $HOME/ratings.txt"
+
+# what did I change my mind about
+./gradlew listRatings --args="--sort recent --out $HOME/ratings.txt"
+```
+
+`--db` defaults the way the server's does: `SEGUE_DB` if set, otherwise
+`${user.home}/.segue/segue.db`. `--out` has no default, for the same reason `exportGraph`'s has
+none.
+
+Each row is a rating, the label the graph knows the entity by, when it last changed, the qid and
+the note. A rating whose entity the graph has no claim about reads `(not in the graph)` and is
+counted in the summary — [ADR 39](adr/0039-affinity-capture-and-read.md) requires an entity to be
+in the graph before it can be rated, but the graph around a rating can be rebuilt and the rating
+has to outlive it.
+
+### Why this is not `list_affinity`
+
+ADR 39 declined a bulk MCP read on [ADR 16](adr/0016-privacy-and-data-handling.md)'s data
+minimisation: it is the one call that would put the whole taste layer in front of a model. **That
+reasoning stands.** What it also did, unintentionally, was lock out the owner — and affinity is the
+one thing in segue that cannot be regenerated, because there is no source to re-fetch it from and
+[ADR 39](adr/0039-affinity-capture-and-read.md) keeps no history.
+
+So ADR 43 changed the caller rather than the surface. `AffinityStore` now has a `readAll()`, and
+`ArchitectureTest.onlyTheRatingsToolReadsEveryRating` forbids any class outside `..ratings..` from
+calling it. That rule is load-bearing rather than decorative: `ToolSurfaceTest` counts tools, and a
+bulk read reaching the surface would arrive as a *field on an existing tool*, which it would not
+notice. `find(qid)` stays available everywhere — that is what `get_entity` and `AffinityOverlay`
+use.
+
+### The output is a file, and the log lines are counts
+
+Not a style preference. [ADR 30](adr/0030-structured-logging.md) makes SLF4J the only logging API
+and `nothingWritesToStandardOut` forbids `System.out` project-wide, so "print it to the terminal"
+means "log it" — and [ADR 33](adr/0033-taste-layer-separation.md) says affinity is never logged.
+The listing goes to the file; every note the tool emits is a count or a path.
+
+`RatingsAreNeverLoggedTest` drives the real `main` with a Logback appender attached and asserts
+that no log line from anywhere carries a label, a note **or a qid**. That last one is the point:
+since no line names an entity, no line can attribute a rating to one. It is the sibling of
+`AffinityIsNeverLoggedTest`, drawn one line further in — that test can demand total silence because
+`note_affinity` has nothing to say, and this tool is a command a person runs and watches.
+
+`*.txt` is gitignored beside `*.db`, `*.csv`, `*.dot` and `*.graphml`, and the file names itself as
+personal data on its own first line. Second and third locks; the first is writing it outside the
+working tree.
+
+### Three things this is not allowed to do
+
+It never writes. `ArchitectureTest.theRatingsToolOnlyReads` forbids `ratings` from calling
+`GraphStore.record`, `GraphStore.upsertNode`, `AssertionLog.append` **or `AffinityStore.put`**.
+That last clause exists nowhere else in the project — the other rules guard the three world-fact
+writes, and nothing guarded the *rating* write, because until this tool the only class outside
+`mcp` holding an `AffinityStore` looked up one qid at a time.
+
+It opens nothing else. `theRatingsToolOpensNothingElse` bans `tinker`, `jena`, `ingest`, `mcp`,
+`app`, both sibling tools and `java.net`. It needs a bulk read of the `affinity` table and the node
+claims in the log, both through `sqlite`; no traversal, so no engine, and no projection, so no
+`ingest`. The sibling tools are banned so this one cannot inherit their looser fences — `export`
+may use `GraphProjector`, and this may not.
+
+It never fetches a label. That is why `java.net` is on the list: a rating whose entity has left the
+graph is exactly the row that makes an HTTP lookup look like an improvement. A listing of personal
+data is a pure function of one local file.
+
+### Naming is load-bearing here
+
+`affinityNeverTouchesTheWorldFactLayer` matches by simple **name**, so:
+
+| class | named | because |
+| --- | --- | --- |
+| `AffinityRow` | opts *into* the taste fence | it holds a rating and a note, and must never grow a `Provenance` |
+| `RatingsRun`, `Labels` | deliberately out of it | they hold an `AssertionLog`, which that fence forbids |
+
+The join between the two layers happens above both ports and nowhere else (ADR 33). Here the class
+names say which side of that line each one is on — rename either and the build tells you.
 
 ## How to read an ADR against the code
 

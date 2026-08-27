@@ -130,6 +130,40 @@ class SqliteAffinityStoreTest {
     assertThat(rowCount(db, "affinity")).isEqualTo(1);
   }
 
+  @Test
+  @DisplayName("readAll returns every rating, in qid order, so the caller decides the ordering")
+  void readsEveryRatingInQidOrder() {
+    try (SqliteAffinityStore store = SqliteAffinityStore.inMemory()) {
+      store.put(new AffinityRecord("Q900003", 5, "an invented note", LATER));
+      store.put(new AffinityRecord("Q900001", 2, null, FIRST));
+      store.put(new AffinityRecord("Q900002", 4, "another invented note", FIRST));
+
+      assertThat(store.readAll())
+          .extracting(AffinityRecord::qid)
+          .containsExactly("Q900001", "Q900002", "Q900003");
+    }
+  }
+
+  @Test
+  @DisplayName("readAll carries the whole row, note and timestamp included")
+  void readsTheWholeRow() {
+    AffinityRecord affinity = new AffinityRecord("Q900001", 3, "an invented note", FIRST);
+
+    try (SqliteAffinityStore store = SqliteAffinityStore.inMemory()) {
+      store.put(affinity);
+
+      assertThat(store.readAll()).containsExactly(affinity);
+    }
+  }
+
+  @Test
+  @DisplayName("readAll on an unrated store is empty, not an error")
+  void readsNothingWhenNothingIsRated() {
+    try (SqliteAffinityStore store = SqliteAffinityStore.inMemory()) {
+      assertThat(store.readAll()).isEmpty();
+    }
+  }
+
   private static int rowCount(Path db, String table) throws SQLException {
     try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + db);
         Statement st = conn.createStatement();

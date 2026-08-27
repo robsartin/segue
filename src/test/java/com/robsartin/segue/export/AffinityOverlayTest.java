@@ -40,6 +40,16 @@ class AffinityOverlayTest {
       return Optional.ofNullable(ratings.get(qid));
     }
 
+    /**
+     * Deliberately unusable. The overlay asks about exactly the entities already in the picture and
+     * about nothing else (ADR 41), and ADR 43 gave the bulk read to one dev tool that is not this
+     * one. A fake that answered it would let that stop being true without failing anything.
+     */
+    @Override
+    public List<AffinityRecord> readAll() {
+      throw new UnsupportedOperationException("the exporter never reads the whole taste layer");
+    }
+
     @Override
     public void close() {}
   }

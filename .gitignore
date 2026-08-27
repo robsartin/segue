@@ -33,3 +33,12 @@ _to_delete/
 # Write these outside the working tree; this line is the second lock, not the first.
 *.dot
 *.graphml
+
+# The ratings tool's output (issue #69, ADR 43). This is the worst of the three: the seeding
+# tool's files are a list of names and an affinity export is a picture with ratings on it, but
+# this file IS the taste layer — every rating, every note, in one place, and the one part of
+# segue that cannot be regenerated from a source. Write it outside the working tree; this line
+# and the header the tool writes into the file itself are the second and third locks, not the
+# first. No committed .txt is currently needed — if one ever is, name it here with an explicit
+# negation and say in the commit message why it carries no personal data.
+*.txt
