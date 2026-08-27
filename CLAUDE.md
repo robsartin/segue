@@ -199,6 +199,12 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   award edges and 2 others; at the default 200 it is 12 of 118. Not the `DESC(?sitelinks)`
   problem — awards never appear in a person's reverse answer at all — and deliberately not
   reworked. See the issue-#32 note in ADR 36.
+- **Do not raise `maxNewEdges` to "complete" an act that reports `truncated`.** It was
+  measured on three of them (issue #71) and completing an act does not improve its routes:
+  the tail past the bound is the part of a catalogue that connects to nothing, because
+  `DESC(?sitelinks)` already kept the connective neighbours. One of the three added several
+  hundred edges and changed no route at all. The figures, the route comparisons and the three
+  rejected mechanisms are in ADR 36's issue-#71 amendment.
 - **`query.wikidata.org` holds only the main graph.** Scholarly articles live on
   `query-scholarly.wikidata.org`, so `AUTHORED` (P50) silently under-reports for an
   academic seed: Einstein returns 32 on the main endpoint against 117 in reality.

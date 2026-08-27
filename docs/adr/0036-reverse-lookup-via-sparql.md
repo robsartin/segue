@@ -57,6 +57,78 @@ Two candidate mechanisms were measured against the live APIs rather than argued 
   n=15 that is Nick Cave, Blixa Bargeld, Mick Harvey and Warren Ellis ahead of a 2024
   album track — and the one extra row makes `truncated` an observation rather than a
   guess.
+
+  **Amendment (2026-08-27, issue #71): the bound is a quality decision, not only a cost
+  compromise, and the acts it truncates are deliberately left truncated.** A re-seed of the
+  815-act list at `maxNewEdges=500` left 16 acts still reporting `truncated`, and the
+  obvious reading was that they are under-served: J.S. Bach measured 200 → 200 edges,
+  500 → 499, 1200 → 1174, never plateauing. Three mechanisms were on the table — a per-act
+  override in the seed list, a "complete this one act" mode, and automatic escalation of any
+  act that truncates. **None was built, because completing a truncated act does not improve
+  its routes**, and the reason is a property this bullet already decided.
+
+  The measurement, on a copy of the real 54,448-node graph: three of the 16 re-expanded into
+  a second copy at `maxNewEdges=3000` — enough that all three came back `truncated=false` —
+  and `find_paths` run over the same 21 pairs against both copies, through the same ADR 31
+  ranking.
+
+  | act | edges at 500 | edges complete | neighbours added | of those, ones that connect to anything else | seconds |
+  |---|---|---|---|---|---|
+  | Stephen King `Q39829` | 493 | 864 | 371 | **0** | 10.6 |
+  | J.S. Bach `Q1339` | 499 | 1197 | 698 | **5** | 80.3 |
+  | David Bowie `Q5383` | 500 | 662 | 156 | 15, six of them duplicate release items for two songs | 1.9 |
+
+  - **Stephen King's 371 extra edges changed nothing whatsoever.** Every one of the 371
+    entities they name has degree 1 — it touches King and nothing else in the graph — so his
+    connector count is 33 before and 33 after, and the route counts to Edgar Allan Poe, the
+    Ramones and Isaac Asimov are byte-identical across the two graphs: 63, 41 and 184 routes
+    either way. A node that appears in no route is not a thinner answer, it is weight.
+  - **Bach's 698 gained five connectors, and the top-ranked route was unchanged in 20 of the
+    21 pairs.** The five are *After Bach*, *Christmas*, *Knife-Edge*, a Keith Jarrett
+    Goldberg Variations recording, and a 2023 school Christmas concert in Zerbst. Where new
+    routes did appear they arrived at rank 2 or 3 as exact ties — three hops, weakest
+    confidence 0.80, identical to what they displaced — so they reshuffled the answer rather
+    than improving it.
+  - **The one ranking change that did happen was a regression.** Bach ↔ Paul Simon led with
+    an influence chain and now leads with a concert programme:
+
+    ```
+    before:  Bach <-[INFLUENCED_BY]- The Beatles <-[INFLUENCED_BY]- Eels -[INFLUENCED_BY]-> Paul Simon
+    after:   Bach -[COMPOSED_FOR]-> Christmas concert 2023: music school "Johann Friedrich Fasch" Zerbst
+                  <-[COMPOSED_FOR]- Simon & Garfunkel <-[MEMBER_OF]- Paul Simon
+    ```
+
+    Both are three hops at 0.80, so the new one won on a tie, and "a school concert in 2023
+    programmed pieces by both" is a coincidence of programming rather than a relationship.
+    This is ADR 31's own argument arriving from a new direction: a route that means nothing
+    is not made better by being true.
+  - **For a well-connected act the extra routes are invisible anyway.** Every Bowie pair
+    measured was already past `PathRanking.MAX_PATHS` — 2,952 raw routes to The Beatles,
+    2,047 to Bob Dylan, 1,879 to Queen — so the 201, 101 and 52 routes completion added are
+    below a cap the caller never sees past (issue #65). The single visible change was rank 3
+    of Bowie ↔ Queen swapping one *Under Pressure* item for `Q137488650`, a duplicate item
+    for the same song; three of Bowie's fifteen new connectors are *Under Pressure* and three
+    more are *Peace on Earth/Little Drummer Boy*. Completing him mostly bought restatements
+    of edges the graph already had — the clutter issue #67 is about, arriving through the
+    tail of the bound.
+
+  **Why this is a property of `DESC(?sitelinks)` rather than luck.** The bound does not take
+  an arbitrary 500; it takes the 500 most-linked, and sitelink count is roughly the
+  probability that some other seed in a personal graph also touches that item. So connector
+  density falls off exactly where the bound cuts — **4.6% of Bach's first 496 neighbours
+  connect to something else against 0.7% of the next 698; 7.0% against 0.0% for King; 31%
+  against 9.6% for Bowie.** The tail beyond the bound is, by construction, the part of a
+  catalogue that connects to nothing: individual BWV numbers, single releases, editions.
+  Raising the bound buys nodes, not connectivity.
+
+  **The honest caveat, and the trigger that would reopen this.** Every act other than the
+  three was still bounded at 500 in both copies, so a tail work is partly a dead end because
+  the acts that might have met it are bounded too. That is a real limit on the measurement
+  and not one this ADR can dismiss — but it is bounded itself: those 698 works were dropped
+  into a graph of 54,448 nodes built from 815 seeds, which is a great many chances to match,
+  and 5 of them did. Re-measure if a future graph is complete for some reason of its own; do
+  not raise the bound in order to find out, because completing all 815 acts at Bach's 80
+  seconds is the cost the bound exists to avoid.
 - **Neighbour identity rides along.** The query returns `?otherLabel` and `?type` (P31),
   and `ExpandResult` gained a `neighbors` list so `SegueService.expandEntity` uses them
   instead of fetching each neighbour. Without this the fix would be a regression: 73
@@ -156,6 +228,30 @@ Considered again for the issue-#33 amendment, and rejected:
   path the accepted decision already said it should not be. Revisit if a second inverse
   pair appears, or if a non-Wikidata source starts restating Wikidata's edges.
 
+Considered for the issue-#71 amendment, and all three rejected. They are listed because each
+is a reasonable answer to "some acts truncate" and they were dropped for the same reason: the
+thing they achieve is not worth having. **The order below is how attractive they looked, which
+is the opposite of how expensive they are.**
+
+- **A "complete this one act" mode** — one QID, no bound, run when you notice an act is thin.
+  The cheapest of the three, the easiest to keep out of a bounded run, and the one that
+  matches how the problem actually arrives. It was still rejected, because its entire output
+  is the 693 dead-end nodes measured above, and shipping it would invite exactly the use that
+  makes the graph worse.
+- **A per-act override column in the seed list.** Fits the CSV-driven design of ADR 40, keeps
+  a default run bounded, and costs nothing to anyone who leaves the column blank. Rejected
+  because it makes the bound look like a per-act tuning parameter, when the measurement says
+  the same number is right for every act for a reason that has nothing to do with the act:
+  `DESC(?sitelinks)` puts the connective neighbours first, so what the bound drops is the
+  disconnected tail whoever the seed is. A knob nobody should turn is worse than no knob.
+- **Escalating automatically whenever an adapter reports `truncated`.** The most convenient,
+  and the worst of the three on both axes at once. It spends the most — a bounded run becomes
+  unbounded in wall-clock precisely on the acts that are slowest, and Bach alone is 80s — to
+  buy the least, since `truncated` is reported by the acts whose tails are longest and
+  therefore least connected. It would also turn the bound's own honesty against it: the `n+1`
+  row exists so truncation can be observed rather than guessed, and this would make that
+  observation a trigger for undoing it.
+
 ## Consequences
 
 - Expanding a PERSON went from 4 edges to **88**, and a GROUP from **0 to 106** — both
@@ -171,6 +267,13 @@ Considered again for the issue-#33 amendment, and rejected:
   people and expanded, yield **8 routes**, the shortest running through *Ghosts… of the
   Civil Dead* — a film neither of their Wikidata items mentions. `PersonSeededRouteLiveTest`
   is that acceptance criterion, executable.
+- **`truncated` reports a fact, and it is not a defect report** *(issue #71)*. A caller
+  reading it should understand "this entity has more catalogue than the bound keeps", not
+  "this entity's routes are incomplete" — the amendment above measures the difference and
+  finds the second reading false. Nothing in the flag changes; what changes is that the
+  16 acts reporting it on the 815-act list are now a recorded, measured outcome instead of
+  an open question, and the next person to notice them has the numbers rather than the
+  itch.
 - **Truthy triples are lossy, and both losses are priced in.** `wdt:` exposes only the
   best-ranked, non-deprecated value — which usefully reproduces ClaimMapper's deprecated
   filter for free — but it discards the statement's reference block and its qualifiers.
