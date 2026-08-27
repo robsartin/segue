@@ -36,6 +36,13 @@ public final class PathRanking {
   /**
    * Bounds the returned list so a dense neighbourhood cannot produce an unbounded result. Personal
    * scale; raise it deliberately if an explanation ever needs more than this many candidate routes.
+   *
+   * <p>Hitting it is reported rather than hidden (issue #65): {@code SegueService.findPaths}
+   * compares the ranked size against the raw one and returns {@code partial} when they differ, so
+   * "50 route(s)" can no longer stand for two hundred. The {@code find_paths} tool description
+   * states the number too — as prose, because an annotation needs a constant — and {@code
+   * ToolSurfaceTest} asserts the two agree, so raising this fails the build rather than leaving a
+   * stale promise in the schema.
    */
   public static final int MAX_PATHS = 50;
 
