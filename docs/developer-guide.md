@@ -321,9 +321,13 @@ sequenceDiagram
     end
 
     loop every assertion inside the bound
-        alt neighbour not yet in the graph
+        alt neighbour is new to the graph
             Svc->>Svc: identity from ExpandResult.neighbors, else resolver.fetch
-            Svc->>Ingest: record(NodeAssertion)
+            Svc->>Ingest: record(NodeAssertion), counted in nodesAdded
+            Ingest->>Log: append
+            Ingest->>Graph: upsertNode
+        else neighbour exists and the adapter described it
+            Svc->>Ingest: record(NodeAssertion), refreshes a stale kind, not counted
             Ingest->>Log: append
             Ingest->>Graph: upsertNode
         end
@@ -345,6 +349,20 @@ the bounded assertion list; for each assertion naming a neighbour the graph has 
 identity from the adapter if the adapter supplied it and otherwise fetches it, records the node
 through `IngestService`, and only then records the edge. Every write is log-then-graph. The call
 returns a single `ToolResult` whose outcome is `ok` or `partial`, never a thrown exception.
+
+**Identity the adapter supplied is recorded for a neighbour that already exists, too** (issue #55).
+A node's kind comes from `KindMapper`'s whitelist, which grows as it is measured against real data,
+so recording identity only for absent nodes froze every old node at whatever the mapper said the day
+it was discovered — 73% of the CONCEPT nodes with degree ≥ 2 in a real graph were works or groups
+the mapper had since learned to classify, and ADR 31's hub rule was demoting routes through them.
+`upsertNode` is last-writer-wins and ADR 19 already treats a changed belief as a new claim, so the
+refresh is a correction rather than an edit. It is bounded on both sides: an existing neighbour
+nobody described is left alone rather than fetched (that would be a round trip each for every
+neighbour of every expansion), and a refresh never increments `nodesAdded`, which answers how much
+the graph grew. Note it is a different rule from the `described.putIfAbsent` first-writer-wins one a
+few lines above it in the same method: that one settles two sources disagreeing *within one call*,
+this one re-reads the *same* source *across runs*. Nodes correct themselves only when an expansion
+touches them again, so a `KindMapper` improvement still wants a re-seed to propagate.
 
 ### Three couplings that must stay coupled
 

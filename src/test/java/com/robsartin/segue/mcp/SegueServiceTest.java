@@ -393,18 +393,102 @@ class SegueServiceTest {
   }
 
   @Test
-  @DisplayName("an inline neighbour the graph already holds is not recorded a second time")
-  void expandEntityDoesNotRerecordKnownInlineNeighbours() {
+  @DisplayName("a later expansion corrects an existing neighbour's stale kind")
+  void expandEntityRefreshesExistingNeighbourIdentity() {
+    // Issue #55. KindMapper's whitelist grows as it is measured against real data (issues #49
+    // and #52), so a P31 that mapped to CONCEPT on the run that discovered an entity maps to
+    // WORK today. Identity used to be recorded only for a neighbour the graph did not already
+    // have, which froze every old node's kind at whatever the mapper said the first time and
+    // left one class of entity holding two kinds depending on when it arrived. PathRanking's
+    // hub rule then vetoed routes through a work stored as a concept — the opposite of what
+    // issue #52 built it for.
     ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
-    ingest.record(new NodeAssertion("Q2", NodeKind.WORK, "The Proposition", WIKIDATA));
-    NodeAssertion inline = new NodeAssertion("Q2", NodeKind.WORK, "The Proposition", WIKIDATA);
+    ingest.record(new NodeAssertion("Q2", NodeKind.CONCEPT, "The Proposition", WIKIDATA));
+    NodeAssertion corrected = new NodeAssertion("Q2", NodeKind.WORK, "The Proposition", WIKIDATA);
     AssertionRecord edge = new AssertionRecord("Q1", "Q2", "COMPOSED_FOR", null, null, WIKIDATA);
     SourceAdapter adapter =
         new StubSourceAdapter(
-            "inline", new ExpandResult(List.of(edge), List.of(inline), false, false));
+            "inline", new ExpandResult(List.of(edge), List.of(corrected), false, false));
 
     ToolResult<SegueService.ExpansionSummary> result = service(adapter).expandEntity("Q1", 10);
 
+    assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
+    assertThat(graph.node("Q2")).contains(corrected.toNode());
+    // ADR 19: the correction is a new claim appended to the log, not an edit of the old one, so
+    // a replay rebuilds the corrected graph rather than the stale one.
+    assertThat(log.readAll()).contains(corrected);
+    // The refresh is only free because the source already handed the identity over. An existing
+    // neighbour must never cost a round trip of its own — an expansion finds seventy-odd of them.
+    assertThat(resolver.fetchCallCount()).isZero();
+  }
+
+  @Test
+  @DisplayName("an inline neighbour the graph already holds is refreshed but not counted as added")
+  void expandEntityDoesNotCountRefreshedInlineNeighboursAsAdded() {
+    // The other half of issue #55. The refresh above re-records an entity the graph already
+    // had, and nodesAdded must not follow it: the number answers "how much did this expansion
+    // grow the graph by", and a caller told 1 would read a corrected node as a discovered one.
+    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+    ingest.record(new NodeAssertion("Q2", NodeKind.CONCEPT, "The Proposition", WIKIDATA));
+    NodeAssertion corrected = new NodeAssertion("Q2", NodeKind.WORK, "The Proposition", WIKIDATA);
+    AssertionRecord edge = new AssertionRecord("Q1", "Q2", "COMPOSED_FOR", null, null, WIKIDATA);
+    SourceAdapter adapter =
+        new StubSourceAdapter(
+            "inline", new ExpandResult(List.of(edge), List.of(corrected), false, false));
+
+    ToolResult<SegueService.ExpansionSummary> result = service(adapter).expandEntity("Q1", 10);
+
+    assertThat(result.payload().nodesAdded()).isZero();
+    assertThat(result.payload().edgesAdded()).isEqualTo(1);
+    assertThat(result.detail()).contains("0 new node(s)");
+    // Refreshed all the same — the count is what stays put, not the kind.
+    assertThat(graph.node("Q2").orElseThrow().kind()).isEqualTo(NodeKind.WORK);
+  }
+
+  @Test
+  @DisplayName("one neighbour named by two assertions is refreshed once, not once per assertion")
+  void expandEntityRefreshesEachNeighbourOnce() {
+    // The multigraph shape again: Nick Cave both wrote and scored The Proposition. The graph
+    // re-read used to make this impossible for free, because a neighbour recorded on the first
+    // assertion was present by the second; now that the refresh fires whether or not the node
+    // exists, the same identity claim would otherwise be appended to the log once per assertion
+    // and replayed that many times at boot.
+    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+    ingest.record(new NodeAssertion("Q2", NodeKind.CONCEPT, "The Proposition", WIKIDATA));
+    NodeAssertion corrected = new NodeAssertion("Q2", NodeKind.WORK, "The Proposition", WIKIDATA);
+    AssertionRecord wrote =
+        new AssertionRecord("Q1", "Q2", "WROTE_SCREENPLAY_FOR", null, null, WIKIDATA);
+    AssertionRecord scored = new AssertionRecord("Q1", "Q2", "COMPOSED_FOR", null, null, WIKIDATA);
+    SourceAdapter adapter =
+        new StubSourceAdapter(
+            "multigraph",
+            new ExpandResult(List.of(wrote, scored), List.of(corrected), false, false));
+
+    ToolResult<SegueService.ExpansionSummary> result = service(adapter).expandEntity("Q1", 10);
+
+    assertThat(result.payload().edgesAdded()).isEqualTo(2);
+    assertThat(graph.node("Q2").orElseThrow().kind()).isEqualTo(NodeKind.WORK);
+    assertThat(log.readAll()).filteredOn(corrected::equals).hasSize(1);
+  }
+
+  @Test
+  @DisplayName("an existing neighbour the adapter did not describe is left exactly as it was")
+  void expandEntityLeavesUndescribedExistingNeighboursAlone() {
+    // The bound on the refresh, and the reason it needs no flag: it happens only where a source
+    // already volunteered the identity in the same response. Fetching identity for an existing
+    // neighbour would turn every expansion into hundreds of extra round trips to correct nodes
+    // nobody asked about, which is a different and much more expensive decision.
+    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+    ingest.record(new NodeAssertion("Q2", NodeKind.CONCEPT, "The Proposition", WIKIDATA));
+    AssertionRecord edge = new AssertionRecord("Q1", "Q2", "COMPOSED_FOR", null, null, WIKIDATA);
+    SourceAdapter adapter =
+        new StubSourceAdapter("undescribed", new ExpandResult(List.of(edge), false, false));
+
+    ToolResult<SegueService.ExpansionSummary> result = service(adapter).expandEntity("Q1", 10);
+
+    assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
+    assertThat(resolver.fetchCallCount()).isZero();
+    assertThat(graph.node("Q2").orElseThrow().kind()).isEqualTo(NodeKind.CONCEPT);
     assertThat(result.payload().nodesAdded()).isZero();
     assertThat(result.payload().edgesAdded()).isEqualTo(1);
   }
