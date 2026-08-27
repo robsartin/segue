@@ -109,6 +109,135 @@ class DotWriterTest {
   }
 
   @Test
+  @DisplayName("WORK is shaded by its four commonest classes, on one yellow ladder")
+  void shadesWorkByItsClass() throws IOException {
+    String dot =
+        render(
+            view(
+                List.of(
+                    new ViewNode("Q901", NodeKind.WORK, "Hollow Tide", List.of("Q482994")),
+                    new ViewNode("Q902", NodeKind.WORK, "Bracken Air", List.of("Q105543609")),
+                    new ViewNode("Q903", NodeKind.WORK, "Kettle Song", List.of("Q134556")),
+                    new ViewNode("Q904", NodeKind.WORK, "The Long Marsh", List.of("Q11424"))),
+                List.of()));
+
+    assertThat(dot).contains("\"Q901\" [label=\"Hollow Tide\", shape=note, fillcolor=\"#F8F3C6\"");
+    assertThat(dot).contains("\"Q902\" [label=\"Bracken Air\", shape=note, fillcolor=\"#D9CF3B\"");
+    assertThat(dot).contains("\"Q903\" [label=\"Kettle Song\", shape=note, fillcolor=\"#BFB633\"");
+    assertThat(dot)
+        .contains("\"Q904\" [label=\"The Long Marsh\", shape=note, fillcolor=\"#A69E2B\"");
+  }
+
+  @Test
+  @DisplayName("any other WORK keeps plain WORK yellow — the shades are four classes, not a scheme")
+  void leavesEveryOtherWorkPlain() throws IOException {
+    String dot =
+        render(
+            view(
+                List.of(
+                    new ViewNode("Q901", NodeKind.WORK, "A Novel", List.of("Q7725634")),
+                    new ViewNode("Q902", NodeKind.WORK, "Something", List.of("Q900901")),
+                    new ViewNode("Q903", NodeKind.WORK, "Unclassified", List.of())),
+                List.of()));
+
+    assertThat(dot.lines().filter(line -> line.contains("fillcolor=\"#F2E87A\"")).count())
+        .isEqualTo(3);
+  }
+
+  @Test
+  @DisplayName("shading is WORK's alone: the same class on another kind changes nothing")
+  void shadesNoKindButWork() throws IOException {
+    String dot =
+        render(
+            view(
+                List.of(
+                    new ViewNode("Q901", NodeKind.PERSON, "Wren Alderman", List.of("Q482994")),
+                    new ViewNode("Q902", NodeKind.CONCEPT, "Invented Prize", List.of("Q11424"))),
+                List.of()));
+
+    assertThat(dot).contains("shape=ellipse, fillcolor=\"#84C2EC\"");
+    assertThat(dot).contains("shape=octagon, fillcolor=\"#D598B8\"");
+  }
+
+  @Test
+  @DisplayName("the first class with a shade wins, as the first recognised class chooses the kind")
+  void takesTheFirstShadedClass() throws IOException {
+    String dot =
+        render(
+            view(
+                List.of(
+                    new ViewNode(
+                        "Q901", NodeKind.WORK, "Kettle Song", List.of("Q900901", "Q134556"))),
+                List.of()));
+
+    assertThat(dot).contains("fillcolor=\"#BFB633\"");
+  }
+
+  @Test
+  @DisplayName("a node's tooltip names the class it is an instance of, not just its kind")
+  void tooltipsNodesWithTheirClass() throws IOException {
+    String dot =
+        render(
+            view(
+                List.of(new ViewNode("Q901", NodeKind.WORK, "Hollow Tide", List.of("Q482994"))),
+                List.of()));
+
+    assertThat(dot).contains("tooltip=\"album\"");
+  }
+
+  @Test
+  @DisplayName("every class the claim stated is named, in the order it stated them")
+  void tooltipsEveryStatedClass() throws IOException {
+    String dot =
+        render(
+            view(
+                List.of(
+                    new ViewNode(
+                        "Q901", NodeKind.WORK, "Hollow Tide", List.of("Q482994", "Q105543609"))),
+                List.of()));
+
+    assertThat(dot).contains("tooltip=\"album, musical work/composition\"");
+  }
+
+  @Test
+  @DisplayName("a class the offline table has never heard of is named by its QID, not guessed at")
+  void tooltipsAnUnknownClassByItsQid() throws IOException {
+    String dot =
+        render(
+            view(
+                List.of(new ViewNode("Q901", NodeKind.CONCEPT, "Something", List.of("Q900901"))),
+                List.of()));
+
+    assertThat(dot).contains("tooltip=\"Q900901\"");
+  }
+
+  @Test
+  @DisplayName("a node whose source stated no class says exactly that")
+  void tooltipsAClasslessNodeHonestly() throws IOException {
+    String dot =
+        render(view(List.of(new ViewNode("Q901", NodeKind.PERSON, "Wren Alderman")), List.of()));
+
+    assertThat(dot).contains("tooltip=\"no stated class\"");
+  }
+
+  @Test
+  @DisplayName("every node carries a tooltip, whatever it is and whatever it knows")
+  void tooltipsEveryNode() throws IOException {
+    String dot =
+        render(
+            view(
+                List.of(
+                    new ViewNode("Q901", NodeKind.PERSON, "Wren Alderman", List.of("Q5")),
+                    new ViewNode("Q902", NodeKind.GROUP, "The Paper Kettles"),
+                    new ViewNode("Q903", NodeKind.WORK, "Hollow Tide", List.of("Q900901")),
+                    new ViewNode(
+                        "Q904", NodeKind.CONCEPT, "The Invented Prize", List.of("Q618779"))),
+                List.of()));
+
+    assertThat(dot.lines().filter(line -> line.contains("tooltip=")).count()).isEqualTo(4);
+  }
+
+  @Test
   @DisplayName("the graph-level default states the dark text the fills are chosen against")
   void declaresDarkText() throws IOException {
     String dot = render(view(List.of(), List.of()));

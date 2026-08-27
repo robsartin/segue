@@ -168,6 +168,70 @@ working. **GraphML is deliberately unchanged**: it already carries `kind` as an 
 colours on it natively, so presentation stays the reader's. DOT is the format that bakes
 presentation into the file, which is why this is a DOT-only concern.
 
+**Amendment (2026-08-27, issue #63): every DOT node carries a `tooltip` naming its class, and WORK
+alone is shaded by its four commonest classes.**
+
+Since ADR 42 every node claim stores its raw `P31`, so a picture can say what a node *is* rather
+than only which of six kinds it belongs to. Measured on the rebuilt graph (54,448 nodes, `P31` on
+99.97% of them): 861 distinct classes, top 8 covering 80.5%, top 40 still only 96.6%. That is a tail
+no palette reaches — but within a kind it concentrates, and the two halves of this amendment are
+deliberately different in reach because of it.
+
+- **A `tooltip` on every node, in DOT.** Graphviz renders it as `xlink:title` in SVG, so hovering
+  says "concert tour" or "television special". It is the only thing that reaches CONCEPT's 458
+  classes, which is the kind a reader most often wants to interrogate — "why is this pink node
+  here?" is the usual question — and it costs the picture nothing.
+
+- **The class names come from a table in the source, `ClassLabels`, and fall back to the bare QID.**
+  The graph stores class QIDs and not labels, and the exporter is offline: a lookup at export time
+  would be one HTTP round trip per node, 132 for a depth-1 neighbourhood and tens of thousands for
+  `full`, and would make a picture depend on the internet being up. Storing labels at ingest was the
+  alternative and is a schema change — which ADR 42's own note says must now come with a real
+  migration — for a purely presentational string. **The fallback is honest rather than helpful**: a
+  tooltip reading `Q1261214` is useless and true, where a guess would be useful and sometimes wrong
+  with no way for the reader to tell which. The table names ~45 classes, every one read from
+  Wikidata's own `labels/en` with the description confirmed, the way `KindMapper`'s whitelist was.
+
+- **`ArchitectureTest.theExporterNeverSpeaksToANetwork`**, new here, because this is the change that
+  creates the temptation. `export` may not depend on `java.net`, `javax.net` or the project's HTTP
+  client. Read-only was already a rule; offline was only a habit.
+
+- **Shade WORK by its top four classes — album, musical work/composition, single, film — and
+  nothing else.** WORK is 81% of the graph and 106 classes wide, and those four (31%, 21%, 14%,
+  10%) are genuinely different things. **No other kind is shaded**: PERSON is one class at 100%,
+  GROUP is 75% "musical group", and CONCEPT's 458 classes are too flat for four shades to be
+  anything but a lie about which four matter. Every other WORK class keeps plain WORK yellow. The
+  first class with a shade wins, matching `KindMapper`'s first-recognised-class rule, so the picture
+  and the kind agree about which class did the choosing.
+
+- **The shades vary in lightness only, and the palette was re-scored rather than assumed.** Same
+  Okabe-Ito yellow hue throughout, mixed with white or scaled down in linear light. Re-run under
+  issue #59's own method — Machado et al. (2009) matrices at severity 1.0 for protanopia,
+  deuteranopia and tritanopia, worst CIELAB distance over every pair:
+
+  | | measured |
+  |---|---|
+  | palette's worst cross-kind pair, before and after | ΔE 11.88, PLACE/CONCEPT under deuteranopia — **unchanged** |
+  | nearest any *shade* comes to another kind's fill | ΔE 17.28, film against GROUP under deuteranopia |
+  | plain WORK yellow against GROUP, for comparison | ΔE 15.95 |
+  | closest two of the five yellows | ΔE 8.88, single against film under tritanopia |
+  | black-label contrast, worst of the ten fills | 7.55:1 on film — WCAG AAA |
+
+  Darkening the yellow moves it *away* from GROUP, not toward it, because the GROUP orange is
+  itself a light tint: the worry the issue raised turned out to be backwards, which is why it was
+  measured. `PaletteSeparationTest` re-runs all three checks on every build against the fills the
+  writer actually emits, so this table is a gate rather than a claim.
+
+- **GraphML gains `instanceOf` and no tooltip.** The raw `P31` QIDs, space-separated exactly as the
+  log column and the graph vertex pack them (no escaping needed: every value is a QID). Gephi shows
+  attributes on hover and filters on them natively, so a name and a shade there would be presentation
+  taken away from the reader. The DOT/GraphML split — one file bakes presentation in, the other
+  hands over data — is the same one the #59 amendment drew.
+
+Not free: `ClassLabels` is a hand-maintained sample of a long tail, so a class outside it shows as a
+QID until someone adds it, and the four shaded QIDs are a second place (beside `KindMapper`) where a
+Wikidata class id appears in the source. Both were preferred to the alternatives above.
+
 ## Alternatives considered
 
 - **Put it in `seed`, since that is where the other dev tool lives** — one package for

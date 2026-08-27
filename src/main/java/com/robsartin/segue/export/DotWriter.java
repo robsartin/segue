@@ -3,6 +3,7 @@ package com.robsartin.segue.export;
 import com.robsartin.segue.domain.NodeKind;
 import java.io.IOException;
 import java.io.Writer;
+import java.util.Objects;
 
 /**
  * Graphviz DOT: the format you look at, as opposed to the one you work in.
@@ -11,6 +12,14 @@ import java.io.Writer;
  * and an edge is labelled with its type code. That is all — confidence and source id are on the
  * edge in {@link GraphMlWriter}, where a tool can filter on them; in DOT they would be decoration
  * on a picture that is already crowded.
+ *
+ * <p><b>Every node also carries a {@code tooltip}: what it is an instance of.</b> Graphviz turns it
+ * into an {@code xlink:title} in SVG, so hovering a node says "concert tour" or "television
+ * special" where the fill can only say CONCEPT or WORK. That is the channel with no budget — six
+ * fills cannot describe 861 classes, and a tooltip describes all of them at no cost to the picture.
+ * The names come from {@link ClassLabels}, an offline table, and fall back to the bare class QID;
+ * the exporter does not go looking one up (ADR 41, and {@code
+ * ArchitectureTest.theExporterNeverSpeaksToANetwork}).
  *
  * <p><b>Why both.</b> Shape survives greyscale printing and colour-blind viewing where colour does
  * not; colour survives being scaled down, where shape does not — at the 132 nodes of a real depth-1
@@ -49,7 +58,9 @@ public final class DotWriter implements ViewWriter {
               + "\", shape="
               + shape(node.kind())
               + ", fillcolor=\""
-              + fill(node.kind())
+              + fill(node)
+              + "\", tooltip=\""
+              + escape(ClassLabels.describe(node.instanceOf()))
               + "\"];"
               + NL);
     }
@@ -117,6 +128,58 @@ public final class DotWriter implements ViewWriter {
       case PLACE -> "#6CB194"; // Okabe-Ito bluish green
       case EVENT -> "#DC886C"; // Okabe-Ito vermillion
       case CONCEPT -> "#D598B8"; // Okabe-Ito reddish purple
+    };
+  }
+
+  /**
+   * Four shades of the WORK yellow, one per class, and plain yellow for every other class.
+   *
+   * <p><b>Only WORK, and only four.</b> Measured on a real 54,448-node graph: WORK is 81% of it and
+   * 106 classes wide, and its top four — album 31%, musical work/composition 21%, single 14%, film
+   * 10% — are genuinely different things that a picture full of identical yellow notes cannot tell
+   * apart. No other kind earns it. PERSON is one class at 100%; GROUP is 75% "musical group";
+   * CONCEPT's 458 classes are too flat for four shades to be anything but a lie about which four
+   * matter. The tooltip is what reaches those tails, at no colour cost.
+   *
+   * <p><b>The ladder is lightness only.</b> Every shade is the same Okabe-Ito yellow, mixed with
+   * white or scaled down in linear light; no shade changes hue, so none can drift toward GROUP
+   * orange. Re-scored under the method {@link #fill(NodeKind)} describes — Machado et al. matrices
+   * at severity 1.0 for all three deficiencies, worst CIELAB distance over every pair:
+   *
+   * <ul>
+   *   <li>The nearest any shade comes to another kind's fill is <b>ΔE 17.3</b> (film against GROUP,
+   *       deuteranopia) — <em>further</em> than plain WORK yellow already sits from GROUP (15.9),
+   *       because the tinted orange is light and darkening the yellow moves away from it. The
+   *       palette's worst pair is unchanged at ΔE 11.9, PLACE against CONCEPT.
+   *   <li>The five yellows are ΔE 8.9 apart at worst (single against film, tritanopia).
+   *   <li>Black labels stay AAA on all of them: 7.55:1 at worst, on film.
+   * </ul>
+   *
+   * <p>{@code PaletteSeparationTest} re-runs all three of those checks rather than trusting this
+   * comment. And shape still carries the kind alone, so a shade a reader cannot place costs them
+   * nothing: a yellow note is a WORK whichever yellow it is.
+   */
+  private static String fill(ViewNode node) {
+    if (node.kind() != NodeKind.WORK) {
+      return fill(node.kind());
+    }
+    // The FIRST class with a shade wins, matching KindMapper: the first recognised class is the
+    // one that chose the kind, so it is the one the picture should agree with.
+    return node.instanceOf().stream()
+        .map(DotWriter::shade)
+        .filter(Objects::nonNull)
+        .findFirst()
+        .orElseGet(() -> fill(NodeKind.WORK));
+  }
+
+  /** The shade for one class, or null when this class is not one of the four. */
+  private static String shade(String classQid) {
+    return switch (classQid) {
+      case "Q482994" -> "#F8F3C6"; // album
+      case "Q105543609" -> "#D9CF3B"; // musical work/composition
+      case "Q134556" -> "#BFB633"; // single
+      case "Q11424" -> "#A69E2B"; // film
+      default -> null;
     };
   }
 

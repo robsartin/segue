@@ -240,8 +240,13 @@ public final class ViewSelector {
         edges.stream().map(ViewSelector::toViewEdge).toList());
   }
 
+  /**
+   * One projected node, flattened. {@code instanceOf} travels as the claim recorded it (ADR 42) —
+   * raw QIDs, in order, unresolved — because what a picture does with a class is the writer's
+   * question, not this class's.
+   */
   private static ViewNode toViewNode(NodeRecord node) {
-    return new ViewNode(node.qid(), node.kind(), node.label());
+    return new ViewNode(node.qid(), node.kind(), node.label(), node.instanceOf());
   }
 
   /**
