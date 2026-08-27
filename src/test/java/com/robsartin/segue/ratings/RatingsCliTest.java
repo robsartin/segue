@@ -52,8 +52,11 @@ class RatingsCliTest {
   @Test
   @DisplayName("an unknown option is a usage error rather than an ignored argument")
   void refusesAnUnknownOption() {
-    assertThatThrownBy(() -> parse("--out", "/tmp/ratings.txt", "--include-everything"))
+    // With a value, so this reaches the unknown-option branch rather than the missing-value one -
+    // the two produce different messages and only one of them is what this test is about.
+    assertThatThrownBy(() -> parse("--out", "/tmp/ratings.txt", "--include-everything", "yes"))
         .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("unknown option")
         .hasMessageContaining("--include-everything");
   }
 
