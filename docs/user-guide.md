@@ -302,10 +302,12 @@ empty result, if the QID has not been added.
 
 The payoff. Every route between two entities up to `maxHops` relationships apart, ranked
 most-explanatory-first. Two things decide the order, and the second one settles ties in the first:
-a route is demoted if it passes through a **hub** — a concept node so many entities touch that
-sharing it says nothing about either end, a Walk of Fame star being the standard example — and
-among routes that are equally specific, one built on well-corroborated edges outranks a shorter one
-resting on a single unconfirmed source. See
+a route is demoted if it passes through a **hub**, and among routes that are equally specific, one
+built on well-corroborated edges outranks a shorter one resting on a single unconfirmed source. A
+node is a hub either way it can be empty: a concept so many entities touch that sharing it says
+nothing about either end (a Walk of Fame star, the standard example), or a body one is *elected*
+to rather than works in — an academy, a learned society, a guild — where "we are both members"
+reports a career rather than anything the two did together. See
 [ADR 31, on path ranking by confidence](adr/0031-path-ranking-by-confidence.md). Each route comes
 back hop by hop with the assertions behind it, so you can cite it.
 
@@ -613,6 +615,12 @@ lifetime achievement award — is collected by everyone notable, so it connects 
 Those edges are still in the graph and those routes are still returned; they are returned **last**,
 behind anything that explains more. If the only route between two people runs through a Walk of
 Fame star, that is the honest answer and you will see it — after everything better.
+
+Membership works the same way and needed its own rule, because bands are memberships too and they
+are exactly the connectors this is for. An academy, a learned society or a guild is something you
+are elected to, so a route through one says what a lifetime achievement award says; a band is
+something you were *in*. What separates them is the kind of body Wikidata says it is, not how many
+members the graph happens to hold — see ADR 31's second amendment for the measurement.
 
 ## The taste layer
 
