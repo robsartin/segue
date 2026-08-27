@@ -239,6 +239,100 @@ than judge a route.
   `award` to this table is a different decision from the one measured here — recorded so the next
   person finds it rather than rediscovers it.
 
+**Amendment (2026-08-27, issue #67): a third proposed demotion, measured and refused. Ranking
+cannot reach an edition node, and does not need to.**
+
+Nothing above is withdrawn and nothing below changes any ordering. This records a rule that was
+proposed, measured against the real graph, and not built — because the measurement showed the
+nodes it targeted are structurally incapable of being ranked at all.
+
+`version, edition or translation` (`Q3331189`) is the largest single `CONCEPT` class in the graph,
+visible only since ADR 42 stored `P31`. Issue #67 asked whether such a node duplicates the original
+it is an edition of — in which case it states one fact twice — or carries genuinely different
+personnel, in which case removing it would lose data. `P629` ("edition or translation of") links
+the two, so the question is answerable rather than a matter of taste.
+
+**Measured on the 54,448-node graph: 1,715 nodes state the class, and `P629` resolved for 1,246 of
+them against WDQS. Of the 1,216 whose original is also in the graph:**
+
+| | count | of 1,216 |
+|---|---|---|
+| every edge duplicates the original's, edge type included | 1,209 | **99.4%** |
+| some edges shared, some not | 1 | 0.1% |
+| no edge in common | 6 | 0.5% |
+| **reach a person the original does not already reach** | **0** | **0.0%** |
+
+**The last row is the answer, and it is exact rather than approximate.** Not one of the 1,216
+introduces a neighbour the original lacks. The seven apparent exceptions are all the *same person*
+under a different edge type: Wagner is `AUTHORED` on a libretto edition and `COMPOSED_FOR` on the
+opera (Parsifal, Das Rheingold, Die Walküre, Tristan und Isolde, Tannhäuser), and Kate Bush is
+`PERFORMED` on *The Sensual World* and `COMPOSED_FOR` on *Flower Of The Mountain*. There is no
+remaster engineer, no liner-note author and no bonus-track guest anywhere in the sample. The
+signal hypothesis is not weakened, it is refuted.
+
+**The issue's premise was wrong in a way worth recording, because it changes where to look.** These
+are not album re-releases. Of the 1,717 edges touching them, **1,663 are `AUTHORED`** — they are
+book editions and translations arriving from the reverse-`P50` pass on a novelist: 97 separate
+`'Salem's Lot` nodes under Stephen King, 15 `1984`s under Orwell, 174 editions under Darwin. Only
+54 edges are musical at all.
+
+### Why this ADR's rule cannot be the answer
+
+**An edition node is a pendant leaf. 1,714 of the 1,715 have degree exactly 1; one has degree 2.**
+A path intermediate needs degree ≥ 2 by definition, so **exactly one of 1,715 can ever appear
+inside a route** — `Q121923041` *Labyrint*, a Czech anthology joining Ray Bradbury and Robert A.
+Heinlein, who already share six other intermediates. Every remaining edition can only ever be an
+endpoint, and the amendment above already exempts endpoints on purpose.
+
+So a demotion rule here — whether a `HUB_DEGREE` variant, a class entry beside
+`RecognitionInstitutions`, or anything else — would be **a no-op against 1,714 of 1,715 nodes**.
+That is the whole finding: the specificity dimension judges intermediates, and these are not
+intermediates. Degree, which the first amendment introduced as the signal for a hub, identifies
+these as the exact opposite of one.
+
+### The other three options, and why none was taken
+
+- **Filter at ingest.** Refused, and the measurement is what refuses it: ADR 36's `ORDER BY
+  DESC(?sitelinks)` **already prices them last**. In Poe's neighbourhood — the worst case, 173 of
+  334 — editions carry a median of **1** sitelink against **9** for everything else, and at
+  `maxNewEdges` of 15, 50 or 100 **zero** editions survive the bound. They appear only at the
+  default 200, where they take 30% of his slots. The lever that admits them is therefore the bound,
+  not the vocabulary, and the bound is issue #71's open question. Filtering is also irreversible
+  without a re-seed, which now costs about 36 minutes; spending that to hard-code a workaround for
+  a number someone is actively re-deciding is the wrong order to do the work in.
+- **Collapse onto the original via `P629`.** Refused on reach and on cost. It reaches **1,216 of
+  1,715 = 70.9%**: 469 state no `P629` at all (105 of them under Darwin) and 30 more point at an
+  original the graph does not hold. Paying for a new property, a merge rule and a decision about
+  which of two provenances survives, to correct seven tenths of a leaf population, is ADR 36's own
+  rejected alternative — suppressing inverse pairs at ingest — arriving again in a new costume and
+  deserving the same answer.
+- **Leave, and let the exporter filter for presentation.** The clutter it would address is real and
+  measured (Darwin 63% of 275 neighbours, Poe 52% of 334), and it is still not built, for the
+  reason the ingest filter is not: the size of a neighbourhood is what `maxNewEdges` controls. If
+  #71 lowers the bound, the exporter filter would be dead code at the next re-seed.
+
+**The decision is therefore to keep them and change nothing** — not in `PathRanking`, not in
+`EdgeTypes`, not in the exporter. They are 1,715 of 54,448 nodes (3.1%) and 1,717 of ~61,630 edges
+(2.8%), every one of them in the tail of an ordering that already sorts them there.
+
+### Consequences of the third amendment
+
+- **`find_paths` is unaffected by all of them, and this is structural rather than lucky.** One
+  anthology node is the entire exposure, and it connects two authors who are already connected six
+  other ways, so no route in the graph depends on an edition node.
+- **The visible cost is admitted, not fixed.** A neighbourhood view of Darwin or Poe is about half
+  editions at `maxNewEdges=200`. That is a real annoyance with a known cause and an owner (#71),
+  and recording it here is what stops it being rediscovered as a vocabulary problem a third time.
+- **A cheap test would not have pinned anything.** There is no code change, and the finding is a
+  property of Wikidata's data rather than of this codebase — an offline fixture asserting that
+  editions are leaves would only restate the fixture. The evidence lives here instead, which is
+  what ADR 1 is for.
+- **What would reopen it.** An edition node reaching degree ≥ 2 in numbers — anthologies and
+  omnibus editions are the shape that does it, and one exists already. If the count of edition
+  nodes that could be intermediates grows past a handful, the population stops being leaves and
+  this amendment's central fact expires. Re-measure the degree distribution before reasoning from
+  this again.
+
 ## Alternatives considered
 
 - **Rank inside each adapter** — no port change, and it duplicates the comparator in two
