@@ -21,13 +21,26 @@ import java.util.Optional;
  * visible label is dropped and the tooltip is all there is. See {@link #labelEdges} for the
  * measurements; {@link #note} is what says so out loud.
  *
- * <p><b>Every node also carries a {@code tooltip}: what it is an instance of.</b> Graphviz turns it
- * into an {@code xlink:title} in SVG, so hovering a node says "concert tour" or "television
- * special" where the fill can only say CONCEPT or WORK. That is the channel with no budget — six
- * fills cannot describe 861 classes, and a tooltip describes all of them at no cost to the picture.
- * The names come from {@link ClassLabels}, an offline table, and fall back to the bare class QID;
- * the exporter does not go looking one up (ADR 41, and {@code
- * ArchitectureTest.theExporterNeverSpeaksToANetwork}).
+ * <p><b>Every node also carries a {@code tooltip}: what it is an instance of.</b> "Concert tour" or
+ * "television special" where the fill can only say CONCEPT or WORK — the channel with no budget,
+ * since six fills cannot describe 861 classes. The names come from {@link ClassLabels}, an offline
+ * table, and fall back to the bare class QID; the exporter does not go looking one up (ADR 41, and
+ * {@code ArchitectureTest.theExporterNeverSpeaksToANetwork}).
+ *
+ * <p><b>A browser opening the SVG will not show either tooltip, and DOT cannot make it.</b> Issue
+ * #81. Graphviz puts a {@code tooltip} in {@code xlink:title}, which browsers ignore; the mechanism
+ * they do implement is the {@code <title>} <em>element</em>, and Graphviz writes that from the
+ * object's <b>name</b>, unconditionally — no attribute redirects it, {@code id} included. A node's
+ * name is its identity and has to stay unique, so the class cannot be it (two nodes named {@code
+ * human} silently merge into one), and an edge has no name at all: its {@code <title>} is
+ * mechanically {@code tail-&gt;head}, so a relationship type cannot appear there however the nodes
+ * are named. Hovering therefore shows {@code Q16473} and {@code Q16473-&gt;Q1415017}.
+ *
+ * <p><b>The attribute stays anyway</b>, because it is not inert and because above {@link
+ * #LABEL_BUDGET} it is the only thing carrying an edge's type: {@code dot -Tcmapx} renders the same
+ * {@code tooltip} as an HTML {@code title} on an {@code <area>}, which every browser shows. {@code
+ * WhatAHoverShowsTest} renders through the real binary and pins both halves, so neither the
+ * "cannot" nor the "does" can quietly stop being true.
  *
  * <p><b>Why both.</b> Shape survives greyscale printing and colour-blind viewing where colour does
  * not; colour survives being scaled down, where shape does not — at the 132 nodes of a real depth-1
@@ -116,8 +129,11 @@ public final class DotWriter implements ViewWriter {
    * nothing at all when it has not.
    *
    * <p>It names both counts so the reader can see the rule rather than only its verdict, and it
-   * says where the type went: hovering the SVG, or {@code typeCode} in GraphML, which carries every
-   * one of them however dense the view is.
+   * says where the type went — and says it accurately, which it did not until issue #81. It used to
+   * read "render with -Tsvg and hover", which is the one thing that does not work: Graphviz puts
+   * the tooltip in {@code xlink:title}, and the {@code <title>} element a browser actually shows
+   * holds the QIDs. {@code typeCode} in GraphML carries every type however dense the view is, and
+   * {@code -Tcmapx} is the render that turns the tooltip into an HTML {@code title}.
    */
   @Override
   public Optional<String> note(GraphView view) {
@@ -129,8 +145,10 @@ public final class DotWriter implements ViewWriter {
             + " edge(s) is past the "
             + LABEL_BUDGET
             + " this picture can label legibly, so the DOT edge labels are dropped. Each edge"
-            + " keeps its type in a tooltip — render with -Tsvg and hover — and GraphML carries"
-            + " typeCode on every edge whatever the size");
+            + " keeps its type in a tooltip, but Graphviz puts that in xlink:title and a browser"
+            + " hovering the SVG shows the QIDs instead (issue #81): read the types from GraphML,"
+            + " which carries typeCode on every edge whatever the size, or render with -Tcmapx,"
+            + " where the tooltip becomes an HTML title");
   }
 
   /** True while the picture can still carry a label on every edge. */
