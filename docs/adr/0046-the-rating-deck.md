@@ -269,6 +269,17 @@ old shape.**
 - **Two `only reads` fences gained `updateRating`.** `theRatingsToolOnlyReads` and
   `theRecommenderOnlyReads` each named `AffinityStore.put` as the write they forbid. A second write
   method on the port would have walked straight through both, so both now name it too.
+- **The banner shows what this session wrote, not what the deck was dealt with.** "The card must
+  show the rating it already has, and that is non-negotiable" above is the strongest claim in this
+  amendment, and `b` broke it. `RateServer` holds `List.copyOf(deck)` from startup, so a card's
+  `currentRating` never refreshes: rating a card `2` and pressing `b` re-displayed the same card
+  still announcing "Currently rated 3" — a documented key, on a page whose own caption says going
+  back re-rates, producing a confident falsehood about the one number this ADR says must never be
+  wrong. `deck.html` now keeps a `qid → rating` map of what it has successfully sent, written only
+  after a response that was `ok`, and the banner prefers it over the server's snapshot. The page
+  needs no round trip to know this: it is what sent the value. It applies to an ordinary card too —
+  a card rated a minute ago and returned to *is* a revision of that rating, and showing the value
+  given is the same protection against a reflexive second answer the banner exists for.
 - **The `Origin` allowlist now guards `GET /api/card` as well as `POST /api/rate`.** "The Origin
   allowlist, ADR 28's argument used a second time" above says the check runs "before honouring
   `POST /api/rate`", and only that endpoint called `originAllowed`. The asymmetry was defensible

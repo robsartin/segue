@@ -91,6 +91,21 @@
   // what a rejected promise used to do here.
   let busy = false;
 
+  // What this session has actually written, by qid.
+  //
+  // The server hands out cards from a List<Card> captured at startup, so a card's currentRating is
+  // the value the affinity table held when the deck was dealt — and `b` is a documented key on a
+  // page that advertises re-rating. Rate a card 2, press `b`, and the banner went on asserting
+  // "Currently rated 3": the one element ADR 46 calls non-negotiable, stating a falsehood on a
+  // supported flow. The page does not need to ask the server, because the page is what sent the
+  // new value; it is recorded here the moment the POST is known to have succeeded, and never for
+  // a refused or unanswered one, so this map only ever holds ratings that really are in the table.
+  //
+  // It applies to an ordinary card too, not just a revision card. A card the owner rated a minute
+  // ago and has just come back to IS a revision of that rating, and showing the value they gave is
+  // the same protection against a reflexive second answer that the revision banner exists for.
+  const writtenThisSession = new Map();
+
   function problem(text) {
     document.getElementById('problem').textContent = text;
   }
@@ -112,11 +127,14 @@
 
     // Issue #109: a revision card carries the rating it already has, and must show it — the
     // whole point of the card is not letting a considered rating be re-guessed blind. Gated on
-    // c.currentRating so an ordinary card (currentRating === null) never shows this at all.
-    if (c.currentRating !== null) {
+    // `rating` being non-null, so an ordinary card the session has not rated shows nothing here.
+    // What this session wrote wins over what the deck was dealt with: the server's copy is a
+    // startup snapshot and cannot know about a rating sent since.
+    const rating = writtenThisSession.has(c.qid) ? writtenThisSession.get(c.qid) : c.currentRating;
+    if (rating !== null && rating !== undefined) {
       const revision = document.createElement('p');
       revision.className = 'revision';
-      revision.textContent = `Currently rated ${c.currentRating} — this is a revision, not a new card.`;
+      revision.textContent = `Currently rated ${rating} — this is a revision, not a new card.`;
       nodes.push(revision);
     }
 
@@ -215,6 +233,9 @@
       return;
     }
     problem('');
+    // Recorded only here — after a response that was actually ok — so the banner can never claim a
+    // rating that was refused or never answered for.
+    writtenThisSession.set(qid, value);
     rated++;
     index++;
     await show();

@@ -1508,7 +1508,10 @@ current value would invite a considered rating to be re-guessed blind — a 2 be
 on a second look reads as new information rather than the re-judgment it actually is, which is
 worse than not offering revision at all. `deck.html` renders it as a filled banner ("Currently
 rated N — this is a revision, not a new card"), the one element on the card with a real background
-fill rather than just coloured text, so it cannot be mistaken for an ordinary caption.
+fill rather than just coloured text, so it cannot be mistaken for an ordinary caption. **The number
+it shows is what the session has written, falling back to what the server dealt**: `RateServer`
+holds the deck as it stood at startup, so pressing `b` after re-rating a card would otherwise
+re-announce the value that card no longer has.
 
 `--revise` deals no candidates: a candidate is by definition absent from the known-list and
 therefore unrated, so there is nothing about it to reconsider, and mixing discovery into a revision

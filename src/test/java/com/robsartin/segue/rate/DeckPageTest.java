@@ -209,30 +209,39 @@ class DeckPageTest {
   void rendersTheCurrentRatingOnARevisionCard() throws Exception {
     String renderCard = blockAfter(script(), "function renderCard(");
 
-    // An unrated card (currentRating === null) must not get a revision banner at all — this is
+    // The value shown must be what the SESSION knows, falling back to what the server dealt.
+    // RateServer holds List.copyOf(deck) from startup, so c.currentRating never refreshes: rating
+    // a card 2 and pressing `b` left the banner asserting the old value on a documented flow.
+    assertThat(matches(renderCard, "writtenThisSession[\\s\\S]*?c\\.currentRating"))
+        .as(
+            "expected the shown rating to prefer what this session wrote over the server's"
+                + " startup snapshot")
+        .isTrue();
+
+    // An unrated card the session has not rated must not get a revision banner at all — this is
     // what stops the deck's ordinary cards from claiming a rating they do not have.
-    assertThat(matches(renderCard, "c\\.currentRating\\s*!==?\\s*null"))
-        .as("expected renderCard to branch on whether c.currentRating is present")
+    assertThat(matches(renderCard, "rating\\s*!==?\\s*null"))
+        .as("expected renderCard to branch on whether a rating is present")
         .isTrue();
 
     // Everything that builds and shows the banner must live INSIDE that guard's own block.
     // blockAfter locates the brace immediately following the guard text and balances it, so this
     // fails if the banner element were built unconditionally, with the guard merely present
     // somewhere else in the function.
-    String guarded = blockAfter(renderCard, "c.currentRating !== null");
+    String guarded = blockAfter(renderCard, "rating !== null");
 
-    // The element's text must interpolate the ACTUAL c.currentRating value (a template literal
-    // referencing it), not a fixed label — a hard-coded "Currently rated" with no ${c...} would
-    // read as compliant while showing the wrong number on every card.
+    // The element's text must interpolate the ACTUAL rating value (a template literal referencing
+    // it), not a fixed label — a hard-coded "Currently rated" with no ${...} would read as
+    // compliant while showing the wrong number on every card.
     Matcher element =
         Pattern.compile(
                 "const\\s+(\\w+)\\s*=\\s*document\\.createElement\\([^)]*\\)[\\s\\S]*?"
-                    + "\\1\\.textContent\\s*=\\s*`[^`]*\\$\\{\\s*c\\.currentRating\\s*\\}[^`]*`")
+                    + "\\1\\.textContent\\s*=\\s*`[^`]*\\$\\{\\s*rating\\s*\\}[^`]*`")
             .matcher(guarded);
     assertThat(element.find())
         .as(
             "expected an element inside the guard whose textContent interpolates the actual"
-                + " c.currentRating value")
+                + " rating value")
         .isTrue();
     String varName = element.group(1);
 
@@ -257,13 +266,28 @@ class DeckPageTest {
   }
 
   @Test
+  @DisplayName("the banner's session memory records only ratings the server actually accepted")
+  void theSessionOnlyRemembersRatingsThatLanded() throws Exception {
+    String rate = blockAfter(script(), "async function rate(");
+
+    // The banner now prefers what this session wrote over the server's startup snapshot, so a
+    // value remembered for a POST that was refused or never answered would turn one stale number
+    // into a confidently wrong one. The write into the map has to sit behind the same ok check
+    // that already gates the session count and the index move.
+    assertThat(rate).contains("writtenThisSession.set");
+    assertThat(rate.indexOf("response.ok"))
+        .as("the ok check must come before the session remembers the rating")
+        .isLessThan(rate.indexOf("writtenThisSession.set"));
+  }
+
+  @Test
   @DisplayName(
       "the revision banner has a real background fill, not just colored text, so a revision card"
           + " cannot be mistaken for one of the page's plain muted captions")
   void revisionBannerIsVisuallyDistinct() throws Exception {
     String html = page();
     String renderCard = blockAfter(script(), "function renderCard(");
-    String guarded = blockAfter(renderCard, "c.currentRating !== null");
+    String guarded = blockAfter(renderCard, "rating !== null");
 
     Matcher classAssign =
         Pattern.compile("(\\w+)\\.className\\s*=\\s*['\"](\\w[\\w-]*)['\"]").matcher(guarded);
