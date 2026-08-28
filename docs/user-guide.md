@@ -834,6 +834,16 @@ Nothing in the tool surface retracts a claim, deletes an entity or unrates somet
 expressible against the assertion log but deliberately unexposed. Re-rating overwrites, which is the
 only "undo" available.
 
+### The tools do not recommend anything
+
+There is no `what_should_I_explore_next` tool, and there deliberately is not going to be one on this
+surface. The recommender exists — `./gradlew recommend`, on the machine that holds the graph — and it
+takes a file listing everything you already know, which is exactly the personal data segue keeps out
+of a conversation with a model.
+[ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) makes that argument and records what
+would have to change for a bounded, conversational version to exist. Meanwhile `find_paths` answers
+the question this surface *is* for: not "what next", but "how are these two connected".
+
 ## Errors you will actually see
 
 Every one of these is a readable error result with `isError: true`, not a protocol crash — your

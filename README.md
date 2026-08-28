@@ -169,11 +169,13 @@ Slice 0 — the domain model and the engine bake-off — is complete, and so are
 it: the source-adapter SPI, the Wikidata ingest with reverse lookup, the MCP server on both
 transports, and the taste layer. Remaining work is tracked as GitHub issues.
 
-The notable thing *not* built is recommendations. They need routes to filter, and until the
-vocabulary grew its first non-collaboration edge there were not enough routes to filter — see
-[ADR 38](docs/adr/0038-award-received-as-the-first-non-collaboration-edge.md). The limits you will
-actually hit today are written down honestly in
-[the user guide](docs/user-guide.md#honest-limits).
+Recommendations — the thing this README used to list as not built — now exist, as a dev-side tool
+rather than a seventh MCP tool: `./gradlew recommend` ranks entities *absent* from a list of what you
+already know by how much more of that list reaches them than their size in the graph predicts, and
+explains each one with real cited routes. Why that scoring, why not PageRank, and why it is not a
+tool a model can call are all in
+[ADR 45](docs/adr/0045-recommend-by-normalised-lift-with-routes.md). The limits you will actually hit
+today are written down honestly in [the user guide](docs/user-guide.md#honest-limits).
 
 The open risk is unchanged from the original plan: whether MCP is a pleasant *authoring* interface,
 or whether you want a UI within ten minutes.

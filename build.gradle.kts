@@ -161,6 +161,24 @@ tasks.register<JavaExec>("listRatings") {
     outputs.upToDateWhen { false }
 }
 
+tasks.register<JavaExec>("recommend") {
+    group = "application"
+    description =
+        "Ranks entities you do NOT already have by how much more of your list reaches them than " +
+            "their size predicts, and explains each one with real routes. Reads only; needs no " +
+            "network. The output is personal data (ADR 33) — write it outside the working tree. " +
+            "See ADR 45. Example: ./gradlew recommend " +
+            "--args=\"--known \$HOME/known.csv --out \$HOME/next.txt --scorer lift\""
+    mainClass.set("com.robsartin.segue.recommend.RecommendCli")
+    classpath = sourceSets["main"].runtimeClasspath
+    // sqlite-jdbc loads a native library, the same grant tasks.test makes.
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
+    // The whole graph is replayed into memory, and a real one is six figures of assertions.
+    maxHeapSize = "4g"
+    // Never up-to-date: the graph changes under it, and the point is to ask it now.
+    outputs.upToDateWhen { false }
+}
+
 tasks.register<JavaExec>("retractEntity") {
     group = "application"
     description =

@@ -144,13 +144,33 @@ public final class PathRanking {
     List<Hop> hops = path.hops();
     int hubs = 0;
     for (int i = 0; i + 1 < hops.size(); i++) {
-      NodeRecord intermediate = hops.get(i).to();
-      if (isBusyConcept(intermediate, degreeByQid)
-          || isRecognitionInstitution(intermediate, recognitionInstitutionClass)) {
+      if (isHub(hops.get(i).to(), degreeByQid, recognitionInstitutionClass)) {
         hubs++;
       }
     }
     return hubs;
+  }
+
+  /**
+   * Whether this node, standing between two others, is a hub rather than a fact about them.
+   *
+   * <p>Public because a second caller needs the same judgement and must not own a second copy of
+   * it. The recommender (ADR 45) asks it of every candidate intermediate <em>before</em> a route
+   * exists, and EXCLUDES the ones that answer yes rather than demoting them: ranking has something
+   * left to say about a hub route, since "what connects me to the Rock and Roll Hall of Fame" is a
+   * question with an answer, while a recommendation derived from one is nothing but the observation
+   * that both parties are famous. Two readings of one rule, one implementation - if this ever
+   * changes, both change together, which is the whole reason it is exposed instead of copied.
+   *
+   * <p>The two ways to be a hub are described on {@link #hubIntermediates}: a busy {@code CONCEPT}
+   * (issue #52), or a node stating a class that makes it a body one is ELECTED to (issue #66).
+   */
+  public static boolean isHub(
+      NodeRecord node,
+      ToIntFunction<String> degreeByQid,
+      Predicate<String> recognitionInstitutionClass) {
+    return isBusyConcept(node, degreeByQid)
+        || isRecognitionInstitution(node, recognitionInstitutionClass);
   }
 
   private static boolean isBusyConcept(NodeRecord node, ToIntFunction<String> degreeByQid) {

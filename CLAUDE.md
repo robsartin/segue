@@ -12,9 +12,9 @@ X → Y → Z", with every hop citable to a source.
 Slice 0 — the domain model plus a two-engine bake-off that answered the
 graph-database question — is complete, and so are the increments built on it:
 Wikidata ingest, the MCP server on both transports, and (increment 5) the taste
-layer. Remaining work is tracked as GitHub issues; recommendations are the
-notable thing NOT built, because they need routes to filter and issue #32 is why
-there currently are none.
+layer. Remaining work is tracked as GitHub issues. Recommendations — long the
+notable thing NOT built — landed with ADR 45, as the fifth dev-side tool rather
+than a seventh MCP tool.
 
 ## Build and run
 
@@ -27,6 +27,7 @@ there currently are none.
 ./gradlew exportGraph --args="--view neighbourhood --qid Q42 --out $HOME/one.graphml"  # ADR 41; read-only; the --out extension picks the format
 ./gradlew listRatings --args="--sort recent --out $HOME/ratings.txt"   # ADR 43; read-only; the OUTPUT IS PERSONAL DATA
 ./gradlew retractEntity --args="--qid Q12345 --reason 'wrong entity' --dry-run"   # ADR 44; appends a retraction; --dry-run reports and writes nothing
+./gradlew recommend --args="--known $HOME/known.csv --out $HOME/next.txt"   # ADR 45; read-only; ranks what you do NOT have, with routes; the OUTPUT IS PERSONAL DATA
 ```
 
 Gradle, not Maven. The wrapper is pinned to 9.7.1 and committed; **Gradle 9.1.0 is the
@@ -94,10 +95,17 @@ retract/  The retraction tool (ADR 44): appends one Retraction claim so the
           retractEntity`. Dev-side, plain Java, offline, and NOT a seventh MCP
           tool. The only dev tool that WRITES — and it may write exactly one kind
           of row, through IngestService, holding no GraphStore at all.
+recommend/ The recommender (ADR 45): ranks entities ABSENT from a supplied known-list by
+          candidate-degree-normalised lift, excludes hub intermediates through PathRanking.isHub,
+          weights edge types, and explains every candidate with real find_paths routes. Run as
+          `./gradlew recommend`. Dev-side, plain Java, READ-ONLY, offline, NOT a seventh MCP tool —
+          and the only tool that may not even see AffinityStore, because the affinity weighting is
+          a seam (Recommendations.EQUAL_REGARD) rather than a wire.
 ingest/   IngestService (the only write path) and GraphProjector (boot replay).
 support/  Plain-Java cross-cutting helpers with no project dependencies of their
-          own — currently UuidV7, the RFC 9562 v7 id generator used for request
-          correlation.
+          own — UuidV7, the RFC 9562 v7 id generator used for request correlation, and
+          QidList, the QID-file reader `export` and `recommend` share (it moved here from
+          `export` in ADR 45: the tools may not depend on each other).
 mcp/      The six MCP tools (EntityTools, GraphTools, TasteTools), SegueService
           (the facade they call), CorrelationId. Spring-only package (ADR 32) —
           annotated with the starter's @McpTool, but plain enough to unit test.
@@ -427,6 +435,34 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   carry fixed padding (`(retraction)`, `1.0`) that `readRow` never reads back — relaxing a
   `NOT NULL` in SQLite means rebuilding the whole table.
 
+- **A recommender that counts connections rediscovers fame, and the fix is which degree you divide
+  by.** Measured on the real 123,752-node graph before anything was built (issue #82, ADR 45): raw
+  counting and Adamic-Adar both returned the most famous entities in the graph, because a candidate
+  connected to everything shares its intermediates with everything. **Dividing by the CANDIDATE's own
+  degree** turns popularity into surprise, and it needs a **degree floor** (12, `--min-degree`)
+  because a normalised score otherwise rewards whatever is thinnest — the experiment's cosine variant
+  put a degree-2 node first. `--scorer` keeps raw/adamic-adar/resource-allocation/lift as a dial, and
+  running two of them is how you see what the normalisation does. **Plain PageRank is the wrong
+  tool** (it measures the fame this is escaping) and personalised PageRank is refused for a different
+  reason: it cannot produce the routes, and a score with no receipts is not a segue recommendation.
+- **Hub intermediates are EXCLUDED from recommendations, not demoted, and it is `PathRanking.isHub`
+  — now public for exactly this.** Discounting let the Rock and Roll Hall of Fame decide the top of
+  the experiment's ranking. Routing demotes a hub route because "what connects me to the hall of
+  fame" has an answer; recommending excludes one because "you were both inducted" is not a
+  recommendation. One implementation, two readings — **never write a second copy of that judgement**.
+  116 intermediates were excluded on the real run.
+- **Edge type carries more of the recommendation signal than any further tuning of the degree
+  maths.** `RecommendationWeights`: influence 1.0, collaboration 0.5, recognition 0.2, one
+  significant figure, and only the ORDER is measured. Halving collaboration is what dissolved the
+  co-membership artefact (a band member reached through 28 songs by one group — one fact counted 28
+  times); `RECEIVED_AWARD` is a fifth and deliberately **not zero**, because ADR 38 admitted P166
+  precisely for single-authored work where there is no collaboration to find. Adding an `EdgeType`
+  now fails `RecommendationWeightsTest.everyRegisteredTypeIsNamed` until it is weighed.
+- **The recommender may not depend on `AffinityStore` at all**, which no other tool's fence says.
+  Banning the type rather than the calls is the point: `find` is available everywhere else, and
+  eight hundred single-qid lookups are the bulk read ADR 39 declined, spelled slowly. Building the
+  real affinity weighting changes that rule, ADR 39 and ADR 45 together.
+
 - **The taste layer's classes deliberately have no package of their own.**
   `AffinityRecord` sits in `domain`, `AffinityStore` in `port`,
   `SqliteAffinityStore` in `sqlite`, `TasteTools` in `mcp` — each where its
@@ -534,9 +570,10 @@ claim about the user with its own dimensions (rating, first-heard-where, seen-li
 Wilco's lineup is a claim about the world. Separate tables so recommendations can
 be re-derived by traversing the world graph filtered through affinity. Landed in
 increment 5: `AffinityStore`, `SqliteAffinityStore`, `TasteTools`, and the
-`affinity` field on `get_entity`. Recommendations themselves are NOT built —
-they need routes to filter, and issue #32 is why twelve dogfooding pairs
-currently return none.
+`affinity` field on `get_entity`. Recommendations landed later, in `recommend/`
+(ADR 45) — and the affinity half of that sentence is still NOT built: the table
+is empty, so `Recommendations.EQUAL_REGARD` is the seam and an ArchUnit rule
+keeps the recommender from seeing `AffinityStore` at all.
 
 ### The open risk
 
