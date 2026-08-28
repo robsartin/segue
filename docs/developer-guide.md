@@ -979,7 +979,8 @@ dot -Tpng -o graph.png -Tcmapx -o graph.map graph.dot
 
 `WhatAHoverShowsTest` renders through the real Graphviz binary and asserts on `<title>` *content*
 rather than on the presence of an attribute — which is exactly the assertion whose absence let this
-ship. It skips where Graphviz is not installed.
+ship. It skips where Graphviz is not installed, so **CI installs it**: the runner image has no
+`dot`, and without that step the test would report success while executing nothing.
 
 ## Looking at what you have rated
 

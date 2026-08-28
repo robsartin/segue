@@ -341,8 +341,14 @@ after "is it in the file" is "does the thing that consumes the file act on it".
   tooltip. It pins both halves: the node `<title>` is the QID and carries no class, the edge
   `<title>` is two QIDs and carries no type, **and** the imagemap does carry both. If a future
   Graphviz starts writing the tooltip into `<title>`, the first two fail and this amendment wants
-  revisiting — which is the point of pinning a "cannot" rather than merely writing it down. It
-  skips where Graphviz is not installed; a build machine without it should not fail for that.
+  revisiting — which is the point of pinning a "cannot" rather than merely writing it down.
+
+- **CI installs Graphviz, because otherwise this test passes by not running.** The test skips itself
+  where the binary is absent — a machine without it has no rendered file to read and should not
+  fail for that — and the runner image does not carry it, so the first CI run reported four passes
+  and four skips. A guard that reports success while executing nothing is the same failure as a
+  tooltip that is present and unread, one level further out again, and it was caught only by
+  reading the test report rather than the build's exit code. One `apt-get` step in the workflow.
 
 Not free: the class and the relationship are now documented as unreachable through the render most
 people will reach for, and the note has to spend two extra clauses saying so. The alternative was
