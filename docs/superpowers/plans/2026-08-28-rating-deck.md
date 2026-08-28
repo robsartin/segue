@@ -1234,16 +1234,25 @@ Replace `src/main/resources/rate/deck.html`:
 Run: `./gradlew test --tests 'com.robsartin.segue.rate.DeckPageTest'`
 Expected: PASS, 3 tests.
 
-- [ ] **Step 5: Look at it**
+- [ ] **Step 5: Look at it — against a COPY of the database, never the real one**
+
+**The owner's real ratings are not a scratch pad.** `affinity` is the one table in segue that cannot be regenerated, and a manual smoke test writes to it. Copy first, and point `--db` at the copy:
 
 ```bash
-cd ~/code/segue && ./gradlew rate --args="--known $HOME/setlist-scout/filtered-qids.csv"
+mkdir -p /tmp/rate-smoke && cp ~/.segue/segue.db /tmp/rate-smoke/copy.db
+cd ~/code/segue && ./gradlew rate --args="--db /tmp/rate-smoke/copy.db --known $HOME/setlist-scout/filtered-qids.csv"
 ```
 
-Open `http://127.0.0.1:8090`. Check by eye: the first card is a high-degree entity, its degree matches what the card claims, pressing `3` advances, pressing `b` returns to it. Then stop with ctrl-c and confirm the rating landed:
+Open `http://127.0.0.1:8090`. Check by eye: the first card is a high-degree entity, its degree matches what the card claims, pressing `3` advances, pressing `b` returns to it. Then stop with ctrl-c and confirm the rating landed in the copy:
 
 ```bash
-cd ~/code/segue && ./gradlew listRatings --args="--out $HOME/rated.txt" && head -5 $HOME/rated.txt
+cd ~/code/segue && ./gradlew listRatings --args="--db /tmp/rate-smoke/copy.db --out /tmp/rate-smoke/rated.txt" && head -5 /tmp/rate-smoke/rated.txt
+```
+
+Finally, confirm the real database was untouched — its mtime must be unchanged:
+
+```bash
+stat -f '%m %Sm %N' ~/.segue/segue.db
 ```
 
 - [ ] **Step 6: Commit**
