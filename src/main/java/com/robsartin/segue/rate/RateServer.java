@@ -1,5 +1,6 @@
 package com.robsartin.segue.rate;
 
+import com.robsartin.segue.domain.Qid;
 import com.robsartin.segue.domain.RatingScale;
 import com.robsartin.segue.port.AffinityStore;
 import com.sun.net.httpserver.HttpExchange;
@@ -161,8 +162,11 @@ public final class RateServer {
     try {
       String qid = field(body, "qid");
       int rating = Integer.parseInt(field(body, "rating"));
-      // RatingScale, not AffinityRecord: one definition of the scale, in a class that carries no
-      // rating of its own. Its message names no value, which is deliberate (ADR 33).
+      // Qid and RatingScale, not AffinityRecord: one definition of each rule, in classes that
+      // carry no rating of their own. RatingScale's message names no value, which is deliberate
+      // (ADR 33). Both checks also run inside updateRating, which is where the contract holds them
+      // for every caller; these two refuse an untrusted body at the boundary that parsed it.
+      Qid.check(qid);
       RatingScale.check(rating);
       // updateRating, never put — in BOTH modes, and this handler could not tell them apart if it
       // wanted to (it holds a List<Card> and no flag). put writes the whole row, and the deck can

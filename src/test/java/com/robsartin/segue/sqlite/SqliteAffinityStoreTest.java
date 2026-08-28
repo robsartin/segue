@@ -233,6 +233,21 @@ class SqliteAffinityStoreTest {
     }
   }
 
+  @Test
+  @DisplayName("updateRating refuses a qid that is not a QID, rather than poisoning the table")
+  void updateRatingRefusesANonQid() {
+    // `affinity` has no CHECK constraint on qid, so nothing below this method would refuse one.
+    // A stored non-QID is not one bad row: readAll and find rebuild an AffinityRecord per row and
+    // would throw IllegalArgumentException from then on, past this class's catch (SQLException).
+    try (SqliteAffinityStore store = SqliteAffinityStore.inMemory()) {
+      assertThatThrownBy(() -> store.updateRating("junk", 3, FIRST))
+          .isInstanceOf(IllegalArgumentException.class);
+
+      assertThat(store.readRatings()).isEmpty();
+      assertThat(store.readAll()).isEmpty();
+    }
+  }
+
   private static int rowCount(Path db, String table) throws SQLException {
     try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + db);
         Statement st = conn.createStatement();

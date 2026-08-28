@@ -1,6 +1,7 @@
 package com.robsartin.segue.sqlite;
 
 import com.robsartin.segue.domain.AffinityRecord;
+import com.robsartin.segue.domain.Qid;
 import com.robsartin.segue.domain.RatingScale;
 import com.robsartin.segue.port.AffinityStore;
 import java.io.IOException;
@@ -149,9 +150,13 @@ public final class SqliteAffinityStore implements AffinityStore {
 
   @Override
   public void updateRating(String qid, int rating, Instant updatedAt) {
-    // The same rule AffinityRecord's compact constructor applies, called from the one write path
-    // that does not build one. Without it this method would be the only way into the table with no
-    // range check at all.
+    // BOTH rules AffinityRecord's compact constructor applies, called from the one write path
+    // that does not build one. The first version of this method carried the rating half across and
+    // left the qid half behind: `affinity` has no CHECK constraint, so a non-QID was accepted, and
+    // every later read that rebuilds an AffinityRecord then threw an IllegalArgumentException past
+    // the catch (SQLException) below — breaking readAll and find for good, on the one table with
+    // no source to regenerate from.
+    Qid.check(qid);
     RatingScale.check(rating);
     try (PreparedStatement ps = conn.prepareStatement(UPDATE_RATING)) {
       ps.setString(1, qid);

@@ -32,9 +32,7 @@ public record AffinityRecord(String qid, int rating, String note, Instant update
   public AffinityRecord {
     Objects.requireNonNull(qid, "qid");
     Objects.requireNonNull(updatedAt, "updatedAt");
-    if (!qid.matches("Q\\d+")) {
-      throw new IllegalArgumentException("qid must look like Q12345, got: " + qid);
-    }
+    Qid.check(qid);
     // The bounds and the message both live on RatingScale, which carries no rating of its own —
     // see its javadoc for why a caller that only needs to say "1 to 5" must not have to name this
     // record to do it.

@@ -69,6 +69,14 @@ public interface AffinityStore extends AutoCloseable {
    * path, so a method that could only update would refuse the commoner case. A row created here has
    * no note because there is nobody to have written one.
    *
+   * <p><b>An implementation validates, because this is the one write into the table that builds no
+   * {@link AffinityRecord}.</b> That record's compact constructor is where both invariants used to
+   * live, and a write that skips it skips them: the {@code affinity} table has no {@code CHECK}
+   * constraint, so a non-QID would be stored and every later read that rebuilds a record would
+   * throw past the implementation's own {@code SQLException} handling — permanently, on data with
+   * no source to regenerate from.
+   *
+   * @param qid must be a QID, checked through {@code Qid}
    * @param rating 1 to 5; an implementation refuses anything else, through {@code RatingScale}
    */
   void updateRating(String qid, int rating, Instant updatedAt);

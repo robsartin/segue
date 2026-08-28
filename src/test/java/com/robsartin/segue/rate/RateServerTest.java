@@ -351,6 +351,47 @@ class RateServerTest {
   }
 
   @Test
+  @DisplayName("a qid that is not a QID is refused with a 400, and no row reaches the table")
+  void refusesAQidThatIsNotAQid() throws Exception {
+    // A regression this branch's own review wave introduced. The handler used to build
+    // new AffinityRecord(qid, ...), whose compact constructor enforces Q\d+ and threw the
+    // IllegalArgumentException this method already turns into a 400. updateRating replaced that
+    // call and carried the rating half of the validation across, not the qid half.
+    //
+    // The damage is not one bad row. `affinity` has no CHECK constraint on qid, so the row is
+    // accepted; every later read that reconstructs an AffinityRecord — readAll, find — then
+    // throws IllegalArgumentException, which the surrounding catch (SQLException) does not catch.
+    // ./gradlew listRatings and AffinityOverlay break permanently, on the one table with no source
+    // to regenerate it from, fixable only by hand-editing SQLite.
+    //
+    // Exercised against a REAL store on purpose: RecordingAffinity's updateRating builds an
+    // AffinityRecord to record what it was given, so it validates the qid by accident and this
+    // test would pass against the fake while the real store wrote the row.
+    try (SqliteAffinityStore store = SqliteAffinityStore.inMemory()) {
+      RateServer strict = new RateServer(List.of(), store, 0);
+      strict.start();
+      try {
+        HttpResponse<String> response =
+            client.send(
+                HttpRequest.newBuilder(
+                        URI.create("http://127.0.0.1:" + strict.port() + "/api/rate"))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString("{\"qid\":\"junk\",\"rating\":3}"))
+                    .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(400);
+        // readRatings builds no AffinityRecord, so it can see a poisoned row that readAll cannot.
+        assertThat(store.readRatings()).doesNotContainKey("junk");
+        // And the read that would have been broken from here on is still answerable at all.
+        assertThat(store.readAll()).isEmpty();
+      } finally {
+        strict.stop();
+      }
+    }
+  }
+
+  @Test
   @DisplayName("a missing deck.html answers 500 rather than closing the connection on the browser")
   void answersWhenThePageResourceIsMissing() throws Exception {
     RateServer broken = new RateServer(List.of(), affinity, 0, "/rate/there-is-no-such-page.html");
