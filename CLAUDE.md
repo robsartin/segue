@@ -89,7 +89,7 @@ ratings/  The taste-layer reader (ADR 43): every rating with its label, note and
           updated_at, sortable by rating or recency, run as `./gradlew
           listRatings`. Dev-side, plain Java, READ-ONLY, offline, and NOT a
           seventh MCP tool. Its output IS personal data; *.txt is gitignored.
-          The tightest fence of the three tools — sqlite only, no engine, no
+          The tightest fence of the six dev tools — sqlite only, no engine, no
           projection, no network.
 retract/  The retraction tool (ADR 44): appends one Retraction claim so the
           projection stops showing an entity and its edges, run as `./gradlew
@@ -103,24 +103,26 @@ recommend/ The recommender (ADR 45): ranks entities ABSENT from a supplied known
           weights edge types, and explains every candidate with real find_paths routes. Run as
           `./gradlew recommend`. Dev-side, plain Java, READ-ONLY, offline, NOT a seventh MCP tool.
           Since issue #85 it WEIGHTS by rating — Recommendations.regardFor over the note-free
-          AffinityStore.readRatings — and it is the only tool fenced at the CALL SITES:
+          AffinityStore.readRatings — under a fence written at the CALL SITES:
           theRecommenderReadsRatingsAndNeverNotes bans find and readAll and the AffinityRecord
           type, while still letting it read scores.
 rate/     The rating deck (ADR 46): a loopback page on 127.0.0.1:8090 that deals one
           entity per keystroke — known entities by degree, a recommend candidate every fifth
           card — `1`-`5` rates and advances, `s`/space skips, `b` goes back. Run as `./gradlew
           rate`. Dev-side, NOT a seventh MCP tool, and — with retract — one of only two dev
-          tools that WRITE: AffinityStore.put alone, fenced by three ArchUnit rules, one of
+          tools that WRITE: AffinityStore.put alone, fenced by four ArchUnit rules, one of
           which (theRatingDeckLogsNoRating) names a single exception — the class that
           constructs what it writes. No un-rate: AffinityStore has no delete, so going back
           re-rates rather than withdrawing.
 ingest/   IngestService (the only write path) and GraphProjector (boot replay).
 support/  Plain-Java cross-cutting helpers with no project dependencies of their
-          own — UuidV7, the RFC 9562 v7 id generator used for request correlation, and
+          own — UuidV7, the RFC 9562 v7 id generator used for request correlation;
           QidList, the QID-file reader `export`, `recommend` and `rate` share (it moved here
           from `export` in ADR 45, so a shared reader would not force a dependency between
           siblings that must not have one — `rate` depending on `recommend` directly, for its
-          candidate sweep, is the one dev-tool pair that already does, by design).
+          candidate sweep, is the one dev-tool pair that already does, by design); and
+          ClassLabels, the offline P31 label table `export` and `rate` share, which moved here
+          from `export` in ADR 46 for the same reason QidList did.
 mcp/      The six MCP tools (EntityTools, GraphTools, TasteTools), SegueService
           (the facade they call), CorrelationId. Spring-only package (ADR 32) —
           annotated with the starter's @McpTool, but plain enough to unit test.
@@ -430,7 +432,8 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
 - **`AffinityStore` has TWO bulk reads, and each belongs to exactly one package.** `readAll`
   returns whole rows, notes included, and is the `ratings` dev tool's alone
   (`onlyTheRatingsToolReadsEveryRating`); `readRatings` returns a note-free `Map<String, Integer>`
-  and is the recommender's alone (`onlyTheRecommenderReadsEveryRating`, issue #85). The reason the
+  and belongs to the two dev tools that weight and deal by it, `recommend` and — since ADR 46 —
+  `rate` (`onlyTheRecommenderReadsEveryRating`, issues #85 and #101). The reason the
   second one is still fenced has CHANGED — a score is no longer too personal to leave, but ADR 26
   pins the surface at six tools and nothing on it needs the whole table.
   ADR 39 declined a bulk `list_affinity` MCP tool on ADR 16 data-minimisation grounds, and what it
