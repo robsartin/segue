@@ -247,6 +247,47 @@ class PathRankingTest {
     assertThat(ranked).containsExactly(throughABand, throughAnAcademy);
   }
 
+  // ---- the vocabulary that does not exist yet (issue #88) -------------------
+
+  @Test
+  @DisplayName("an aboutness hub is a busy CONCEPT, so the degree rule already covers it")
+  void aSubjectHubIsAlreadyCovered() {
+    // Issue #78 wants P921 "main subject", and P136 genre carries 16,552 items for "science
+    // fiction" alone. Demonstrated here rather than waited for: a subject node is a CONCEPT and
+    // it is busy by construction, which is exactly the shape issue #52 measured on awards. The
+    // property is not registered and this rule does not care - it judges the intermediate, not
+    // the relation, so it will hold the day the vocabulary widens.
+    PathResult throughASubject = twoHopVia(hub("Q900216", NodeKind.CONCEPT), 1.00);
+    PathResult throughTheBookItself = twoHopVia(quiet("Q900118", NodeKind.WORK), 0.80);
+
+    List<PathResult> ranked =
+        PathRanking.rank(List.of(throughASubject, throughTheBookItself), DEGREES, INSTITUTIONS);
+
+    assertThat(ranked).containsExactly(throughTheBookItself, throughASubject);
+  }
+
+  @Test
+  @DisplayName("a place hub is invisible to both rules, and that is issue #78's to fix")
+  void aPlaceHubIsNotCoveredByEitherRule() {
+    // The gap, pinned so the next person finds it rather than rediscovers it (issue #88). P131
+    // "located in" makes "both are in New York" a route, and New York is a PLACE: the degree
+    // rule is CONCEPT-only on purpose, and a city states no class that means "elected to". So
+    // the place route wins here on confidence, which is the #52 failure returning in a kind
+    // nobody has had to think about yet.
+    //
+    // Deliberately not fixed by widening the degree rule to PLACE. There are two PLACE nodes in
+    // the real graph and neither can be an intermediate, so the rule would be a no-op against
+    // everything that exists - the same reason ADR 31's third amendment refused a rule for
+    // edition nodes. It belongs with the property that creates the problem.
+    PathResult throughAPlace = twoHopVia(hub("Q900217", NodeKind.PLACE), 1.00);
+    PathResult throughTheFilmTheyMade = twoHopVia(quiet("Q900119", NodeKind.WORK), 0.80);
+
+    List<PathResult> ranked =
+        PathRanking.rank(List.of(throughAPlace, throughTheFilmTheyMade), DEGREES, INSTITUTIONS);
+
+    assertThat(ranked).containsExactly(throughAPlace, throughTheFilmTheyMade);
+  }
+
   // ---- the judgement, borrowed (ADR 45) -------------------------------------
 
   @Test
