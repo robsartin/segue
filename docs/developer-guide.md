@@ -25,6 +25,7 @@ Everything here was checked against the source in `src/main/java/com/robsartin/s
 - [Looking at the graph](#looking-at-the-graph)
 - [Looking at what you have rated](#looking-at-what-you-have-rated)
 - [Taking something back out](#taking-something-back-out)
+- [What to explore next](#what-to-explore-next)
 - [How to read an ADR against the code](#how-to-read-an-adr-against-the-code)
 
 ## What segue is, in one pass
@@ -156,13 +157,14 @@ view, and ADR 44 a fourth rather than a mode of one of them.
 | `sqlite` | `SqliteAssertionLog` and `SqliteAffinityStore` — two tables in one file, two connections. | `port`, `domain` |
 | `wikidata` | The first source: resolution, expansion, and the two mapping passes. Plain Java, no Spring. | `port`, `domain` |
 | `ingest` | `IngestService` (the only write path) and `GraphProjector` (boot replay). | `port`, `domain` |
-| `support` | Cross-cutting plain-Java helpers with no project dependencies — currently `UuidV7`. | nothing |
+| `support` | Cross-cutting plain-Java helpers with no project dependencies — `UuidV7`, and `QidList`, the QID-file reader two dev tools share. | nothing |
 | `mcp` | The tool classes, `SegueService`, the view records, `CorrelationId`. Spring-aware. | `ingest`, `port`, `domain`, `support` |
 | `app` | Entry point, all bean wiring, `application.yaml`, transport profiles. Spring-aware. | everything it wires |
 | `seed` | The bulk seeding tool ([ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)): a name list to `name → QID`, run as `./gradlew resolveNames`. Plain Java, never opens a store. | `port`, `domain`, `wikidata` |
 | `export` | The graph exporter ([ADR 41](adr/0041-graph-exporter-views-and-formats.md)): `ViewSelector` and the two writers, run as `./gradlew exportGraph`. Plain Java, read-only. | `port`, `domain`, `ingest`, `sqlite`, `tinker` |
 | `ratings` | The taste-layer reader ([ADR 43](adr/0043-listing-your-own-ratings.md)): every rating with its label, note and `updated_at`, run as `./gradlew listRatings`. Plain Java, read-only, offline. | `port`, `domain`, `sqlite` |
 | `retract` | The retraction tool ([ADR 44](adr/0044-retraction-as-a-new-claim.md)): appends one `Retraction` claim so the projection stops showing an entity and its edges, run as `./gradlew retractEntity`. Plain Java, offline, and the only dev tool that writes. | `port`, `domain`, `ingest`, `sqlite` |
+| `recommend` | The recommender ([ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md)): ranks entities absent from a supplied known-list by how much more of that list reaches them than their size predicts, and explains each with real routes. Run as `./gradlew recommend`. Plain Java, read-only, offline, and it cannot see the taste layer at all. | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `support` |
 
 ### Which rules a machine enforces
 
@@ -188,6 +190,9 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `onlyTheRatingsToolReadsEveryRating` | calling `AffinityStore.readAll` from outside `ratings` — the bulk read exists for the owner's dev tool and for nothing on the MCP surface | [ADR 16](adr/0016-privacy-and-data-handling.md), [ADR 39](adr/0039-affinity-capture-and-read.md), [ADR 43](adr/0043-listing-your-own-ratings.md) |
 | `theRetractionToolWritesOnlyRetractions` | `retract` calling the three world-fact writes, `AffinityStore.put` or `AffinityStore.readAll` — it appends a retraction through `IngestService` and writes nothing else, least of all a rating | [ADR 44](adr/0044-retraction-as-a-new-claim.md) |
 | `theRetractionToolOpensNothingElse` | `retract` depending on `GraphStore` **as a type**, on `AffinityStore`, or on `tinker`, `jena`, `mcp`, `app`, `seed`, `export`, `ratings`, `java.net` or `javax.net` — a retraction has no graph half, so the tool must not be able to hold one | [ADR 44](adr/0044-retraction-as-a-new-claim.md) |
+| `theRecommenderOnlyReads` | `recommend` calling the three world-fact writes or `AffinityStore.put`, or depending on `IngestService` at all | [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
+| `theRecommenderNeverReadsTheTasteLayer` | `recommend` depending on `AffinityStore` or `AffinityRecord` **as types** — the affinity weighting is a seam, and wiring it is an ADR rather than an import | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 39](adr/0039-affinity-capture-and-read.md), [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
+| `theRecommenderOpensNothingElse` | `recommend` depending on `jena`, `mcp`, `app`, `seed`, `export`, `ratings`, `retract`, `java.net` or `javax.net` | [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
 | `nothingWritesToStandardOut` | reading `System.out` anywhere except the one named exception, `SegueApplication` | [ADR 28](adr/0028-mcp-transports.md) |
 | `nothingWritesToStandardError`, `noPrintStackTrace`, `noJavaUtilLogging` | bypassing SLF4J | [ADR 30](adr/0030-structured-logging.md) |
 | `affinityNeverTouchesTheWorldFactLayer` | a taste-layer type depending on the log, the graph, `IngestService` or the claim records | [ADR 33](adr/0033-taste-layer-separation.md) |
@@ -1094,6 +1099,101 @@ answer here, and a version number is a second source of truth a hand-edited file
 This is the real migration ADR 42 said the next schema change would need, and it was tested against
 a copy of the live database as well as from a fixture that writes the old schema by hand. Do the
 same for the next one.
+
+## What to explore next
+
+```bash
+# the measured default: lift, floor 12, twenty-five candidates, three routes each
+./gradlew recommend --args="--known $HOME/known.csv --out $HOME/next.txt"
+
+# turn the dial, and read the two lists side by side
+./gradlew recommend --args="--known $HOME/known.csv --out $HOME/raw.txt --scorer raw"
+./gradlew recommend --args="--known $HOME/known.csv --out $HOME/deep.txt --min-degree 25 --top 50"
+```
+
+`--known` is a file of QIDs — one per line, or ADR 40's mapping file unchanged. `--out` has no
+default, because the output is personal data: it is your known-list plus what the graph makes of it,
+and the file says so on its first line. Read
+[ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) before changing the scoring; almost
+every number in it was measured rather than chosen.
+
+### The score, in one formula
+
+```
+score(candidate) = ( Σ over shared intermediates z of  weight(z) / discount(degree z) )
+                   / normalisation(degree of the candidate)
+```
+
+Both knobs are on `Scorer`, and `--scorer` picks a point on the spectrum: `raw`, `adamic-adar`,
+`resource-allocation`, `lift`. **The second knob is the one that matters.** Discounting the busy
+*intermediate* is not enough, because a candidate connected to everything shares its intermediates
+with everything; dividing by the candidate's own degree is what turns a popularity ranking into a
+surprise one. Run `--scorer raw` against a real graph once: it returns the most famous entities in
+it, which is the thing this feature exists to escape.
+
+Dividing by the candidate's degree rewards a small denominator, so a **degree floor is not
+optional** — `--min-degree`, defaulting to `Recommendations.MIN_CANDIDATE_DEGREE`. Without one the
+answer is whatever is thinnest.
+
+### Edge type carries more of the signal than the arithmetic does
+
+`RecommendationWeights` puts every relation in one of three tiers: influence at 1.0, collaboration
+at 0.5, recognition at 0.2. Two consequences worth knowing before touching it:
+
+- Halving collaboration is what stops one band's discography counting as thirty reasons. The
+  artefact is visible in the report's own "N of yours through M shared intermediates" column — run
+  `--scorer resource-allocation` and look for a candidate reached by **one** of your entities
+  through a hundred intermediates.
+- `RECEIVED_AWARD` is a fifth and deliberately not zero. Awards are the only relation the vocabulary
+  has for single-authored work ([ADR 38](adr/0038-award-received-as-the-first-non-collaboration-edge.md)),
+  so zeroing them blinds the recommender to a whole domain.
+
+Adding a relation type to `EdgeTypes` fails `RecommendationWeightsTest.everyRegisteredTypeIsNamed`
+until it has been weighed here. That is deliberate: inheriting a default is not a decision.
+
+### Hubs are excluded, not demoted, and it is the same rule routing uses
+
+`PathRanking.isHub` is public for exactly this: a busy `CONCEPT` (issue #52) or a body stating a
+recognition class (issue #66) is refused as an intermediate before any route through it exists.
+Routing *demotes* a hub route because "what connects me to the Rock and Roll Hall of Fame" is a
+question with an answer; recommending *excludes* one because "you were both inducted" is not a
+recommendation. One implementation, two readings — do not write a second copy.
+
+### Every candidate arrives with routes, from the real traversal
+
+`Routes` asks `GraphStore.paths` for the candidate's best reachers, ranks with the shared
+`PathRanking` and renders with `PathResult.render()` — the same three steps `find_paths` takes. A
+score with no receipts is not a segue recommendation, and there is one notion of a good route in
+this project. Explanations are built only for the ranked and bounded list; doing it for a thousand
+candidates would be a thousand traversals thrown away.
+
+### The affinity seam is present and wired to nothing
+
+`Recommendations.EQUAL_REGARD` gives every known entity a weight of 1.0, and `CandidateSweep`
+multiplies every connection by it. The `affinity` table is empty, so that is the honest answer
+today. **`theRecommenderNeverReadsTheTasteLayer` bans `AffinityStore` as a type here**, which is
+stronger than banning the two calls: `find` is available everywhere else, and eight hundred
+single-qid lookups are the bulk read [ADR 39](adr/0039-affinity-capture-and-read.md) declined,
+spelled slowly. Building the real weighting changes that rule, ADR 39 and ADR 45 together.
+
+### Four things this is not allowed to do
+
+| it cannot | rule | why |
+| --- | --- | --- |
+| write anything | `theRecommenderOnlyReads` | no graph write, no `AssertionLog.append`, no `AffinityStore.put`, and no `IngestService` to route one through |
+| see a rating | `theRecommenderNeverReadsTheTasteLayer` | the seam is a function; a store here would be the bulk read under another name |
+| reach a network or a sibling tool | `theRecommenderOpensNothingElse` | a recommendation is a pure function of one local file, and a dependency on `retract` would let a read-only tool inherit a writing fence |
+| name an entity in a log line | `RecommendationsAreNeverLoggedTest` | the list is derived from your known-list, so ADR 33's "never logged" applies; every log line is a count or a path |
+
+### Why this is not a seventh MCP tool
+
+The best case any dev-side tool has had, and it still lost. *"What should I explore next?"* really is
+a conversational question — unlike seeding, exporting, listing ratings or retracting. What settles it
+is what the question needs: a file naming everything you already know, which is the personal data
+[ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md) refused to hand a model, or the taste layer as the
+known-list, which needs the bulk read ADR 39 refused. ADR 45 records a re-open condition rather than
+shutting the door: a *bounded* version — "given these five things I have rated, what next?" — is an
+argument on its own terms, and it amends ADR 26 rather than arriving as a field on an existing tool.
 
 ## How to read an ADR against the code
 

@@ -1,0 +1,207 @@
+package com.robsartin.segue.recommend;
+
+import com.robsartin.segue.domain.EdgeRecord;
+import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.domain.NodeRecord;
+import com.robsartin.segue.domain.PathRanking;
+import com.robsartin.segue.domain.Recommendation;
+import com.robsartin.segue.domain.RecommendationWeights;
+import com.robsartin.segue.domain.Scorer;
+import com.robsartin.segue.domain.SharedIntermediate;
+import com.robsartin.segue.port.GraphStore;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.function.ToDoubleFunction;
+import java.util.function.ToIntFunction;
+
+/**
+ * Two hops out from everything you already know, and everything that is not allowed to come back
+ * (ADR 45).
+ *
+ * <p>The walk is short and the filters are the design. In order:
+ *
+ * <ol>
+ *   <li><b>Out one hop from every known entity</b>, keeping the best-weighted edge type per
+ *       neighbour. Parallel edges between one pair are one relationship stated twice, not two
+ *       reasons.
+ *   <li><b>Refuse hub intermediates outright</b> — {@link PathRanking#isHub}, the same judgement
+ *       routing uses, borrowed rather than reimplemented. Not down-weighted: a candidate reached
+ *       through a hall of fame is not a weak recommendation, it is not a recommendation.
+ *   <li><b>Out one hop from each surviving intermediate</b>, once per intermediate however many
+ *       known entities reached it, which is what keeps this affordable on a real graph.
+ *   <li><b>Keep the candidates that could be things to explore</b>: a {@code PERSON} or a {@code
+ *       GROUP}, absent from the known-list, not an institution, and carrying at least {@code
+ *       minDegree} edges.
+ * </ol>
+ *
+ * <p><b>Why the second pass is keyed on the intermediate.</b> Written the obvious way — for each
+ * known entity, for each neighbour, for each of ITS neighbours — a famous intermediate is expanded
+ * once per known entity that cites it, and on the real graph the busiest are cited by two dozen.
+ * Collecting the reachers per intermediate first turns that into one traversal each.
+ *
+ * <p><b>It reads, and it holds no taste.</b> The regard for each known entity arrives as a
+ * function, never as an {@code AffinityStore}: see {@code Recommendations.EQUAL_REGARD} for what
+ * that seam is and why it is deliberately not wired to anything.
+ */
+public final class CandidateSweep {
+
+  private final GraphStore graph;
+  private final java.util.function.Predicate<String> recognitionInstitutionClass;
+
+  /** Memoised per sweep, for the same reason {@code ViewSelector} memoises it: it is hot. */
+  private final Map<String, Integer> degrees = new HashMap<>();
+
+  public CandidateSweep(
+      GraphStore graph, java.util.function.Predicate<String> recognitionInstitutionClass) {
+    this.graph = Objects.requireNonNull(graph, "graph");
+    this.recognitionInstitutionClass =
+        Objects.requireNonNull(recognitionInstitutionClass, "recognitionInstitutionClass");
+  }
+
+  /**
+   * Every entity worth considering, scored but unranked.
+   *
+   * @param known the entities you already have — the membership oracle, and the whole reason a
+   *     well-connected node absent from it means something
+   * @param scorer where on the raw-to-lift spectrum to sit
+   * @param minDegree the floor below which a candidate is not ranked. Required under a normalised
+   *     scorer; see {@code Recommendations.MIN_CANDIDATE_DEGREE}
+   * @param regard what one known entity's connections are worth. {@code
+   *     Recommendations.EQUAL_REGARD} today
+   */
+  public Sweep over(
+      Collection<String> known, Scorer scorer, int minDegree, ToDoubleFunction<String> regard) {
+    Objects.requireNonNull(known, "known");
+    Objects.requireNonNull(scorer, "scorer");
+    Objects.requireNonNull(regard, "regard");
+    Set<String> knownSet = new LinkedHashSet<>(known);
+
+    // via qid -> (known qid -> what the hop from that entity to this intermediate is worth)
+    Map<String, Map<String, Double>> reachers = new LinkedHashMap<>();
+    int found = 0;
+    int missing = 0;
+    int hubs = 0;
+    Set<String> hubsSeen = new LinkedHashSet<>();
+
+    for (String seed : knownSet) {
+      Optional<NodeRecord> node = graph.node(seed);
+      if (node.isEmpty()) {
+        missing++;
+        continue;
+      }
+      found++;
+      for (Map.Entry<String, Double> neighbour : bestPerNeighbour(seed).entrySet()) {
+        String via = neighbour.getKey();
+        // A known entity is allowed to BE an intermediate: "one you know cites one you know, who
+        // cites this" is a route, and the known-list filter applies to the candidate at the end.
+        if (isHub(via)) {
+          if (hubsSeen.add(via)) {
+            hubs++;
+          }
+          continue;
+        }
+        reachers
+            .computeIfAbsent(via, key -> new LinkedHashMap<>())
+            .merge(seed, neighbour.getValue() * regard.applyAsDouble(seed), Math::max);
+      }
+    }
+
+    Map<String, List<SharedIntermediate>> evidence = new LinkedHashMap<>();
+    for (Map.Entry<String, Map<String, Double>> entry : reachers.entrySet()) {
+      String via = entry.getKey();
+      int viaDegree = degree(via);
+      for (Map.Entry<String, Double> candidate : bestPerNeighbour(via).entrySet()) {
+        String qid = candidate.getKey();
+        if (knownSet.contains(qid) || !couldBeExplored(qid, minDegree)) {
+          continue;
+        }
+        for (Map.Entry<String, Double> reacher : entry.getValue().entrySet()) {
+          if (reacher.getKey().equals(qid)) {
+            continue;
+          }
+          evidence
+              .computeIfAbsent(qid, key -> new ArrayList<>())
+              .add(
+                  new SharedIntermediate(
+                      reacher.getKey(), via, viaDegree, reacher.getValue() * candidate.getValue()));
+        }
+      }
+    }
+
+    List<Recommendation> candidates = new ArrayList<>();
+    for (Map.Entry<String, List<SharedIntermediate>> entry : evidence.entrySet()) {
+      NodeRecord entity = graph.node(entry.getKey()).orElseThrow();
+      int degree = degree(entry.getKey());
+      candidates.add(
+          new Recommendation(
+              entity, scorer.score(entry.getValue(), degree), degree, entry.getValue()));
+    }
+    return new Sweep(candidates, found, missing, hubs);
+  }
+
+  /**
+   * Every neighbour of one entity, with the best weight among the edges reaching it.
+   *
+   * <p>The best rather than the sum, because parallel edges between one pair are one relationship
+   * the source stated twice — a membership and a "has part" over the same two entities is the case
+   * ADR 36's issue-#33 amendment already had to fix once in ingest.
+   */
+  private Map<String, Double> bestPerNeighbour(String qid) {
+    List<EdgeRecord> edges = graph.edges(qid);
+    degrees.putIfAbsent(qid, edges.size());
+    Map<String, Double> best = new LinkedHashMap<>();
+    for (EdgeRecord edge : edges) {
+      String other = edge.fromQid().equals(qid) ? edge.toQid() : edge.fromQid();
+      if (other.equals(qid)) {
+        continue;
+      }
+      best.merge(other, RecommendationWeights.of(edge.typeCode()), Math::max);
+    }
+    return best;
+  }
+
+  /** ADR 31's hub judgement, asked of an intermediate before any route through it exists. */
+  private boolean isHub(String qid) {
+    ToIntFunction<String> lookup = this::degree;
+    return graph
+        .node(qid)
+        .map(node -> PathRanking.isHub(node, lookup, recognitionInstitutionClass))
+        .orElse(true);
+  }
+
+  /**
+   * Whether this entity is a thing one could go and explore.
+   *
+   * <p>A {@code PERSON} or a {@code GROUP}: a record, a prize or a city is a fact about a
+   * connection rather than something to listen to next. Not an institution, for the reason the hub
+   * rule excludes one as an intermediate — a recommender without this filter suggests joining a
+   * learned society. And above the degree floor, because the normalised score rewards a small
+   * denominator and without a floor the answer is whatever is smallest.
+   */
+  private boolean couldBeExplored(String qid, int minDegree) {
+    Optional<NodeRecord> node = graph.node(qid);
+    if (node.isEmpty()) {
+      return false;
+    }
+    NodeKind kind = node.get().kind();
+    if (kind != NodeKind.PERSON && kind != NodeKind.GROUP) {
+      return false;
+    }
+    if (node.get().instanceOf().stream().anyMatch(recognitionInstitutionClass)) {
+      return false;
+    }
+    return degree(qid) >= minDegree;
+  }
+
+  private int degree(String qid) {
+    return degrees.computeIfAbsent(qid, key -> graph.edges(key).size());
+  }
+}

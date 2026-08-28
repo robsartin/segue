@@ -247,6 +247,26 @@ class PathRankingTest {
     assertThat(ranked).containsExactly(throughABand, throughAnAcademy);
   }
 
+  // ---- the judgement, borrowed (ADR 45) -------------------------------------
+
+  @Test
+  @DisplayName("the hub judgement is available on its own, and answers the same way")
+  void theHubJudgementIsAvailableOnItsOwn() {
+    // The recommender needs the same question answered about a candidate intermediate before it
+    // ever builds a route, and it must not reimplement it - a second copy of this rule would let
+    // a hall of fame back into recommendations while routing kept excluding it.
+    assertThat(PathRanking.isHub(hub("Q900214", NodeKind.CONCEPT), DEGREES, NO_INSTITUTIONS))
+        .isTrue();
+    assertThat(PathRanking.isHub(quiet("Q900116", NodeKind.CONCEPT), DEGREES, NO_INSTITUTIONS))
+        .isFalse();
+    assertThat(PathRanking.isHub(hub("Q900215", NodeKind.GROUP), DEGREES, NO_INSTITUTIONS))
+        .isFalse();
+    assertThat(
+            PathRanking.isHub(
+                quiet("Q900117", NodeKind.GROUP, PLAYED_IN, ELECTED_TO), DEGREES, INSTITUTIONS))
+        .isTrue();
+  }
+
   // ---- specificity helpers --------------------------------------------------
 
   /**

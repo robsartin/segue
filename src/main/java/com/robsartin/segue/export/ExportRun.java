@@ -1,6 +1,7 @@
 package com.robsartin.segue.export;
 
 import com.robsartin.segue.export.ExportCli.Options;
+import com.robsartin.segue.support.QidList;
 import java.io.IOException;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;

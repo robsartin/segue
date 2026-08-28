@@ -4,6 +4,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 import com.robsartin.segue.app.SegueApplication;
+import com.robsartin.segue.domain.AffinityRecord;
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.EdgeRecord;
 import com.robsartin.segue.domain.LoggedAssertion;
@@ -445,6 +446,104 @@ class ArchitectureTest {
           .because(
               "ADR 16, ADR 39 and ADR 43: the owner may enumerate their taste layer from a dev-side"
                   + " tool; nothing on the MCP surface may enumerate it at all");
+
+  /**
+   * ADR 45: the recommender reads, and it cannot write either layer.
+   *
+   * <p>The fifth dev-side tool, and the second one whose fence has to name {@code
+   * AffinityStore.put} - not because it holds ratings, but because it is the tool that would most
+   * plausibly be extended to write one. A recommender that could record "I liked this suggestion"
+   * would be a taste-layer writer wearing a world-fact tool's fence, and ADR 33 keeps {@code
+   * note_affinity} the only writer there is.
+   *
+   * <p>{@code IngestService} is banned as a type for the reason {@link #theExporterOnlyReads} bans
+   * it: without that clause a class here could route a claim through the one legitimate writer and
+   * break no other rule. {@code GraphProjector} is deliberately allowed, exactly as it is for the
+   * exporter - the sweep and the routes need a real traversal, so the tool replays the log into a
+   * throwaway in-memory graph and reuses the engine, which is what keeps a recommendation's routes
+   * identical to the ones {@code find_paths} returns.
+   */
+  @ArchTest
+  static final ArchRule theRecommenderOnlyReads =
+      noClasses()
+          .that()
+          .resideInAPackage("..recommend..")
+          .should(
+              ArchConditions.callMethodWhere(APPLIES_A_CLAIM.or(callTo("put", AffinityStore.class)))
+                  .or(
+                      ArchConditions.dependOnClassesThat(
+                          JavaClass.Predicates.equivalentTo(IngestService.class))))
+          .because(
+              "ADR 45: recommending is a read — the tool never appends to the log, never writes"
+                  + " the graph, never writes a rating, and cannot reach the one class that is"
+                  + " allowed to");
+
+  /**
+   * ADR 45: the recommender cannot see the taste layer at all, and that is the seam being a seam.
+   *
+   * <p>The rule with the most to say about this tool, because ADR 33's stated payoff is
+   * "recommendations are derived by traversing the world graph and filtering through affinity" and
+   * this is the tool that derives them. The filtering half is <b>not built</b>: the {@code
+   * affinity} table is empty, so every known entity counts for one, and the weighting arrives as
+   * {@code Recommendations.EQUAL_REGARD} - a {@code ToDoubleFunction} over a qid, the same shape
+   * {@code PathRanking} takes a degree in.
+   *
+   * <p>Banning the <em>type</em> rather than the two calls is what makes that a decision instead of
+   * a to-do. {@code find} is available everywhere else in the project, so a well-meaning change
+   * could give this tool one rating at a time and call it the affinity weighting - eight hundred
+   * lookups being a bulk read spelled slowly, and precisely what ADR 39 declined to put in front of
+   * a caller that is not the owner. When the weighting is really built it will change this rule,
+   * ADR 39 and ADR 45 together, which is the argument being had rather than skipped.
+   */
+  @ArchTest
+  static final ArchRule theRecommenderNeverReadsTheTasteLayer =
+      noClasses()
+          .that()
+          .resideInAPackage("..recommend..")
+          .should()
+          .dependOnClassesThat(
+              JavaClass.Predicates.equivalentTo(AffinityStore.class)
+                  .or(JavaClass.Predicates.equivalentTo(AffinityRecord.class)))
+          .because(
+              "ADR 45 and ADR 33: the affinity weighting is a seam and not a wire — the recommender"
+                  + " takes regard as a function, and giving it a store is a decision to be argued"
+                  + " in an ADR rather than an import to be added");
+
+  /**
+   * ADR 45: the recommender needs a log, an engine and nothing else.
+   *
+   * <p>The same fence its siblings carry, with the same reasoning. {@code seed}, {@code export},
+   * {@code ratings} and {@code retract} are banned as packages because a dependency on a sibling
+   * would let this tool inherit the sibling's different fence - {@code retract} may write, and this
+   * may not. {@code java.net} because a recommendation is a pure function of one local file: the
+   * list of what somebody already knows never leaves the machine, which is ADR 40's argument for
+   * why the seeding list lives outside this repository, applied to the tool that reads it.
+   *
+   * <p>{@code jena} is banned as the reference adapter nothing outside the bake-off should reach;
+   * {@code tinker} is not, because the throwaway projection is a {@code TinkerGraphStore} the same
+   * way the exporter's is.
+   */
+  @ArchTest
+  static final ArchRule theRecommenderOpensNothingElse =
+      noClasses()
+          .that()
+          .resideInAPackage("..recommend..")
+          .should()
+          .dependOnClassesThat()
+          .resideInAnyPackage(
+              "..jena..",
+              "..mcp..",
+              "..app..",
+              "..seed..",
+              "..export..",
+              "..ratings..",
+              "..retract..",
+              "java.net..",
+              "javax.net..")
+          .because(
+              "ADR 45: the recommender replays one local log into one in-memory graph, offline —"
+                  + " it needs no sibling tool, no second engine and no network, and cannot become"
+                  + " an MCP tool by accident");
 
   /**
    * ADR 44: the retraction tool writes exactly one thing, and cannot write anything else.

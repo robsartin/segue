@@ -1,4 +1,4 @@
-package com.robsartin.segue.export;
+package com.robsartin.segue.support;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -15,9 +15,16 @@ import java.util.regex.Pattern;
  * The entity list the {@code subgraph} view keeps.
  *
  * <p>Designed so that the seeding tool's mapping file (ADR 40) works unchanged, because that is the
- * case the whole view exists for: fed the file that turned a list of names into QIDs, the subgraph
- * shows the acts actually on the list and how they connect, with the discovered intermediates
- * stripped out.
+ * case the exporter's {@code subgraph} view exists for: fed the file that turned a list of names
+ * into QIDs, the subgraph shows the acts actually on the list and how they connect, with the
+ * discovered intermediates stripped out.
+ *
+ * <p><b>It lives in {@code support} because two dev-side tools read the same file (ADR 45).</b> The
+ * recommender's known-list is the same shape and answers a different question of it - which
+ * entities are already known, so that a well-connected entity absent from it is a recommendation.
+ * The tools may not depend on each other: each carries its own ArchUnit fence, and a dependency on
+ * a sibling would let one inherit the other's. A shared reader neither of them owns is the way both
+ * read the file identically without either learning the other exists.
  *
  * <p><b>The rule is: the first comma-separated field on a line that is exactly a QID.</b> That
  * reads a bare one-per-line list and the mapping file with the same code and no header handling. It
@@ -27,7 +34,7 @@ import java.util.regex.Pattern;
  * is exactly a QID is a QID; a QID inside a sentence is prose.
  *
  * <p>This class does not depend on {@code seed} and must not: it recognises a shape, not a schema,
- * so the two tools stay independent and a bare list of QIDs typed by hand works just as well.
+ * so the tools stay independent and a bare list of QIDs typed by hand works just as well.
  *
  * <p><b>The file is personal data.</b> A list of who someone listens to, reads and watches is
  * exactly what ADR 33 governs, and it lives outside this repository (issue #37, ADR 40). This tool
