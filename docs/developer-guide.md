@@ -1443,7 +1443,9 @@ check or the ordering; both are narrower or stricter than they look, on purpose.
 ./gradlew rate --args="--known $HOME/known.csv"
 ```
 
-`--known` is the same file `recommend` takes. `--db` defaults the way every other tool's does.
+`--known` is the same file `recommend` takes. `--db` defaults to `SEGUE_DB` if it is set and
+`${user.home}/.segue/segue.db` otherwise, which is what `export`, `ratings`, `retract` and
+`recommend` do too (`seed` has no `--db`: it never opens a store).
 `--port` defaults to `RateCli.DEFAULT_PORT`, 8090 rather than 8080, so the deck and a running MCP
 server never address each other by accident; `--port 0` asks the OS to pick one, and the tool logs
 which. Open the printed address in a browser: `1`–`5` rates and advances, `s` or space skips
@@ -1455,9 +1457,12 @@ without recording anything, `b` goes back.
 the point. A known entity already earned its place on your list, so the useful thing to show is
 how much of the graph hangs off it — the same in-graph degree `Deck` sorted the deck by, so a card
 near the top visibly explains its own position. A candidate is something you may never have heard
-of, so the useful thing is the routes that reached it — the same routes, rendered the same way,
-that `find_paths` would return for that pair (`Deck.routeLines`, `PathResult.render()`). Neither
-shape carries a note field; there is nowhere on either `Card` to put one.
+of, so the useful thing is the routes that reached it. Those come from `Routes.bestFor` by way of
+`Deck.routeLines`, and are built by the three things `find_paths` uses, in the same order —
+`GraphStore.paths`, the shared `PathRanking`, then `PathResult.render()`. They are **not** the set
+`find_paths` would return for that pair: `Routes.MAX_HOPS` is 2 where `find_paths` defaults to 4,
+and `bestFor` keeps only the top-ranked route per reaching entity. Neither card shape carries a
+note field; there is nowhere on either `Card` to put one.
 
 ### No session file: the deck is "everything unrated", recomputed every run
 
@@ -1488,16 +1493,18 @@ read that was reserved to one dev tool now belongs to any of them.
 The Spring app already serves HTTP on `127.0.0.1:8080`, so the machinery to do this exists there —
 and that is the objection: it would put a taste-layer *writer* on the MCP server's own port, and
 [ADR 32](adr/0032-layering-and-archunit.md) confines Spring to `app` and `mcp` for a reason that
-has nothing to do with this feature. As a seventh MCP tool it fails the same way five ADRs before
-it have — [ADR 39](adr/0039-affinity-capture-and-read.md) declined a `get_affinity` tool and
-folded the read into `get_entity` instead, and
+has nothing to do with this feature. A seventh MCP tool is a question six ADRs have each already
+answered no — [ADR 39](adr/0039-affinity-capture-and-read.md),
 [ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md),
 [ADR 41](adr/0041-graph-exporter-views-and-formats.md),
-[ADR 43](adr/0043-listing-your-own-ratings.md) and
-[ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) each declined one for adjacent bulk
-work — and this reuses the recommender's own `CandidateSweep`, `Routes` and `Sweep` for its
-candidate cards without reopening that question: the input is still ADR 40's file of everything
-you already have, and handing that to a model is what ADR 40 already refused.
+[ADR 43](adr/0043-listing-your-own-ratings.md),
+[ADR 44](adr/0044-retraction-as-a-new-claim.md) and
+[ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) — **on six different grounds**,
+which ADR 46's Alternatives section lists one ADR at a time rather than summarising. Do not
+paraphrase them as one reason; read the list. ADR 46's own ground is the one it takes from ADR 45:
+`rate` reuses the recommender's `CandidateSweep`, `Routes` and `Sweep` for its candidate cards
+without reopening the question, because the input is still ADR 40's file of everything you already
+have, and handing that to a model is what ADR 40 already refused.
 
 ## How to read an ADR against the code
 

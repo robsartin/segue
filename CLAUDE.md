@@ -109,9 +109,10 @@ rate/     The rating deck (ADR 46): a loopback page on 127.0.0.1:8090 that deals
           entity per keystroke — known entities by degree, a recommend candidate every fifth
           card — `1`-`5` rates and advances, `s`/space skips, `b` goes back. Run as `./gradlew
           rate`. Dev-side, NOT a seventh MCP tool, and — with retract — one of only two dev
-          tools that WRITE: AffinityStore.put alone, fenced by three ArchUnit rules with one
-          named exception for the class that constructs what it writes. No un-rate:
-          AffinityStore has no delete, so going back re-rates rather than withdrawing.
+          tools that WRITE: AffinityStore.put alone, fenced by three ArchUnit rules, one of
+          which (theRatingDeckLogsNoRating) names a single exception — the class that
+          constructs what it writes. No un-rate: AffinityStore has no delete, so going back
+          re-rates rather than withdrawing.
 ingest/   IngestService (the only write path) and GraphProjector (boot replay).
 support/  Plain-Java cross-cutting helpers with no project dependencies of their
           own — UuidV7, the RFC 9562 v7 id generator used for request correlation, and
