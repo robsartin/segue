@@ -3,6 +3,7 @@ package com.robsartin.segue.recommend;
 import static com.robsartin.segue.recommend.InventedWorld.ALSO_IN_THE_ACADEMY;
 import static com.robsartin.segue.recommend.InventedWorld.ALSO_IN_THE_HALL;
 import static com.robsartin.segue.recommend.InventedWorld.ANCESTOR;
+import static com.robsartin.segue.recommend.InventedWorld.ANOTHER_ANCESTOR;
 import static com.robsartin.segue.recommend.InventedWorld.A_RECORD;
 import static com.robsartin.segue.recommend.InventedWorld.A_THIN_BAND;
 import static com.robsartin.segue.recommend.InventedWorld.ELECTED_TO;
@@ -14,6 +15,7 @@ import static com.robsartin.segue.recommend.InventedWorld.KNOWN_TWO;
 import static com.robsartin.segue.recommend.InventedWorld.SHARED_ARTIST;
 import static com.robsartin.segue.recommend.InventedWorld.SHARED_PRIZE;
 import static com.robsartin.segue.recommend.InventedWorld.THE_ACADEMY;
+import static com.robsartin.segue.recommend.InventedWorld.THE_ADMIRER;
 import static com.robsartin.segue.recommend.InventedWorld.edge;
 import static com.robsartin.segue.recommend.InventedWorld.hubConcept;
 import static com.robsartin.segue.recommend.InventedWorld.node;
@@ -196,6 +198,63 @@ class CandidateSweepTest {
 
     assertThat(find(sweep, ANCESTOR).orElseThrow().score())
         .isGreaterThan(find(sweep, FELLOW_PRIZEWINNER).orElseThrow().score());
+  }
+
+  @Test
+  @DisplayName("a candidate that does the citing scores below one that is cited (issue #84)")
+  void citingScoresBelowBeingCited() {
+    // The defect issue #84 names, in four edges. Both candidates have the identical shape: the
+    // same known entities, the same intermediate, one influence hop each side, the same degree.
+    // Only the ARROW differs — the artist cites the ancestor, and the thin band cites the artist.
+    influenceChain();
+    node(graph, A_THIN_BAND, NodeKind.GROUP, "whose whole graph presence is an influence list");
+    edge(graph, A_THIN_BAND, SHARED_ARTIST, EdgeTypes.INFLUENCED_BY.code());
+    padDegreeTo(graph, A_THIN_BAND, FLOOR);
+
+    Sweep sweep = sweep();
+
+    assertThat(find(sweep, A_THIN_BAND).orElseThrow().degree())
+        .isEqualTo(find(sweep, ANCESTOR).orElseThrow().degree());
+    assertThat(find(sweep, A_THIN_BAND).orElseThrow().score())
+        .isLessThan(find(sweep, ANCESTOR).orElseThrow().score());
+  }
+
+  @Test
+  @DisplayName("a candidate that only cites is demoted, never dropped: it is still a real answer")
+  void citingIsDemotedRatherThanExcluded() {
+    node(graph, SHARED_ARTIST, NodeKind.PERSON, "an artist you cite");
+    node(graph, A_THIN_BAND, NodeKind.GROUP, "which cites that artist too");
+    edge(graph, KNOWN_ONE, SHARED_ARTIST, EdgeTypes.INFLUENCED_BY.code());
+    edge(graph, A_THIN_BAND, SHARED_ARTIST, EdgeTypes.INFLUENCED_BY.code());
+    padDegreeTo(graph, A_THIN_BAND, FLOOR);
+
+    assertThat(find(sweep(), A_THIN_BAND)).isPresent();
+    assertThat(find(sweep(), A_THIN_BAND).orElseThrow().score()).isGreaterThan(0);
+  }
+
+  @Test
+  @DisplayName("the hop from one of yours carries no direction: both readings are segues")
+  void directionIsAskedOnlyOfTheCandidatesOwnHop() {
+    // The regression this guards is the one that would break the feature: the entities that cite
+    // your list are the same entities that cite its ancestors, so discounting the FIRST hop by
+    // direction would demote exactly the ancestors the change exists to keep.
+    node(graph, SHARED_ARTIST, NodeKind.PERSON, "an artist you cite");
+    node(graph, THE_ADMIRER, NodeKind.GROUP, "a band that cites you");
+    node(graph, ANCESTOR, NodeKind.GROUP, "cited by the artist");
+    node(graph, ANOTHER_ANCESTOR, NodeKind.GROUP, "cited by the admirer");
+    edge(graph, KNOWN_ONE, SHARED_ARTIST, EdgeTypes.INFLUENCED_BY.code());
+    edge(graph, SHARED_ARTIST, ANCESTOR, EdgeTypes.INFLUENCED_BY.code());
+    edge(graph, THE_ADMIRER, KNOWN_ONE, EdgeTypes.INFLUENCED_BY.code());
+    edge(graph, THE_ADMIRER, ANOTHER_ANCESTOR, EdgeTypes.INFLUENCED_BY.code());
+    padDegreeTo(graph, SHARED_ARTIST, FLOOR);
+    padDegreeTo(graph, THE_ADMIRER, FLOOR);
+    padDegreeTo(graph, ANCESTOR, FLOOR);
+    padDegreeTo(graph, ANOTHER_ANCESTOR, FLOOR);
+
+    Sweep sweep = sweep();
+
+    assertThat(find(sweep, ANOTHER_ANCESTOR).orElseThrow().score())
+        .isEqualTo(find(sweep, ANCESTOR).orElseThrow().score());
   }
 
   @Test
