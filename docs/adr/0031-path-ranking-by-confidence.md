@@ -404,8 +404,9 @@ The measure that came closest was "a busy node that is not itself a collaboratio
 neighbourhood is nothing but people": `kind != WORK`, degree ≥ `HUB_DEGREE`, and at least 90% of
 neighbours a PERSON or a GROUP. It separates the gold set exactly — the exemption for WORK is what
 buys it, since a film's cast is the colliding case above. Swept over every node in the real graph
-against the two rules it would replace: **117 nodes both agree on, 125 flagged only by the new
-measure, 23 flagged only by the two rules.**
+against the two rules as they stood when the question was asked — three classes in the table:
+**117 nodes both agree on, 125 flagged only by the new measure, 23 flagged only by the two rules.**
+Re-swept against the table this amendment leaves behind, the gap only widens: 123, 119 and 43.
 
 **What it wrongly demotes.** Metallica, at 14 edges, because the graph holds its members and not
 its records. Immanuel Kant at 19, Aristotle, Joseph Conrad, James Joyce, Louis Pasteur, Niels Bohr,
@@ -414,14 +415,17 @@ vocabulary that states an artistic or intellectual debt and the one ADR 45 weigh
 some thirty bands in the same position as Metallica. Verified as routes, not as flags: *Weezer ↔
 Judas Priest* leads today with **Metallica** and under the candidate with *Sum 41*.
 
-**What it wrongly keeps.** All 21 institutions below `HUB_DEGREE` that the class rule catches at
-any size — the Académie Française at 3 edges, the Royal Society of Edinburgh at 4, the British
-Academy at 2. Of the 94 nodes stating one of the three original classes, **63 carry fewer than ten
-edges**, so this is the common case rather than the tail. Again as routes: *Henri Bergson ↔ the
-Comte de Buffon* leads today with "both influenced by **Charles Darwin**" and under the candidate
-with "both members of the **Académie Française**"; *David Hume ↔ Georg Cantor* leads today with
-**Bertrand Russell** and under the candidate with the **Royal Society of Edinburgh**. That is
-precisely the failure the second amendment exists to prevent, arriving again.
+**What it wrongly keeps.** Every institution below `HUB_DEGREE` that the class rule catches at any
+size — the Académie Française at 3 edges, the Royal Society of Edinburgh at 4, the British Academy
+at 2. Of the 94 nodes stating one of the three original classes, **63 carry fewer than ten edges**
+and 21 of those carry between two and nine, which is to say they can be intermediates and this
+measure would let all 21 through. It is the common case rather than the tail, and it grew with the
+table: 167 nodes state a recognition class now, 126 of them below ten edges and 40 in the two-to-
+nine band. Again as routes: *Henri Bergson ↔ the Comte de Buffon* leads today with "both influenced
+by **Charles Darwin**" and under the candidate with "both members of the **Académie Française**";
+*David Hume ↔ Georg Cantor* leads today with **Bertrand Russell** and under the candidate with the
+**Royal Society of Edinburgh**. That is precisely the failure the second amendment exists to
+prevent, arriving again.
 
 A degree-only variant of the same idea — "a list of a hundred people is a hub, whatever it calls
 itself" — was measured too, because it needs no class table at all. Every all-people node of 46
@@ -434,8 +438,8 @@ it.
 
 **Keep both rules. `PathRanking` is unchanged by this amendment.** A general measure is only worth
 having if it is at least as good on the cases the special cases were built for, and this one loses
-21 institutions and demotes Metallica and Kant to gain ten institutions a table entry can have for
-one line each.
+21 institutions and demotes Metallica and Kant to gain about a dozen busy ones — most of which four
+lines of table cover instead, at no cost to anything else.
 
 ### What the measurement found instead: the table had gone stale, and it always will
 
@@ -489,10 +493,11 @@ assumption that it is total.
   degree rule is `CONCEPT`-only on purpose and a city states no class meaning "elected to". #78
   needs a third rule and should stop expecting a general one.
 - **That third rule belongs with the property that creates the need, not here.** The graph holds
-  two `PLACE` nodes and neither can be an intermediate, so widening the degree rule today would be
-  a no-op against everything that exists — the same argument the third amendment used to refuse a
-  rule for edition nodes. The gap is pinned by a test instead, so the day P131 is registered the
-  failure is loud.
+  exactly one `PLACE` — New York City, at a single edge — and six `EVENT`s that could be an
+  intermediate at all, because nothing in the vocabulary relates anything to a place. Widening the
+  degree rule today would be a no-op against everything that exists, which is the argument the
+  third amendment used to refuse a rule for edition nodes. The gap is pinned by a test instead, so
+  the day P131 is registered the failure is loud.
 
 ### Consequences of the fourth amendment
 
@@ -502,7 +507,9 @@ assumption that it is total.
   copy and is untouched — Gottfried ↔ Seyfried through CSI, Hanks ↔ O'Brien through *The Great Buck
   Howard*, Darwin ↔ Vonnegut through Thoreau, Cheap Trick ↔ Scorpions through Mötley Crüe, Red Hot
   Chili Peppers ↔ Nine Inch Nails through The Clash, the Rolling Stones ↔ Counting Crows through
-  Guns N' Roses.
+  Guns N' Roses. Huston ↔ Arthur, the pair the first amendment was written for, still leads at four
+  hops with two specific acting awards bridged by a person who won both, and the Walk of Fame route
+  is still below it.
 - **Measured on the eight institutions the new classes catch: of 785 contested pairs among their
   neighbours, 285 lead with a different route and 74 of those now lead with a hub-free one** —
   Darwin ↔ Haeckel leaves the Zoological Society of London for a shared influence, Updike ↔ Auster

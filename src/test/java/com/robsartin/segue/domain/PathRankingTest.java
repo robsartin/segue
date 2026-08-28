@@ -275,10 +275,11 @@ class PathRankingTest {
     // the place route wins here on confidence, which is the #52 failure returning in a kind
     // nobody has had to think about yet.
     //
-    // Deliberately not fixed by widening the degree rule to PLACE. There are two PLACE nodes in
-    // the real graph and neither can be an intermediate, so the rule would be a no-op against
-    // everything that exists - the same reason ADR 31's third amendment refused a rule for
-    // edition nodes. It belongs with the property that creates the problem.
+    // Deliberately not fixed by widening the degree rule to PLACE. The real graph holds exactly
+    // ONE place - New York City, at a single edge - because nothing in the vocabulary relates
+    // anything to a location, so the rule would be a no-op against everything that exists. That
+    // is the reason ADR 31's third amendment refused a rule for edition nodes, and it is the
+    // reason this one belongs with the property that creates the problem.
     PathResult throughAPlace = twoHopVia(hub("Q900217", NodeKind.PLACE), 1.00);
     PathResult throughTheFilmTheyMade = twoHopVia(quiet("Q900119", NodeKind.WORK), 0.80);
 
