@@ -27,6 +27,14 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      # WhatAHoverShowsTest renders DOT through the real binary to assert on what a browser
+      # would show (ADR 41, issue #81). It skips itself where Graphviz is absent, and the
+      # runner image does not carry it — so without this the one check standing between that
+      # amendment and a silent regression passed by not running. That is the same failure the
+      # issue is about, one level out.
+      - name: Install Graphviz
+        run: sudo apt-get update && sudo apt-get install -y graphviz
+
       - name: Check
         run: ./gradlew --no-daemon check
 

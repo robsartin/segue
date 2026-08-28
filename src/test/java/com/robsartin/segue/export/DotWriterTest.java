@@ -315,6 +315,15 @@ class DotWriterTest {
   }
 
   @Test
+  @DisplayName("the note does not send the operator to an SVG hover, which cannot show the type")
+  void doesNotSendTheOperatorToAnSvgHover() {
+    Optional<String> note = new DotWriter().note(star(DotWriter.LABEL_BUDGET + 1));
+
+    assertThat(note).isPresent();
+    assertThat(note.get()).doesNotContain("-Tsvg").contains("xlink:title").contains("typeCode");
+  }
+
+  @Test
   @DisplayName("a picture that kept its labels has nothing to report")
   void saysNothingWhenItKeepsTheLabels() {
     assertThat(new DotWriter().note(star(DotWriter.LABEL_BUDGET))).isEmpty();

@@ -273,6 +273,88 @@ Not free: an operator who wants labels on a dense view cannot ask for them — t
 because the picture that flag produces is the one this issue is about. The tooltip needs an SVG and
 a pointer, so a PNG of a dense view has the edge types nowhere; that is what GraphML is for.
 
+**Amendment (2026-08-28, issue #81): DOT cannot put a tooltip where a browser will show it, and the
+two amendments above were wrong to say it could.**
+
+The #63 and #70 amendments both claim that Graphviz renders a `tooltip` as `xlink:title` "so
+hovering a node says concert tour". The first half is true and the second does not follow.
+**Browsers do not display `xlink:title`** — confirmed in Safari, in both directions: the shipped
+SVG showed nothing useful, and a copy with the same text moved into the `<title>` element showed it
+correctly. The tooltips were all present — 276 of them on the real 132-node depth-1 neighbourhood,
+exactly one per node and edge — and not one of them reached a reader.
+
+**How it got past the gate is the more useful half.** #63 grepped the rendered SVG, found the
+attributes, and concluded the tooltips worked. They were in the file; they were simply not what a
+browser reads. **Presence in the output was verified; the outcome was not** — which is the same
+trap as asserting on DOT text rather than on rendered SVG, one level further out. The next check
+after "is it in the file" is "does the thing that consumes the file act on it".
+
+- **The mechanism.** Graphviz emits both, and the wrong one wins:
+
+  ```xml
+  <g id="node1" class="node">
+    <title>Q16473</title>                       <- what a browser shows on hover
+    <g id="a_node1"><a xlink:title="human">     <- where the class actually is
+  ```
+
+  The `<title>` **element** is the tooltip mechanism browsers implement. Graphviz writes it from
+  the object's **name**, so a reader hovering a node gets `Q16473` and hovering an edge gets
+  `Q16473->Q1415017`.
+
+- **Nothing redirects it, and that was measured against the real binary rather than read out of the
+  manual** (Graphviz 15.1.1). One node was given every plausible attribute at once — `id`, `class`,
+  `tooltip`, `labeltooltip`, `URL`, `href`, `target`, `comment`, `xlabel`, and the non-attributes
+  `title`, `name`, `desc`, `alt`, `description` — plus an HTML-like label carrying `TITLE`. `id`
+  and `class` land on the `<g>`; every tooltip lands in `xlink:title`; the rest are ignored. The
+  `<title>` element was the name in all of them. The `cairo` SVG renderer drops tooltips entirely
+  and `svg_inline` is byte-identical to `svg`.
+
+- **The issue's two candidate fixes were tried, and both fail.** Emitting the class as the node
+  **name** does put it in `<title>` and is disqualifying for the reason the issue suspected, worse
+  than expected: two nodes named `human` do not collide loudly, they **silently merge into one
+  node** — Graphviz kept the second label, dropped the first, and turned the edge between them into
+  a self-loop. Setting `id=` explicitly sets `<g id>` and leaves `<title>` alone.
+
+- **For an edge it is not merely awkward, it is impossible.** An edge has no name. Its `<title>` is
+  written mechanically as `tail->head` from the two node names, so the relationship type cannot
+  appear there however the nodes are named — and naming nodes after their labels to rescue the
+  endpoints would break identity twice over, since labels are not unique. The one channel that
+  reaches an edge `<title>` is **port** syntax (`"A":"MEMBER_OF" -> "B"`, which does print), and
+  that smuggles a relationship through a geometry channel, risks colliding with a compass point,
+  and still prints the endpoints as the QIDs #70 rejected. **This is the finding: DOT cannot
+  express it.** A documented "cannot" beats an attribute nothing reads.
+
+- **The `tooltip` attribute stays, and is not inert.** `dot -Tcmapx` renders the same `tooltip` as
+  an HTML `title` on an `<area>` — `title="human"`, `title="Steve Martin -RECEIVED_AWARD-> Writers
+  Guild of America Award"` — and an HTML `title` is a tooltip in every browser. Verified on the
+  real neighbourhood: 276 areas, one per node and edge. So a PNG plus its imagemap does show them,
+  which corrects the #70 amendment's closing sentence as well. Deleting the attribute would have
+  cost the only carrier of an edge's type above the label budget in exchange for nothing.
+
+- **What changes in the output is one sentence.** `DotWriter.note` used to tell the operator to
+  "render with -Tsvg and hover", which is precisely the thing that does not work. It now says the
+  tooltip is in `xlink:title`, that an SVG hover shows the QIDs, and names the two renders that do
+  answer the question — GraphML's `typeCode`, or `-Tcmapx`.
+
+- **`WhatAHoverShowsTest` renders through the real Graphviz binary and asserts on `<title>`
+  *content*.** Not on the presence of an attribute — on the string a browser would put in the
+  tooltip. It pins both halves: the node `<title>` is the QID and carries no class, the edge
+  `<title>` is two QIDs and carries no type, **and** the imagemap does carry both. If a future
+  Graphviz starts writing the tooltip into `<title>`, the first two fail and this amendment wants
+  revisiting — which is the point of pinning a "cannot" rather than merely writing it down.
+
+- **CI installs Graphviz, because otherwise this test passes by not running.** The test skips itself
+  where the binary is absent — a machine without it has no rendered file to read and should not
+  fail for that — and the runner image does not carry it, so the first CI run reported four passes
+  and four skips. A guard that reports success while executing nothing is the same failure as a
+  tooltip that is present and unread, one level further out again, and it was caught only by
+  reading the test report rather than the build's exit code. One `apt-get` step in the workflow.
+
+Not free: the class and the relationship are now documented as unreachable through the render most
+people will reach for, and the note has to spend two extra clauses saying so. The alternative was
+to keep an attribute that reads as a working feature to anyone who greps for it — which is what
+this issue cost.
+
 ## Alternatives considered
 
 - **Put it in `seed`, since that is where the other dev tool lives** — one package for
