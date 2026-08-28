@@ -33,6 +33,12 @@ discarded them.
   stated, beside the `NodeKind` derived from them. A list, in the order the source gave
   them, because the mapping takes the first class it recognises — order is part of the
   value, which is why it is not a set.
+  *(Amended 2026-08-28, issue #87: the second sentence's REASON is gone, the type is not.
+  The mapping no longer takes the first recognised class — ADR 21's amendment ranks the
+  kinds, so the derived kind is the same whatever order the classes are in, which is the
+  whole point of that change. It stays a list because the field records what the source
+  said, and what a source said has an order; a set would be this projection editing the
+  claim. Both stores still round-trip that order and `GraphStoreContract` still pins it.)*
 - **`NodeKind` still has exactly six constants.** ADR 21 is untouched. This keeps the raw
   fact beside the derived classification; it does not enlarge the classification.
 - **Both projections re-derive the kind from the stored classes, always, with no network.**
@@ -78,7 +84,11 @@ discarded them.
   values that cannot contain a delimiter.
 - **A set rather than a list** — the natural type for "the classes this is an instance of",
   and wrong here: the mapping takes the first recognised class, so a set would make the
-  derived kind depend on iteration order.
+  derived kind depend on iteration order. *(Amended 2026-08-28, issue #87: that hazard is
+  now removed at the other end — the kinds are ranked, so iteration order cannot change the
+  answer. `ReverseClaims` had in fact been collecting the classes into a `LinkedHashSet`
+  keyed on SPARQL row order all along, which is how a film ended up stored city-first. The
+  conclusion is unchanged for the reason given above.)*
 - **Re-derive only on an explicit `--rederive` flag** — auditable, and it reproduces the
   failure mode this ADR exists to remove.
 - **A schema version and an `ALTER TABLE` upgrade path** — the responsible default, and it
@@ -89,7 +99,8 @@ discarded them.
 - A future `KindMapper` improvement corrects every affected node **for free, at the next
   boot, offline**. `GraphProjectorTest` pins exactly that: a node logged as `CONCEPT` with
   a class the mapper has since learned projects as `GROUP`, with no fetch and no rewrite of
-  the log.
+  the log. *(Issue #87 was the first change to collect on it: replaying a copy of the real
+  307,037-row log corrected four nodes with no re-seed and no network.)*
 - Old claims do not heal. Rows written before this change have no classes, so they keep the
   kind they recorded — which is why the graph is re-seeded once more rather than migrated.
   After that re-seed, every node carries its classes and no further re-seed is needed for a

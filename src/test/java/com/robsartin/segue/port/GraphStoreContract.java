@@ -75,7 +75,9 @@ public abstract class GraphStoreContract {
   void instanceOfSurvivesTheRoundTrip() {
     // Issue #60 puts the raw P31 on the node beside the derived kind. A store that dropped it
     // would leave a record field that only ever reads back empty - and both engines have to
-    // keep the ORDER, because the mapping takes the first class it recognises.
+    // keep the ORDER, because the field records what the source said and a source's answer has
+    // an order. The kind no longer depends on it (issue #87 ranks the kinds instead); a store
+    // that reordered the list would still be editing the claim on its way through.
     store.upsertNode(
         new NodeRecord("Q100003", NodeKind.WORK, "Probe Song", List.of("Q134556", "Q7366")));
 
