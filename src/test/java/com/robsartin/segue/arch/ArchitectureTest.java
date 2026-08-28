@@ -139,7 +139,8 @@ class ArchitectureTest {
               "..ingest..",
               "..mcp..",
               "..app..",
-              "..retract..")
+              "..retract..",
+              "..rate..")
           .because(
               "ADR 40: the seeding tool resolves and reports — it never writes the graph, never"
                   + " opens the database, and is deliberately not an MCP tool (ADR 26)");
@@ -306,6 +307,13 @@ class ArchitectureTest {
    * rather than a second traversal that can drift. What this rule guarantees is that nothing
    * durable changes: no claim reaches the log, the database or a store the exporter did not create
    * itself.
+   *
+   * <p><b>There are two dev-side tools that write, not one.</b> This Javadoc said "the one dev-side
+   * tool that [writes]" while ADR 46 was adding a second — {@code rate}, which writes a rating
+   * through {@code AffinityStore.put} — so the sentence was literally false and the rule below
+   * covered only half of what it claimed. Both packages are banned now, and they write to different
+   * layers: {@code retract} appends a world-fact claim through {@code IngestService}, {@code rate}
+   * writes the taste layer and never touches {@code ingest} at all (ADR 33).
    */
   @ArchTest
   static final ArchRule theExporterOnlyReads =
@@ -317,17 +325,19 @@ class ArchitectureTest {
                   .or(
                       ArchConditions.dependOnClassesThat(
                           JavaClass.Predicates.equivalentTo(IngestService.class)))
-                  // ADR 44 added a fourth dev-side tool, and it is the first one that writes.
-                  // Without this clause the exporter could reach RetractRun and append a
-                  // retraction through it, inheriting a looser fence than its own — the exact
-                  // shape theRatingsToolOpensNothingElse already refuses for its siblings.
+                  // ADR 44 added a fourth dev-side tool, and it was the first one that writes;
+                  // ADR 46's rating deck is the second. Without these two clauses the exporter
+                  // could reach RetractRun and append a retraction through it, or RateServer and
+                  // write a rating through that, inheriting a looser fence than its own — the
+                  // exact shape theRatingsToolOpensNothingElse already refuses for its siblings.
+                  // The two writers write to different layers and neither is the exporter's.
                   .or(
                       ArchConditions.dependOnClassesThat(
-                          JavaClass.Predicates.resideInAPackage("..retract.."))))
+                          JavaClass.Predicates.resideInAnyPackage("..retract..", "..rate.."))))
           .because(
               "ADR 41: the exporter is a read-only tool — it never appends to the log, never"
-                  + " writes the graph, and cannot reach the one class that is allowed to,"
-                  + " nor the one dev-side tool that is (ADR 44)");
+                  + " writes the graph, and cannot reach the one class that is allowed to, nor"
+                  + " either of the two dev-side tools that write (ADR 44, ADR 46)");
 
   /**
    * ADR 41: the exporter is offline as well as read-only.
@@ -414,6 +424,7 @@ class ArchitectureTest {
               "..seed..",
               "..export..",
               "..retract..",
+              "..rate..",
               "java.net..",
               "javax.net..")
           .because(
@@ -533,9 +544,24 @@ class ArchitectureTest {
    *
    * <p>Three fences, and they are answering different questions. This one says the recommender
    * cannot see the words. {@link #onlyTheRatingsToolReadsANote} says the same of everything else in
-   * the project, at the accessor. {@link #onlyTheRecommenderReadsEveryRating} says the note-free
-   * bulk read is this tool's alone, so widening the taste layer's readership stays an ADR-level
-   * decision even though the score is now ordinary data.
+   * the project, at the accessor. {@link #onlyTheRecommenderReadsEveryRating} keeps the note-free
+   * bulk read off the MCP surface, so widening the taste layer's readership stays an ADR-level
+   * decision even though the score is now ordinary data. That sentence used to end "is this tool's
+   * alone"; issue #101 (ADR 46) took the decision it asks for and widened the rule to {@code
+   * resideOutsideOfPackages("..recommend..", "..rate..")}, so the rating deck may call {@code
+   * readRatings} as well — it needs the same map to know which entities it has already dealt.
+   *
+   * <p><b>The deck reading scores does not let it reach a note — but it is held off one differently
+   * from this package, and the difference is worth reading rather than assuming.</b> Two rules
+   * cover both equally: {@link #onlyTheRatingsToolReadsANote} shuts {@code AffinityRecord.note()}
+   * out of everything but {@code ratings} and {@code sqlite}, and {@link
+   * #onlyTheRatingsToolReadsEveryRating} keeps {@code readAll} — the read that carries a note — as
+   * the listing tool's. Past that they diverge. This rule also bans {@code AffinityStore.find} in
+   * {@code recommend} and forbids that package to name {@code AffinityRecord} at all; {@code rate}
+   * has no {@code find} ban anywhere, and {@link #theRatingDeckLogsNoRating} lets exactly one class
+   * name the record — {@code RateServer}, which has to construct the one it writes. What holds the
+   * deck off the words is {@link #theRatingDeckNeverReadsANote}, which bans the accessor for every
+   * class in {@code rate}, {@code RateServer} included and with no exception.
    */
   @ArchTest
   static final ArchRule theRecommenderReadsRatingsAndNeverNotes =
@@ -555,8 +581,8 @@ class ArchitectureTest {
                   + " reads that carry free text stay out of this package");
 
   /**
-   * Issue #85: the note-free bulk read belongs to the recommender, and to nothing on the MCP
-   * surface.
+   * Issue #85: the note-free bulk read belongs to the recommender and the rating deck, and to
+   * nothing on the MCP surface.
    *
    * <p>The sibling of {@link #onlyTheRatingsToolReadsEveryRating}, one field narrower and for a
    * different reason. That rule protects a note; this one protects nothing personal at all now that
@@ -565,17 +591,131 @@ class ArchitectureTest {
    * tool, and {@code ToolSurfaceTest} counts tools, so it would not notice. ADR 45 recorded a
    * re-open condition for a conversational recommendation and issue #85 deliberately did not
    * exercise it; until an ADR does, {@code get_entity} answers one qid at a time.
+   *
+   * <p>Widened by issue #101 (ADR 46): the deck needs the same note-free map to know which entities
+   * are already rated and must not be dealt again, which is the resume mechanism {@code Deck}'s
+   * class comment describes. Both readers are dev-side tools off the MCP surface, so the thing this
+   * rule actually protects is unchanged.
    */
   @ArchTest
   static final ArchRule onlyTheRecommenderReadsEveryRating =
       noClasses()
           .that()
-          .resideOutsideOfPackage("..recommend..")
+          .resideOutsideOfPackages("..recommend..", "..rate..")
           .should()
           .callMethodWhere(callTo("readRatings", AffinityStore.class))
           .because(
-              "ADR 26 and issue #85: the score is ordinary data, and reading every score at once is"
-                  + " still the recommender's job rather than a field on an MCP tool");
+              "ADR 26 and issues #85 and #101: the score is ordinary data, and reading every score"
+                  + " at once is a dev-side tool's job — the recommender or the rating deck — rather"
+                  + " than a field on an MCP tool");
+
+  /**
+   * Issue #101: the deck writes the taste layer and nothing else.
+   *
+   * <p>The mirror image of {@code theRatingsToolOnlyReads}. That tool may read every rating and
+   * write none; this one may write a rating and must not touch the graph or the log. Between them
+   * the two dev tools that meet the affinity table can each do exactly one thing to it.
+   */
+  @ArchTest
+  static final ArchRule theRatingDeckWritesOnlyAffinity =
+      noClasses()
+          .that()
+          .resideInAPackage("..rate..")
+          .should(ArchConditions.callMethodWhere(APPLIES_A_CLAIM))
+          .because(
+              "ADR 46: the deck records what the owner thinks and never what the world says — it"
+                  + " appends no claim, records no edge and upserts no node");
+
+  /**
+   * Issue #85, held by construction and then by rule.
+   *
+   * <p>{@code Card} has no note field, so there is nothing for the page to render even by accident;
+   * this stops the field being reintroduced by someone who thinks it would be handy.
+   */
+  @ArchTest
+  static final ArchRule theRatingDeckNeverReadsANote =
+      noClasses()
+          .that()
+          .resideInAPackage("..rate..")
+          .should(ArchConditions.callMethodWhere(callTo("note", AffinityRecord.class)))
+          .because(
+              "issue #85: a rating is ordinary data and a note is not — the deck writes the first"
+                  + " and must never be able to display the second");
+
+  /**
+   * ADR 33: no rating reaches a log line. RateServer holds one just long enough to write it.
+   *
+   * <p>Narrower than it looks, and the narrowing is the whole decision. Written blanket first —
+   * {@code noClasses().that().resideInAPackage("..rate..")} against {@code AffinityRecord} as a
+   * type — it failed naming {@link com.robsartin.segue.rate.RateServer}, because that class must
+   * construct the record it writes: {@code affinity.put(new AffinityRecord(...))} in {@code rate}
+   * is not a bug, it is the one write this package exists to make. The deck logs a port, a count
+   * and a path; a qid paired with a score is the personal part, and the easiest way to leak it is a
+   * debug line added while chasing something else. Excluding {@code RateServer} by name states that
+   * exception where it can be read rather than designing around it silently, and every other class
+   * in {@code rate} — {@code Card}, {@code Deck}, {@code RateRun}, {@code RateCli} — still cannot
+   * hold a rating at all.
+   */
+  @ArchTest
+  static final ArchRule theRatingDeckLogsNoRating =
+      noClasses()
+          .that()
+          .resideInAPackage("..rate..")
+          .and()
+          .haveSimpleNameNotEndingWith("RateServer")
+          .should()
+          .dependOnClassesThat()
+          .haveFullyQualifiedName("com.robsartin.segue.domain.AffinityRecord")
+          .because(
+              "ADR 33 keeps affinity out of every log line. RateServer is the single exception,"
+                  + " because it must build the record it writes; nothing else in the deck may"
+                  + " hold a rating at all, and RateServer owns no logger that prints one");
+
+  /**
+   * ADR 46: the deck needs a log, an engine, the recommender's sweep and nothing else.
+   *
+   * <p>The sixth tool's half of the fence every dev tool carries — {@link #seedNeverOpensAStore},
+   * {@link #theRatingsToolOpensNothingElse}, {@link #theRecommenderOpensNothingElse}, {@link
+   * #theRetractionToolOpensNothingElse} — and for the same reason: a dependency on a sibling lets
+   * this tool inherit that sibling's fence instead of its own. It writes a rating and nothing else,
+   * so reaching {@code retract} (which appends a world-fact claim) or {@code ratings} (which reads
+   * every note) would each be a way around a rule this package is otherwise held to.
+   *
+   * <p><b>{@code recommend} is deliberately NOT banned, and it is the only sibling pair in the
+   * project that may depend on each other.</b> The candidate half of the deck is the recommender's
+   * own {@code CandidateSweep}, {@code Routes} and {@code Sweep}, so that a card's routes are the
+   * routes that tool would give for the same pair rather than a second implementation that can
+   * drift. ADR 46 argues that dependency and ADR 45 moved {@code QidList} into {@code support}
+   * rather than let a shared reader create it by accident. It runs one way only: {@link
+   * #theRecommenderOpensNothingElse} bans the return trip.
+   *
+   * <p><b>{@code java.net} is deliberately NOT banned either</b>, and this is the one dev tool that
+   * could not carry that clause. Its whole shape is an HTTP server: {@code RateServer} binds an
+   * {@code InetSocketAddress} on {@link java.net.InetAddress#getLoopbackAddress()} and parses the
+   * {@code Origin} header with {@link java.net.URI}. What the siblings' {@code java.net} ban buys
+   * them — nothing leaves the machine — is bought here by the bind address and the Origin allowlist
+   * instead, which is ADR 46's own argument and is tested over a real socket in {@code
+   * RateServerTest} rather than asserted here.
+   */
+  @ArchTest
+  static final ArchRule theRatingDeckOpensNothingElse =
+      noClasses()
+          .that()
+          .resideInAPackage("..rate..")
+          .should()
+          .dependOnClassesThat()
+          .resideInAnyPackage(
+              "..jena..",
+              "..mcp..",
+              "..app..",
+              "..seed..",
+              "..export..",
+              "..ratings..",
+              "..retract..")
+          .because(
+              "ADR 46: the deck replays one local log into one in-memory graph and serves it on"
+                  + " loopback — it needs no second engine and no sibling tool but the recommender,"
+                  + " whose sweep it reuses on purpose, and cannot become an MCP tool by accident");
 
   /**
    * ADR 45: the recommender needs a log, an engine and nothing else.
@@ -606,6 +746,7 @@ class ArchitectureTest {
               "..export..",
               "..ratings..",
               "..retract..",
+              "..rate..",
               "java.net..",
               "javax.net..")
           .because(
@@ -677,6 +818,7 @@ class ArchitectureTest {
                           "..seed..",
                           "..export..",
                           "..ratings..",
+                          "..rate..",
                           "java.net..",
                           "javax.net..")))
           .because(

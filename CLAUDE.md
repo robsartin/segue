@@ -28,6 +28,7 @@ than a seventh MCP tool.
 ./gradlew listRatings --args="--sort recent --out $HOME/ratings.txt"   # ADR 43; read-only; the OUTPUT IS PERSONAL DATA
 ./gradlew retractEntity --args="--qid Q12345 --reason 'wrong entity' --dry-run"   # ADR 44; appends a retraction; --dry-run reports and writes nothing
 ./gradlew recommend --args="--known $HOME/known.csv --out $HOME/next.txt"   # ADR 45; read-only; ranks what you do NOT have, with routes; the OUTPUT IS PERSONAL DATA
+./gradlew rate --args="--known $HOME/known.csv"   # ADR 46; loopback page at 127.0.0.1:8090; WRITES ratings only, no un-rate
 ```
 
 Gradle, not Maven. The wrapper is pinned to 9.7.1 and committed; **Gradle 9.1.0 is the
@@ -88,25 +89,40 @@ ratings/  The taste-layer reader (ADR 43): every rating with its label, note and
           updated_at, sortable by rating or recency, run as `./gradlew
           listRatings`. Dev-side, plain Java, READ-ONLY, offline, and NOT a
           seventh MCP tool. Its output IS personal data; *.txt is gitignored.
-          The tightest fence of the three tools — sqlite only, no engine, no
+          The tightest fence of the six dev tools — sqlite only, no engine, no
           projection, no network.
 retract/  The retraction tool (ADR 44): appends one Retraction claim so the
           projection stops showing an entity and its edges, run as `./gradlew
           retractEntity`. Dev-side, plain Java, offline, and NOT a seventh MCP
-          tool. The only dev tool that WRITES — and it may write exactly one kind
-          of row, through IngestService, holding no GraphStore at all.
+          tool. The only dev tool that writes a WORLD-FACT claim — exactly one
+          kind of row, through IngestService, holding no GraphStore at all. (ADR
+          46's `rate` is the other dev tool that writes, but only ever to the
+          taste layer, through AffinityStore — never through IngestService.)
 recommend/ The recommender (ADR 45): ranks entities ABSENT from a supplied known-list by
           candidate-degree-normalised lift, excludes hub intermediates through PathRanking.isHub,
           weights edge types, and explains every candidate with real find_paths routes. Run as
           `./gradlew recommend`. Dev-side, plain Java, READ-ONLY, offline, NOT a seventh MCP tool.
           Since issue #85 it WEIGHTS by rating — Recommendations.regardFor over the note-free
-          AffinityStore.readRatings — and it is still the only tool fenced from every read that
-          could carry a note.
+          AffinityStore.readRatings — under a fence written at the CALL SITES:
+          theRecommenderReadsRatingsAndNeverNotes bans find and readAll and the AffinityRecord
+          type, while still letting it read scores.
+rate/     The rating deck (ADR 46): a loopback page on 127.0.0.1:8090 that deals one
+          entity per keystroke — known entities by degree, a recommend candidate every fifth
+          card — `1`-`5` rates and advances, `s`/space skips, `b` goes back. Run as `./gradlew
+          rate`. Dev-side, NOT a seventh MCP tool, and — with retract — one of only two dev
+          tools that WRITE: AffinityStore.put alone, fenced by four ArchUnit rules, one of
+          which (theRatingDeckLogsNoRating) names a single exception — the class that
+          constructs what it writes. No un-rate: AffinityStore has no delete, so going back
+          re-rates rather than withdrawing.
 ingest/   IngestService (the only write path) and GraphProjector (boot replay).
 support/  Plain-Java cross-cutting helpers with no project dependencies of their
-          own — UuidV7, the RFC 9562 v7 id generator used for request correlation, and
-          QidList, the QID-file reader `export` and `recommend` share (it moved here from
-          `export` in ADR 45: the tools may not depend on each other).
+          own — UuidV7, the RFC 9562 v7 id generator used for request correlation;
+          QidList, the QID-file reader `export`, `recommend` and `rate` share (it moved here
+          from `export` in ADR 45, so a shared reader would not force a dependency between
+          siblings that must not have one — `rate` depending on `recommend` directly, for its
+          candidate sweep, is the one dev-tool pair that already does, by design); and
+          ClassLabels, the offline P31 label table `export` and `rate` share, which moved here
+          from `export` in ADR 46 for the same reason QidList did.
 mcp/      The six MCP tools (EntityTools, GraphTools, TasteTools), SegueService
           (the facade they call), CorrelationId. Spring-only package (ADR 32) —
           annotated with the starter's @McpTool, but plain enough to unit test.
@@ -416,7 +432,8 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
 - **`AffinityStore` has TWO bulk reads, and each belongs to exactly one package.** `readAll`
   returns whole rows, notes included, and is the `ratings` dev tool's alone
   (`onlyTheRatingsToolReadsEveryRating`); `readRatings` returns a note-free `Map<String, Integer>`
-  and is the recommender's alone (`onlyTheRecommenderReadsEveryRating`, issue #85). The reason the
+  and belongs to the two dev tools that weight and deal by it, `recommend` and — since ADR 46 —
+  `rate` (`onlyTheRecommenderReadsEveryRating`, issues #85 and #101). The reason the
   second one is still fenced has CHANGED — a score is no longer too personal to leave, but ADR 26
   pins the surface at six tools and nothing on it needs the whole table.
   ADR 39 declined a bulk `list_affinity` MCP tool on ADR 16 data-minimisation grounds, and what it
@@ -498,7 +515,11 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   of esteem; every other type's direction says which end is the person, the work or the prize. The
   ADR has the per-type table and the before/after measurement — top 25 items citing more than they
   are cited went 18 → 2, and the all-inbound ancestors scored identically.
-- **The recommender reads ratings and cannot read a note**, which no other tool's fence says. It
+- **The recommender reads ratings and cannot read a note.** That was the one fence no sibling tool
+  had until ADR 46: `rate` now reads the same `readRatings` and is held off the note by
+  `theRatingDeckNeverReadsANote`. What is still particular to `recommend` is the SHAPE — `find`
+  banned and `AffinityRecord` unnameable, where `rate` has no `find` ban and lets `RateServer` name
+  the record it constructs. It
   used to be banned from `AffinityStore` as a type; issue #85 narrowed that to
   `theRecommenderReadsRatingsAndNeverNotes` — `AffinityRecord` banned as a type, `find` and
   `readAll` banned as calls, `readRatings` (a `Map<String, Integer>`) allowed. The old argument is

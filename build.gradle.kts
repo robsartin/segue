@@ -179,6 +179,25 @@ tasks.register<JavaExec>("recommend") {
     outputs.upToDateWhen { false }
 }
 
+tasks.register<JavaExec>("rate") {
+    group = "application"
+    description =
+        "Serves a local page that deals your entities one at a time and records a 1-5 rating " +
+            "per keystroke, filling the affinity table the recommender weights by. Loopback " +
+            "only. Writes the taste layer and nothing else. See ADR 46. Example: ./gradlew rate " +
+            "--args=\"--known \$HOME/setlist-scout/filtered-qids.csv\""
+    mainClass.set("com.robsartin.segue.rate.RateCli")
+    classpath = sourceSets["main"].runtimeClasspath
+    // sqlite-jdbc loads a native library, the same grant tasks.test makes.
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
+    // The whole graph is replayed into memory, and a real one is six figures of assertions.
+    maxHeapSize = "4g"
+    // A long-running server: Gradle must not hold the console.
+    standardInput = System.`in`
+    // Never up-to-date: the ratings change under it, and the point is to add to them now.
+    outputs.upToDateWhen { false }
+}
+
 tasks.register<JavaExec>("retractEntity") {
     group = "application"
     description =

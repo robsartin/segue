@@ -1,6 +1,7 @@
 package com.robsartin.segue.export;
 
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.support.ClassLabels;
 import java.io.IOException;
 import java.io.Writer;
 import java.util.HashMap;

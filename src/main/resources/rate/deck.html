@@ -1,0 +1,232 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>segue rating deck</title>
+<style>
+  :root { color-scheme: light dark; --ink: #111; --paper: #fff; --muted: #555; --line: #767676; }
+  @media (prefers-color-scheme: dark) {
+    :root { --ink: #eee; --paper: #16181c; --muted: #aaa; --line: #808080; }
+  }
+  body { margin: 0; padding: 2rem 1rem; background: var(--paper); color: var(--ink);
+         font: 16px/1.5 system-ui, sans-serif; display: flex; justify-content: center; }
+  main { max-width: 34rem; width: 100%; }
+  h1 { font-size: 2rem; margin: 0 0 .25rem; }
+  .kind { color: var(--muted); font-size: .9rem; text-transform: lowercase; }
+  .why { margin: 1.25rem 0; padding-left: 1rem; border-left: 3px solid var(--line);
+         color: var(--muted); font-size: .95rem; }
+  .why li { margin: .35rem 0; }
+  .rate { display: flex; gap: .5rem; margin: 2rem 0 1rem; }
+  button { flex: 1; padding: 1rem 0; font-size: 1.25rem; cursor: pointer;
+           color: var(--ink); background: var(--paper); border: 2px solid var(--line);
+           border-radius: .4rem; }
+  button:hover { border-color: var(--ink); }
+  button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+  .keys, .progress { color: var(--muted); font-size: .85rem; }
+  .done { font-size: 1.25rem; }
+  /* Failures are announced here rather than inside #card, because show() rewrites #card and
+     would wipe the message it was written to explain. role="alert" makes a screen reader say
+     it without the owner having to go looking. */
+  .problem:not(:empty) { margin-top: 1rem; padding: .75rem 1rem; font-size: .95rem;
+                         border: 2px solid var(--ink); border-radius: .4rem; }
+</style>
+<main>
+  <div id="card" aria-live="polite">
+    <p class="progress">loading…</p>
+  </div>
+  <div class="rate">
+    <button data-rating="1" aria-label="1, strongly not for me">1</button>
+    <button data-rating="2" aria-label="2">2</button>
+    <button data-rating="3" aria-label="3">3</button>
+    <button data-rating="4" aria-label="4">4</button>
+    <button data-rating="5" aria-label="5, a favourite">5</button>
+  </div>
+  <p class="keys">
+    Keys <b>1</b>–<b>5</b> rate and advance · <b>s</b> or space skips · <b>b</b> goes back.
+    Going back re-rates; a rating cannot be withdrawn, only changed.
+  </p>
+  <p class="progress" id="progress"></p>
+  <p class="problem" id="problem" role="alert"></p>
+</main>
+<script>
+  let index = 0;
+  let rated = 0;
+  // The card currently on screen, captured by show() and consumed by rate().
+  // Holding it here (rather than re-fetching /api/card in rate()) avoids a
+  // second round-trip per keystroke and, more importantly, a race: if the
+  // owner presses a rating key twice in quick succession, the second fetch
+  // could resolve before the first POST lands and both would rate the same
+  // qid onto what is now the wrong index.
+  //
+  // The guard is symmetric: BOTH show() and rate() null out `current`
+  // synchronously, before their first await, and only the function that
+  // just resolved a fetch is allowed to set it back. That closes two races,
+  // not one: a second keypress while a rate() POST is in flight sees
+  // current === null and is dropped (rate/rate); and — the one a
+  // one-directional guard misses — pressing 's' or 'b' starts a new show()
+  // GET while `current` still names the OLD card, so a rating key pressed
+  // before that GET resolves would otherwise rate the card just skipped
+  // past, onto an index that has already moved on. Nulling it at the top of
+  // show() too closes that: rate() sees current === null during the whole
+  // window a card is in flight and does nothing, rather than silently
+  // mis-rating and silently dropping the card the owner meant to rate.
+  let current = null;
+
+  // True from the moment a request is sent until its answer has been dealt with.
+  //
+  // `current` alone could not do this job, because it is null in two unrelated
+  // situations — a request in flight, and the end of the deck — and skip/back
+  // must be refused in the first and allowed in the second. Without it, pressing
+  // 's' while a rate() POST was in flight moved `index` twice and one card was
+  // never dealt: no rating misapplied, one card silently lost out of hundreds.
+  //
+  // Every path that sets it true clears it again in a `finally`, so a request
+  // that fails cannot leave the page permanently unresponsive — which is exactly
+  // what a rejected promise used to do here.
+  let busy = false;
+
+  function problem(text) {
+    document.getElementById('problem').textContent = text;
+  }
+
+  function appendRouteText(li, text) {
+    // PathResult.render() emits one indented, newline-terminated line per hop (see
+    // Deck.routeLines / PathResult.render on the Java side). Split on the newlines it actually
+    // puts there and give each hop its own visual line, rather than letting a multi-hop route
+    // collapse into one run-on line of default HTML whitespace handling.
+    const lines = text.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+    lines.forEach((line, i) => {
+      if (i > 0) li.appendChild(document.createElement('br'));
+      li.appendChild(document.createTextNode(line));
+    });
+  }
+
+  function renderCard(c) {
+    const h1 = document.createElement('h1');
+    h1.textContent = c.label;
+
+    const kind = document.createElement('p');
+    kind.className = 'kind';
+    kind.textContent = `${c.kind} · ${c.classes}`;
+
+    let why;
+    if (c.degree !== null) {
+      why = document.createElement('p');
+      why.className = 'why';
+      why.textContent = `connects ${c.degree} things in the graph`;
+    } else {
+      why = document.createElement('ul');
+      why.className = 'why';
+      for (const route of c.routes) {
+        const li = document.createElement('li');
+        appendRouteText(li, route);
+        why.appendChild(li);
+      }
+    }
+
+    // label, kind, classes and every route line are Wikidata-derived text from an
+    // openly editable source, so they are built as DOM nodes (textContent /
+    // createTextNode) rather than interpolated into innerHTML — a vandalised label
+    // containing markup is inert text here, never executable.
+    document.getElementById('card').replaceChildren(h1, kind, why);
+  }
+
+  async function show() {
+    busy = true;
+    current = null;
+    try {
+      const response = await fetch(`/api/card?i=${index}`);
+      if (response.status === 404) {
+        const done = document.createElement('p');
+        done.className = 'done';
+        done.textContent = 'That is the whole deck. Nothing left to rate.';
+        document.getElementById('card').replaceChildren(done);
+        document.getElementById('progress').textContent = '';
+        return;
+      }
+      if (!response.ok) {
+        problem('That card could not be read: the server answered ' + response.status + '.');
+        return;
+      }
+      const c = await response.json();
+      current = c;
+      renderCard(c);
+      document.getElementById('progress').textContent =
+        `card ${index + 1} · ${rated} rated this session`;
+    } catch (noAnswer) {
+      problem('That card could not be read: the server did not answer. Is the rate task still running?');
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function rate(value) {
+    if (busy || !current) return;
+    const qid = current.qid;
+    current = null;
+    busy = true;
+    let response = null;
+    try {
+      response = await fetch('/api/rate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ qid, rating: value }),
+      });
+    } catch (noAnswer) {
+      // The handler threw and the connection closed without a response, or the server has gone.
+      // Either way the write cannot be claimed, so it is not counted and the deck does not move.
+      response = null;
+    } finally {
+      busy = false;
+    }
+    if (response === null) {
+      problem('That rating may not have been recorded: the server did not answer. Nothing has advanced — this is the same card.');
+      await show();
+      return;
+    }
+    if (!response.ok) {
+      // A refusal is a rating that was NOT written. Counting it and dealing the next card is
+      // the one failure this page must never have: a rating cannot be withdrawn (ADR 46), and
+      // one that was never written cannot be found later and fixed either.
+      problem('That rating was not recorded: the server refused it (' + response.status + '). Nothing has advanced — this is the same card.');
+      await show();
+      return;
+    }
+    problem('');
+    rated++;
+    index++;
+    await show();
+  }
+
+  function skip() {
+    if (busy) return;
+    problem('');
+    index++;
+    show();
+  }
+
+  function back() {
+    if (busy || index === 0) return;
+    problem('');
+    index--;
+    show();
+  }
+
+  document.querySelectorAll('button[data-rating]').forEach(b =>
+    b.addEventListener('click', () => rate(Number(b.dataset.rating))));
+
+  document.addEventListener('keydown', event => {
+    // Auto-repeat delivers about thirty events a second and a loopback round-trip takes a few
+    // milliseconds, so a finger resting on '4' for one second wrote roughly fifteen ratings of 4
+    // to whatever cards went past — and ADR 46 gives no way to withdraw any of them. One press,
+    // one rating.
+    if (event.repeat) return;
+    // A key pressed with a modifier belongs to the browser. Cmd/Ctrl+S was skipping a card AND
+    // swallowing the save dialog; Ctrl/Alt+1..5 was recording a rating nobody asked for.
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    if (event.key >= '1' && event.key <= '5') { rate(Number(event.key)); }
+    else if (event.key === 's' || event.key === ' ') { skip(); event.preventDefault(); }
+    else if (event.key === 'b') { back(); }
+  });
+
+  show();
+</script>
