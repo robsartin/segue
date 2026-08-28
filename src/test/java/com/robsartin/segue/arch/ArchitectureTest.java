@@ -584,6 +584,68 @@ class ArchitectureTest {
                   + " than a field on an MCP tool");
 
   /**
+   * Issue #101: the deck writes the taste layer and nothing else.
+   *
+   * <p>The mirror image of {@code theRatingsToolOnlyReads}. That tool may read every rating and
+   * write none; this one may write a rating and must not touch the graph or the log. Between them
+   * the two dev tools that meet the affinity table can each do exactly one thing to it.
+   */
+  @ArchTest
+  static final ArchRule theRatingDeckWritesOnlyAffinity =
+      noClasses()
+          .that()
+          .resideInAPackage("..rate..")
+          .should(ArchConditions.callMethodWhere(APPLIES_A_CLAIM))
+          .because(
+              "ADR 46: the deck records what the owner thinks and never what the world says — it"
+                  + " appends no claim, records no edge and upserts no node");
+
+  /**
+   * Issue #85, held by construction and then by rule.
+   *
+   * <p>{@code Card} has no note field, so there is nothing for the page to render even by accident;
+   * this stops the field being reintroduced by someone who thinks it would be handy.
+   */
+  @ArchTest
+  static final ArchRule theRatingDeckNeverReadsANote =
+      noClasses()
+          .that()
+          .resideInAPackage("..rate..")
+          .should(ArchConditions.callMethodWhere(callTo("note", AffinityRecord.class)))
+          .because(
+              "issue #85: a rating is ordinary data and a note is not — the deck writes the first"
+                  + " and must never be able to display the second");
+
+  /**
+   * ADR 33: no rating reaches a log line. RateServer holds one just long enough to write it.
+   *
+   * <p>Narrower than it looks, and the narrowing is the whole decision. Written blanket first —
+   * {@code noClasses().that().resideInAPackage("..rate..")} against {@code AffinityRecord} as a
+   * type — it failed naming {@link com.robsartin.segue.rate.RateServer}, because that class must
+   * construct the record it writes: {@code affinity.put(new AffinityRecord(...))} in {@code rate}
+   * is not a bug, it is the one write this package exists to make. The deck logs a port, a count
+   * and a path; a qid paired with a score is the personal part, and the easiest way to leak it is a
+   * debug line added while chasing something else. Excluding {@code RateServer} by name states that
+   * exception where it can be read rather than designing around it silently, and every other class
+   * in {@code rate} — {@code Card}, {@code Deck}, {@code RateRun}, {@code RateCli} — still cannot
+   * hold a rating at all.
+   */
+  @ArchTest
+  static final ArchRule theRatingDeckLogsNoRating =
+      noClasses()
+          .that()
+          .resideInAPackage("..rate..")
+          .and()
+          .haveSimpleNameNotEndingWith("RateServer")
+          .should()
+          .dependOnClassesThat()
+          .haveFullyQualifiedName("com.robsartin.segue.domain.AffinityRecord")
+          .because(
+              "ADR 33 keeps affinity out of every log line. RateServer is the single exception,"
+                  + " because it must build the record it writes; nothing else in the deck may"
+                  + " hold a rating at all, and RateServer owns no logger that prints one");
+
+  /**
    * ADR 45: the recommender needs a log, an engine and nothing else.
    *
    * <p>The same fence its siblings carry, with the same reasoning. {@code seed}, {@code export},
