@@ -93,8 +93,10 @@ ratings/  The taste-layer reader (ADR 43): every rating with its label, note and
 retract/  The retraction tool (ADR 44): appends one Retraction claim so the
           projection stops showing an entity and its edges, run as `./gradlew
           retractEntity`. Dev-side, plain Java, offline, and NOT a seventh MCP
-          tool. The only dev tool that WRITES — and it may write exactly one kind
-          of row, through IngestService, holding no GraphStore at all.
+          tool. The only dev tool that writes a WORLD-FACT claim — exactly one
+          kind of row, through IngestService, holding no GraphStore at all. (ADR
+          46's `rate` is the other dev tool that writes, but only ever to the
+          taste layer, through AffinityStore — never through IngestService.)
 recommend/ The recommender (ADR 45): ranks entities ABSENT from a supplied known-list by
           candidate-degree-normalised lift, excludes hub intermediates through PathRanking.isHub,
           weights edge types, and explains every candidate with real find_paths routes. Run as
@@ -102,11 +104,24 @@ recommend/ The recommender (ADR 45): ranks entities ABSENT from a supplied known
           Since issue #85 it WEIGHTS by rating — Recommendations.regardFor over the note-free
           AffinityStore.readRatings — and it is still the only tool fenced from every read that
           could carry a note.
+rate/     The rating deck (ADR 46): serves a loopback page on 127.0.0.1:8090 (not 8080, so it
+          can run beside the MCP server) that deals one entity per keystroke — known entities
+          by in-graph degree, a recommend candidate every fifth card — `1`-`5` rates and
+          advances, `s`/space skips without recording, `b` goes back. Run as `./gradlew rate`.
+          Dev-side, NOT a seventh MCP tool, and — with retract — one of only two dev tools that
+          WRITE: AffinityStore.put alone, never a graph or log claim, enforced by three ArchUnit
+          rules with one named exception (RateServer, which must construct the record it
+          writes). Reuses recommend's own CandidateSweep/Routes/Sweep for candidate cards rather
+          than a second implementation, and shares its AffinityStore.readRatings call
+          (onlyTheRecommenderReadsEveryRating now also permits `..rate..`). No un-rate: going
+          back re-rates rather than deleting, because AffinityStore has no delete.
 ingest/   IngestService (the only write path) and GraphProjector (boot replay).
 support/  Plain-Java cross-cutting helpers with no project dependencies of their
           own — UuidV7, the RFC 9562 v7 id generator used for request correlation, and
-          QidList, the QID-file reader `export` and `recommend` share (it moved here from
-          `export` in ADR 45: the tools may not depend on each other).
+          QidList, the QID-file reader `export`, `recommend` and `rate` share (it moved here
+          from `export` in ADR 45, so a shared reader would not force a dependency between
+          siblings that must not have one — `rate` depending on `recommend` directly, for its
+          candidate sweep, is the one dev-tool pair that already does, by design).
 mcp/      The six MCP tools (EntityTools, GraphTools, TasteTools), SegueService
           (the facade they call), CorrelationId. Spring-only package (ADR 32) —
           annotated with the starter's @McpTool, but plain enough to unit test.

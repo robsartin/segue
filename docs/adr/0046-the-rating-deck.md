@@ -156,9 +156,12 @@ anywhere else in segue, that removes one.
   puts a taste-layer writer on the MCP server's own port and forces ADR 32's Spring-only packages
   to admit a third member for no benefit the dev-tool placement lacks.
 - **A seventh MCP tool** — the natural reading of "let a model help me rate things," and the
-  question ADR 26 has now declined five times running for adjacent work. Refused on the same
-  ground each time: the input is ADR 40's file of everything the owner already has, which is
-  personal data that does not belong in front of a model.
+  question ADR 26 has now declined five times running for adjacent work, on two different
+  grounds. ADR 40, ADR 41, ADR 43 and ADR 45 refused one each on the same ground this decision
+  does: the input is ADR 40's file of everything the owner already has, which is personal data
+  that does not belong in front of a model. ADR 39 refused `get_affinity` on a narrower ground of
+  its own — no file and no bulk data were involved, only an ADR-level change spent on a lookup
+  `get_entity` already had reason to make.
 - **A terminal deck** — no HTTP at all, and the gesture is a single keypress either way. Refused
   because recognising an entity is the hard part of rating it, and a class list and a route
   rendered as wrapped terminal text reads worse than a card — a card the owner cannot read quickly
