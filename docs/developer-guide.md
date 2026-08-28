@@ -305,10 +305,10 @@ almost everything, because wiring is its job. `support` depends on nothing and i
 `mcp`. Two things a reader might expect and will not find: `app` does not import `jena` at all —
 the reference engine is reachable only from tests — and nothing imports `domain` from `app`.
 
-`seed`, `export`, `ratings` and `retract` are the four dev-side tools. None is reachable from the
-application — nothing imports any of them, and each is entered through its own `main` behind a
-Gradle `JavaExec` task — and their arrows are the interesting part, because each has a different
-relationship with the data and a different fence to match.
+`seed`, `export`, `ratings`, `retract`, `recommend` and `rate` are the six dev-side tools. None is
+reachable from the application — nothing imports any of them, and each is entered through its own
+`main` behind a Gradle `JavaExec` task — and their arrows are the interesting part, because each
+has a different relationship with the data and a different fence to match.
 
 - **`seed` reaches `wikidata` and stops.** It may not touch `sqlite`, `tinker`, `jena`, `ingest`,
   `mcp`, `app` or `retract`: it cannot open the database even to read it, which is the fence that
@@ -316,12 +316,19 @@ relationship with the data and a different fence to match.
   ([ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)).
 - **`export` reaches `sqlite`, `tinker` and `ingest`**, because reading the graph is its whole job,
   and it may build a throwaway projection ([ADR 41](adr/0041-graph-exporter-views-and-formats.md)).
-- **`ratings` reaches `sqlite` and nothing else** — the tightest of the four, because it needs the
-  least: a bulk read of the `affinity` table and the node claims in the log, no traversal and no
-  projection ([ADR 43](adr/0043-listing-your-own-ratings.md)).
-- **`retract` reaches `sqlite` and `ingest`, and is the only one that writes.** It appends one
-  `Retraction` through `IngestService` and may not hold a `GraphStore` at all — a retraction has no
-  graph half ([ADR 44](adr/0044-retraction-as-a-new-claim.md)).
+- **`ratings` reaches `sqlite` and nothing else**, because it needs the least: a bulk read of the
+  `affinity` table and the node claims in the log, no traversal and no projection
+  ([ADR 43](adr/0043-listing-your-own-ratings.md)).
+- **`retract` reaches `sqlite` and `ingest`, and is the only one that writes a world-fact claim.**
+  It appends one `Retraction` through `IngestService` and may not hold a `GraphStore` at all — a
+  retraction has no graph half ([ADR 44](adr/0044-retraction-as-a-new-claim.md)).
+- **`recommend` reaches `sqlite`, `tinker`, `ingest` and `wikidata`**, because it replays the log
+  into a throwaway projection and traverses it, and it writes nothing at all
+  ([ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md)).
+- **`rate` reaches the same four and `recommend` itself**, the one dependency between two dev
+  tools, for the candidate half of the deck. It is the other tool that writes — to the taste layer
+  only, through `AffinityStore.put`, never through `IngestService`
+  ([ADR 46](adr/0046-the-rating-deck.md)).
 
 Tools with opposite relationships to the store cannot share a package and keep any fence
 meaningful, which is why ADR 41 made the first two siblings, ADR 43 added a third rather than a
@@ -338,14 +345,15 @@ view, and ADR 44 a fourth rather than a mode of one of them.
 | `sqlite` | `SqliteAssertionLog` and `SqliteAffinityStore` — two tables in one file, two connections. | `port`, `domain` |
 | `wikidata` | The first source: resolution, expansion, and the two mapping passes. Plain Java, no Spring. | `port`, `domain` |
 | `ingest` | `IngestService` (the only write path) and `GraphProjector` (boot replay). | `port`, `domain` |
-| `support` | Cross-cutting plain-Java helpers with no project dependencies — `UuidV7`, and `QidList`, the QID-file reader two dev tools share. | nothing |
+| `support` | Cross-cutting plain-Java helpers with no project dependencies — `UuidV7`, and `QidList`, the QID-file reader `export`, `recommend` and `rate` share. | nothing |
 | `mcp` | The tool classes, `SegueService`, the view records, `CorrelationId`. Spring-aware. | `ingest`, `port`, `domain`, `support` |
 | `app` | Entry point, all bean wiring, `application.yaml`, transport profiles. Spring-aware. | everything it wires |
 | `seed` | The bulk seeding tool ([ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)): a name list to `name → QID`, run as `./gradlew resolveNames`. Plain Java, never opens a store. | `port`, `domain`, `wikidata` |
 | `export` | The graph exporter ([ADR 41](adr/0041-graph-exporter-views-and-formats.md)): `ViewSelector` and the two writers, run as `./gradlew exportGraph`. Plain Java, read-only. | `port`, `domain`, `ingest`, `sqlite`, `tinker` |
 | `ratings` | The taste-layer reader ([ADR 43](adr/0043-listing-your-own-ratings.md)): every rating with its label, note and `updated_at`, run as `./gradlew listRatings`. Plain Java, read-only, offline. | `port`, `domain`, `sqlite` |
-| `retract` | The retraction tool ([ADR 44](adr/0044-retraction-as-a-new-claim.md)): appends one `Retraction` claim so the projection stops showing an entity and its edges, run as `./gradlew retractEntity`. Plain Java, offline, and the only dev tool that writes. | `port`, `domain`, `ingest`, `sqlite` |
+| `retract` | The retraction tool ([ADR 44](adr/0044-retraction-as-a-new-claim.md)): appends one `Retraction` claim so the projection stops showing an entity and its edges, run as `./gradlew retractEntity`. Plain Java, offline, and the only dev tool that writes a world-fact claim. | `port`, `domain`, `ingest`, `sqlite` |
 | `recommend` | The recommender ([ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md)): ranks entities absent from a supplied known-list by how much more of that list reaches them than their size predicts, and explains each with real routes. Run as `./gradlew recommend`. Plain Java, read-only, offline, and it cannot see the taste layer at all. | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `support` |
+| `rate` | The rating deck ([ADR 46](adr/0046-the-rating-deck.md)): a loopback page on 127.0.0.1:8090 dealing one unrated entity per keystroke, run as `./gradlew rate`. Plain Java, offline, and the only dev tool that writes a rating. | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `recommend`, `support` |
 
 ### Which rules a machine enforces
 
@@ -1458,11 +1466,13 @@ the point. A known entity already earned its place on your list, so the useful t
 how much of the graph hangs off it — the same in-graph degree `Deck` sorted the deck by, so a card
 near the top visibly explains its own position. A candidate is something you may never have heard
 of, so the useful thing is the routes that reached it. Those come from `Routes.bestFor` by way of
-`Deck.routeLines`, and are built by the three things `find_paths` uses, in the same order —
-`GraphStore.paths`, the shared `PathRanking`, then `PathResult.render()`. They are **not** the set
-`find_paths` would return for that pair: `Routes.MAX_HOPS` is 2 where `find_paths` defaults to 4,
-and `bestFor` keeps only the top-ranked route per reaching entity. Neither card shape carries a
-note field; there is nowhere on either `Card` to put one.
+`Deck.routeLines`, and **two** steps are shared with `find_paths`: `GraphStore.paths`, then the
+same `PathRanking.rank`. The third is not shared. `SegueService.findPaths` hands the ranked routes
+to `ViewMapper.toPathViews` and returns structured `PathView` records; the deck calls
+`PathResult.render()`, whose only two callers in `src/main` are dev-side — `RecommendationReport`
+and `Deck.routeLines`. The route *set* differs too: `Routes.MAX_HOPS` is 2 where `find_paths`
+defaults to 4, and `bestFor` keeps only the top-ranked route per reaching entity. Neither card
+shape carries a note field; there is nowhere on either `Card` to put one.
 
 ### No session file: the deck is "everything unrated", recomputed every run
 
@@ -1499,9 +1509,10 @@ answered no — [ADR 39](adr/0039-affinity-capture-and-read.md),
 [ADR 41](adr/0041-graph-exporter-views-and-formats.md),
 [ADR 43](adr/0043-listing-your-own-ratings.md),
 [ADR 44](adr/0044-retraction-as-a-new-claim.md) and
-[ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) — **on six different grounds**,
-which ADR 46's Alternatives section lists one ADR at a time rather than summarising. Do not
-paraphrase them as one reason; read the list. ADR 46's own ground is the one it takes from ADR 45:
+[ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) — and **no one ground is shared by
+all six**, which is why ADR 46's Alternatives section lists them one ADR at a time rather than
+summarising. Some do borrow from each other, and the list says which. Do not paraphrase the six as
+a single reason; read it. ADR 46's own ground is the one it takes from ADR 45:
 `rate` reuses the recommender's `CandidateSweep`, `Routes` and `Sweep` for its candidate cards
 without reopening the question, because the input is still ADR 40's file of everything you already
 have, and handing that to a model is what ADR 40 already refused.

@@ -25,14 +25,14 @@ same cost in a different shape.
 The shape of the answer already has five precedents: `seed` (ADR 40), `export` (ADR 41), `ratings`
 (ADR 43), `retract` (ADR 44) and `recommend` (ADR 45) are each a `./gradlew` task rather than an
 MCP tool. ADR 26 pins the MCP surface at six, and each of those five ADRs put its own tool on the
-owner's machine instead — on a ground of its own, argued in that ADR.
+owner's machine instead, for the reasons argued in that ADR.
 
 Six ADRs have now each considered a proposed seventh MCP tool and each declined it: ADR 39, ADR 40,
-ADR 41, ADR 43, ADR 44 and ADR 45. **The grounds differ, ADR by ADR**, and the Alternatives section
-below states each one from that ADR's own file rather than compressing six decisions into a shared
-reason none of them all share. Two of the six bear on this decision directly. ADR 45 made the
-fullest case yet for a seventh tool — for exactly the "what should I explore next" conversational
-question — and declined it anyway. ADR 39 declined one and answered the underlying question the
+ADR 41, ADR 43, ADR 44 and ADR 45. **No one ground is shared by all six**, and the Alternatives
+section below states each from that ADR's own file rather than compressing six decisions into a
+reason none of them all share — some do borrow from each other, and the list says which. Two of
+the six bear on this decision directly. ADR 45 made the fullest case yet for a seventh tool — for
+exactly the "what should I explore next" conversational question — and declined it anyway. ADR 39 declined one and answered the underlying question the
 other way round: the affinity read it refused a tool for stayed **on** the MCP surface, folded into
 `get_entity`, rather than moving to a dev-side tool.
 
@@ -114,9 +114,11 @@ Nothing else on the port moves, and the three other ways a note could be reached
 exactly as they were. `readAll` stays reserved to `..ratings..`
 (`onlyTheRatingsToolReadsEveryRating`). `AffinityRecord.note()` stays reserved to `..ratings..` and
 `..sqlite..` (`onlyTheRatingsToolReadsANote`). `find` is reserved to nobody and never was — it is
-what `get_entity` and `AffinityOverlay` call — but `rate` does not call it, and the fences below
-leave `RateServer` the only class here that could. In any case no note can reach `rate` through
-`readRatings`, because a `Map<String, Integer>` has nowhere to carry one.
+what `get_entity` and `AffinityOverlay` call — and no rule bans it inside `..rate..` either; the
+deck simply does not call it. The conclusion holds without that: `readRatings` returns a
+`Map<String, Integer>` with nowhere to carry a note, and `theRatingDeckNeverReadsANote` bans
+`AffinityRecord.note()` for **every** class in `..rate..`, `RateServer` included and with no
+exception — so a `find` call added here later still could not read the words off what it returns.
 
 ### Ratings only: three fences, and one stated exception
 
@@ -164,7 +166,7 @@ in this tool, or anywhere else in segue, that removes one.
   puts a taste-layer writer on the MCP server's own port and forces ADR 32's Spring-only packages
   to admit a third member for no benefit the dev-tool placement lacks.
 - **A seventh MCP tool** — the natural reading of "let a model help me rate things." Six ADRs
-  have declined one before this, each on its own ground, and no ground below is shared by all six:
+  have declined one before this, and no ground below is shared by all six:
   - ADR 39 refused `get_affinity`: it would spend the tool-count budget on a lookup `get_entity`
     already answers.
   - ADR 40 refused `import_list`: it would hand a model a file path outside the repository and

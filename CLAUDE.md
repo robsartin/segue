@@ -103,8 +103,9 @@ recommend/ The recommender (ADR 45): ranks entities ABSENT from a supplied known
           weights edge types, and explains every candidate with real find_paths routes. Run as
           `./gradlew recommend`. Dev-side, plain Java, READ-ONLY, offline, NOT a seventh MCP tool.
           Since issue #85 it WEIGHTS by rating — Recommendations.regardFor over the note-free
-          AffinityStore.readRatings — and it is still the only tool fenced from every read that
-          could carry a note.
+          AffinityStore.readRatings — and it is the only tool fenced at the CALL SITES:
+          theRecommenderReadsRatingsAndNeverNotes bans find and readAll and the AffinityRecord
+          type, while still letting it read scores.
 rate/     The rating deck (ADR 46): a loopback page on 127.0.0.1:8090 that deals one
           entity per keystroke — known entities by degree, a recommend candidate every fifth
           card — `1`-`5` rates and advances, `s`/space skips, `b` goes back. Run as `./gradlew
