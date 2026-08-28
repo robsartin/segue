@@ -294,7 +294,8 @@ famous ones first — but the result tells you when it stopped early, and you sh
 ### `get_entity(qid)`
 
 Reads one entity back: the node, its neighbours **grouped by the relationship type** connecting
-them, and your affinity if you have rated it. Read-only and purely local — it never calls Wikidata.
+them, and your rating if you have given it one. Read-only and purely local — it never calls
+Wikidata. Your note is deliberately not part of the answer — see [the taste layer](#the-taste-layer).
 
 Neighbours only appear after `expand_entity` has run for that entity. Returns an error, not an
 empty result, if the QID has not been added.
@@ -716,6 +717,12 @@ for you; reading it is your half.
 `note_affinity(qid, rating, note?)` records what *you* think of one entity. It is the only tool
 that writes personal data, and it is kept rigorously apart from the sourced world facts.
 
+**Its two fields are treated differently, and the difference matters more than the separation
+does.** The rating is ordinary data here: a model may read it back, weigh a recommendation by it
+and talk about it. The note never leaves your machine through a tool — it is stored, and only
+`./gradlew listRatings` reads it. Where that line is drawn, and the argument on both sides of it,
+is [ADR 33](adr/0033-taste-layer-separation.md).
+
 ```mermaid
 flowchart TB
     subgraph world["World facts — sourced, shareable"]
@@ -758,15 +765,18 @@ appear in it.
   "detail": "noted affinity for Q192668",
   "payload": {
     "rating": 4,
-    "note": "Placeholder note for the docs, not a real opinion.",
     "updatedAt": "2026-08-26T02:14:15.940813Z"
   }
 }
 ```
 
+**The note is stored and is not echoed back.** That is deliberate: a tool result is what a model
+reads, and your own words are the one part of a rating that never crosses to one. The rating did
+cross, and does.
+
 ### Reading it back
 
-There is no seventh tool for this. `get_entity` returns the affinity beside the neighbours (trimmed
+There is no seventh tool for this. `get_entity` returns the rating beside the neighbours (trimmed
 here to two type groups and two neighbours each, so the affinity block is visible):
 
 ```json
@@ -785,7 +795,6 @@ here to two type groups and two neighbours each, so the affinity block is visibl
     ],
     "affinity": {
       "rating": 4,
-      "note": "Placeholder note for the docs, not a real opinion.",
       "updatedAt": "2026-08-26T02:14:15.940813Z"
     }
   }
@@ -793,8 +802,15 @@ here to two type groups and two neighbours each, so the affinity block is visibl
 ```
 
 Note the `detail` string gains the word `rated`, and there is no way to list everything you have
-ever rated. That absence is a decision, not a gap — a bulk read would hand out the entire taste
-layer in one call for a use case that does not exist yet.
+ever rated through a tool. That absence is a decision, not a gap — the whole table in one call is
+something the six-tool surface has no use for, and `./gradlew listRatings` is how *you* read it.
+
+**Your note is not in that block, and cannot be.** The score and the words are treated differently
+on purpose: a 1-5 rating is the same kind of statement as the list of things you have chosen to put
+in the graph at all, only more precise, and a note is free text that could say anything. So a model
+may read, weigh and discuss a rating, and never sees a note — not here, not from `note_affinity`,
+not from any tool. The one thing that reads notes back is `./gradlew listRatings`, on your own
+machine. See [ADR 33](adr/0033-taste-layer-separation.md), which argues both sides of that.
 
 ### The rules, and why each one
 
@@ -802,6 +818,8 @@ layer in one call for a use case that does not exist yet.
 |---|---|
 | A rating is a **required integer from 1 to 5** | There is no rating-free note. "Not for me" is a 1 or a 2, not a separate concept — low ratings are as useful as high ones. |
 | The note is **optional** | A bare rating is a complete entry. Nothing should press you for words you did not offer. |
+| The note is **never returned to a model** | Not by `get_entity`, not by `note_affinity`'s own response. Write it for yourself; read it back with `./gradlew listRatings`. |
+| The rating **is** returned, and may be reasoned with | It reaches a model's context, and context leaves the machine. That is a decision, taken because the list of what you like already does the same less precisely, and because a score nobody may mention cannot explain a recommendation. |
 | **Re-rating overwrites** | One row per entity, latest wins, with a timestamp of the change. There is no history, and taste drift is deliberately not retained. |
 | **The entity must already be in the graph** | Something Wikidata does not have cannot be rated at all. That is an accepted cost of having one identity spine. |
 | **Affinity never enters the graph** | The world graph can be exported or shared with none of it attached. |
@@ -816,11 +834,12 @@ Re-rating, observed:
 {
   "outcome": "ok",
   "detail": "noted affinity for Q192668",
-  "payload": { "rating": 3, "note": null, "updatedAt": "2026-08-26T02:14:15.949211Z" }
+  "payload": { "rating": 3, "updatedAt": "2026-08-26T02:14:15.949211Z" }
 }
 ```
 
-The previous rating and its note are gone, replaced. `updatedAt` moved.
+The previous rating and its note are gone, replaced. `updatedAt` moved. Nothing in the response
+says whether a note was cleared, because nothing in the response ever mentions a note.
 
 ### Privacy
 

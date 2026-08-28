@@ -17,6 +17,11 @@ import java.util.List;
  * <p>{@code affinity} is null for an entity the user has never rated. Null rather than a default
  * rating, because "never said" and "rated lowest" are different answers and a filter that confused
  * them would be wrong in both directions.
+ *
+ * <p><b>What it carries is the rating, and since issue #85 that is all it carries.</b> It carried
+ * the note as well from the day ADR 39 shipped, which made this record the taste layer's leak
+ * rather than its read path: ADR 33 now draws the line between the score and the words, not around
+ * both. See {@link AffinityView}.
  */
 public record EntityView(
     NodeView node, List<NeighborGroup> neighborsByType, AffinityView affinity) {}

@@ -2,6 +2,7 @@ package com.robsartin.segue.port;
 
 import com.robsartin.segue.domain.AffinityRecord;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -60,6 +61,27 @@ public interface AffinityStore extends AutoCloseable {
    * enforces it.
    */
   List<AffinityRecord> readAll();
+
+  /**
+   * Every score there is, keyed by qid — and no notes (ADR 33 as amended by issue #85).
+   *
+   * <p><b>A second bulk read exists because the two fields are no longer one kind of data.</b> ADR
+   * 33 used to treat the whole taste layer as personal; issue #85 split it. A rating is the
+   * known-list at higher resolution and may be read, weighted and discussed; a note is free text no
+   * schema constrains, and it stays with the owner. {@link #readAll()} still answers "show me my
+   * ratings, in my own words" for the {@code ratings} tool; this answers "how much does each of
+   * these count for", which is what the recommender's affinity weighting needs.
+   *
+   * <p><b>The return type is the fence, not a convenience.</b> A {@code Map<String, Integer>} has
+   * nowhere to put a note, so a caller holding this cannot leak one however carelessly it is
+   * written — which is what lets {@code ArchitectureTest.theRecommenderReadsRatingsAndNeverNotes}
+   * replace the old blanket ban on the recommender seeing this port at all. An implementation must
+   * not select the note column to build it.
+   *
+   * <p>Unordered, deliberately: this is a lookup table, and a caller wanting an order wants {@link
+   * #readAll()} and one of ADR 43's two comparators.
+   */
+  Map<String, Integer> readRatings();
 
   @Override
   void close();

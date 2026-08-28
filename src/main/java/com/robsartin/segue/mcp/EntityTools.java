@@ -116,9 +116,11 @@ public class EntityTools {
           result if the QID has not been added yet — call add_entity first.
 
           This is also where affinity is read back: if the user has rated this entity with \
-          note_affinity, the result carries their rating, their note if they wrote one, and when \
-          it last changed. The affinity field is absent for an entity they have never rated, \
-          which means "they have not said" and not "they dislike it".\
+          note_affinity, the result carries their rating from 1 to 5 and when it last changed. \
+          The affinity field is absent for an entity they have never rated, which means "they \
+          have not said" and not "they dislike it". Any note they wrote is deliberately NOT \
+          returned, here or by any other tool — it is theirs, it is read on their own machine, \
+          and asking for it again will not produce it.\
           """,
       annotations =
           @McpTool.McpAnnotations(

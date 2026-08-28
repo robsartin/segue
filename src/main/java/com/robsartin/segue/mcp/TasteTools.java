@@ -52,9 +52,13 @@ public class TasteTools {
           Rating something Wikidata does not have is not possible, and this returns an error \
           result rather than inventing an identity for it.
 
+          The note is stored for the user alone and is never returned — not by this tool, which \
+          does not echo back the words it was given, and not by get_entity. Write it down \
+          faithfully and do not expect to read it again.
+
           Re-rating the same entity replaces the previous rating rather than adding to it; the \
           result carries the timestamp of the change. Read a rating back with get_entity, which \
-          returns the affinity alongside the entity's neighbours.\
+          returns the rating alongside the entity's neighbours.\
           """,
       annotations =
           @McpTool.McpAnnotations(

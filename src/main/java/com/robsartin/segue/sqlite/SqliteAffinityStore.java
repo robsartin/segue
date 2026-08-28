@@ -13,7 +13,9 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -72,6 +74,14 @@ public final class SqliteAffinityStore implements AffinityStore {
    */
   private static final String SELECT_ALL =
       "SELECT qid, rating, note, updated_at FROM affinity ORDER BY qid";
+
+  /**
+   * The note-free bulk read (issue #85). <b>The column list is the privacy boundary in SQL</b>: a
+   * caller of {@code readRatings} cannot be handed a note, because this statement never asks for
+   * one. Unordered, because the result is a lookup table rather than a listing — ADR 43's two
+   * orderings belong to {@code readAll} and its caller.
+   */
+  private static final String SELECT_SCORES = "SELECT qid, rating FROM affinity";
 
   private final Connection conn;
 
@@ -153,6 +163,20 @@ public final class SqliteAffinityStore implements AffinityStore {
       // No qid to name, and deliberately no count either: how much the user has rated is itself a
       // fact about them (ADR 33), and this message is the likeliest string on this path to be
       // logged by something upstream.
+      throw new IllegalStateException("cannot read the affinity table", e);
+    }
+  }
+
+  @Override
+  public Map<String, Integer> readRatings() {
+    Map<String, Integer> ratings = new HashMap<>();
+    try (PreparedStatement ps = conn.prepareStatement(SELECT_SCORES);
+        ResultSet rs = ps.executeQuery()) {
+      while (rs.next()) {
+        ratings.put(rs.getString("qid"), rs.getInt("rating"));
+      }
+      return Map.copyOf(ratings);
+    } catch (SQLException e) {
       throw new IllegalStateException("cannot read the affinity table", e);
     }
   }

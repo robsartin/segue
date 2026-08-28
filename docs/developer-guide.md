@@ -371,7 +371,9 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `theRetractionToolWritesOnlyRetractions` | `retract` calling the three world-fact writes, `AffinityStore.put` or `AffinityStore.readAll` — it appends a retraction through `IngestService` and writes nothing else, least of all a rating | [ADR 44](adr/0044-retraction-as-a-new-claim.md) |
 | `theRetractionToolOpensNothingElse` | `retract` depending on `GraphStore` **as a type**, on `AffinityStore`, or on `tinker`, `jena`, `mcp`, `app`, `seed`, `export`, `ratings`, `java.net` or `javax.net` — a retraction has no graph half, so the tool must not be able to hold one | [ADR 44](adr/0044-retraction-as-a-new-claim.md) |
 | `theRecommenderOnlyReads` | `recommend` calling the three world-fact writes or `AffinityStore.put`, or depending on `IngestService` at all | [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
-| `theRecommenderNeverReadsTheTasteLayer` | `recommend` depending on `AffinityStore` or `AffinityRecord` **as types** — the affinity weighting is a seam, and wiring it is an ADR rather than an import | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 39](adr/0039-affinity-capture-and-read.md), [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
+| `theRecommenderReadsRatingsAndNeverNotes` | `recommend` depending on `AffinityRecord` **as a type**, or calling `AffinityStore.find` or `readAll` — it may hold the store and call the note-free `readRatings`, and nothing that carries free text | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 39](adr/0039-affinity-capture-and-read.md), [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
+| `onlyTheRatingsToolReadsANote` | calling `AffinityRecord.note()` from outside `ratings` and `sqlite` — the score is ordinary data, the note is the owner's and is read on their own machine | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 43](adr/0043-listing-your-own-ratings.md) |
+| `onlyTheRecommenderReadsEveryRating` | calling `AffinityStore.readRatings` from outside `recommend` — the note-free bulk read belongs to the weighting, and ADR 26 still pins the surface at six tools | [ADR 26](adr/0026-mcp-tool-surface.md), [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
 | `theRecommenderOpensNothingElse` | `recommend` depending on `jena`, `mcp`, `app`, `seed`, `export`, `ratings`, `retract`, `java.net` or `javax.net` | [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
 | `nothingWritesToStandardOut` | reading `System.out` anywhere except the one named exception, `SegueApplication` | [ADR 28](adr/0028-mcp-transports.md) |
 | `nothingWritesToStandardError`, `noPrintStackTrace`, `noJavaUtilLogging` | bypassing SLF4J | [ADR 30](adr/0030-structured-logging.md) |
@@ -683,11 +685,19 @@ Mechanically:
   no foreign key to anything. The join between the two layers happens exactly once, in
   `SegueService.getEntity`, above both ports.
 - `AffinityStore` has no `append`, and that absence is a decision the interface's Javadoc explains.
-  It does have a `readAll` — added by [ADR 43](adr/0043-listing-your-own-ratings.md) for the
-  `ratings` dev tool, and reserved to it by an ArchUnit rule. See
+  It has **two** bulk reads, and which one you may call is the boundary: `readAll` returns whole
+  rows including the note and is reserved to the `ratings` dev tool
+  ([ADR 43](adr/0043-listing-your-own-ratings.md)); `readRatings` returns a `Map<String, Integer>`
+  and is reserved to `recommend` (issue #85). Both reservations are ArchUnit rules. See
   [Looking at what you have rated](#looking-at-what-you-have-rated).
 - `note_affinity` is the only writer. There is no read tool: `get_entity` carries the rating back,
   and listing every rating is a Gradle task rather than a seventh tool.
+- **The rating crosses to a model; the note does not** (issue #85, amending
+  [ADR 33](adr/0033-taste-layer-separation.md)). `AffinityView` has no note field, and
+  `onlyTheRatingsToolReadsANote` fails the build if anything outside `ratings` and `sqlite` calls
+  `AffinityRecord.note()`. `NoteNeverLeavesThroughAToolTest` drives every `@McpTool` method the
+  `mcp` package carries — discovered by classpath scan, not listed — against a store holding one
+  invented note, and asserts the JSON of every result is free of it.
 
 ### The two rules, and why they read differently
 
@@ -1380,21 +1390,34 @@ score with no receipts is not a segue recommendation, and there is one notion of
 this project. Explanations are built only for the ranked and bounded list; doing it for a thousand
 candidates would be a thousand traversals thrown away.
 
-### The affinity seam is present and wired to nothing
+### The affinity seam, wired
 
-`Recommendations.EQUAL_REGARD` gives every known entity a weight of 1.0, and `CandidateSweep`
-multiplies every connection by it. The `affinity` table is empty, so that is the honest answer
-today. **`theRecommenderNeverReadsTheTasteLayer` bans `AffinityStore` as a type here**, which is
-stronger than banning the two calls: `find` is available everywhere else, and eight hundred
-single-qid lookups are the bulk read [ADR 39](adr/0039-affinity-capture-and-read.md) declined,
-spelled slowly. Building the real weighting changes that rule, ADR 39 and ADR 45 together.
+`CandidateSweep` multiplies every connection out of a known entity by a
+`ToDoubleFunction<String>` of that entity's qid. `RecommendCli` builds it:
+`Recommendations.regardFor(affinity.readRatings())`. A rating of 3 weighs 1.0, a 5 weighs 5/3, a 1
+weighs 1/3, and an unrated entity counts as a 3 — so **an empty `affinity` table produces exactly
+the ranking ADR 45 measured**, and three things rated 5 outweigh six rated 2.
+
+`Recommendations.EQUAL_REGARD` is still there: it is what `regardFor` returns for an empty map, and
+what every test that is not about affinity passes.
+
+**The fence narrowed rather than opening** (issue #85). It used to ban `AffinityStore` as a type;
+it now bans `AffinityRecord` as a type and `find` and `readAll` as calls. The old argument survives
+literally — eight hundred single-qid `find` calls are a bulk read spelled slowly — and the one
+method left, `readRatings`, returns a `Map<String, Integer>` with nowhere to put a note.
+`RecommendCli` is the only class in the package that touches the store; everything below it still
+sees a function.
+
+**Untested against real ratings.** The `affinity` table held zero rows when this landed;
+`AffinityWeightedRecommendationTest` demonstrates the movement against invented ratings in a
+scratch database and nothing else has ever exercised it.
 
 ### Four things this is not allowed to do
 
 | it cannot | rule | why |
 | --- | --- | --- |
 | write anything | `theRecommenderOnlyReads` | no graph write, no `AssertionLog.append`, no `AffinityStore.put`, and no `IngestService` to route one through |
-| see a rating | `theRecommenderNeverReadsTheTasteLayer` | the seam is a function; a store here would be the bulk read under another name |
+| see a note | `theRecommenderReadsRatingsAndNeverNotes` | it may read every score; `find`, `readAll` and `AffinityRecord` are the three ways free text could reach this package, and all three are banned |
 | reach a network or a sibling tool | `theRecommenderOpensNothingElse` | a recommendation is a pure function of one local file, and a dependency on `retract` would let a read-only tool inherit a writing fence |
 | name an entity in a log line | `RecommendationsAreNeverLoggedTest` | the list is derived from your known-list, so ADR 33's "never logged" applies; every log line is a count or a path |
 
