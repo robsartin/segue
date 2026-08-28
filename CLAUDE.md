@@ -346,8 +346,20 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   corrections never do. The log is never rewritten — re-derivation is the projection's job.
   The list is one space-separated column (`instance_of`, beside `node_kind`) and one packed
   literal on a graph vertex; no escaping, because `NodeRecord` validates every value as a QID.
-  **ORDER is part of the value** — the mapper takes the first class it recognises — so never
-  store it as a set.
+  It stays a **list** because it records what the source said and a source's answer has an
+  order — but that order no longer decides anything; see the next bullet.
+- **When an entity states classes belonging to more than one kind, a fixed PRECEDENCE picks the
+  winner — never the order they arrived in.** `KindMapper` took the first class it recognised,
+  and P31 order is noise: the entity JSON is oldest-statement-first and `ReverseClaims` collects
+  the classes into a `LinkedHashSet` keyed on SPARQL row order. So a film that Wikidata ALSO
+  (wrongly, unsourced, but really) calls a city was stored city-first and became a `PLACE` — and
+  nothing flagged it, while every kind-keyed rule quietly misfired: ADR 31's hub demotion is
+  `CONCEPT`-only, DOT colours by kind, `SourceAdapter.supports(kind)` gates expansion (issue
+  #87). The ranking is **PERSON, WORK, GROUP, EVENT, PLACE, CONCEPT**, argued per rung in
+  `KindMapper.PRECEDENCE` and pinned in both directions by `KindMapperTest`. **Do not resolve
+  this with a `P279` subclass walk** — it is a network call and both projections re-derive kinds
+  offline, and it could not settle "city vs film" anyway, since neither subclasses the other.
+  Adding a `NodeKind` constant fails a static check until it is ranked.
 
 - **ADR 42 shipped a schema change with no migration, and that was a one-off.** It was
   affordable only because every one of the 265,046 assertions was a regenerable Wikidata world
