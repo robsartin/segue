@@ -155,13 +155,19 @@ anywhere else in segue, that removes one.
 - **A controller in the Spring app** — the server and the port already exist. Refused because it
   puts a taste-layer writer on the MCP server's own port and forces ADR 32's Spring-only packages
   to admit a third member for no benefit the dev-tool placement lacks.
-- **A seventh MCP tool** — the natural reading of "let a model help me rate things," and the
-  question ADR 26 has now declined five times running for adjacent work, on two different
-  grounds. ADR 40, ADR 41, ADR 43 and ADR 45 refused one each on the same ground this decision
-  does: the input is ADR 40's file of everything the owner already has, which is personal data
-  that does not belong in front of a model. ADR 39 refused `get_affinity` on a narrower ground of
-  its own — no file and no bulk data were involved, only an ADR-level change spent on a lookup
-  `get_entity` already had reason to make.
+- **A seventh MCP tool** — the natural reading of "let a model help me rate things," and ADR
+  26 has now declined one five times running, each on its own ground:
+  - ADR 39 refused `get_affinity`: it would spend the tool-count budget on a lookup `get_entity`
+    already answers.
+  - ADR 40 refused `import_list`: it would hand a model a file path outside the repository and
+    make the personal list part of a conversation transcript.
+  - ADR 41 refused `export_graph`: the output is a file on a filesystem no model can see.
+  - ADR 43 refused `list_affinity`: it is the same bulk read ADR 39 had already declined on ADR
+    16's data-minimisation grounds, asked again by a different caller.
+  - ADR 45 refused a `recommend` tool: the input is ADR 40's file of everything the owner already
+    knows, which is personal data that does not belong in front of a model.
+
+  This decision's own ground is the one ADR 45 already used: the input is still ADR 40's file.
 - **A terminal deck** — no HTTP at all, and the gesture is a single keypress either way. Refused
   because recognising an entity is the hard part of rating it, and a class list and a route
   rendered as wrapped terminal text reads worse than a card — a card the owner cannot read quickly

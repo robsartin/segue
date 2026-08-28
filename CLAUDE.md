@@ -28,6 +28,7 @@ than a seventh MCP tool.
 ./gradlew listRatings --args="--sort recent --out $HOME/ratings.txt"   # ADR 43; read-only; the OUTPUT IS PERSONAL DATA
 ./gradlew retractEntity --args="--qid Q12345 --reason 'wrong entity' --dry-run"   # ADR 44; appends a retraction; --dry-run reports and writes nothing
 ./gradlew recommend --args="--known $HOME/known.csv --out $HOME/next.txt"   # ADR 45; read-only; ranks what you do NOT have, with routes; the OUTPUT IS PERSONAL DATA
+./gradlew rate --args="--known $HOME/known.csv"   # ADR 46; loopback page at 127.0.0.1:8090; WRITES ratings only, no un-rate
 ```
 
 Gradle, not Maven. The wrapper is pinned to 9.7.1 and committed; **Gradle 9.1.0 is the
@@ -104,17 +105,13 @@ recommend/ The recommender (ADR 45): ranks entities ABSENT from a supplied known
           Since issue #85 it WEIGHTS by rating — Recommendations.regardFor over the note-free
           AffinityStore.readRatings — and it is still the only tool fenced from every read that
           could carry a note.
-rate/     The rating deck (ADR 46): serves a loopback page on 127.0.0.1:8090 (not 8080, so it
-          can run beside the MCP server) that deals one entity per keystroke — known entities
-          by in-graph degree, a recommend candidate every fifth card — `1`-`5` rates and
-          advances, `s`/space skips without recording, `b` goes back. Run as `./gradlew rate`.
-          Dev-side, NOT a seventh MCP tool, and — with retract — one of only two dev tools that
-          WRITE: AffinityStore.put alone, never a graph or log claim, enforced by three ArchUnit
-          rules with one named exception (RateServer, which must construct the record it
-          writes). Reuses recommend's own CandidateSweep/Routes/Sweep for candidate cards rather
-          than a second implementation, and shares its AffinityStore.readRatings call
-          (onlyTheRecommenderReadsEveryRating now also permits `..rate..`). No un-rate: going
-          back re-rates rather than deleting, because AffinityStore has no delete.
+rate/     The rating deck (ADR 46): a loopback page on 127.0.0.1:8090 that deals one
+          entity per keystroke — known entities by degree, a recommend candidate every fifth
+          card — `1`-`5` rates and advances, `s`/space skips, `b` goes back. Run as `./gradlew
+          rate`. Dev-side, NOT a seventh MCP tool, and — with retract — one of only two dev
+          tools that WRITE: AffinityStore.put alone, fenced by three ArchUnit rules with one
+          named exception for the class that constructs what it writes. No un-rate:
+          AffinityStore has no delete, so going back re-rates rather than withdrawing.
 ingest/   IngestService (the only write path) and GraphProjector (boot replay).
 support/  Plain-Java cross-cutting helpers with no project dependencies of their
           own — UuidV7, the RFC 9562 v7 id generator used for request correlation, and
