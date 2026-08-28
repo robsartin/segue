@@ -174,4 +174,87 @@ class RateServerTest {
       weirdServer.stop();
     }
   }
+
+  @Test
+  @DisplayName("an unterminated JSON string in the body is a 400, not a handler that throws")
+  void refusesAnUnterminatedString() throws Exception {
+    // The body a browser could never send and a curl typo sends constantly. The scan for the
+    // closing quote used to return -1 and go straight into String.substring, which raises
+    // StringIndexOutOfBoundsException — NOT an IllegalArgumentException, so the catch missed it,
+    // the handler threw, and com.sun.net.httpserver closed the connection with no response at
+    // all. A malformed body must be refused, and refusing means answering.
+    HttpResponse<String> response =
+        client.send(
+            request("/api/rate")
+                .POST(HttpRequest.BodyPublishers.ofString("{\"qid\":\"Q900001"))
+                .build(),
+            HttpResponse.BodyHandlers.ofString());
+
+    assertThat(response.statusCode()).isEqualTo(400);
+    assertThat(affinity.written).isEmpty();
+  }
+
+  @Test
+  @DisplayName("a body with no colon after the field name is a 400 rather than a thrown handler")
+  void refusesAFieldWithNoValue() throws Exception {
+    HttpResponse<String> response =
+        client.send(
+            request("/api/rate").POST(HttpRequest.BodyPublishers.ofString("{\"qid\"}")).build(),
+            HttpResponse.BodyHandlers.ofString());
+
+    assertThat(response.statusCode()).isEqualTo(400);
+    assertThat(affinity.written).isEmpty();
+  }
+
+  @Test
+  @DisplayName("a non-integer rating is refused, never truncated into the affinity table")
+  void refusesANonIntegerRating() throws Exception {
+    // 4.7 used to be stored as 4: the digit scan stopped at the '.' and the remainder was
+    // dropped in silence. The affinity table is the one thing in segue with no source to
+    // regenerate it from, so a fabricated value in it is worse than a refusal.
+    HttpResponse<String> response =
+        client.send(
+            request("/api/rate")
+                .POST(HttpRequest.BodyPublishers.ofString("{\"qid\":\"Q900001\",\"rating\":4.7}"))
+                .build(),
+            HttpResponse.BodyHandlers.ofString());
+
+    assertThat(response.statusCode()).isEqualTo(400);
+    assertThat(affinity.written).isEmpty();
+  }
+
+  @Test
+  @DisplayName("the IPv6 loopback origin the allowlist claims to accept is actually accepted")
+  void acceptsTheIpv6LoopbackOrigin() throws Exception {
+    // URI.getHost() returns an IPv6 literal in its brackets, so "http://[::1]:8090" yields
+    // "[::1]" — the bare "::1" the allowlist used to carry could never match anything, and both
+    // ADR 46 and this class's Javadoc claimed it did.
+    HttpResponse<String> response =
+        client.send(
+            request("/api/rate")
+                .header("Origin", "http://[::1]:" + server.port())
+                .POST(HttpRequest.BodyPublishers.ofString("{\"qid\":\"Q900001\",\"rating\":3}"))
+                .build(),
+            HttpResponse.BodyHandlers.ofString());
+
+    assertThat(response.statusCode()).isEqualTo(204);
+    assertThat(affinity.written).hasSize(1);
+  }
+
+  @Test
+  @DisplayName("a missing deck.html answers 500 rather than closing the connection on the browser")
+  void answersWhenThePageResourceIsMissing() throws Exception {
+    RateServer broken = new RateServer(List.of(), affinity, 0, "/rate/there-is-no-such-page.html");
+    broken.start();
+    try {
+      HttpResponse<String> response =
+          client.send(
+              HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + broken.port() + "/")).build(),
+              HttpResponse.BodyHandlers.ofString());
+
+      assertThat(response.statusCode()).isEqualTo(500);
+    } finally {
+      broken.stop();
+    }
+  }
 }

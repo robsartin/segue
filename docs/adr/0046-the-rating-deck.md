@@ -84,10 +84,14 @@ are needed together.
 
 The check is stricter than ADR 28's own text implies, and the strictness is deliberate rather than
 incidental. `RateServer.originAllowed` parses the header as a `URI` and compares `URI.getHost()`
-exactly against `{127.0.0.1, localhost, ::1}`; it does not compare the raw header text with
+exactly against `{127.0.0.1, localhost, [::1]}`; it does not compare the raw header text with
 `String.startsWith`. `"http://127.0.0.1.evil.com"` *starts with* the allowed origin
 `"http://127.0.0.1"` as a string, while naming a completely different host — a `startsWith` check
-would have let it through. The literal string `"null"` — what a browser sends as the `Origin` of a
+would have let it through. The IPv6 entry carries its brackets because that is the form
+`URI.getHost()` returns for an IPv6 literal — `http://[::1]:8090` yields `[::1]` — and the bare
+`::1` this ADR first recorded matched nothing at all, which the final review of issue #101 caught
+and fixed in both the code and this sentence (the MCP server's own loopback list,
+`SegueConfiguration.loopbackNames`, already spelled it that way). The literal string `"null"` — what a browser sends as the `Origin` of a
 sandboxed iframe or a `data:` navigation, and which an attacker can manufacture at will — is
 deliberately not in the allowed set, because it is the opposite of an allowlist entry: it is a
 shape the attacker chooses, not the browser attesting to a real page. A genuinely *absent*

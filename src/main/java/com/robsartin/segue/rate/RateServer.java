@@ -33,6 +33,9 @@ public final class RateServer {
 
   private static final byte[] EMPTY_JSON = "{}".getBytes(StandardCharsets.UTF_8);
 
+  private static final byte[] PAGE_MISSING =
+      "the deck page is missing from this build".getBytes(StandardCharsets.UTF_8);
+
   /**
    * The loopback hostnames a browser is allowed to say it came from.
    *
@@ -41,6 +44,13 @@ public final class RateServer {
    * with {@code "http://127.0.0.1"} as a string while naming a completely different host. Parsing
    * the header as a URI and comparing hosts exactly closes that.
    *
+   * <p><b>The IPv6 loopback is spelled {@code [::1]}, brackets included, because that is what
+   * {@link URI#getHost()} returns for an IPv6 literal</b> — {@code URI.create("http://[::1]:8090")
+   * .getHost()} is {@code "[::1]"}, not {@code "::1"}. This set carried the bare form until issue
+   * #101's final review, which made the entry dead: an owner who opened the deck at {@code
+   * http://[::1]:8090} was refused by a rule that claimed to allow them, and both this Javadoc and
+   * ADR 46 said otherwise.
+   *
    * <p>The literal string {@code "null"} is deliberately NOT in this set. A browser sends it as the
    * {@code Origin} of a sandboxed iframe or a {@code data:} navigation — exactly the shape an
    * attacker controls to manufacture an origin of their choosing, which makes it the opposite of an
@@ -48,17 +58,36 @@ public final class RateServer {
    * separately below and is fine: curl and a real MCP-style client send none, and a browser fetch()
    * call always sends one, so that branch never protects a browser request.
    */
-  private static final Set<String> ALLOWED_ORIGIN_HOSTS = Set.of("127.0.0.1", "localhost", "::1");
+  private static final Set<String> ALLOWED_ORIGIN_HOSTS = Set.of("127.0.0.1", "localhost", "[::1]");
+
+  /** Where the page lives in the jar. A field only so the absent-resource branch can be driven. */
+  static final String PAGE_RESOURCE = "/rate/deck.html";
 
   private final List<Card> deck;
   private final AffinityStore affinity;
   private final int requestedPort;
+  private final String pageResource;
   private HttpServer server;
 
   public RateServer(List<Card> deck, AffinityStore affinity, int requestedPort) {
+    this(deck, affinity, requestedPort, PAGE_RESOURCE);
+  }
+
+  /**
+   * The same server, told where to find its page.
+   *
+   * <p>Package-private and for one caller: {@code RateServerTest} pointing at a resource that is
+   * not there, so the missing-page branch answers over a real socket rather than being reasoned
+   * about. A resource absent from the jar is a build accident, but the handler's behaviour when it
+   * happens is not — throwing out of a {@code com.sun.net.httpserver} handler closes the connection
+   * with no response, which reads to the owner as a browser that will not load rather than as an
+   * error.
+   */
+  RateServer(List<Card> deck, AffinityStore affinity, int requestedPort, String pageResource) {
     this.deck = List.copyOf(Objects.requireNonNull(deck, "deck"));
     this.affinity = Objects.requireNonNull(affinity, "affinity");
     this.requestedPort = requestedPort;
+    this.pageResource = Objects.requireNonNull(pageResource, "pageResource");
   }
 
   public void start() throws IOException {
@@ -82,10 +111,20 @@ public final class RateServer {
     }
   }
 
+  /**
+   * The page, or a 500 saying why not — never an exception out of the handler.
+   *
+   * <p>This used to throw {@link IllegalStateException} when the resource was absent. Throwing out
+   * of a {@code com.sun.net.httpserver} handler closes the connection with no response at all, so
+   * the owner saw a browser that would not load rather than a server that had something to say.
+   * Same treatment as a malformed body on {@code /api/rate}: refuse, and refusing means answering.
+   */
   private void page(HttpExchange exchange) throws IOException {
-    try (InputStream in = RateServer.class.getResourceAsStream("/rate/deck.html")) {
+    try (InputStream in = RateServer.class.getResourceAsStream(pageResource)) {
       if (in == null) {
-        throw new IllegalStateException("deck.html is missing from the jar");
+        log.error("{} is missing from the classpath — the deck cannot be served", pageResource);
+        send(exchange, 500, "text/plain; charset=utf-8", PAGE_MISSING);
+        return;
       }
       send(exchange, 200, "text/html; charset=utf-8", in.readAllBytes());
     }
@@ -212,15 +251,41 @@ public final class RateServer {
     return out.toString();
   }
 
+  /**
+   * One field out of a body this class parses by hand, and <b>every</b> way of failing is an {@link
+   * IllegalArgumentException} — which is the type {@link #rate} catches and turns into a 400.
+   *
+   * <p>Two ways it used to fail differently, both found by issue #101's final review and both
+   * reaching the affinity table, the one thing in segue with no source to regenerate it from:
+   *
+   * <ul>
+   *   <li><b>An unterminated string threw the wrong type.</b> {@code {"qid":"Q900001} } left the
+   *       scan for the closing quote at -1, and {@code String.substring(1, -1)} raises {@code
+   *       StringIndexOutOfBoundsException}, which is NOT an {@code IllegalArgumentException}. The
+   *       catch missed it, the handler threw, and the connection closed with no response at all. A
+   *       missing colon had the same shape.
+   *   <li><b>A non-integer was silently truncated.</b> {@code {"rating":4.7} } stopped the digit
+   *       scan at the {@code .} and stored <b>4</b>, answering 204 as though the owner had said so.
+   *       A fabricated rating is worse than a refusal, so a number this parser cannot represent
+   *       exactly is refused: after the digits, the next character must actually end the value.
+   * </ul>
+   */
   private static String field(String body, String name) {
     int at = body.indexOf('"' + name + '"');
     if (at < 0) {
       throw new IllegalArgumentException("missing field");
     }
     int colon = body.indexOf(':', at);
+    if (colon < 0) {
+      throw new IllegalArgumentException("field has no value");
+    }
     String rest = body.substring(colon + 1).trim();
     if (rest.startsWith("\"")) {
-      return rest.substring(1, rest.indexOf('"', 1));
+      int close = rest.indexOf('"', 1);
+      if (close < 0) {
+        throw new IllegalArgumentException("unterminated string");
+      }
+      return rest.substring(1, close);
     }
     int end = 0;
     while (end < rest.length()
@@ -230,7 +295,15 @@ public final class RateServer {
     if (end == 0) {
       throw new IllegalArgumentException("unparseable field");
     }
+    if (end < rest.length() && !endsAValue(rest.charAt(end))) {
+      throw new IllegalArgumentException("not a whole number");
+    }
     return rest.substring(0, end);
+  }
+
+  /** What may legitimately follow a number in the one-object bodies this endpoint accepts. */
+  private static boolean endsAValue(char c) {
+    return c == ',' || c == '}' || c == ']' || Character.isWhitespace(c);
   }
 
   private static void send(HttpExchange exchange, int status, String type, byte[] body)
