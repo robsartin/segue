@@ -27,11 +27,18 @@ final class ViewMapper {
   }
 
   /**
-   * The taste layer's one translation. {@code qid} is dropped on purpose — see {@link
-   * AffinityView}.
+   * The taste layer's one translation, and the only place a stored rating becomes wire.
+   *
+   * <p><b>Two fields of four cross, and this method is the boundary</b> (issue #85). {@code qid} is
+   * dropped because it is already on the {@link NodeView} beside it; {@code note} is dropped
+   * because it is the owner's own words and a tool result is a model's context. This method used to
+   * copy the note across, which is how {@code get_entity} leaked it from the day ADR 39 shipped —
+   * {@code ArchitectureTest.onlyTheRatingsToolReadsANote} now fails the build if any class outside
+   * the ratings tool and the store calls {@code AffinityRecord.note()}, so the line cannot be
+   * recrossed here by accident.
    */
   static AffinityView toAffinityView(AffinityRecord affinity) {
-    return new AffinityView(affinity.rating(), affinity.note(), affinity.updatedAt());
+    return new AffinityView(affinity.rating(), affinity.updatedAt());
   }
 
   static CandidateView toCandidateView(Candidate candidate) {

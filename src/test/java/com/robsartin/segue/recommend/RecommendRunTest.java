@@ -12,6 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.domain.EdgeTypes;
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.domain.Recommendations;
 import com.robsartin.segue.domain.Scorer;
 import com.robsartin.segue.recommend.RecommendCli.Options;
 import com.robsartin.segue.tinker.TinkerGraphStore;
@@ -63,7 +64,8 @@ class RecommendRunTest {
   }
 
   private List<Explained> run(Options options) throws IOException {
-    return new RecommendRun(graph, INSTITUTIONS).run(options, notes::add);
+    return new RecommendRun(graph, INSTITUTIONS, Recommendations.EQUAL_REGARD)
+        .run(options, notes::add);
   }
 
   @Test
@@ -80,7 +82,7 @@ class RecommendRunTest {
   @DisplayName("the warning comes first, before a candidate exists and long before the file does")
   void theWarningComesFirst() throws IOException {
     Options options = options(KNOWN_ONE, KNOWN_TWO);
-    new RecommendRun(graph, INSTITUTIONS)
+    new RecommendRun(graph, INSTITUTIONS, Recommendations.EQUAL_REGARD)
         .run(
             options,
             note -> {
@@ -99,7 +101,7 @@ class RecommendRunTest {
   void theCountsArriveBeforeTheWrite() throws IOException {
     Options options = options(KNOWN_ONE, KNOWN_TWO);
     List<String> beforeTheFile = new ArrayList<>();
-    new RecommendRun(graph, INSTITUTIONS)
+    new RecommendRun(graph, INSTITUTIONS, Recommendations.EQUAL_REGARD)
         .run(
             options,
             note -> {

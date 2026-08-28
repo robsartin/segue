@@ -75,6 +75,13 @@ It is still not a tool, and the reason is what the question needs rather than wh
   that needs no file at all, and it needs `AffinityStore.readAll` — the bulk read ADR 39 declined on
   ADR 16's data minimisation and ADR 43 reserved to a tool that runs on the owner's own machine.
   Reading it one qid at a time is that same read spelled slowly.
+  *(Amended 2026-08-28, issue #85: this bullet is weaker than it was, and it is worth saying so
+  rather than letting it stand as if nothing had changed. A rating-shaped known-list would now need
+  `readRatings`, which carries no note and no longer offends ADR 16 the way `readAll` does. **The
+  first bullet is the one still doing the work**: the input this tool actually takes is ADR 40's
+  file of everything the owner already knows, that file is personal data ADR 40 kept away from a
+  model, and issue #85 did not touch it. The seventh-tool question stays where ADR 45 left it — and
+  issue #85 deliberately declined to reopen it, which is why `recommend` is still a Gradle task.)*
 - **The output is a file.** 25 candidates with three routes each is 150 cited hops; it is something
   read once and kept, next to the exporter's picture, not a conversational reply.
 
@@ -191,6 +198,35 @@ Explanations are built only for the ranked and bounded list. Doing it for all 1,
 be a thousand traversals thrown away.
 
 ### The affinity seam is present, obvious, and wired to nothing.
+
+*(Amended 2026-08-28, issue #85. **It is wired now.** ADR 33 split the taste layer — the score is
+ordinary data, the note is not — and this section is what that unblocked. `RecommendCli` opens the
+affinity store, calls the note-free `AffinityStore.readRatings`, and passes
+`Recommendations.regardFor(ratings)` into `RecommendRun`; everything below that still takes regard
+as a `ToDoubleFunction<String>`, so the seam described below is unchanged in shape and only its
+argument has changed.*
+
+***The weighting is centred on the middle of the scale, not proportional to it.** `regardFor` gives
+a rating of 3 a weight of 1.0, a 5 a weight of 5/3 and a 1 a weight of 1/3, and an entity with no
+rating counts as a 3. That last part is the decision: most of the known-list is unrated, because it
+came from ADR 40's file rather than from the taste layer, and a weighting proportional to the raw
+rating would push every unrated entity to the bottom the moment the first rating was written. An
+empty `affinity` table therefore produces exactly the ranking measured above, weight for weight.*
+
+***The rule that guarded this is narrowed, not removed.** `theRecommenderNeverReadsTheTasteLayer`
+banned `AffinityStore` as a type; `theRecommenderReadsRatingsAndNeverNotes` bans `AffinityRecord`
+as a type and `find` and `readAll` as calls, which is the same instinct pointed at the half that
+still needs it. The old rule's argument — that 800 single-qid `find` calls are a bulk read spelled
+slowly — survives literally: `find` is exactly what it forbids, and the one method left returns a
+`Map<String, Integer>` that cannot carry a note however it is used.*
+
+***Untested against real ratings, and the ADR says so.** The `affinity` table still held zero rows
+the day this landed. `AffinityWeightedRecommendationTest` builds a scratch database with invented
+ratings — three entities at 5 reaching one candidate, six at 2 reaching another, both candidates
+padded to the same degree — and drives the real `main` twice: without ratings the crowded candidate
+wins, with them the loved one does. That proves the wiring and the arithmetic. It does not prove
+that 5/3 is the right strength on a real taste layer, and the way to learn that is the way the
+degree floor was chosen: run two and read both lists.)*
 
 `Recommendations.EQUAL_REGARD` is a `ToDoubleFunction<String>` over a known entity's qid, returning
 1.0; `CandidateSweep` multiplies every connection by it. A candidate reached by three things rated 5
