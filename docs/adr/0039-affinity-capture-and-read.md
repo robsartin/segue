@@ -41,6 +41,21 @@ recommendation built now would filter an empty set.
 - **The read is surfaced on `get_entity`, not as a seventh tool.** `get_entity` returns an
   `affinity` field alongside the neighbours: the rating, the note if there is one, and when it last
   changed. It is absent for an entity that has never been rated.
+  *(Amended 2026-08-28, issue #85. **The note is no longer returned — not here, and not by
+  `note_affinity`, which used to echo it straight back.** `AffinityView` carries the rating and
+  `updatedAt` and has no note field at all. This sentence shipped a leak: ADR 33 called the whole
+  taste layer personal data while this bullet put the free-text half of it into a tool result, and
+  a tool result is a model's context. Issue #85 moved ADR 33's line to run between the score and
+  the note, and this is the side of it that had to change. The rest of the bullet stands: the read
+  is still on `get_entity`, still absent when nothing has been said, and still not a seventh tool.
+  What ADR 39 got right was the placement; what it got wrong was the payload.*
+
+  *Two consequences worth stating rather than leaving to be discovered. **`note_affinity`'s result
+  no longer confirms what was stored**, so a caller cannot check its own note round-tripped — the
+  owner can, with `listRatings`, and that is the audience the note has. And **the tool descriptions
+  now say so out loud**: `get_entity`'s tells a model the note is deliberately withheld and asking
+  again will not produce it, `note_affinity`'s tells it to write the words down faithfully and not
+  expect them back. A field that silently disappears reads as a bug and invites a retry.)*
 - **A QID is required, and the entity must already be in the graph.** One identity spine (ADR 22),
   and every rating is guaranteed to join to world facts. Rating an unknown entity is a readable
   error result, never a thrown protocol error (ADR 27).
@@ -80,6 +95,14 @@ projection of the log (ADR 19, ADR 24), and the join is made above both ports in
   recommendations. Rejected for now on ADR 16's data minimisation: it is the one operation that
   makes the entire taste layer readable in a single call, and nothing needs it until recommendations
   do. It is a small addition when that day comes.
+  *(Amended 2026-08-28, issue #85. That day came, and it was answered in code rather than on the
+  tool surface. There are now two bulk reads on the port and neither is an MCP tool:
+  `readAll` returns whole rows and belongs to the `ratings` dev tool (ADR 43), `readRatings`
+  returns a `Map<String, Integer>` — no notes, by return type — and belongs to `recommend`. The
+  reason a `list_affinity` tool is still absent has changed shape: it is no longer that the scores
+  are too personal to leave, but that ADR 26 pins the surface at six and nothing on it needs the
+  whole table. `onlyTheRecommenderReadsEveryRating` is what keeps that honest, because
+  `ToolSurfaceTest` counts tools and a bulk read would arrive as a field.)*
 - **Affinity as a field on the graph node** — no join at all, and it puts personal data inside the
   structure ADR 33 exists to keep it out of.
 - **1-10, or thumbs up/down** — ten points invites false precision about the difference between a 6
@@ -112,6 +135,9 @@ projection of the log (ADR 19, ADR 24), and the join is made above both ports in
 - **`get_entity`'s response now composes both layers**, so any client rendering it is rendering
   personal data. That is intended — it is the user's own client — but it is why no bulk read exists
   and why the field is absent rather than defaulted when nothing has been said.
+  *(Amended 2026-08-28, issue #85: what it composes is the world facts and the **score**. The
+  caller is a model as often as it is a client, and ADR 33 now says which half of a rating may
+  reach one.)*
 - **The tool surface stays at ADR 26's six.** A `get_affinity` or `list_affinity` appearing later is
   an ADR-level change, and `ToolSurfaceTest` fails until an ADR says so.
 - **ArchUnit enforces the separation both ways** (`affinityNeverTouchesTheWorldFactLayer`,

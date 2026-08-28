@@ -52,8 +52,10 @@ import java.util.function.ToIntFunction;
  * Collecting the reachers per intermediate first turns that into one traversal each.
  *
  * <p><b>It reads, and it holds no taste.</b> The regard for each known entity arrives as a
- * function, never as an {@code AffinityStore}: see {@code Recommendations.EQUAL_REGARD} for what
- * that seam is and why it is deliberately not wired to anything.
+ * function, never as an {@code AffinityStore}. Since issue #85 that function is usually {@code
+ * Recommendations.regardFor} over the owner's ratings, built once in {@code RecommendCli} — the
+ * store is opened at the entry point and nowhere else, so nothing in the middle of the sweep can
+ * reach a rating it was not handed, or a note at all.
  */
 public final class CandidateSweep {
 
@@ -78,8 +80,8 @@ public final class CandidateSweep {
    * @param scorer where on the raw-to-lift spectrum to sit
    * @param minDegree the floor below which a candidate is not ranked. Required under a normalised
    *     scorer; see {@code Recommendations.MIN_CANDIDATE_DEGREE}
-   * @param regard what one known entity's connections are worth. {@code
-   *     Recommendations.EQUAL_REGARD} today
+   * @param regard what one known entity's connections are worth — {@code Recommendations.regardFor}
+   *     over the ratings, which is {@code Recommendations.EQUAL_REGARD} when nothing has been rated
    */
   public Sweep over(
       Collection<String> known, Scorer scorer, int minDegree, ToDoubleFunction<String> regard) {

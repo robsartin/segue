@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+import java.util.function.ToDoubleFunction;
 
 /**
  * Warn, sweep, rank, explain, report, write — in that order, and the order is the design (ADR 45).
@@ -56,11 +57,23 @@ public final class RecommendRun {
 
   private final GraphStore graph;
   private final Predicate<String> recognitionInstitutionClass;
+  private final ToDoubleFunction<String> regard;
 
-  public RecommendRun(GraphStore graph, Predicate<String> recognitionInstitutionClass) {
+  /**
+   * @param regard what one known entity's connections count for. Still a function and not a store
+   *     (ADR 45): issue #85 lets the recommender read ratings, and this class reads none of them —
+   *     {@code RecommendCli} turns the note-free bulk read into this argument, and everything below
+   *     here sees arithmetic. {@code Recommendations.EQUAL_REGARD} is what an empty {@code
+   *     affinity} table produces, and what every test that is not about affinity passes
+   */
+  public RecommendRun(
+      GraphStore graph,
+      Predicate<String> recognitionInstitutionClass,
+      ToDoubleFunction<String> regard) {
     this.graph = Objects.requireNonNull(graph, "graph");
     this.recognitionInstitutionClass =
         Objects.requireNonNull(recognitionInstitutionClass, "recognitionInstitutionClass");
+    this.regard = Objects.requireNonNull(regard, "regard");
   }
 
   /**
@@ -80,7 +93,7 @@ public final class RecommendRun {
 
     Sweep sweep =
         new CandidateSweep(graph, recognitionInstitutionClass)
-            .over(known, options.scorer(), options.minDegree(), Recommendations.EQUAL_REGARD);
+            .over(known, options.scorer(), options.minDegree(), regard);
 
     notes.accept(
         sweep.candidates().size()

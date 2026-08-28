@@ -303,6 +303,10 @@ class StdioPurityTest {
    * add_entity} would call Wikidata, and ADR 39 requires the entity to be in the graph before it
    * can be rated. The rating and the note are invented — the repository is public and affinity is
    * personal data (ADR 33, as amended by issue #37).
+   *
+   * <p><b>Since issue #85 it proves two halves of one boundary</b>: the rating survives the restart
+   * and reaches the model, and the note reaches the disk and stops there. It used to assert that
+   * {@code get_entity} returned the note, which is the leak that issue closed.
    */
   @Test
   void affinityRecordedOverStdioSurvivesARestart(@TempDir Path tempDir) throws Exception {
@@ -349,10 +353,21 @@ class StdioPurityTest {
         .as("get_entity must carry the affinity recorded before the restart: %s", readBack)
         .isFalse();
     assertThat(affinity.get("rating").asInt()).isEqualTo(4);
-    assertThat(affinity.get("note").stringValue()).isEqualTo(note);
     assertThat(Instant.parse(affinity.get("updatedAt").stringValue()))
         .as("updatedAt must round-trip as a parseable ISO-8601 instant")
         .isNotNull();
+
+    // Issue #85, proved on the channel that matters: the score crossed the process boundary and
+    // the words did not. This asserts on the whole of both runs' stdout rather than on the
+    // affinity node, because stdout IS the protocol here — a note leaking through a summary line,
+    // an error string or a field nobody thought about would be invisible to a field-shaped
+    // assertion and is exactly what NoteNeverLeavesThroughAToolTest cannot see from inside the JVM.
+    assertThat(String.join("\n", firstRun))
+        .as("note_affinity's own response must not echo the note back")
+        .doesNotContain(note);
+    assertThat(String.join("\n", secondRun))
+        .as("nothing the second server writes to the protocol channel may carry the note")
+        .doesNotContain(note);
 
     // ADR 33: the rating must not have leaked into the log the graph is rebuilt from. The second
     // server replayed that log at boot and still found the graph exactly as it was seeded.

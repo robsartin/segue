@@ -114,8 +114,16 @@ source of truth and the graph is a projection of it
 
 `note_affinity(qid, rating, note?)` records what you think of one entity: a required integer rating
 from 1 to 5, and optionally a note in your own words. Reading it back is part of `get_entity`; there
-is no separate read tool and no way to list everything you have rated
+is no separate read tool and no way to list everything you have rated through a tool
 ([ADR 39](docs/adr/0039-affinity-capture-and-read.md) argues both).
+
+**The two fields are not treated the same, and that is the decision worth knowing.** The rating is
+ordinary data here: a model may read it back, weight a recommendation by it and talk about it,
+because a 1-5 score is the list of things you already chose to put in the graph at a higher
+resolution. **The note never reaches a model** — not through `get_entity`, not in `note_affinity`'s
+own reply — because free text can say anything, and a tool result becomes context that leaves the
+machine. `./gradlew listRatings` reads your notes back, on your machine.
+[ADR 33](docs/adr/0033-taste-layer-separation.md) argues both sides of that split.
 
 It **never touches the graph**. Affinity lives in its own table behind its own port, carries no
 provenance and no corroboration, and is not an assertion — so the world graph can be exported or

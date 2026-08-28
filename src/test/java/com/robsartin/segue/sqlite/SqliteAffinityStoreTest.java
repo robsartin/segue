@@ -13,6 +13,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Instant;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -161,6 +162,30 @@ class SqliteAffinityStoreTest {
   void readsNothingWhenNothingIsRated() {
     try (SqliteAffinityStore store = SqliteAffinityStore.inMemory()) {
       assertThat(store.readAll()).isEmpty();
+    }
+  }
+
+  @Test
+  @DisplayName("readRatings returns every score by qid, and cannot return a note (issue #85)")
+  void readsEveryScoreAndNoNotes() {
+    try (SqliteAffinityStore store = SqliteAffinityStore.inMemory()) {
+      store.put(new AffinityRecord("Q900003", 5, "an invented note", LATER));
+      store.put(new AffinityRecord("Q900001", 2, null, FIRST));
+      store.put(new AffinityRecord("Q900002", 4, "another invented note", FIRST));
+
+      // A Map<String, Integer> has nowhere to put a note, and the SQL behind it does not select
+      // the column. That is the whole point of a second bulk read existing beside readAll: the
+      // recommender needs the scores and must not be able to hold the words (ADR 33, issue #85).
+      assertThat(store.readRatings())
+          .containsExactlyInAnyOrderEntriesOf(Map.of("Q900001", 2, "Q900002", 4, "Q900003", 5));
+    }
+  }
+
+  @Test
+  @DisplayName("readRatings on an unrated store is empty, not an error")
+  void readsNoScoresWhenNothingIsRated() {
+    try (SqliteAffinityStore store = SqliteAffinityStore.inMemory()) {
+      assertThat(store.readRatings()).isEmpty();
     }
   }
 

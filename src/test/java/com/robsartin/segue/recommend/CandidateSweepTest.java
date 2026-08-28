@@ -260,9 +260,10 @@ class CandidateSweepTest {
   @Test
   @DisplayName("the affinity seam is a weight per known entity, and it reaches the score")
   void theAffinitySeamReachesTheScore() {
-    // Unused today - Recommendations.EQUAL_REGARD gives everything a 1 because the affinity table
-    // is empty. This is the test that says the seam is real: hand it a function that thinks more
-    // of one entity, and the candidates that entity reaches move.
+    // The seam, at the level that owns it: hand this a function that thinks more of one entity and
+    // the candidates that entity reaches move. Since issue #85 the real function is
+    // Recommendations.regardFor over the owner's ratings, built in RecommendCli — what belongs
+    // here is that the multiplication happens at all, and an invented function says it plainest.
     influenceChain();
     ToDoubleFunction<String> lovesTheFirst = qid -> KNOWN_ONE.equals(qid) ? 3.0 : 1.0;
 
