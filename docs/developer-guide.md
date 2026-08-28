@@ -27,6 +27,7 @@ Everything here was checked against the source in `src/main/java/com/robsartin/s
 - [Looking at what you have rated](#looking-at-what-you-have-rated)
 - [Taking something back out](#taking-something-back-out)
 - [What to explore next](#what-to-explore-next)
+- [Rating one card at a time](#rating-one-card-at-a-time)
 - [How to read an ADR against the code](#how-to-read-an-adr-against-the-code)
 
 ## What segue is, in one pass
@@ -1430,6 +1431,71 @@ is what the question needs: a file naming everything you already know, which is 
 known-list, which needs the bulk read ADR 39 refused. ADR 45 records a re-open condition rather than
 shutting the door: a *bounded* version — "given these five things I have rated, what next?" — is an
 argument on its own terms, and it amends ADR 26 rather than arriving as a field on an existing tool.
+
+## Rating one card at a time
+
+`rate` is the sixth dev-side tool, and like the other five it is deliberately not a seventh MCP
+tool. [ADR 46](adr/0046-the-rating-deck.md) is the decision — read it before changing the Origin
+check or the ordering; both are narrower or stricter than they look, on purpose.
+
+```bash
+# serve everything on your list that has no rating yet, on 127.0.0.1:8090
+./gradlew rate --args="--known $HOME/known.csv"
+```
+
+`--known` is the same file `recommend` takes. `--db` defaults the way every other tool's does.
+`--port` defaults to `RateCli.DEFAULT_PORT`, 8090 rather than 8080, so the deck and a running MCP
+server never address each other by accident; `--port 0` asks the OS to pick one, and the tool logs
+which. Open the printed address in a browser: `1`–`5` rates and advances, `s` or space skips
+without recording anything, `b` goes back.
+
+### Two card shapes, because "why is this here" only has one answer at a time
+
+`Card.known` and `Card.candidate` are readable in full in `Card.java`; the shape each produces is
+the point. A known entity already earned its place on your list, so the useful thing to show is
+how much of the graph hangs off it — the same in-graph degree `Deck` sorted the deck by, so a card
+near the top visibly explains its own position. A candidate is something you may never have heard
+of, so the useful thing is the routes that reached it — the same routes, rendered the same way,
+that `find_paths` would return for that pair (`Deck.routeLines`, `PathResult.render()`). Neither
+shape carries a note field; there is nowhere on either `Card` to put one.
+
+### No session file: the deck is "everything unrated", recomputed every run
+
+`RateCli` reads every existing rating once, with `AffinityStore.readRatings()`, and `Deck.deal`
+excludes anything already rated from both the known list and the candidate stream — that exclusion
+is the entire resume mechanism. There is no position to persist, nothing to corrupt, and nothing
+left lying around between runs; quitting mid-deck costs nothing, and the next run picks up
+whatever is still unrated. `Deck`'s class javadoc is the authority on the ordering itself — degree
+descending for known entities, a candidate mixed in roughly every fifth card — and is worth reading
+before changing either number.
+
+### Ratings are the only thing it writes
+
+Three ArchUnit rules hold the boundary: `rate` may call `AffinityStore.put` and nothing that
+appends to the assertion log or touches the graph; it may never call `AffinityRecord.note()`; and
+no class in the package may depend on `AffinityRecord` at all, with one named exception —
+`RateServer`, because it is the class that has to construct the record it writes. Read the
+exception in `ArchitectureTest.theRatingDeckLogsNoRating`'s own javadoc rather than assuming it:
+every other class in `rate` still cannot hold a rating in any form.
+
+`ArchitectureTest.onlyTheRecommenderReadsEveryRating` also now names `..rate..`, beside
+`..recommend..`, as the only packages allowed to call `AffinityStore.readRatings()`. That widening
+is the ADR-level decision the rule's own javadoc asks for — see ADR 46 rather than assuming a bulk
+read that was reserved to one dev tool now belongs to any of them.
+
+### Why this is not a controller in the running app, and not a seventh MCP tool
+
+The Spring app already serves HTTP on `127.0.0.1:8080`, so the machinery to do this exists there —
+and that is the objection: it would put a taste-layer *writer* on the MCP server's own port, and
+[ADR 32](adr/0032-layering-and-archunit.md) confines Spring to `app` and `mcp` for a reason that
+has nothing to do with this feature. As a seventh MCP tool it fails the same way five ADRs before
+it have — [ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md),
+[ADR 41](adr/0041-graph-exporter-views-and-formats.md),
+[ADR 43](adr/0043-listing-your-own-ratings.md) and
+[ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) each declined one for adjacent bulk
+work, and this reuses the recommender's own `CandidateSweep`, `Routes` and `Sweep` for its
+candidate cards without reopening that question: the input is still ADR 40's file of everything
+you already have, and handing that to a model is what ADR 40 already refused.
 
 ## How to read an ADR against the code
 
