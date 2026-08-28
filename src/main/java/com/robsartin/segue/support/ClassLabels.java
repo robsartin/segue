@@ -1,4 +1,4 @@
-package com.robsartin.segue.export;
+package com.robsartin.segue.support;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -30,11 +30,16 @@ import java.util.stream.Collectors;
  * why the table is allowed to be a sample of the long tail rather than a promise about it. Measured
  * on a real 54,448-node graph, 861 distinct classes appear and the top 40 cover 96.6%: a table is
  * the right shape for that distribution and a complete one is not available offline at any size.
+ *
+ * <p><b>It lives in {@code support} rather than in {@code export} because two tools read it.</b>
+ * The exporter puts a class name in a DOT tooltip; the rating deck puts it on a card. A dev tool
+ * that depended on {@code export} to reach this table would inherit that package's looser fence,
+ * which is the reason the ratings tool bans the dependency outright.
  */
-final class ClassLabels {
+public final class ClassLabels {
 
   /** What a node whose source stated no class at all gets. */
-  static final String NO_CLASS = "no stated class";
+  public static final String NO_CLASS = "no stated class";
 
   private static final Map<String, String> BY_QID = new LinkedHashMap<>();
 
@@ -103,7 +108,7 @@ final class ClassLabels {
   }
 
   /** The class's English name, or the QID itself when the table has never heard of it. */
-  static String label(String classQid) {
+  public static String label(String classQid) {
     return BY_QID.getOrDefault(classQid, classQid);
   }
 
@@ -112,7 +117,7 @@ final class ClassLabels {
    * order is what {@code KindMapper} reads and the first one is therefore the one that chose the
    * node's kind.
    */
-  static String describe(List<String> classQids) {
+  public static String describe(List<String> classQids) {
     return classQids.isEmpty()
         ? NO_CLASS
         : classQids.stream().map(ClassLabels::label).collect(Collectors.joining(", "));
