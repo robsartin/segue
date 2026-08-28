@@ -24,6 +24,7 @@ the caveats.
 - [The six tools](#the-six-tools)
 - [A worked example: Nick Cave to John Hillcoat](#a-worked-example-nick-cave-to-john-hillcoat)
 - [A second example: two novelists with no shared credit](#a-second-example-two-novelists-with-no-shared-credit)
+- [Reading what comes back](#reading-what-comes-back)
 - [The taste layer](#the-taste-layer)
 - [Honest limits](#honest-limits)
 - [Errors you will actually see](#errors-you-will-actually-see)
@@ -621,6 +622,94 @@ are exactly the connectors this is for. An academy, a learned society or a guild
 are elected to, so a route through one says what a lifetime achievement award says; a band is
 something you were *in*. What separates them is the kind of body Wikidata says it is, not how many
 members the graph happens to hold — see ADR 31's second amendment for the measurement.
+
+## Reading what comes back
+
+Every entity segue knows about is one of **six kinds**, and every connection is one of a small fixed
+set of relationships. You never have to memorise either list — the answers name them — but three
+things about them change how a route reads.
+
+### The six kinds, and why there is no "musician"
+
+| Kind | What it holds |
+| --- | --- |
+| `PERSON` | One human |
+| `GROUP` | A band, an orchestra, a company, an academy — anything with members |
+| `WORK` | A film, album, song, novel, episode; the thing that was made |
+| `PLACE` | A city, country, town, region |
+| `EVENT` | A concert, a festival, a war — something that happened |
+| `CONCEPT` | Everything else |
+
+Those descriptions are illustrations, not the rule: which Wikidata classes land in which kind is
+decided by a whitelist in the source (`KindMapper`), and it grows as real data turns up classes it
+did not know.
+
+**There is no `MUSICIAN`, `BAND` or `FILM` kind, on purpose.** A role is a *relationship*, not a
+kind: one Nick Cave node is a `PERSON` who `PERFORMED` albums, `AUTHORED` novels and
+`WROTE_SCREENPLAY_FOR` films, all at once, rather than three nodes or one node forced to pick a
+primary identity that is a lie. It is also what lets a route cross from music to film to literature
+without anything special happening at the border.
+[ADR 21, on the six-kind ontology](adr/0021-six-kind-ontology.md).
+
+**`CONCEPT` means "none of the other five", not "an idea".** Segue recognises a whitelist of the
+classes Wikidata puts on an entity, and anything unrecognised falls through to `CONCEPT` — so it is
+a mixed bag, and an entity that reads `CONCEPT` is often just wearing a class the whitelist has not
+learned yet. But the `CONCEPT`s you actually meet **in the middle of a route** are overwhelmingly
+awards, because an award is the one sort of unplaced thing that many people point at. Measured on a
+real 25,815-node graph while the hub rule was being set — [ADR 31](adr/0031-path-ranking-by-confidence.md)'s
+first amendment, 2026-08-26 — fifteen `CONCEPT` nodes in it reached a degree of ten or more, and
+thirteen of those fifteen were awards.
+
+### If you draw a picture, shape and colour both say the kind
+
+`./gradlew exportGraph` renders your graph or a slice of it — `docs/developer-guide.md` has the
+commands, and [ADR 41](adr/0041-graph-exporter-views-and-formats.md) the reasoning. In the DOT
+output every node says its kind **twice**:
+
+| Kind | Shape | Fill |
+| --- | --- | --- |
+| `PERSON` | ellipse | sky blue |
+| `GROUP` | box | orange |
+| `WORK` | note | yellow |
+| `PLACE` | house | green |
+| `EVENT` | diamond | vermillion |
+| `CONCEPT` | octagon | reddish purple |
+
+The redundancy is the point: **shape survives greyscale printing and colour-blind viewing, colour
+survives being scaled down, and neither survives both.** The fills come from the Okabe-Ito
+colour-universal palette rather than being picked by eye, and `PERSON` and `GROUP` — the pair most
+often needing to be told apart — get the most separated two colours in it. `DotWriter` is the
+authority for both columns.
+
+### Not all relationships are equally strong claims
+
+`find_paths` does not rank by relationship type. It judges the node in the *middle* of a route — is
+it a hub? — and then the evidence behind each hop. Two two-hop routes, one through a shared
+influence and one through a shared award, come back in whatever order confidence puts them.
+
+They are not equally interesting, though, and it is worth knowing which is which:
+
+- **`INFLUENCED_BY` is the only relationship in the vocabulary that states an artistic debt.**
+  Somebody has said, on the record, that this artist came from that one. A route through a shared
+  influence says the two ends draw on the same source.
+- **`RECEIVED_AWARD` says only that the same body recognised both.** It is in the vocabulary because
+  a novel has exactly one author, so without it two novelists who never collaborated connect to
+  nothing at all — see [the second example](#a-second-example-two-novelists-with-no-shared-credit).
+  That is a real connection and a much weaker claim about either of them.
+- **Everything else is collaboration**: `MEMBER_OF`, `PERFORMED`, `ACTED_IN`, `AUTHORED`,
+  `DIRECTED` and the rest all say two entities worked on the same thing.
+
+Where that difference stops being a matter of taste and becomes arithmetic is in the recommender —
+`./gradlew recommend`, on your own machine, not on the tool surface. It weighs a hop of influence at
+**1.0**, a hop of collaboration at **0.5** and a shared award at **0.2**, so one influence hop
+counts for five award hops. It also reads the arrow: a candidate whose own item cites something you
+like has said that about *itself*, so that hop is worth a fifth of the same hop pointing the other
+way, where somebody else cited the candidate. The measurements behind all of that are in
+[ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md).
+
+**So: when two routes are the same length and equally well evidenced, the one through a shared
+influence is telling you more than the one through a shared award.** The ranking will not do that
+for you; reading it is your half.
 
 ## The taste layer
 
