@@ -555,8 +555,8 @@ class ArchitectureTest {
                   + " reads that carry free text stay out of this package");
 
   /**
-   * Issue #85: the note-free bulk read belongs to the recommender, and to nothing on the MCP
-   * surface.
+   * Issue #85: the note-free bulk read belongs to the recommender and the rating deck, and to
+   * nothing on the MCP surface.
    *
    * <p>The sibling of {@link #onlyTheRatingsToolReadsEveryRating}, one field narrower and for a
    * different reason. That rule protects a note; this one protects nothing personal at all now that
@@ -565,17 +565,23 @@ class ArchitectureTest {
    * tool, and {@code ToolSurfaceTest} counts tools, so it would not notice. ADR 45 recorded a
    * re-open condition for a conversational recommendation and issue #85 deliberately did not
    * exercise it; until an ADR does, {@code get_entity} answers one qid at a time.
+   *
+   * <p>Widened by issue #101 (ADR 46): the deck needs the same note-free map to know which entities
+   * are already rated and must not be dealt again, which is the resume mechanism {@code Deck}'s
+   * class comment describes. Both readers are dev-side tools off the MCP surface, so the thing this
+   * rule actually protects is unchanged.
    */
   @ArchTest
   static final ArchRule onlyTheRecommenderReadsEveryRating =
       noClasses()
           .that()
-          .resideOutsideOfPackage("..recommend..")
+          .resideOutsideOfPackages("..recommend..", "..rate..")
           .should()
           .callMethodWhere(callTo("readRatings", AffinityStore.class))
           .because(
-              "ADR 26 and issue #85: the score is ordinary data, and reading every score at once is"
-                  + " still the recommender's job rather than a field on an MCP tool");
+              "ADR 26 and issues #85 and #101: the score is ordinary data, and reading every score"
+                  + " at once is a dev-side tool's job — the recommender or the rating deck — rather"
+                  + " than a field on an MCP tool");
 
   /**
    * ADR 45: the recommender needs a log, an engine and nothing else.
