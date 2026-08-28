@@ -66,17 +66,11 @@
   let current = null;
 
   function appendRouteText(li, text) {
-    // PathResult.render() emits one 6-space-indented, newline-terminated line per hop — but by
-    // the time this string reaches the browser, RateServer's hand-rolled JSON escaper has already
-    // replaced every '\n' with a single space (it has to escape it somehow to stay valid JSON;
-    // confirmed live against a real candidate card — the wire payload's routes[] carries zero '\n'
-    // characters). So a hop boundary does not arrive as a newline here, it arrives as a run of
-    // several spaces: the collapsed '\n' plus the next hop's 6-space indent. Splitting on 4+
-    // consecutive spaces reconstructs the line-per-hop structure the server already destroyed,
-    // without depending on any one hop's own text ever containing a run that long (verified
-    // against real data: within-hop text never exceeds a single space; the hop-boundary run is 7).
-    // A `\n` alternative is kept too, in case a future fix stops collapsing it server-side.
-    const lines = text.split(/\n| {4,}/).map(s => s.trim()).filter(s => s.length > 0);
+    // PathResult.render() emits one indented, newline-terminated line per hop (see
+    // Deck.routeLines / PathResult.render on the Java side). Split on the newlines it actually
+    // puts there and give each hop its own visual line, rather than letting a multi-hop route
+    // collapse into one run-on line of default HTML whitespace handling.
+    const lines = text.split('\n').map(s => s.trim()).filter(s => s.length > 0);
     lines.forEach((line, i) => {
       if (i > 0) li.appendChild(document.createElement('br'));
       li.appendChild(document.createTextNode(line));

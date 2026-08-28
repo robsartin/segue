@@ -18,6 +18,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 class RateServerTest {
 
@@ -135,5 +138,40 @@ class RateServerTest {
 
     assertThat(response.statusCode()).isEqualTo(400);
     assertThat(affinity.written).isEmpty();
+  }
+
+  @Test
+  @DisplayName(
+      "a label carrying a newline, a tab and a control character comes back as valid JSON and"
+          + " round-trips to the exact original string")
+  void escapesControlCharactersInJson() throws Exception {
+    // A real Wikidata label is free text from an openly editable source; this is a deliberately
+    // adversarial one, invented for the test (never real data — see CLAUDE.md), that exercises
+    // every character RateServer.escape() must turn into a valid JSON string escape rather than
+    // emit literally: \n (a JSON control character), \t (another), and \u0001 (a raw C0 control
+    // character with no dedicated JSON shorthand, so it needs the generic \\uXXXX form).
+    String weirdLabel = "Weird\nLabel\tWith\u0001Control";
+    NodeRecord weird = new NodeRecord("Q900099", NodeKind.GROUP, weirdLabel, List.of());
+    RateServer weirdServer = new RateServer(List.of(Card.known(weird, 3)), affinity, 0);
+    weirdServer.start();
+    try {
+      HttpResponse<String> response =
+          client.send(
+              HttpRequest.newBuilder(
+                      URI.create("http://127.0.0.1:" + weirdServer.port() + "/api/card?i=0"))
+                  .build(),
+              HttpResponse.BodyHandlers.ofString());
+
+      // readTree throws on malformed JSON — a literal, unescaped control character embedded in a
+      // JSON string is invalid per RFC 8259, and a real strict JSON parser (this is the same
+      // Jackson 3 the rest of the project uses, not a lenient hand-rolled reader) is what would
+      // choke on the deck page's own `await response.json()`.
+      ObjectMapper mapper = JsonMapper.builder().build();
+      JsonNode node = mapper.readTree(response.body());
+
+      assertThat(node.path("label").asText()).isEqualTo(weirdLabel);
+    } finally {
+      weirdServer.stop();
+    }
   }
 }

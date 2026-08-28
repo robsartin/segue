@@ -175,8 +175,41 @@ public final class RateServer {
         + "}";
   }
 
+  /**
+   * A minimal JSON string escaper (this hand-rolled encoder has no library backing it — see {@link
+   * #json}), fixed after it shipped incomplete: it turned every '\n' into a literal space rather
+   * than a JSON escape, silently flattening the line-per-hop structure a candidate card's routes
+   * depend on ({@code PathResult.render()}), and left every other control character — tabs,
+   * carriage returns, anything below U+0020 — completely unescaped, which is not "ugly JSON" but
+   * invalid JSON: a real parser refuses it (confirmed live and pinned by {@code
+   * RateServerTest.escapesControlCharactersInJson}, which reads the server's own response back
+   * through Jackson).
+   *
+   * <p>A single left-to-right pass, not a chain of {@code String.replace} calls: the backslash case
+   * only ever sees a bare {@code \\} from the ORIGINAL text, because by the time this method would
+   * revisit that position it has already moved past it — there is no second pass over the escapes
+   * just written to accidentally double-escape.
+   */
   private static String escape(String raw) {
-    return raw.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", " ");
+    StringBuilder out = new StringBuilder(raw.length());
+    for (int i = 0; i < raw.length(); i++) {
+      char c = raw.charAt(i);
+      switch (c) {
+        case '\\' -> out.append("\\\\");
+        case '"' -> out.append("\\\"");
+        case '\n' -> out.append("\\n");
+        case '\r' -> out.append("\\r");
+        case '\t' -> out.append("\\t");
+        default -> {
+          if (c < 0x20) {
+            out.append(String.format("\\u%04x", (int) c));
+          } else {
+            out.append(c);
+          }
+        }
+      }
+    }
+    return out.toString();
   }
 
   private static String field(String body, String name) {
