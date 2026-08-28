@@ -458,6 +458,18 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   times); `RECEIVED_AWARD` is a fifth and deliberately **not zero**, because ADR 38 admitted P166
   precisely for single-authored work where there is no collaboration to find. Adding an `EdgeType`
   now fails `RecommendationWeightsTest.everyRegisteredTypeIsNamed` until it is weighed.
+- **Direction is read on the candidate's own hop, and NOWHERE else** (issue #84, ADR 45's amendment).
+  Undirected, a small band citing ten famous acts and an ancestor those acts cite are the same shape,
+  and the small band wins on lift because its degree is smaller — it was rank 1. A hop the candidate
+  is the SUBJECT of is now worth a fifth (`RecommendationWeights.asEvidenceAbout`, `SELF_STATED`):
+  being cited is a fact somebody else stated, citing is a self-description. **Demoted, never
+  excluded** — "who came from the things you like" is still a segue. **Do not extend it to the hop
+  out of your own entities**: the bands that cite your list are the same bands that cite its
+  ancestors, so that would demote exactly what this keeps (`CandidateSweepTest
+  .directionIsAskedOnlyOfTheCandidatesOwnHop`). Only `INFLUENCED_BY` and `BASED_ON` carry a direction
+  of esteem; every other type's direction says which end is the person, the work or the prize. The
+  ADR has the per-type table and the before/after measurement — top 25 items citing more than they
+  are cited went 18 → 2, and the all-inbound ancestors scored identically.
 - **The recommender may not depend on `AffinityStore` at all**, which no other tool's fence says.
   Banning the type rather than the calls is the point: `find` is available everywhere else, and
   eight hundred single-qid lookups are the bulk read ADR 39 declined, spelled slowly. Building the

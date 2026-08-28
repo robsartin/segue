@@ -41,6 +41,13 @@ import java.util.Map;
  *       "we both won this" is the weakest reason to listen to somebody in the vocabulary.
  * </ul>
  *
+ * <p><b>And one dimension that is not a tier at all: which way the relation points (issue #84).</b>
+ * A tier says what a relation is worth; the direction says whether this hop is a claim about the
+ * candidate or a claim by it. Measured on the real graph, undirected scoring put a small band that
+ * lists ten famous influences at rank 1, above every ancestor those influences actually have —
+ * because to a walk that ignores arrows, citing and being cited are the same edge, and the small
+ * band divides by a smaller degree. See {@link #asEvidenceAbout} and {@link #SELF_STATED}.
+ *
  * <p><b>The weight is not the hub rule and does not replace it.</b> Hub intermediates are EXCLUDED
  * before any weight applies ({@link PathRanking#isHub}): a route through the Rock and Roll Hall of
  * Fame is not down-weighted, it is not a route. Both mechanisms have work left after the other has
@@ -67,35 +74,83 @@ public final class RecommendationWeights {
   /** Both were recognised by the same body. A fact about institutions; worth a fifth. */
   public static final double RECOGNITION = 0.2;
 
-  private static final Map<String, Double> BY_CODE = new LinkedHashMap<>();
+  /**
+   * What an esteem-directional hop is worth when the entity being judged is the one <em>making</em>
+   * the claim rather than the one it is made about. A multiplier on the tier above (issue #84).
+   *
+   * <p>A fifth, the same figure {@link #RECOGNITION} carries and for a related reason: what is left
+   * after the direction is taken away is a fact about somebody else's paperwork. "This band says it
+   * was influenced by yours" is a real, cited fact, and it is a fact the band wrote about itself.
+   * It is not zero, because "who came from the things you like" is a segue too — it is just the one
+   * that says least about whether to go and listen.
+   */
+  public static final double SELF_STATED = 0.2;
+
+  /**
+   * One row of the table: what a hop of this type is worth, and whether its direction means
+   * anything.
+   *
+   * <p>Two dimensions in one row, because neither is derivable from the other and both have to be
+   * decided when a relation joins the vocabulary. {@code BASED_ON} and {@code MEMBER_OF} are both
+   * collaborations and only one of them states a debt; {@code INFLUENCED_BY} and {@code BASED_ON}
+   * are both debts and sit in different tiers.
+   *
+   * @param weight the tier — what the relation is worth at all
+   * @param esteemDirectional whether the subject of the claim is deferring to its object. True only
+   *     where the relation states a DEBT; false where the direction is Wikidata's convention for
+   *     which end is the person and which is the work, or the prize, or the band
+   */
+  private record Weighing(double weight, boolean esteemDirectional) {}
+
+  /** A relation that states a debt: the subject is deferring to the object. */
+  private static final boolean A_DEBT = true;
+
+  /** A relation whose direction says which end is which kind, and nothing about regard. */
+  private static final boolean NO_ESTEEM = false;
+
+  private static final Map<String, Weighing> BY_CODE = new LinkedHashMap<>();
 
   static {
-    put(EdgeTypes.INFLUENCED_BY, INFLUENCE);
+    // The one relation in the vocabulary that is both an artistic debt and stated between two
+    // entities either of which could be a recommendation. The whole of issue #84 lands here.
+    put(EdgeTypes.INFLUENCED_BY, INFLUENCE, A_DEBT);
 
-    put(EdgeTypes.MEMBER_OF, COLLABORATION);
-    put(EdgeTypes.HAS_PART, COLLABORATION);
-    put(EdgeTypes.PERFORMED, COLLABORATION);
-    put(EdgeTypes.AUTHORED, COLLABORATION);
-    put(EdgeTypes.DIRECTED, COLLABORATION);
-    put(EdgeTypes.WROTE_SCREENPLAY_FOR, COLLABORATION);
-    put(EdgeTypes.COMPOSED_FOR, COLLABORATION);
-    put(EdgeTypes.ACTED_IN, COLLABORATION);
-    put(EdgeTypes.BASED_ON, COLLABORATION);
-    put(EdgeTypes.PART_OF, COLLABORATION);
+    // Which end is the person and which is the group is a fact about kinds, not about regard: a
+    // band does not defer to its drummer, nor a drummer to the band.
+    put(EdgeTypes.MEMBER_OF, COLLABORATION, NO_ESTEEM);
+    put(EdgeTypes.HAS_PART, COLLABORATION, NO_ESTEEM);
+    // Every one of these is inverted at ingest so it reads person-to-work (ADR 22). The direction
+    // is that convention and nothing else; two people credited on one film are symmetric.
+    put(EdgeTypes.PERFORMED, COLLABORATION, NO_ESTEEM);
+    put(EdgeTypes.AUTHORED, COLLABORATION, NO_ESTEEM);
+    put(EdgeTypes.DIRECTED, COLLABORATION, NO_ESTEEM);
+    put(EdgeTypes.WROTE_SCREENPLAY_FOR, COLLABORATION, NO_ESTEEM);
+    put(EdgeTypes.COMPOSED_FOR, COLLABORATION, NO_ESTEEM);
+    put(EdgeTypes.ACTED_IN, COLLABORATION, NO_ESTEEM);
+    // A debt, and stated the same way round as an influence: the later work defers to the earlier
+    // one. It is marked as one for the same reason INFLUENCED_BY is, and it currently changes
+    // nothing — a WORK is never a candidate (ADR 45 ranks people and groups), so this stance is
+    // waiting for the day one is, rather than being an unstated exception nobody would notice.
+    put(EdgeTypes.BASED_ON, COLLABORATION, A_DEBT);
+    // Containment. A song is not deferring to the album it is on.
+    put(EdgeTypes.PART_OF, COLLABORATION, NO_ESTEEM);
     // Neither is in any graph yet, and both are collaborations by their own definitions - one
     // derived from co-credits, one asserted by a similarity source. A hypothesis is handled where
     // hypotheses belong: PathRanking sorts a route resting on a model guess below every sourced
-    // one (ADR 23), which is the receipts' problem rather than the arithmetic's.
-    put(EdgeTypes.COLLABORATED_WITH, COLLABORATION);
-    put(EdgeTypes.SIMILAR_TO, COLLABORATION);
+    // one (ADR 23), which is the receipts' problem rather than the arithmetic's. Both are declared
+    // SYMMETRIC by the vocabulary itself, so a direction of esteem could not be read off them.
+    put(EdgeTypes.COLLABORATED_WITH, COLLABORATION, NO_ESTEEM);
+    put(EdgeTypes.SIMILAR_TO, COLLABORATION, NO_ESTEEM);
 
-    put(EdgeTypes.RECEIVED_AWARD, RECOGNITION);
+    // The direction here separates a person from a prize, which the hub rule has already dealt
+    // with. Nobody is flattered by being an award.
+    put(EdgeTypes.RECEIVED_AWARD, RECOGNITION, NO_ESTEEM);
   }
 
   private RecommendationWeights() {}
 
-  private static void put(EdgeType type, double weight) {
-    Double prior = BY_CODE.put(type.code(), weight);
+  private static void put(EdgeType type, double weight, boolean esteemDirectional) {
+    Weighing prior = BY_CODE.put(type.code(), new Weighing(weight, esteemDirectional));
     if (prior != null) {
       throw new IllegalStateException("two weights claim " + type.code());
     }
@@ -112,7 +167,48 @@ public final class RecommendationWeights {
    * missing here, so a new relation costs a decision rather than inheriting one.
    */
   public static double of(String typeCode) {
-    return BY_CODE.getOrDefault(typeCode, COLLABORATION);
+    Weighing weighing = BY_CODE.get(typeCode);
+    return weighing == null ? COLLABORATION : weighing.weight();
+  }
+
+  /**
+   * What one hop of this type is worth as evidence <em>about</em> the entity at one end of it.
+   *
+   * <p><b>The direction is a separate dimension from the tier, and it is the whole of issue
+   * #84.</b> Undirected, a small band that lists twelve famous influences and an ancestor twelve
+   * famous bands cite are the same shape — both "share intermediates with things you like" — and
+   * the small band wins, because lift divides by a smaller degree. They are not the same claim.
+   * Being cited by something is a fact somebody else stated about you; citing something is a fact
+   * you stated about yourself, and an entity whose entire presence in the graph is its own
+   * influence list has said nothing anybody can check.
+   *
+   * <p><b>Ask this only about the entity being recommended.</b> The hop between one of your own
+   * entities and the intermediate is not a claim about either of them that matters here — it is
+   * what makes the intermediate shared, and both readings are real segues: "who the things I like
+   * came from" and "who came from them" (ADR 45). Applying the discount at that end too would
+   * demote exactly the ancestors this exists to keep, because the entities that cite your list are
+   * the same entities that cite its ancestors.
+   *
+   * @param typeCode the relation
+   * @param statedByIt whether the entity being judged is the SUBJECT of the claim — the one doing
+   *     the citing — rather than its object
+   */
+  public static double asEvidenceAbout(String typeCode, boolean statedByIt) {
+    double weight = of(typeCode);
+    return statedByIt && carriesEsteemDirection(typeCode) ? weight * SELF_STATED : weight;
+  }
+
+  /**
+   * Whether this relation's direction states a debt, so that the two ends of it mean different
+   * things.
+   *
+   * <p>False for a code this table does not name, which is the same conservative fallback {@link
+   * #of} makes and for the same reason: a retired code arriving from the log scores as it always
+   * did rather than being demoted by a rule written after it.
+   */
+  public static boolean carriesEsteemDirection(String typeCode) {
+    Weighing weighing = BY_CODE.get(typeCode);
+    return weighing != null && weighing.esteemDirectional();
   }
 
   /** Whether this table names the type, as opposed to falling back for it. */

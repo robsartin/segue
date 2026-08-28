@@ -36,7 +36,11 @@ import java.util.function.ToIntFunction;
  *       routing uses, borrowed rather than reimplemented. Not down-weighted: a candidate reached
  *       through a hall of fame is not a weak recommendation, it is not a recommendation.
  *   <li><b>Out one hop from each surviving intermediate</b>, once per intermediate however many
- *       known entities reached it, which is what keeps this affordable on a real graph.
+ *       known entities reached it, which is what keeps this affordable on a real graph. <b>This is
+ *       the hop whose direction is read</b> — a hop the candidate states about itself is worth a
+ *       fifth of the same hop stated about it (issue #84, {@code
+ *       RecommendationWeights.asEvidenceAbout}). The hop out of your own entities deliberately is
+ *       not: see {@link Weighing}.
  *   <li><b>Keep the candidates that could be things to explore</b>: a {@code PERSON} or a {@code
  *       GROUP}, absent from the known-list, not an institution, and carrying at least {@code
  *       minDegree} edges.
@@ -98,7 +102,8 @@ public final class CandidateSweep {
         continue;
       }
       found++;
-      for (Map.Entry<String, Double> neighbour : bestPerNeighbour(seed).entrySet()) {
+      for (Map.Entry<String, Double> neighbour :
+          bestPerNeighbour(seed, Weighing.OF_THE_RELATIONSHIP).entrySet()) {
         String via = neighbour.getKey();
         // A known entity is allowed to BE an intermediate: "one you know cites one you know, who
         // cites this" is a route, and the known-list filter applies to the candidate at the end.
@@ -118,7 +123,8 @@ public final class CandidateSweep {
     for (Map.Entry<String, Map<String, Double>> entry : reachers.entrySet()) {
       String via = entry.getKey();
       int viaDegree = degree(via);
-      for (Map.Entry<String, Double> candidate : bestPerNeighbour(via).entrySet()) {
+      for (Map.Entry<String, Double> candidate :
+          bestPerNeighbour(via, Weighing.AS_EVIDENCE_ABOUT_THE_NEIGHBOUR).entrySet()) {
         String qid = candidate.getKey();
         if (knownSet.contains(qid) || !couldBeExplored(qid, minDegree)) {
           continue;
@@ -148,22 +154,53 @@ public final class CandidateSweep {
   }
 
   /**
+   * Which question a hop's weight is answering, and so whether its direction is read (issue #84).
+   */
+  private enum Weighing {
+
+    /**
+     * What the relationship is worth, whichever way round it was stated. The hop out of one of your
+     * own entities: it is what makes the intermediate shared, and "who the things I like came from"
+     * and "who came from them" are both segues (ADR 45).
+     */
+    OF_THE_RELATIONSHIP,
+
+    /**
+     * What the relationship is worth <em>as evidence about the entity at the far end</em>. The hop
+     * into a candidate, and the only place direction is read — being cited is a fact somebody else
+     * stated, citing is a fact the candidate stated about itself.
+     */
+    AS_EVIDENCE_ABOUT_THE_NEIGHBOUR
+  }
+
+  /**
    * Every neighbour of one entity, with the best weight among the edges reaching it.
    *
    * <p>The best rather than the sum, because parallel edges between one pair are one relationship
    * the source stated twice — a membership and a "has part" over the same two entities is the case
-   * ADR 36's issue-#33 amendment already had to fix once in ingest.
+   * ADR 36's issue-#33 amendment already had to fix once in ingest. Taking the best is also what
+   * makes the direction rule right in the awkward case: an entity that both cites its neighbour and
+   * is cited by it keeps the full weight of being cited.
+   *
+   * @param weighing whether the neighbour is the one being judged, and so whether the direction of
+   *     an esteem-directional edge is read off it
    */
-  private Map<String, Double> bestPerNeighbour(String qid) {
+  private Map<String, Double> bestPerNeighbour(String qid, Weighing weighing) {
     List<EdgeRecord> edges = graph.edges(qid);
     degrees.putIfAbsent(qid, edges.size());
     Map<String, Double> best = new LinkedHashMap<>();
     for (EdgeRecord edge : edges) {
-      String other = edge.fromQid().equals(qid) ? edge.toQid() : edge.fromQid();
+      boolean statedByThisEntity = edge.fromQid().equals(qid);
+      String other = statedByThisEntity ? edge.toQid() : edge.fromQid();
       if (other.equals(qid)) {
         continue;
       }
-      best.merge(other, RecommendationWeights.of(edge.typeCode()), Math::max);
+      double weight =
+          weighing == Weighing.OF_THE_RELATIONSHIP
+              ? RecommendationWeights.of(edge.typeCode())
+              // The neighbour states the claim exactly when this entity does not.
+              : RecommendationWeights.asEvidenceAbout(edge.typeCode(), !statedByThisEntity);
+      best.merge(other, weight, Math::max);
     }
     return best;
   }

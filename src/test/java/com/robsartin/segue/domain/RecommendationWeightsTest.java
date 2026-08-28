@@ -61,4 +61,49 @@ class RecommendationWeightsTest {
         .isEqualTo(RecommendationWeights.COLLABORATION);
     assertThat(RecommendationWeights.isWeighed("RETIRED_LONG_AGO")).isFalse();
   }
+
+  @Test
+  @DisplayName("being cited is evidence; citing is a self-description, and worth less (issue #84)")
+  void citingIsWorthLessThanBeingCited() {
+    String influence = EdgeTypes.INFLUENCED_BY.code();
+
+    double cited = RecommendationWeights.asEvidenceAbout(influence, false);
+    double citing = RecommendationWeights.asEvidenceAbout(influence, true);
+
+    assertThat(cited).isEqualTo(RecommendationWeights.of(influence));
+    assertThat(citing).isLessThan(cited);
+  }
+
+  @Test
+  @DisplayName(
+      "a collaboration or a prize reads the same from either end: no esteem flows along it")
+  void onlyEsteemDirectionalTypesReadDifferentlyFromEachEnd() {
+    for (EdgeType type : EdgeTypes.all()) {
+      if (RecommendationWeights.carriesEsteemDirection(type.code())) {
+        continue;
+      }
+      assertThat(RecommendationWeights.asEvidenceAbout(type.code(), true))
+          .describedAs(
+              "%s is not esteem-directional, so which end states it must not change what it is"
+                  + " worth",
+              type.code())
+          .isEqualTo(RecommendationWeights.asEvidenceAbout(type.code(), false));
+    }
+  }
+
+  @Test
+  @DisplayName("exactly two relations state a debt, and the rest are symmetric in regard")
+  void theVocabularysDebtRelationsAreTheOnlyDirectionalOnes() {
+    assertThat(EdgeTypes.all().stream().map(EdgeType::code))
+        .filteredOn(RecommendationWeights::carriesEsteemDirection)
+        .containsExactlyInAnyOrder(EdgeTypes.INFLUENCED_BY.code(), EdgeTypes.BASED_ON.code());
+  }
+
+  @Test
+  @DisplayName("a type the vocabulary no longer registers is read as symmetric, not as a debt")
+  void aRetiredTypeCarriesNoDirection() {
+    assertThat(RecommendationWeights.carriesEsteemDirection("RETIRED_LONG_AGO")).isFalse();
+    assertThat(RecommendationWeights.asEvidenceAbout("RETIRED_LONG_AGO", true))
+        .isEqualTo(RecommendationWeights.of("RETIRED_LONG_AGO"));
+  }
 }

@@ -33,8 +33,12 @@ final class InventedWorld {
   static final String HALL_OF_FAME = "Q900203";
   static final String THE_ACADEMY = "Q900204";
 
+  /** An intermediate that cites one of yours, rather than being cited by it (issue #84). */
+  static final String THE_ADMIRER = "Q900205";
+
   // Candidates.
   static final String ANCESTOR = "Q900301";
+  static final String ANOTHER_ANCESTOR = "Q900307";
   static final String FELLOW_PRIZEWINNER = "Q900302";
   static final String ALSO_IN_THE_HALL = "Q900303";
   static final String ALSO_IN_THE_ACADEMY = "Q900304";

@@ -223,6 +223,99 @@ work — asking two different questions of it. The tools may not depend on each 
 its own ArchUnit fence, and a dependency on a sibling would let one inherit the other's), so the
 reader moves to a package neither of them owns rather than being copied. Behaviour is unchanged.
 
+**Amendment (2026-08-27, issue #84): direction is read, on the candidate's own hop and nowhere
+else.**
+
+Nothing above is withdrawn, and the consequence below that called this "a data question rather than
+a scoring one" was wrong: it is a scoring question, and the graph already held everything needed to
+answer it. From the run this ADR shipped with, ranks 1 and 3:
+
+```
+1. SR-71        U2      <-[INFLUENCED_BY]-  SR-71        SR-71 claims U2
+3. Marc Bolan   Pixies   -[INFLUENCED_BY]-> Marc Bolan   Pixies cite Bolan
+```
+
+**Every SR-71 arrow points outward and every Bolan arrow points inward, and an undirected walk
+cannot tell them apart** — both "share intermediates with things you like". SR-71 then wins on lift,
+because its own degree is smaller. Counted on the graph: SR-71 cites 10 entities and is cited by 1;
+Marc Bolan cites 0 and is cited by 6.
+
+**Being cited by something you like is a fact somebody else stated about the candidate. Citing
+something you like is a fact the candidate stated about itself.** Both are true and only one is
+evidence, so:
+
+- **A hop the candidate is the subject of is worth a fifth of the same hop stated about it.**
+  `RecommendationWeights.asEvidenceAbout`, and `SELF_STATED` is 0.2 — the same figure `RECOGNITION`
+  carries, for a related reason: strip the direction out and what is left is somebody's paperwork.
+- **Demoted, not excluded.** The hub rule excludes because "you were both inducted" is not a
+  recommendation at all; this one does not, because "who came from the things you like" *is* a
+  segue — it is simply the one that says least about whether to go and listen. A candidate whose
+  every arrow points outward is still in the file, and still carries its routes.
+- **Only the candidate's own hop is asked.** The hop out of one of your entities is left alone, and
+  that is the load-bearing half. The entities that cite your list are the same entities that cite
+  its ancestors — `Pixies -> Marc Bolan` is reached through `Pixies -> The Beatles`, an outward arrow
+  from a band that is not being recommended — so discounting the first hop by direction would demote
+  exactly the ancestors this exists to keep. `CandidateSweepTest.directionIsAskedOnlyOfTheCandidatesOwnHop`
+  is the regression test, and the `Weighing` enum is the parameter that says which question is
+  being asked of which hop.
+
+### Which relations carry a direction of esteem, one at a time
+
+Direction is a **separate dimension from the tier** and it lives in the same table row, because
+neither is derivable from the other: `BASED_ON` and `MEMBER_OF` are both collaborations and only one
+of them states a debt, while `INFLUENCED_BY` and `BASED_ON` are both debts in different tiers. It is
+NOT a fact about the vocabulary and does not belong on `EdgeType`: the traversal stays undirected
+everywhere else in segue, exactly as the alternative below says, and this is a *recommendation*
+policy rather than a change to what the graph believes.
+
+| relation | direction of esteem? | why |
+|---|---|---|
+| `INFLUENCED_BY` | **yes** | the one relation stating an artistic debt between two entities either of which could be a recommendation. The whole of this amendment |
+| `BASED_ON` | **yes** | the same debt, work to work — the later work defers to the earlier one. It changes nothing today because a `WORK` is never a candidate; it is stated so the exception is deliberate rather than unnoticed |
+| `MEMBER_OF`, `HAS_PART` | no | which end is the person and which the group is a fact about kinds. A band does not defer to its drummer |
+| `PERFORMED`, `AUTHORED`, `DIRECTED`, `WROTE_SCREENPLAY_FOR`, `COMPOSED_FOR`, `ACTED_IN` | no | every one is inverted at ingest so it reads person-to-work (ADR 22). That direction is the convention, not regard; two people credited on one film are symmetric |
+| `PART_OF` | no | containment. A song is not deferring to its album |
+| `RECEIVED_AWARD` | no | the direction separates a person from a prize, which the hub rule has already dealt with. Nobody is flattered by being an award |
+| `COLLABORATED_WITH`, `SIMILAR_TO` | no | the vocabulary declares both SYMMETRIC, so no direction could be read off them |
+
+`RecommendationWeightsTest.theVocabularysDebtRelationsAreTheOnlyDirectionalOnes` pins that table, so
+a new relation costs both decisions rather than inheriting the quiet one.
+
+### The measurement, on the real graph, before and after
+
+Same 123,752-node copy, same 815-entity known-list, same `lift` and same floor of 12; only the
+arrows are read. Top ten:
+
+| # | before | after |
+|---|---|---|
+| 1 | SR-71 — 1.2393 | Metallica — 1.0820 |
+| 2 | Metallica — 1.1712 | Marc Bolan — 1.0149 |
+| 3 | Marc Bolan — 1.0149 | MC5 — 0.9621 |
+| 4 | Cartel — 0.9825 | New York Dolls — 0.7590 |
+| 5 | MC5 — 0.9621 | Free — 0.5472 |
+| 6 | Anarbor — 0.8197 | Redd Foxx — 0.5085 |
+| 7 | Tonic — 0.7666 | The Stooges — 0.4918 |
+| 8 | New York Dolls — 0.7590 | The Fugs — 0.4745 |
+| 9 | The Stooges — 0.6627 | Lenny Bruce — 0.4714 |
+| 10 | Third Eye Blind — 0.6162 | Dick Dale — 0.4657 |
+
+**Of the top 25, the number that cite more entities than cite them went from 18 to 2.** The thin
+items fell out of the page and kept their receipts: SR-71 1 → 24, Cartel 4 → 76, Anarbor 6 → 88, The
+Witty Featherstones 12 → 141, La Ludwig Band 15 → 191, and four more left the top 200 entirely.
+Five candidates in the old top 25 cite nobody at all — Marc Bolan, MC5, New York Dolls, Free and The
+Fugs, with Mott the Hoople just below it at 34 — and every one of the six scores **identically**
+before and after. That is the clearest possible statement of what the change touches: their arrows
+were already all inbound, so nothing about them moved except everything that had been above them.
+
+**One named ancestor did fall, and it is the honest cost of the rule.** Black Flag went 22 → 65, and
+the reason is in the counts rather than in the arithmetic: in this graph it cites 19 entities and is
+cited by 9, so two thirds of its presence is its own influence list, and its own routes into the
+known-list are the outward ones. The Stooges is the same shape (cites 21, cited by 19) and survives
+at 7 because its inbound half reaches further. **No multiplier separates them from SR-71 by rank
+alone** — at 0.5 SR-71 returns to rank 2, and at 0.1 both Black Flag and SR-71 leave together — so
+0.2 is where this sits, and Black Flag falling out of the first page is recorded rather than tuned
+away.
+
 ## Alternatives considered
 
 - **A seventh MCP tool** — argued above at length, and the strongest case any of the five dev-side
@@ -251,7 +344,10 @@ reader moves to a package neither of them owns rather than being copied. Behavio
   because the traversal is undirected everywhere else in segue — `Hop.traversedBackwards` records
   the direction rather than forbidding it — and because both are real answers: "who did the things I
   like come from" and "who came from them" are both segues. If it is built it is a new dimension for
-  the whole path layer, not a special case here.
+  the whole path layer, not a special case here. **Half taken (2026-08-27, issue #84): the traversal
+  is still undirected and no edge was split in two, but the SCORE now reads the arrow on the hop
+  that touches the candidate. See the issue-#84 amendment above — "both are real answers" is why it
+  demotes rather than excludes.**
 - **Storing recommendations in the graph or the log** — they are derived, they change every time the
   graph does, and ADR 19 keeps the log for what sources said. A snapshot file, like the exporter's,
   is the honest artefact.
@@ -271,6 +367,10 @@ reader moves to a package neither of them owns rather than being copied. Behavio
 - **Sorting that out is the next question, and it is a data question rather than a scoring one.**
   A thin item citing twelve famous bands and a genuine ancestor cited by twelve famous bands look
   identical to an undirected two-hop walk. The direction alternative above is the honest fix.
+  **~~A data question~~ — wrong, and corrected by the issue-#84 amendment above (2026-08-27). The
+  graph already stored the arrow and the receipts already printed it; nothing but the score was
+  ignoring it. Of the top 25, the items citing more than they are cited went from 18 to 2, and the
+  ancestors that cite nobody did not move at all.**
 - **The floor and the hub degree both drift as the graph grows**, in opposite directions, and
   nothing re-measures them automatically. A threshold nobody re-measures is a blocklist with extra
   steps.
