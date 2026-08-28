@@ -34,10 +34,10 @@ import java.util.stream.Collectors;
  * already happened.
  *
  * <p><b>It reads and cannot write.</b> {@code ArchitectureTest.theRatingsToolOnlyReads} forbids
- * this package from calling {@code AffinityStore.put}, {@code AssertionLog.append}, {@code
- * GraphStore.record} or {@code GraphStore.upsertNode} - the affinity write included, which no other
- * rule in the project covers. Affinity is the one part of segue that cannot be regenerated, so the
- * tool that reads all of it must be unable to touch any of it.
+ * this package from calling {@code AffinityStore.put}, {@code AffinityStore.updateRating}, {@code
+ * AssertionLog.append}, {@code GraphStore.record} or {@code GraphStore.upsertNode} - both affinity
+ * writes included, which no other rule in the project covers. Affinity is the one part of segue
+ * that cannot be regenerated, so the tool that reads all of it must be unable to touch any of it.
  *
  * <p>Notes go to a {@link Consumer} rather than to a logger of this class's own, so the ordering is
  * observable from a test and so this class has no logger to misuse - the same discipline {@code

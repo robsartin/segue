@@ -785,13 +785,20 @@ class ArchitectureTest {
    * through {@link IngestService#retract}, which is the only reason it is allowed to depend on
    * {@code ingest} at all.
    *
-   * <p>So the four durable writes are all forbidden <em>here</em> as well as from wherever else
-   * they are already forbidden: {@code AssertionLog.append} directly (it must go through {@code
-   * ingest}, so that {@link #onlyIngestAppliesClaimsToTheGraph} keeps meaning what it says), both
-   * halves of the graph write, and {@code AffinityStore.put}. That last one matters most: a
+   * <p>So every durable write is forbidden <em>here</em> as well as from wherever else it is
+   * already forbidden: {@code AssertionLog.append} directly (it must go through {@code ingest}, so
+   * that {@link #onlyIngestAppliesClaimsToTheGraph} keeps meaning what it says), both halves of the
+   * graph write, and <b>both</b> taste-layer writes — {@code AffinityStore.put} and, since the
+   * issue-#109 review, {@code AffinityStore.updateRating}. The taste-layer clauses matter most: a
    * retraction is about the world-fact layer, and ADR 33 keeps the taste layer out of it entirely.
    * A rating is the one thing in segue that cannot be regenerated, and the tool whose whole purpose
    * is removing things must be unable to touch it.
+   *
+   * <p><b>The count is deliberately not stated as a number any more.</b> This javadoc said "the
+   * four durable writes" and went on listing four while the port had grown a fifth; the rule kept
+   * its teeth only because {@link #theRetractionToolOpensNothingElse} bans {@code AffinityStore} as
+   * a type in this package. A rule whose prose promises coverage it does not have reads as
+   * decorative to the next person, whether or not a second rule happens to be holding the line.
    */
   @ArchTest
   static final ArchRule theRetractionToolWritesOnlyRetractions =
@@ -802,6 +809,7 @@ class ArchitectureTest {
               ArchConditions.callMethodWhere(
                   APPLIES_A_CLAIM
                       .or(callTo("put", AffinityStore.class))
+                      .or(callTo("updateRating", AffinityStore.class))
                       .or(callTo("readAll", AffinityStore.class))))
           .because(
               "ADR 44: retraction appends one claim through IngestService and writes nothing"
