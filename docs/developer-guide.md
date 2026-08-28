@@ -14,6 +14,7 @@ Everything here was checked against the source in `src/main/java/com/robsartin/s
 ## Contents
 
 - [What segue is, in one pass](#what-segue-is-in-one-pass)
+- [The model: what segue can represent](#the-model-what-segue-can-represent)
 - [The layering](#the-layering)
 - [The log is the truth; the graph is a projection](#the-log-is-the-truth-the-graph-is-a-projection)
 - [Two-pass ingest](#two-pass-ingest)
@@ -52,6 +53,185 @@ The tool surface is fixed at six tools by
 [ADR 26: the MCP tool surface](adr/0026-mcp-tool-surface.md); the tools themselves are the
 `@McpTool`-annotated methods on `EntityTools`, `GraphTools` and `TasteTools`, and
 `ToolSurfaceTest` fails if a seventh appears.
+
+## The model: what segue can represent
+
+Everything in the graph is one of **six kinds** of node, joined by relations drawn from **one flat
+controlled vocabulary**. That is the whole shape, and it is deliberately smaller than the domains it
+covers.
+
+**This section is the rules. The code is the list.** Issue #46 found ADR 32's rules table naming
+nine rules when `ArchitectureTest` enforced eighteen, and the fix was to make the ADR say that the
+test is the list. Same discipline here: nothing below reproduces a vocabulary, a class mapping or a
+weight table, because a second copy of one is a drift generator.
+
+| Question | The authority |
+| --- | --- |
+| Which kinds are there? | `NodeKind` |
+| Which relations are there, and is each one inverted, fallback-only, derived or symmetric? | `EdgeTypes` |
+| Which Wikidata `P31` classes map to which kind? | `KindMapper` |
+| What is a hop of each relation worth to a recommendation, and does its direction mean anything? | `RecommendationWeights` |
+
+Counted on 2026-08-28 against those files, that is six kinds, fourteen relations and fifty-three
+class mappings. The numbers are here to sanity-check a reading, not to be cited; two of the three
+are expected to grow, and the first is not.
+
+### Six kinds, closed, and roles are edges
+
+`NodeKind` has six constants and is intended never to gain a seventh. "Musician", "novelist" and
+"director" are **roles**, and a role is an edge — `PERFORMED`, `AUTHORED`, `DIRECTED` — so one Nick
+Cave node is all three at once and the enum stays put. **Wanting to add `MUSICIAN` or `FILM` is a
+signal that the model is being used wrong**, not a requirement to satisfy.
+[ADR 21](adr/0021-six-kind-ontology.md) is the decision, and it states the cost honestly: a query
+that genuinely wants "films only" filters on edge type or on the stored classes, because there is no
+`FILM` kind to filter on.
+
+The same ADR settles that there is **one flat relation namespace** rather than a vocabulary per
+domain. Music, film and literature relations are all relations between the same six kinds, which is
+why a cross-domain route needs no bridge.
+
+**`CONCEPT` is the fallback, and two later rules depend on it staying one.** `KindMapper` whitelists
+a short list of Wikidata classes and everything else falls through, so `CONCEPT` means "this could
+not be placed" rather than "this is an idea". [ADR 31](adr/0031-path-ranking-by-confidence.md)'s
+issue-#52 amendment demotes a route through a high-degree `CONCEPT` intermediate, and
+[ADR 38](adr/0038-award-received-as-the-first-non-collaboration-edge.md) requires an award node to
+be a `CONCEPT` — enforced by a test, because a `KindMapper` entry that placed awards somewhere else
+would switch the hub rule off silently.
+
+### The vocabulary is borrowed from Wikidata, never invented
+
+Every relation a source states is anchored to a Wikidata property — `MEMBER_OF` is P463, `DIRECTED`
+is P57, `RECEIVED_AWARD` is P166 — so adding one is a measurement rather than a naming exercise.
+[ADR 22](adr/0022-wikidata-identity-and-vocabulary.md).
+
+**The exceptions declare themselves in the type.** `EdgeType.wikidataProperty` is null for a
+relation no source states: `COLLABORATED_WITH` is derived from co-credits and `SIMILAR_TO` arrives
+from a similarity source. The null is the record that nothing was fetched, and `ClaimMapper` reads
+the vocabulary as its ingest whitelist, so a null-property type simply never matches a claim.
+
+### `inverted` records which end of the edge Wikidata states it on
+
+Wikidata states most creative relations on the **work** — `film P57 person` — while an affinity
+graph reads better from the person. `EdgeType.inverted` records that, so ingest flips it
+mechanically and the stored edge reads `person DIRECTED film` (ADR 22).
+
+**The flag fixes direction, not discovery**, and conflating the two is the easiest mistake to make
+here. Expanding the person reads the person's own claims and finds nothing, because the triple is
+not stored there; recovering it takes a second, reverse pass. See
+[Two-pass ingest](#two-pass-ingest) and [ADR 36](adr/0036-reverse-lookup-via-sparql.md).
+
+### `fallbackOnly` is for a property that is the other end of one already registered
+
+Wikidata defines P527 ("has part") as the inverse of both P463 and P361 — one relationship, stated
+from the opposite end — so reading both ends records one membership as two edges.
+`EdgeType.fallbackOnly` marks that case, and the effect is that the property is read **only on the
+degraded path**, where the pass that would have found the better-stated direction could not run.
+ADR 36's issue-#33 amendment is the decision and the measurement; the mechanism is in
+[The fallback-only subtraction](#the-fallback-only-subtraction).
+
+The rule for a new property is short: **if it is Wikidata's inverse of one already in `EdgeTypes`,
+mark it `fallbackOnly` or do not register it at all.** There is deliberately no inverted variant of
+the factory — registering both ends of one inverse pair *as* inverted would mean the vocabulary held
+the same edge twice by construction.
+
+### Direction is read for recommendations, and not for routing
+
+The same edge means different things to the two consumers, and that is deliberate.
+
+- **`find_paths` is undirected.** `Hop.traversedBackwards` records which way the walk crossed an
+  edge so the rendered citation reads correctly; it does not forbid the crossing. Nor does routing
+  weigh relations against each other — `PathRanking` orders by hypothesis-last, then specificity
+  (the hub rule), then weakest confidence, so **a shared influence and a shared award of equal
+  confidence rank equally**. Every registered relation is legitimate evidence that two entities are
+  connected. [ADR 31](adr/0031-path-ranking-by-confidence.md).
+- **The recommender reads both the type and the arrow.** `RecommendationWeights` puts every relation
+  in one of three tiers, and separately marks whether its direction states a *debt*. A hop the
+  candidate is the subject of — the candidate citing your list, rather than being cited by it — is
+  worth a fraction of the same hop stated about it, and **only the candidate's own hop is asked**;
+  discounting the hop out of your own entities would demote exactly the ancestors the tool exists to
+  surface. [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) and its issue-#84
+  amendment.
+
+Tier and direction are two dimensions in one table row because neither is derivable from the other:
+`BASED_ON` and `MEMBER_OF` are both collaborations and only one states a debt, while `INFLUENCED_BY`
+and `BASED_ON` are both debts in different tiers. Direction of esteem is a **recommendation policy,
+not a fact about the vocabulary**, which is why it lives in `RecommendationWeights` and not on
+`EdgeType`.
+
+### `NodeKind` is a derivation, not a fact
+
+A node claim stores the raw `P31` classes the source stated, beside the kind derived from them, and
+both projections re-derive the kind at projection time with no network.
+[ADR 42](adr/0042-store-p31-and-rederive-kind-at-projection.md).
+
+That is what makes an improvement to `KindMapper` reach entities the graph already holds. Before it,
+the seventeen classes added across issues #49 and #52 could only take effect by re-fetching every
+entity from Wikidata, which cost two full re-seeds. Three properties of the rule are load-bearing:
+
+- **It is always on, never a flag.** An opt-in correction is one every future caller has to
+  remember, and forgetting it is invisible.
+- **A claim stating no classes keeps the kind it recorded.** Not every source is Wikidata, and one
+  that classifies without stating classes has nothing to re-derive from.
+- **When classes are stated the mapper is the authority, including when it answers `CONCEPT`.**
+  Otherwise the whitelist would be a ratchet, where additions propagate and corrections never do.
+
+The rule lives in `KindMapper`, beside the table it re-applies, because `GraphProjector` and
+`LogProjection` both call it and two copies would be free to disagree about a graph and a picture of
+that graph.
+
+### Confidence is graded, and the grade records what could be seen
+
+[ADR 23](adr/0023-quarantine-model-generated-assertions.md) fixes one confidence convention across
+every adapter, and ADR 36 explains why the same relationship can arrive at two different grades:
+
+- A **forward** Wikidata claim is read as a full statement, so its reference block and qualifiers
+  are visible. `ClaimMapper` grades it 1.00 when it carries a reference and 0.80 when it does not.
+- A **reverse** hit is a truthy `wdt:` triple, which exposes neither. `ReverseClaims` therefore
+  grades it 0.80 unconditionally and records no `validFrom`/`validTo` — the honest reading of an
+  unknown is the lower one, not the optimistic one.
+
+Two consequences follow that look surprising until you know this. The two hops of one route can
+carry different confidences, and `PathResult.weakestConfidence()` reports the shakier — a route is
+only as trustworthy as its worst hop. And forward claims are concatenated **first**, before
+`maxNewEdges` bites, so the better-evidenced ones survive truncation; see
+[Ordering, bounds and degradation](#ordering-bounds-and-degradation).
+
+### Adding a relation type
+
+The pattern is ADR 38's, and the point of it is that the decision is made against a measurement
+rather than against an intuition.
+
+1. **Measure the hub size before anything else.** Ask the Query Service how many items point at the
+   biggest node the property reaches. ADR 38 did exactly that for the four obvious candidates, and
+   the answer decided the design: award received reached a 127-item node where genre, occupation and
+   record label reached nodes two orders of magnitude larger *(measured 2026-08-25 against WDQS; the
+   figures and the queries are in that ADR)*. A relation that connects everything to everything has
+   stopped saying anything, and `PathRanking` cannot rescue it — a hub edge is perfectly confident,
+   merely uninformative.
+2. **Admit one property, not five.** One property produces a real graph to judge the next question
+   against. ADR 38's open question 1 — whether the selection criterion is a threshold on hub degree,
+   and what that threshold is — **is still open**, so there is no mechanical rule to apply yet, and
+   registering a second property on the strength of the first is not licensed by it.
+3. **Choose the factory from Wikidata's own modelling, not from taste.** Which end states the triple
+   decides `direct` against `inverted`; whether the property is the inverse of one already
+   registered decides `fallbackOnly`; a relation no source states at all is `derived`, with a null
+   property. Get this wrong and the symptom is quiet: every citation `find_paths` prints reads
+   backwards, or one relationship arrives as two edges.
+4. **Weigh it for recommendations — both dimensions.** A tier, and whether its direction states a
+   debt. `RecommendationWeightsTest.everyRegisteredTypeIsNamed` fails the build if the table has not
+   been told about the new type, so a new relation costs a decision rather than inheriting one.
+5. **Record an ADR**, including the candidates you declined and the numbers you declined them on.
+   The declined ones are the part a later reader needs.
+
+Registering the type in `EdgeTypes` is all that ingest needs: the forward whitelist, the reverse
+property set and the direction rule are all derived from the vocabulary rather than hand-kept — see
+[Three couplings that must stay coupled](#three-couplings-that-must-stay-coupled).
+
+**Adding a `P31` class to `KindMapper` is a smaller move with the same discipline.** One line, with
+the label *and* the description confirmed against Wikidata rather than inferred from the QID, and
+preferably measured against a real graph — the classes added by issues #49 and #52 came from
+counting what was actually landing in `CONCEPT`. Since ADR 42 the addition reaches every node the
+graph already holds, at the next boot, offline.
 
 ## The layering
 
