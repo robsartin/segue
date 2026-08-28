@@ -2,7 +2,6 @@ package com.robsartin.segue.domain;
 
 import java.util.List;
 import java.util.Objects;
-import java.util.regex.Pattern;
 
 /**
  * An entity. Identity is the Wikidata QID - the universal spine across music, film, literature and
@@ -17,22 +16,18 @@ import java.util.regex.Pattern;
  */
 public record NodeRecord(String qid, NodeKind kind, String label, List<String> instanceOf) {
 
-  private static final Pattern QID = Pattern.compile("Q\\d+");
-
   public NodeRecord {
     Objects.requireNonNull(qid, "qid");
     Objects.requireNonNull(kind, "kind");
     Objects.requireNonNull(label, "label");
     instanceOf = List.copyOf(Objects.requireNonNull(instanceOf, "instanceOf"));
-    if (!QID.matcher(qid).matches()) {
-      throw new IllegalArgumentException("qid must look like Q12345, got: " + qid);
-    }
+    Qid.check(qid);
     for (String classQid : instanceOf) {
       // Every value is a QID, so the packed encodings that store this list - one space-separated
       // column in the log, one literal on a graph vertex - cannot be broken by data and need no
       // escaping. That is the same argument ProvenanceCodec makes by forbidding its separators
       // in Provenance, made here by constraining the whole value instead.
-      if (classQid == null || !QID.matcher(classQid).matches()) {
+      if (!Qid.looksLikeAQid(classQid)) {
         throw new IllegalArgumentException("instanceOf must look like Q12345, got: " + classQid);
       }
     }

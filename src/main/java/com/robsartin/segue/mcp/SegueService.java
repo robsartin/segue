@@ -9,6 +9,7 @@ import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.PathRanking;
 import com.robsartin.segue.domain.PathResult;
+import com.robsartin.segue.domain.RatingScale;
 import com.robsartin.segue.ingest.IngestService;
 import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.EntityResolver;
@@ -398,7 +399,7 @@ public final class SegueService {
     if (graph.node(qid).isEmpty()) {
       return error("unknown entity: " + qid + " — add it before rating it");
     }
-    if (rating < AffinityRecord.MIN_RATING || rating > AffinityRecord.MAX_RATING) {
+    if (rating < RatingScale.MIN || rating > RatingScale.MAX) {
       return error("rating must be an integer from 1 to 5");
     }
     String trimmed = note == null || note.isBlank() ? null : note.strip();

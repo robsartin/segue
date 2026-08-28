@@ -25,9 +25,9 @@ import org.slf4j.LoggerFactory;
  * seed} (ADR 40) and {@code export} (ADR 41).
  *
  * <p><b>It reads two stores and writes neither.</b> See {@link RatingsRun} for the fence, and note
- * what it covers that no other rule does: {@code AffinityStore.put}. The exporter's rule did not
- * need that clause, because the exporter looks up one rating at a time; this tool holds the whole
- * table.
+ * what it covers that no other rule does: the taste-layer writes, {@code AffinityStore.put} and
+ * {@code updateRating}. The exporter's rule did not need those clauses, because the exporter looks
+ * up one rating at a time; this tool holds the whole table.
  *
  * <p><b>The output is a file, not console output.</b> Two reasons, and they point the same way. ADR
  * 30 makes SLF4J the only logging API and ArchUnit forbids {@code System.out} project-wide, so

@@ -36,6 +36,11 @@ class AffinityOverlayTest {
     }
 
     @Override
+    public void updateRating(String qid, int rating, Instant updatedAt) {
+      throw new UnsupportedOperationException("the exporter never writes");
+    }
+
+    @Override
     public Optional<AffinityRecord> find(String qid) {
       return Optional.ofNullable(ratings.get(qid));
     }

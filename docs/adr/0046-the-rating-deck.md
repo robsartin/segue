@@ -172,6 +172,141 @@ second `put` against the same qid, which needs no new port method. The consequen
 stating plainly: a first rating can be changed, but it can never be withdrawn — there is no verb
 in this tool, or anywhere else in segue, that removes one.
 
+**Amendment (2026-08-28, issue #109): revision, because "everything unrated" made reconsideration
+impossible.**
+
+A real session produced 973 ratings — 541 fives, 309 fours, 121 threes, one 2, one 1. Those 973
+ratings moved exactly **one** entity in the top 25 of `./gradlew recommend`'s output against
+running with no ratings at all, and the last 164 entities in that ranking did not move at all. The
+reason is arithmetic, not a bug: `Recommendations.regardFor` centres its weighting on
+`NEUTRAL_RATING` (3), so a rating of 3 weighs exactly 1.0 — identical to an entity with no rating at
+all. **The 121 threes are no-ops.** They cost a keystroke each and moved nothing, because "no
+opinion yet" and "I said 3" produce the same number.
+
+The deck could not reach them. `Deck.deal`'s only mode excluded every already-rated entity —
+"`readRatings` is now shared with `rate`" above calls that exclusion "the whole of its resume
+mechanism," and the Consequences bullet "a rating can be changed but never withdrawn" said
+correction was possible in principle without saying the deck offered no path back to a rating once
+given, because nothing dealt an already-rated entity a second time. A 3 recorded on a first pass,
+honestly meant as "I don't know" or "it's fine," had no way to become the 2 or 4 it may have
+actually meant.
+
+**Decision: `--revise <rating>` deals already-rated entities holding exactly that rating, instead
+of unrated ones.** `RateCli` gained the flag, validated against `AffinityRecord.MIN_RATING`/
+`MAX_RATING` — the same range check the scale itself uses. `Deck.deal` gained an `OptionalInt
+reviseRating` parameter and, when present, runs a separate selection (`dealRevision`) that walks the
+known list and keeps only the qids the `ratings` map holds at exactly that value, instead of the
+exclusion path above. The default run — no `--revise` — is unchanged: `Deck.deal` with an empty
+`OptionalInt` behaves exactly as the rest of this Decision section describes.
+
+**The card must show the rating it already has, and that is non-negotiable.** The one risk a
+revision pass introduces that a first pass does not: a considered 2, re-shown blind, becomes a
+reflexive 4 on the second look — worse than not offering revision at all, because a rating that
+just happened to be typed again reads as fresh judgment rather than as what it is, an unexamined
+repeat. `Card` gained a third static factory, `Card.rated(node, degree, currentRating)`, carrying
+the existing value; the deck's JSON carries it as `currentRating` beside `degree` (present or
+`null`, the same treatment `degree` already gets); and `deck.html` renders it as a filled,
+reversed-color banner — the one element on the card with a real background fill, not just colored
+text — reading "Currently rated N — this is a revision, not a new card," built with `textContent`
+and `document.createElement`, never `innerHTML`, the same way every other label on the card is
+built. An unrated card shows no such banner; the gate is `currentRating !== null`.
+
+**Revise mode deals no candidates.** A candidate is by definition something absent from the
+known-list and therefore unrated — there is nothing to reconsider about it, and mixing discovery
+into a revision pass would change what the pass measures. `dealRevision` selects only from
+`knownQids`, never from the candidate sweep, and sorts by the same degree-descending rule the
+default deck uses.
+
+Nothing above this amendment is withdrawn — it described, and still describes, `Deck.deal` with no
+`reviseRating` supplied. What changed is that "everything unrated, recomputed at startup" is now
+one of two modes this tool can deal, not the whole of it.
+
+**Amendment (2026-08-28, issue #109 final review): revising a rating preserves the note, because
+`--revise` is the first thing in segue that can reach a note-bearing row.**
+
+The amendment above shipped a silent, irreversible data loss. `RateServer` wrote every rating as
+`affinity.put(new AffinityRecord(qid, rating, null, Instant.now()))`, and `SqliteAffinityStore`'s
+upsert sets `note = excluded.note` — so every write through the deck put `NULL` in the note column.
+Before `--revise` that was harmless, and harmless for a reason worth stating precisely: the deck
+could only deal **unrated** entities, a note cannot exist without a rating (`note_affinity` writes
+both), so no row carrying a note was reachable from this tool at all. `dealRevision` inverts
+exactly that. It selects the already-rated population — which is precisely where the `note_affinity`
+MCP tool writes notes. `note_affinity(Q…, 3, "great live, thin on record")`, then `--revise 3`,
+then pressing `2`, left `rating = 2, note = NULL`, with no message, no log line, and no source
+anywhere to restore the words from.
+
+**Decision: the taste-layer port gains a rating-only write, and the deck uses it — in both modes.**
+`AffinityStore.updateRating(String qid, int rating, Instant updatedAt)` is a signature with nowhere
+to put a note; `SqliteAffinityStore` implements it with SQL that never names the `note` column, so
+an existing note survives an update untouched and a row inserted through it simply has none. It
+inserts as well as updates, because the deck's default mode writes **first** ratings through the
+same call and a method that could only update would refuse its commoner case.
+
+**The fix is a narrower write, not a wider deck, and that is the point.** The obvious alternative —
+have the deck read the existing record and write the note back — was refused: it requires the deck
+to read `AffinityRecord.note()`, which `ArchitectureTest.theRatingDeckNeverReadsANote` forbids for
+every class in `rate` and should go on forbidding. A tool that never sees a note cannot erase one
+either, once the write it makes has no note in it. `RateServer` calls `updateRating` in **both**
+modes and could not distinguish them if it wanted to: it holds a `List<Card>` and no mode flag.
+`put` stays what it was — the whole-row write, and `SegueService.noteAffinity`'s alone, because
+that is the one caller with a note to write.
+
+**Consequential moves, each small and each stated here because this ADR's earlier text names the
+old shape.**
+
+- **The scale's bounds moved to `RatingScale` (`domain`), and the Decision above should now be read
+  as naming it.** That paragraph says `--revise` is "validated against `AffinityRecord.MIN_RATING`/
+  `MAX_RATING`"; the constants are now `RatingScale.MIN`/`MAX`, and `AffinityRecord`'s own compact
+  constructor calls `RatingScale.check`. The reason is a fence that was passing for an invisible
+  reason: `RateCli` named those constants in its usage string, and `theRatingDeckLogsNoRating`
+  saw no violation only because javac inlines a compile-time `int` and the reference never reaches
+  the bytecode ArchUnit reads. A class that needs to say "1 to 5" must not have to name the type
+  that carries a rating value to do it.
+- **`theRatingDeckLogsNoRating`'s named exception is withdrawn.** The section above headed
+  **"Ratings only: three fences, and one stated exception"** records that `RateServer` is excluded
+  by name because it must construct the record it writes. It no longer constructs one, so the
+  exception is gone and the rule now bans `AffinityRecord` across the whole of `rate`, with no
+  exception at all. **That heading is stale as written**: read it as "three fences, and no
+  exception", and read its `affinity.put(new AffinityRecord(...))` sentence as describing what the
+  handler used to do. (The first draft of this amendment cited *"Ratings are the only thing it
+  writes"*, which is the developer guide's heading, not this ADR's.)
+- **Two `only reads` fences gained `updateRating`.** `theRatingsToolOnlyReads` and
+  `theRecommenderOnlyReads` each named `AffinityStore.put` as the write they forbid. A second write
+  method on the port would have walked straight through both, so both now name it too.
+- **The banner shows what this session wrote, not what the deck was dealt with.** "The card must
+  show the rating it already has, and that is non-negotiable" above is the strongest claim in this
+  amendment, and `b` broke it. `RateServer` holds `List.copyOf(deck)` from startup, so a card's
+  `currentRating` never refreshes: rating a card `2` and pressing `b` re-displayed the same card
+  still announcing "Currently rated 3" — a documented key, on a page whose own caption says going
+  back re-rates, producing a confident falsehood about the one number this ADR says must never be
+  wrong. `deck.html` now keeps a `qid → rating` map of what it has successfully sent, written only
+  after a response that was `ok`, and the banner prefers it over the server's snapshot. The page
+  needs no round trip to know this: it is what sent the value. It applies to an ordinary card too —
+  a card rated a minute ago and returned to *is* a revision of that rating, and showing the value
+  given is the same protection against a reflexive second answer the banner exists for. **The
+  wording stays as it is**, on review: "this is a revision, not a new card" is literally true of a
+  default-mode card the owner rated ten seconds ago and has just pressed `b` to return to — it is a
+  revision of that rating, and it is not a new card, because they have already seen it. A second,
+  gentler wording for the default mode would mean two sentences to keep true and would soften the
+  one message whose bluntness is the entire reason it exists.
+- **Two sentences in the Decision above now name the wrong port method, and both should be read as
+  `updateRating`.** "Degree ordering, with the arithmetic" ends "Rating records a `put`; skipping
+  records nothing at all" — the contrast it draws is between recording something and recording
+  nothing, and that still holds exactly; only the method's name has changed. "No un-rate" says
+  pressing `b` and choosing a different number "is a second `put` against the same qid, **which
+  needs no new port method**." That clause is now false, and it is false for a reason worth keeping
+  rather than quietly correcting: re-rating really did need no new port method to *record the
+  rating* — `put` did that correctly. What it needed one for is everything `put` also writes. The
+  paragraph's actual claim survives untouched: there is still no delete, still one row per entity,
+  and a rating can still be changed but never withdrawn.
+- **The `Origin` allowlist now guards `GET /api/card` as well as `POST /api/rate`.** "The Origin
+  allowlist, ADR 28's argument used a second time" above says the check runs "before honouring
+  `POST /api/rate`", and only that endpoint called `originAllowed`. The asymmetry was defensible
+  while a card body carried a label, a kind and a degree: under the rebinding scenario a hostile
+  page learned at most whether some qid was on the owner's known-list. This amendment's own
+  `currentRating` field changed that — a page walking `?i=0,1,2…` could read the ratings
+  themselves. Read that section as naming both endpoints.
+
 ## Alternatives considered
 
 - **A controller in the Spring app** — the server and the port already exist. Refused because it

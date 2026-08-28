@@ -29,23 +29,13 @@ import java.util.Objects;
  */
 public record AffinityRecord(String qid, int rating, String note, Instant updatedAt) {
 
-  /** The inclusive bounds of the scale (ADR 39). */
-  public static final int MIN_RATING = 1;
-
-  public static final int MAX_RATING = 5;
-
   public AffinityRecord {
     Objects.requireNonNull(qid, "qid");
     Objects.requireNonNull(updatedAt, "updatedAt");
-    if (!qid.matches("Q\\d+")) {
-      throw new IllegalArgumentException("qid must look like Q12345, got: " + qid);
-    }
-    if (rating < MIN_RATING || rating > MAX_RATING) {
-      // Deliberately does NOT name the rejected value, unlike every other message in this
-      // package. Affinity is personal data that ADR 33 keeps out of every log line, and an
-      // exception message is the one string in this class most likely to end up in one.
-      // The caller knows what it sent; the log does not need to.
-      throw new IllegalArgumentException("rating must be an integer from 1 to 5");
-    }
+    Qid.check(qid);
+    // The bounds and the message both live on RatingScale, which carries no rating of its own —
+    // see its javadoc for why a caller that only needs to say "1 to 5" must not have to name this
+    // record to do it.
+    RatingScale.check(rating);
   }
 }

@@ -183,9 +183,10 @@ tasks.register<JavaExec>("rate") {
     group = "application"
     description =
         "Serves a local page that deals your entities one at a time and records a 1-5 rating " +
-            "per keystroke, filling the affinity table the recommender weights by. Loopback " +
-            "only. Writes the taste layer and nothing else. See ADR 46. Example: ./gradlew rate " +
-            "--args=\"--known \$HOME/setlist-scout/filtered-qids.csv\""
+            "per keystroke, filling the affinity table the recommender weights by. --revise <n> " +
+            "deals already-rated entities holding exactly that rating instead, for reconsidering " +
+            "them. Loopback only. Writes the taste layer and nothing else. See ADR 46. Example: " +
+            "./gradlew rate --args=\"--known \$HOME/setlist-scout/filtered-qids.csv\""
     mainClass.set("com.robsartin.segue.rate.RateCli")
     classpath = sourceSets["main"].runtimeClasspath
     // sqlite-jdbc loads a native library, the same grant tasks.test makes.

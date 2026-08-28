@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.function.Consumer;
 
@@ -41,24 +42,31 @@ public final class RateRun {
    * Build the deck.
    *
    * @param ratings the note-free bulk read, {@code AffinityStore.readRatings()}, used <b>twice</b>
-   *     and for two different things. Its key set is the exclusion — an entity already rated is not
-   *     dealt again, which is the whole of {@code Deck}'s resume mechanism. Its values are the
+   *     and for two different things. Its key set is the selection — in the default mode an entity
+   *     already rated is not dealt again, which is the whole of {@code Deck}'s resume mechanism,
+   *     and under {@code --revise} the same key set is read the other way round. Its values are the
    *     weighting: {@code Recommendations.regardFor} is what {@code RecommendCli} passes its own
    *     sweep, and passing {@code EQUAL_REGARD} here instead (as this did until issue #101's final
    *     review) made the deck's candidate cards diverge from {@code ./gradlew recommend}'s for the
    *     same {@code --known} file the moment anything was rated. The deck exists to collect the
    *     ratings; showing candidates chosen as though none had been collected is the one thing it
    *     must not do
+   * @param reviseRating absent for the normal unrated sweep; when present (issue #109), the
+   *     candidate sweep is skipped entirely rather than run and discarded — a candidate is by
+   *     definition unrated, so a revision pass has nothing there to reconsider, and the sweep alone
+   *     costs real graph work on a real store
    */
   public static List<Card> buildDeck(
       GraphStore graph,
       List<String> known,
       Map<String, Integer> ratings,
       int candidateCount,
+      OptionalInt reviseRating,
       Consumer<String> notes) {
     Objects.requireNonNull(graph, "graph");
     Objects.requireNonNull(known, "known");
     Objects.requireNonNull(ratings, "ratings");
+    Objects.requireNonNull(reviseRating, "reviseRating");
     Objects.requireNonNull(notes, "notes");
 
     Set<String> alreadyRated = ratings.keySet();
@@ -67,7 +75,29 @@ public final class RateRun {
         known.size() + " entity(ies) on your list, " + alreadyRated.size() + " already rated");
 
     List<Explained> candidates = new ArrayList<>();
-    if (candidateCount > 0) {
+    if (reviseRating.isPresent()) {
+      // A count, never the rating value or a qid (ADR 33) — "up for reconsideration" says how
+      // many, not which ones or what they are currently rated.
+      //
+      // Counted over the KNOWN LIST, not over ratings.values(), because that is the population
+      // Deck.dealRevision walks. Counting the whole table put two numbers from two different
+      // populations three lines apart in the log — "121 card(s) up for reconsideration" then
+      // "84 card(s) to rate" — with nothing saying that the 37 are entities rated at some point
+      // and since dropped from the list, which this run will never deal. The wording says
+      // "entity(ies) on your list" for the same reason: what remains between this number and the
+      // dealt count is only the entities the graph does not hold, exactly as in the default mode
+      // above.
+      int target = reviseRating.getAsInt();
+      long upForReconsideration =
+          known.stream()
+              .filter(
+                  qid -> {
+                    Integer rating = ratings.get(qid);
+                    return rating != null && rating == target;
+                  })
+              .count();
+      notes.accept(upForReconsideration + " entity(ies) on your list are up for reconsideration");
+    } else if (candidateCount > 0) {
       Sweep sweep =
           new CandidateSweep(graph, RecognitionInstitutions::isRecognitionInstitution)
               .over(known, Scorer.LIFT, MIN_CANDIDATE_DEGREE, Recommendations.regardFor(ratings));
@@ -79,7 +109,8 @@ public final class RateRun {
     }
 
     List<Card> deck =
-        Deck.deal(known, qid -> graph.edges(qid).size(), graph::node, alreadyRated, candidates);
+        Deck.deal(
+            known, qid -> graph.edges(qid).size(), graph::node, ratings, candidates, reviseRating);
     notes.accept(deck.size() + " card(s) to rate");
     return deck;
   }

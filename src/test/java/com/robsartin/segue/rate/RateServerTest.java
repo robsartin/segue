@@ -6,10 +6,12 @@ import com.robsartin.segue.domain.AffinityRecord;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.port.AffinityStore;
+import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +33,16 @@ class RateServerTest {
     @Override
     public void put(AffinityRecord affinity) {
       written.add(affinity);
+    }
+
+    /**
+     * The write the deck actually makes. Recorded as the record it is equivalent to — the deck
+     * never has a note, so the note-free write and a note-free record carry the same information,
+     * and every existing assertion on {@code written} keeps meaning what it meant.
+     */
+    @Override
+    public void updateRating(String qid, int rating, Instant updatedAt) {
+      written.add(new AffinityRecord(qid, rating, null, updatedAt));
     }
 
     @Override
@@ -94,6 +106,47 @@ class RateServerTest {
   }
 
   @Test
+  @DisplayName("a card built with Card.known has no current rating, and the JSON says so")
+  void unratedCardSerialisesCurrentRatingAsNull() throws Exception {
+    HttpResponse<String> response =
+        client.send(request("/api/card?i=0").build(), HttpResponse.BodyHandlers.ofString());
+
+    ObjectMapper mapper = JsonMapper.builder().build();
+    JsonNode node = mapper.readTree(response.body());
+
+    assertThat(node.has("currentRating"))
+        .as("currentRating must be present, even when null")
+        .isTrue();
+    assertThat(node.path("currentRating").isNull()).isTrue();
+  }
+
+  @Test
+  @DisplayName(
+      "a card built with Card.rated (issue #109) serialises the rating it already has, exactly")
+  void revisionCardSerialisesItsExistingRating() throws Exception {
+    Card revision =
+        Card.rated(new NodeRecord("Q900002", NodeKind.GROUP, "Rated Band", List.of()), 7, 3);
+    RateServer revisionServer = new RateServer(List.of(revision), affinity, 0);
+    revisionServer.start();
+    try {
+      HttpResponse<String> response =
+          client.send(
+              HttpRequest.newBuilder(
+                      URI.create("http://127.0.0.1:" + revisionServer.port() + "/api/card?i=0"))
+                  .build(),
+              HttpResponse.BodyHandlers.ofString());
+
+      ObjectMapper mapper = JsonMapper.builder().build();
+      JsonNode node = mapper.readTree(response.body());
+
+      assertThat(node.path("currentRating").isNull()).isFalse();
+      assertThat(node.path("currentRating").asInt()).isEqualTo(3);
+    } finally {
+      revisionServer.stop();
+    }
+  }
+
+  @Test
   @DisplayName("a rating is written to the affinity store, with no note")
   void writesARating() throws Exception {
     HttpResponse<String> response =
@@ -124,6 +177,21 @@ class RateServerTest {
 
     assertThat(response.statusCode()).isEqualTo(403);
     assertThat(affinity.written).isEmpty();
+  }
+
+  @Test
+  @DisplayName("a card request carrying a foreign Origin is refused, so ratings cannot be read out")
+  void refusesAForeignOriginOnACard() throws Exception {
+    // /api/card carried no Origin check at all until the issue-#109 review. Once the body grew
+    // currentRating, the read path leaked the ratings themselves rather than mere known-list
+    // membership — under exactly the DNS-rebinding scenario the allowlist exists to stop.
+    HttpResponse<String> response =
+        client.send(
+            request("/api/card?i=0").header("Origin", "https://evil.example.com").build(),
+            HttpResponse.BodyHandlers.ofString());
+
+    assertThat(response.statusCode()).isEqualTo(403);
+    assertThat(response.body()).doesNotContain("Test Band");
   }
 
   @Test
@@ -239,6 +307,88 @@ class RateServerTest {
 
     assertThat(response.statusCode()).isEqualTo(204);
     assertThat(affinity.written).hasSize(1);
+  }
+
+  @Test
+  @DisplayName(
+      "re-rating an entity that already has a note leaves the note alone (issue #109 review)")
+  void reRatingKeepsTheNoteThatIsAlreadyThere() throws Exception {
+    // The failure --revise made reachable. Before this branch the deck could only deal UNRATED
+    // entities, and a note requires a rating (note_affinity writes both), so no note-bearing row
+    // was reachable from here at all. dealRevision inverts that: it selects exactly the
+    // already-rated population, which is precisely where SegueService.noteAffinity writes notes.
+    //
+    // A real store, not the recording fake — the erasure happened in the SQL, where the upsert
+    // takes excluded.note, so a fake that only remembers what it was handed cannot show it.
+    try (SqliteAffinityStore store = SqliteAffinityStore.inMemory()) {
+      store.put(
+          new AffinityRecord(
+              "Q900001", 3, "invented note, never Rob's", Instant.parse("2026-01-01T00:00:00Z")));
+      Card card =
+          Card.rated(new NodeRecord("Q900001", NodeKind.GROUP, "Test Band", List.of()), 42, 3);
+      RateServer revising = new RateServer(List.of(card), store, 0);
+      revising.start();
+      try {
+        HttpResponse<String> response =
+            client.send(
+                HttpRequest.newBuilder(
+                        URI.create("http://127.0.0.1:" + revising.port() + "/api/rate"))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString("{\"qid\":\"Q900001\",\"rating\":2}"))
+                    .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(204);
+        assertThat(store.find("Q900001")).isPresent();
+        assertThat(store.find("Q900001").orElseThrow().rating()).isEqualTo(2);
+        assertThat(store.find("Q900001").orElseThrow().note())
+            .as("the affinity table is the one thing in segue with no source to regenerate it from")
+            .isEqualTo("invented note, never Rob's");
+      } finally {
+        revising.stop();
+      }
+    }
+  }
+
+  @Test
+  @DisplayName("a qid that is not a QID is refused with a 400, and no row reaches the table")
+  void refusesAQidThatIsNotAQid() throws Exception {
+    // A regression this branch's own review wave introduced. The handler used to build
+    // new AffinityRecord(qid, ...), whose compact constructor enforces Q\d+ and threw the
+    // IllegalArgumentException this method already turns into a 400. updateRating replaced that
+    // call and carried the rating half of the validation across, not the qid half.
+    //
+    // The damage is not one bad row. `affinity` has no CHECK constraint on qid, so the row is
+    // accepted; every later read that reconstructs an AffinityRecord — readAll, find — then
+    // throws IllegalArgumentException, which the surrounding catch (SQLException) does not catch.
+    // ./gradlew listRatings and AffinityOverlay break permanently, on the one table with no source
+    // to regenerate it from, fixable only by hand-editing SQLite.
+    //
+    // Exercised against a REAL store on purpose: RecordingAffinity's updateRating builds an
+    // AffinityRecord to record what it was given, so it validates the qid by accident and this
+    // test would pass against the fake while the real store wrote the row.
+    try (SqliteAffinityStore store = SqliteAffinityStore.inMemory()) {
+      RateServer strict = new RateServer(List.of(), store, 0);
+      strict.start();
+      try {
+        HttpResponse<String> response =
+            client.send(
+                HttpRequest.newBuilder(
+                        URI.create("http://127.0.0.1:" + strict.port() + "/api/rate"))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString("{\"qid\":\"junk\",\"rating\":3}"))
+                    .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(400);
+        // readRatings builds no AffinityRecord, so it can see a poisoned row that readAll cannot.
+        assertThat(store.readRatings()).doesNotContainKey("junk");
+        // And the read that would have been broken from here on is still answerable at all.
+        assertThat(store.readAll()).isEmpty();
+      } finally {
+        strict.stop();
+      }
+    }
   }
 
   @Test

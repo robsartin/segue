@@ -1,6 +1,7 @@
 package com.robsartin.segue.rate;
 
-import com.robsartin.segue.domain.AffinityRecord;
+import com.robsartin.segue.domain.Qid;
+import com.robsartin.segue.domain.RatingScale;
 import com.robsartin.segue.port.AffinityStore;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -131,6 +132,15 @@ public final class RateServer {
   }
 
   private void card(HttpExchange exchange) throws IOException {
+    // Checked here as well as on /api/rate (issue #109 review). Only the write path used to carry
+    // the allowlist, on the reasoning that a hostile page could at worst learn whether a qid was
+    // on the known-list. That stopped being the worst case when the card body grew currentRating:
+    // under the DNS-rebinding scenario this class's own javadoc names as the reason the allowlist
+    // exists, a hostile page could read the owner's actual ratings, one index at a time.
+    if (!originAllowed(exchange)) {
+      send(exchange, 403, "application/json", EMPTY_JSON);
+      return;
+    }
     int index = indexFrom(exchange.getRequestURI().getQuery());
     if (index < 0 || index >= deck.size()) {
       send(exchange, 404, "application/json", EMPTY_JSON);
@@ -152,9 +162,20 @@ public final class RateServer {
     try {
       String qid = field(body, "qid");
       int rating = Integer.parseInt(field(body, "rating"));
-      // Let AffinityRecord do the range check: one definition of the scale, in the type that
-      // carries it. Its message names no value, which is deliberate (ADR 33).
-      affinity.put(new AffinityRecord(qid, rating, null, Instant.now()));
+      // Qid and RatingScale, not AffinityRecord: one definition of each rule, in classes that
+      // carry no rating of their own. RatingScale's message names no value, which is deliberate
+      // (ADR 33). Both checks also run inside updateRating, which is where the contract holds them
+      // for every caller; these two refuse an untrusted body at the boundary that parsed it.
+      Qid.check(qid);
+      RatingScale.check(rating);
+      // updateRating, never put — in BOTH modes, and this handler could not tell them apart if it
+      // wanted to (it holds a List<Card> and no flag). put writes the whole row, and the deck can
+      // never have a note to write: theRatingDeckNeverReadsANote bans every class here from
+      // reading one. Through put, re-rating a --revise card wrote note = null over a note only the
+      // owner could ever restore. Through updateRating the note column is never mentioned, and the
+      // default mode — where the row is absent and gets its first rating — is served by the same
+      // call, because an inserted row has no note for anything to preserve.
+      affinity.updateRating(qid, rating, Instant.now());
     } catch (IllegalArgumentException e) {
       send(exchange, 400, "application/json", EMPTY_JSON);
       return;
@@ -209,6 +230,8 @@ public final class RateServer {
         + "\""
         + ",\"degree\":"
         + (card.degree().isPresent() ? card.degree().getAsInt() : "null")
+        + ",\"currentRating\":"
+        + (card.currentRating().isPresent() ? card.currentRating().getAsInt() : "null")
         + ",\"routes\":"
         + routes
         + "}";

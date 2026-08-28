@@ -2,7 +2,6 @@ package com.robsartin.segue.domain;
 
 import java.time.Instant;
 import java.util.Objects;
-import java.util.regex.Pattern;
 
 /**
  * "Everything recorded about this entity before now is wrong, and here is why." Appended to the log
@@ -36,18 +35,14 @@ import java.util.regex.Pattern;
 public record Retraction(String qid, String reason, Instant retractedAt)
     implements LoggedAssertion {
 
-  private static final Pattern QID = Pattern.compile("Q\\d+");
-
   public Retraction {
     Objects.requireNonNull(qid, "qid");
     Objects.requireNonNull(reason, "reason");
     Objects.requireNonNull(retractedAt, "retractedAt");
-    if (!QID.matcher(qid).matches()) {
-      // A retraction is not corrected by editing the log, so a mistyped target is a row that sits
-      // there forever retracting an entity nobody ever claimed. NodeRecord validates its qids for
-      // a smaller reason than this one.
-      throw new IllegalArgumentException("qid must look like Q12345, got: " + qid);
-    }
+    // A retraction is not corrected by editing the log, so a mistyped target is a row that sits
+    // there forever retracting an entity nobody ever claimed. NodeRecord validates its qids for a
+    // smaller reason than this one; both go through the same rule.
+    Qid.check(qid);
     if (reason.isBlank()) {
       throw new IllegalArgumentException("a retraction must say why");
     }

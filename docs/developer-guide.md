@@ -351,7 +351,7 @@ has a different relationship with the data and a different fence to match.
   ([ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md)).
 - **`rate` reaches the same four and `recommend` itself**, the one dependency between two dev
   tools, for the candidate half of the deck. It is the other tool that writes — to the taste layer
-  only, through `AffinityStore.put`, never through `IngestService`
+  only, through `AffinityStore.updateRating`, never through `IngestService`
   ([ADR 46](adr/0046-the-rating-deck.md)).
 
 Tools with opposite relationships to the store cannot share a package and keep any fence
@@ -398,19 +398,19 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `seedNeverOpensAStore` | `seed` depending on `sqlite`, `tinker`, `jena`, `ingest`, `mcp`, `app`, `retract` or `rate` — it resolves names and must not open the database even to read it | [ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md) |
 | `theExporterOnlyReads` | `export` calling `GraphStore.record`/`upsertNode` or `AssertionLog.append`, or depending on `IngestService`, or on either of the two dev tools that write (`retract`, `rate`) at all | [ADR 41](adr/0041-graph-exporter-views-and-formats.md) |
 | `theExporterNeverSpeaksToANetwork` | `export` depending on `java.net`, `javax.net` or `WikidataClient` — an export is a pure function of the database file | [ADR 41](adr/0041-graph-exporter-views-and-formats.md) |
-| `theRatingsToolOnlyReads` | `ratings` calling the three world-fact writes **or `AffinityStore.put`** — the only rule anywhere guarding the rating write | [ADR 43](adr/0043-listing-your-own-ratings.md) |
+| `theRatingsToolOnlyReads` | `ratings` calling the three world-fact writes **or either taste-layer write, `AffinityStore.put` and `updateRating`** — the only rule anywhere guarding the rating write | [ADR 43](adr/0043-listing-your-own-ratings.md) |
 | `theRatingsToolOpensNothingElse` | `ratings` depending on `tinker`, `jena`, `ingest`, `mcp`, `app`, `seed`, `export`, `retract`, `rate`, `java.net` or `javax.net` | [ADR 43](adr/0043-listing-your-own-ratings.md) |
 | `onlyTheRatingsToolReadsEveryRating` | calling `AffinityStore.readAll` from outside `ratings` — the bulk read exists for the owner's dev tool and for nothing on the MCP surface | [ADR 16](adr/0016-privacy-and-data-handling.md), [ADR 39](adr/0039-affinity-capture-and-read.md), [ADR 43](adr/0043-listing-your-own-ratings.md) |
-| `theRetractionToolWritesOnlyRetractions` | `retract` calling the three world-fact writes, `AffinityStore.put` or `AffinityStore.readAll` — it appends a retraction through `IngestService` and writes nothing else, least of all a rating | [ADR 44](adr/0044-retraction-as-a-new-claim.md) |
+| `theRetractionToolWritesOnlyRetractions` | `retract` calling the three world-fact writes, either taste-layer write (`AffinityStore.put`, `updateRating`) or `AffinityStore.readAll` — it appends a retraction through `IngestService` and writes nothing else, least of all a rating | [ADR 44](adr/0044-retraction-as-a-new-claim.md) |
 | `theRetractionToolOpensNothingElse` | `retract` depending on `GraphStore` **as a type**, on `AffinityStore`, or on `tinker`, `jena`, `mcp`, `app`, `seed`, `export`, `ratings`, `rate`, `java.net` or `javax.net` — a retraction has no graph half, so the tool must not be able to hold one | [ADR 44](adr/0044-retraction-as-a-new-claim.md) |
-| `theRecommenderOnlyReads` | `recommend` calling the three world-fact writes or `AffinityStore.put`, or depending on `IngestService` at all | [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
+| `theRecommenderOnlyReads` | `recommend` calling the three world-fact writes or either taste-layer write (`AffinityStore.put`, `updateRating`), or depending on `IngestService` at all | [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
 | `theRecommenderReadsRatingsAndNeverNotes` | `recommend` depending on `AffinityRecord` **as a type**, or calling `AffinityStore.find` or `readAll` — it may hold the store and call the note-free `readRatings`, and nothing that carries free text | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 39](adr/0039-affinity-capture-and-read.md), [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
 | `onlyTheRatingsToolReadsANote` | calling `AffinityRecord.note()` from outside `ratings` and `sqlite` — the score is ordinary data, the note is the owner's and is read on their own machine | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 43](adr/0043-listing-your-own-ratings.md) |
 | `onlyTheRecommenderReadsEveryRating` | calling `AffinityStore.readRatings` from outside `recommend` **and `rate`** — the note-free bulk read belongs to the two dev-side tools that weight and deal by it, and ADR 26 still pins the surface at six tools | [ADR 26](adr/0026-mcp-tool-surface.md), [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
 | `theRecommenderOpensNothingElse` | `recommend` depending on `jena`, `mcp`, `app`, `seed`, `export`, `ratings`, `retract`, `rate`, `java.net` or `javax.net` — `rate` depends on `recommend` by design, and this is what keeps that trip one-way | [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
 | `theRatingDeckWritesOnlyAffinity` | `rate` calling the three world-fact writes — the deck records what the owner thinks, never what the world says | [ADR 46](adr/0046-the-rating-deck.md) |
 | `theRatingDeckNeverReadsANote` | `rate` calling `AffinityRecord.note()` — it writes the score and must not be able to display the note | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 46](adr/0046-the-rating-deck.md) |
-| `theRatingDeckLogsNoRating` | any class in `rate` **except `RateServer`** depending on `AffinityRecord` as a type — `RateServer` must construct the record it writes, and owns no logger that prints one | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 46](adr/0046-the-rating-deck.md) |
+| `theRatingDeckLogsNoRating` | any class in `rate` depending on `AffinityRecord` as a type, **with no exception** — the deck writes through `AffinityStore.updateRating`, which builds no record, so nothing here may hold a rating to log | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 46](adr/0046-the-rating-deck.md) |
 | `theRatingDeckOpensNothingElse` | `rate` depending on `jena`, `mcp`, `app`, `seed`, `export`, `ratings` or `retract`. `recommend` is deliberately allowed (the candidate sweep) and so is `java.net` — this is the one dev tool that is an HTTP server, fenced instead by the loopback bind and the `Origin` allowlist | [ADR 46](adr/0046-the-rating-deck.md) |
 | `nothingWritesToStandardOut` | reading `System.out` anywhere except the one named exception, `SegueApplication` | [ADR 28](adr/0028-mcp-transports.md) |
 | `nothingWritesToStandardError`, `noPrintStackTrace`, `noJavaUtilLogging` | bypassing SLF4J | [ADR 30](adr/0030-structured-logging.md) |
@@ -1269,8 +1269,9 @@ working tree.
 ### Three things this is not allowed to do
 
 It never writes. `ArchitectureTest.theRatingsToolOnlyReads` forbids `ratings` from calling
-`GraphStore.record`, `GraphStore.upsertNode`, `AssertionLog.append` **or `AffinityStore.put`**.
-That last clause exists nowhere else in the project — the other rules guard the three world-fact
+`GraphStore.record`, `GraphStore.upsertNode`, `AssertionLog.append` **or either taste-layer write,
+`AffinityStore.put` and `AffinityStore.updateRating`**.
+Those last clauses exist nowhere else in the project — the other rules guard the three world-fact
 writes, and nothing guarded the *rating* write, because until this tool the only class outside
 `mcp` holding an `AffinityStore` looked up one qid at a time.
 
@@ -1333,7 +1334,7 @@ and shows up in a `full` or `subgraph` export.
 
 | it cannot | rule | why |
 | --- | --- | --- |
-| write anything but a retraction | `theRetractionToolWritesOnlyRetractions` | no graph write, no direct `AssertionLog.append`, and never `AffinityStore.put` — a retraction is about the world-fact layer, and a rating is the one thing here that cannot be regenerated |
+| write anything but a retraction | `theRetractionToolWritesOnlyRetractions` | no graph write, no direct `AssertionLog.append`, and never a taste-layer write (`AffinityStore.put` or `updateRating`) — a retraction is about the world-fact layer, and a rating is the one thing here that cannot be regenerated |
 | hold a `GraphStore` at all | `theRetractionToolOpensNothingElse` | a retraction has no graph half; `GraphStore` cannot remove anything and ADR 41 already refused to widen that port for a dev tool. `IngestService.retract` is static so that satisfying a constructor could never become the reason this tool held a graph |
 | reach a network, an engine or a sibling tool | `theRetractionToolOpensNothingElse` | a decision about your own graph is a pure function of one local file; a dependency on `seed`, `export` or `ratings` would let this inherit a different fence |
 
@@ -1454,7 +1455,7 @@ scratch database and nothing else has ever exercised it.
 
 | it cannot | rule | why |
 | --- | --- | --- |
-| write anything | `theRecommenderOnlyReads` | no graph write, no `AssertionLog.append`, no `AffinityStore.put`, and no `IngestService` to route one through |
+| write anything | `theRecommenderOnlyReads` | no graph write, no `AssertionLog.append`, no taste-layer write (`AffinityStore.put` or `updateRating`), and no `IngestService` to route one through |
 | see a note | `theRecommenderReadsRatingsAndNeverNotes` | it may read every score; `find`, `readAll` and `AffinityRecord` are the three ways free text could reach this package, and all three are banned |
 | reach a network or a sibling tool | `theRecommenderOpensNothingElse` | a recommendation is a pure function of one local file, and a dependency on `retract` would let a read-only tool inherit a writing fence |
 | name an entity in a log line | `RecommendationsAreNeverLoggedTest` | the list is derived from your known-list, so ADR 33's "never logged" applies; every log line is a count or a path |
@@ -1488,10 +1489,42 @@ server never address each other by accident; `--port 0` asks the OS to pick one,
 which. Open the printed address in a browser: `1`–`5` rates and advances, `s` or space skips
 without recording anything, `b` goes back.
 
-### Two card shapes, because "why is this here" only has one answer at a time
+### Reconsidering a rating you already gave: `--revise`
 
-`Card.known` and `Card.candidate` are readable in full in `Card.java`; the shape each produces is
-the point. A known entity already earned its place on your list, so the useful thing to show is
+```bash
+# deal only the entities you already rated exactly 3, instead of the unrated ones
+./gradlew rate --args="--known $HOME/known.csv --revise 3"
+```
+
+`--revise <rating>` (1–5, the same range `RatingScale` defines and `AffinityRecord` enforces
+everywhere else) switches the deck from its default selection to `Deck`'s `dealRevision`: instead
+of everything unrated, it deals every known entity currently holding exactly that rating. This exists because a rating of 3 is an
+arithmetic no-op — `Recommendations.regardFor` centres its weighting on `NEUTRAL_RATING`, so a 3
+weighs exactly the same as no rating at all — and the deck used to have no way back to an entity
+once it held any rating, 3 included. See [ADR 46](adr/0046-the-rating-deck.md)'s 2026-08-28
+amendment (issue #109) for what a real 973-rating session measured before this was built.
+
+**The card shows the rating it already has, and that is the point.** A revision card that hid its
+current value would invite a considered rating to be re-guessed blind — a 2 becoming a reflexive 4
+on a second look reads as new information rather than the re-judgment it actually is, which is
+worse than not offering revision at all. `deck.html` renders it as a filled banner ("Currently
+rated N — this is a revision, not a new card"), the one element on the card with a real background
+fill rather than just coloured text, so it cannot be mistaken for an ordinary caption. **The number
+it shows is what the session has written, falling back to what the server dealt**: `RateServer`
+holds the deck as it stood at startup, so pressing `b` after re-rating a card would otherwise
+re-announce the value that card no longer has.
+
+`--revise` deals no candidates: a candidate is by definition absent from the known-list and
+therefore unrated, so there is nothing about it to reconsider, and mixing discovery into a revision
+pass would change what the pass measures. With no `--revise`, behaviour is exactly what the rest of
+this section describes.
+
+### Three card shapes, because they answer different questions
+
+`Card.known`, `Card.candidate` and `Card.rated` are readable in full in `Card.java`; the shape each
+produces is the point. The first two split on "why is this here"; the third, added by `--revise`
+(issue #109), is a known card plus the rating the entity currently holds, and answers "what did you
+say last time" instead. A known entity already earned its place on your list, so the useful thing to show is
 how much of the graph hangs off it — the same in-graph degree `Deck` sorted the deck by, so a card
 near the top visibly explains its own position. A candidate is something you may never have heard
 of, so the useful thing is the routes that reached it. Those come from `Routes.bestFor` by way of
@@ -1500,28 +1533,42 @@ same `PathRanking.rank`. The third is not shared. `SegueService.findPaths` hands
 to `ViewMapper.toPathViews` and returns structured `PathView` records; the deck calls
 `PathResult.render()`, whose only two callers in `src/main` are dev-side — `RecommendationReport`
 and `Deck.routeLines`. The route *set* differs too: `Routes.MAX_HOPS` is 2 where `find_paths`
-defaults to 4, and `bestFor` keeps only the top-ranked route per reaching entity. Neither card
-shape carries a note field; there is nowhere on either `Card` to put one.
+defaults to 4, and `bestFor` keeps only the top-ranked route per reaching entity. No card shape
+carries a note field; there is nowhere on a `Card` to put one, in any of the three.
 
 ### No session file: the deck is "everything unrated", recomputed every run
 
-`RateCli` reads every existing rating once, with `AffinityStore.readRatings()`, and `Deck.deal`
-excludes anything already rated from both the known list and the candidate stream — that exclusion
-is the entire resume mechanism. There is no position to persist, nothing to corrupt, and nothing
+This describes the default mode — no `--revise` — where `RateCli` reads every existing rating
+once, with `AffinityStore.readRatings()`, and `Deck.deal` excludes anything already rated from both
+the known list and the candidate stream — that exclusion is the entire resume mechanism. There is
+no position to persist, nothing to corrupt, and nothing
 left lying around between runs; quitting mid-deck costs nothing, and the next run picks up
 whatever is still unrated. `Deck`'s class javadoc is the authority on the ordering itself — degree
 descending for known entities, a candidate mixed in roughly every fifth card — and is worth reading
-before changing either number.
+before changing either number. It now says which of the two modes each of its claims belongs to;
+under `--revise` there is still no stored position, and the same degree-descending order applies to
+a selection made the other way round.
 
 ### Ratings are the only thing it writes
 
-Four ArchUnit rules hold the boundary: `rate` may call `AffinityStore.put` and nothing that
-appends to the assertion log or touches the graph; it may never call `AffinityRecord.note()`; no
-class in the package may depend on `AffinityRecord` at all, with one named exception —
-`RateServer`, because it is the class that has to construct the record it writes; and it may not
+**And it writes them through `AffinityStore.updateRating`, never `put`.** `put` writes the whole
+row, note column included, which is right for `note_affinity` — the one caller that has a note to
+write — and wrong here: it wrote `note = NULL` over every entity the deck re-rated. That was
+unreachable until `--revise`, because the deck could only deal unrated entities and a note requires
+a rating; `dealRevision` deals exactly the rated population, which is where notes live.
+`updateRating` has nowhere to put a note and its SQL never names the column, so an existing note
+survives and an inserted row simply has none. `RateServer` uses it in both modes and could not tell
+them apart if it wanted to. See [ADR 46](adr/0046-the-rating-deck.md)'s second 2026-08-28
+amendment.
+
+Four ArchUnit rules hold the boundary: `rate` may call `AffinityStore.updateRating` and nothing
+that appends to the assertion log or touches the graph; it may never call `AffinityRecord.note()`;
+no class in the package may depend on `AffinityRecord` at all, with no exception — `RateServer`
+used to be named as one, and lost it when its write stopped constructing a record; and it may not
 reach `jena`, `mcp`, `app`, `seed`, `export`, `ratings` or `retract`, the sibling fence every dev
-tool carries. Read the exception in `ArchitectureTest.theRatingDeckLogsNoRating`'s own javadoc
-rather than assuming it: every other class in `rate` still cannot hold a rating in any form.
+tool carries. The bounds of the scale live on `RatingScale`, which carries no rating, so a class
+that only needs to say "1 to 5" — `RateCli`'s usage string and its `--revise` check — can say it
+without naming the type that carries one.
 
 The fourth rule, `theRatingDeckOpensNothingElse`, has two deliberate holes, and both are argued in
 its javadoc. `recommend` is allowed, because the candidate half of the deck IS that tool's

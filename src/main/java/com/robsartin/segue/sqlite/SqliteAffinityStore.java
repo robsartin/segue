@@ -1,6 +1,8 @@
 package com.robsartin.segue.sqlite;
 
 import com.robsartin.segue.domain.AffinityRecord;
+import com.robsartin.segue.domain.Qid;
+import com.robsartin.segue.domain.RatingScale;
 import com.robsartin.segue.port.AffinityStore;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -62,6 +64,17 @@ public final class SqliteAffinityStore implements AffinityStore {
   private static final String UPSERT =
       "INSERT INTO affinity (qid, rating, note, updated_at) VALUES (?, ?, ?, ?)"
           + " ON CONFLICT(qid) DO UPDATE SET rating = excluded.rating, note = excluded.note,"
+          + " updated_at = excluded.updated_at";
+
+  /**
+   * The rating-only write (issue #109 review). <b>The absent column is the whole point</b>: this
+   * statement never names {@code note}, so an existing note survives an update and a row inserted
+   * here simply has none. The {@code excluded} trick {@link #UPSERT} uses would clear it, which is
+   * what {@code --revise} made reachable — see {@code AffinityStore.updateRating}.
+   */
+  private static final String UPDATE_RATING =
+      "INSERT INTO affinity (qid, rating, updated_at) VALUES (?, ?, ?)"
+          + " ON CONFLICT(qid) DO UPDATE SET rating = excluded.rating,"
           + " updated_at = excluded.updated_at";
 
   private static final String SELECT_ONE =
@@ -132,6 +145,26 @@ public final class SqliteAffinityStore implements AffinityStore {
       // The qid, and nothing else. A message carrying the rating or the note would put personal
       // data into whatever logs this exception (ADR 33).
       throw new IllegalStateException("cannot store affinity for " + affinity.qid(), e);
+    }
+  }
+
+  @Override
+  public void updateRating(String qid, int rating, Instant updatedAt) {
+    // BOTH rules AffinityRecord's compact constructor applies, called from the one write path
+    // that does not build one. The first version of this method carried the rating half across and
+    // left the qid half behind: `affinity` has no CHECK constraint, so a non-QID was accepted, and
+    // every later read that rebuilds an AffinityRecord then threw an IllegalArgumentException past
+    // the catch (SQLException) below — breaking readAll and find for good, on the one table with
+    // no source to regenerate from.
+    Qid.check(qid);
+    RatingScale.check(rating);
+    try (PreparedStatement ps = conn.prepareStatement(UPDATE_RATING)) {
+      ps.setString(1, qid);
+      ps.setInt(2, rating);
+      ps.setString(3, updatedAt.toString());
+      ps.executeUpdate();
+    } catch (SQLException e) {
+      throw new IllegalStateException("cannot store affinity for " + qid, e);
     }
   }
 
