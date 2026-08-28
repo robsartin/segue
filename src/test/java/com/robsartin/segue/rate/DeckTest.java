@@ -165,7 +165,36 @@ class DeckTest {
             List.of(),
             OptionalInt.of(3));
 
-    assertThat(cards).extracting(Card::qid).containsExactlyInAnyOrder("Q900001", "Q900003");
+    assertThat(cards).extracting(Card::qid).containsExactly("Q900003", "Q900001");
+  }
+
+  @Test
+  @DisplayName("the revision deck is ordered by degree descending, then by qid, like the default")
+  void reviseOrdersByDegreeDescendingThenQid() {
+    // ADR 46 says dealRevision "sorts by the same degree-descending rule the default deck uses",
+    // and degree-descending is the branch's own argument for why revising 121 cards is worth
+    // doing: the busiest entities are the ones whose rating moves the most candidate scores. That
+    // claim was untested — reviseDealsOnlyThatRating asserted membership in any order and
+    // buildsAReviseDeck dealt a single card, so deleting the sort left the suite green.
+    //
+    // Q900003 and Q900004 are given the SAME degree, so the qid tiebreak is pinned too: without
+    // it the order of two equal-degree cards is whatever the known list happened to say, and a
+    // deck that reshuffles between runs over an unchanged table is not a deck anyone can resume.
+    Map<String, Integer> degrees =
+        Map.of("Q900001", 3, "Q900002", 90, "Q900003", 50, "Q900004", 50);
+
+    List<Card> cards =
+        Deck.deal(
+            List.of("Q900001", "Q900002", "Q900003", "Q900004"),
+            q -> degrees.getOrDefault(q, 0),
+            q -> Optional.ofNullable(NODES.get(q)),
+            Map.of("Q900001", 3, "Q900002", 3, "Q900003", 3, "Q900004", 3),
+            List.of(),
+            OptionalInt.of(3));
+
+    assertThat(cards)
+        .extracting(Card::qid)
+        .containsExactly("Q900002", "Q900003", "Q900004", "Q900001");
   }
 
   @Test

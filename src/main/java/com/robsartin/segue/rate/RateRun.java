@@ -77,10 +77,25 @@ public final class RateRun {
     if (reviseRating.isPresent()) {
       // A count, never the rating value or a qid (ADR 33) — "up for reconsideration" says how
       // many, not which ones or what they are currently rated.
+      //
+      // Counted over the KNOWN LIST, not over ratings.values(), because that is the population
+      // Deck.dealRevision walks. Counting the whole table put two numbers from two different
+      // populations three lines apart in the log — "121 card(s) up for reconsideration" then
+      // "84 card(s) to rate" — with nothing saying that the 37 are entities rated at some point
+      // and since dropped from the list, which this run will never deal. The wording says
+      // "entity(ies) on your list" for the same reason: what remains between this number and the
+      // dealt count is only the entities the graph does not hold, exactly as in the default mode
+      // above.
       int target = reviseRating.getAsInt();
       long upForReconsideration =
-          ratings.values().stream().filter(rating -> rating == target).count();
-      notes.accept(upForReconsideration + " card(s) up for reconsideration");
+          known.stream()
+              .filter(
+                  qid -> {
+                    Integer rating = ratings.get(qid);
+                    return rating != null && rating == target;
+                  })
+              .count();
+      notes.accept(upForReconsideration + " entity(ies) on your list are up for reconsideration");
     } else if (candidateCount > 0) {
       Sweep sweep =
           new CandidateSweep(graph, RecognitionInstitutions::isRecognitionInstitution)

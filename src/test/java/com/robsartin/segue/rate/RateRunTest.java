@@ -98,6 +98,35 @@ class RateRunTest {
   }
 
   @Test
+  @DisplayName("the reconsideration count is over the known list, not over the whole table")
+  void reviseCountsOnlyWhatItCanDeal() throws Exception {
+    // The count and the deck were computed from different populations: the note counted every row
+    // in the affinity table at that rating, while dealRevision walks knownQids only. On the real
+    // table that read "121 card(s) up for reconsideration" followed by "84 card(s) to rate", with
+    // nothing anywhere explaining the 37 — and the 37 are entities rated at some point and since
+    // dropped from the list, which the deck will never deal.
+    try (TinkerGraphStore graph = new TinkerGraphStore()) {
+      graph.upsertNode(new NodeRecord("Q900001", NodeKind.GROUP, "On the list", List.of()));
+      graph.upsertNode(new NodeRecord("Q900009", NodeKind.GROUP, "Rated, off the list", List.of()));
+      List<String> notes = new ArrayList<>();
+
+      List<Card> deck =
+          RateRun.buildDeck(
+              graph,
+              List.of("Q900001"),
+              Map.of("Q900001", 3, "Q900009", 3),
+              0,
+              OptionalInt.of(3),
+              notes::add);
+
+      assertThat(deck).hasSize(1);
+      assertThat(notes).anyMatch(n -> n.contains("1 ") && n.contains("up for reconsideration"));
+      assertThat(notes).noneMatch(n -> n.contains("2 ") && n.contains("up for reconsideration"));
+      assertThat(notes).noneMatch(n -> n.contains("Q900001") || n.contains("Q900009"));
+    }
+  }
+
+  @Test
   @DisplayName("the candidate sweep runs too, and its notes still name no entity")
   void theCandidateSweepNotesNameNoEntity() throws Exception {
     try (TinkerGraphStore graph = new TinkerGraphStore()) {
