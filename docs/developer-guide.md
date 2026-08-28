@@ -895,9 +895,9 @@ the reader's.
 
 Every node claim stores its raw `P31` (ADR 42), and the exporter spends it twice.
 
-**In DOT, every node carries a `tooltip`** naming the classes it is an instance of. Graphviz turns
-that into an `xlink:title` in SVG, so `dot -Tsvg` and then hovering a node says "concert tour" or
-"television special" — the channel with no budget, and the only one that reaches the long tail. A
+**In DOT, every node carries a `tooltip`** naming the classes it is an instance of — "concert tour"
+or "television special", the channel with no budget, and the only one that reaches the long tail.
+**Hovering a rendered SVG will not show it**; see "why hovering an SVG shows a QID" below. A
 real graph has 861 distinct classes and the top 40 still only cover 96.6%; six fills were never
 going to describe that. The names come from `ClassLabels`, a table in the source of about 45 classes
 read from Wikidata's own `labels/en`, and **an unknown class shows as its bare QID** rather than a
@@ -921,10 +921,9 @@ on them natively, so "select every album" is a filter there and a colour here.
 ### What an edge says, and when it stops saying it out loud
 
 **Every DOT edge carries a `tooltip`** naming the relationship and both of its ends —
-`Steve Martin -RECEIVED_AWARD-> Writers Guild of America Award` — which Graphviz turns into an
-`xlink:title` in SVG exactly as it does for a node. The endpoints are in there because in a hub the
-edges lie on top of each other, and "which one did I just point at" is the question; the SVG's own
-`<title>` answers it in QIDs.
+`Steve Martin -RECEIVED_AWARD-> Writers Guild of America Award` — which lands in the same place a
+node's does. The endpoints are in there because in a hub the edges lie on top of each other, and
+"which one did I just point at" is the question.
 
 **Above `DotWriter.LABEL_BUDGET` — 40 — edges, the visible label is dropped and the tooltip is all
 there is.** Measured on slices of one real depth-1 neighbourhood under `sfdp` (issue #70): 26 edges
@@ -939,8 +938,10 @@ labels because a route is two or four edges, which is the same rule that keeps t
 ```
 132 node(s), 144 edge(s)
 144 edge(s) is past the 40 this picture can label legibly, so the DOT edge labels are dropped.
-Each edge keeps its type in a tooltip — render with -Tsvg and hover — and GraphML carries
-typeCode on every edge whatever the size
+Each edge keeps its type in a tooltip, but Graphviz puts that in xlink:title and a browser
+hovering the SVG shows the QIDs instead (issue #81): read the types from GraphML, which carries
+typeCode on every edge whatever the size, or render with -Tcmapx, where the tooltip becomes an
+HTML title
 ```
 
 That sentence comes from `DotWriter.note`, not from `ExportRun`, so the class that stays
@@ -948,6 +949,37 @@ format-blind can report a format's decision without learning what format it is h
 is untouched by any of this** — `typeCode` is an attribute there at every size, which is why the
 note points at it. There is deliberately no flag to force labels back on: the picture it would
 produce is the one that made this a bug.
+
+### Why hovering an SVG shows a QID
+
+**A browser will not show either tooltip, and DOT cannot make it.** Graphviz puts a `tooltip` in
+`xlink:title`, which browsers ignore; the mechanism they implement is the `<title>` **element**,
+and Graphviz writes that from the object's **name**. So a rendered node reads
+
+```xml
+<g id="node1" class="node">
+  <title>Q16473</title>                       <- what a browser shows on hover
+  <g id="a_node1"><a xlink:title="human">     <- where the class actually is
+```
+
+and hovering gives `Q16473`, or `Q16473->Q1415017` on an edge. Nothing redirects it — `id` sets the
+`<g>`'s id and leaves `<title>` alone, and the class cannot become the node name because names are
+identities: two nodes named `human` **silently merge into one**. An edge has no name at all, so its
+`<title>` is always `tail->head` and a relationship type cannot reach it however the nodes are
+named. [ADR 41](adr/0041-graph-exporter-views-and-formats.md)'s issue-#81 amendment has the full
+sweep against the real binary.
+
+**The attribute stays because it is not inert.** `dot -Tcmapx` renders it as an HTML `title` on an
+`<area>`, which every browser does show, so a PNG plus its imagemap answers the question a bare SVG
+cannot:
+
+```bash
+dot -Tpng -o graph.png -Tcmapx -o graph.map graph.dot
+```
+
+`WhatAHoverShowsTest` renders through the real Graphviz binary and asserts on `<title>` *content*
+rather than on the presence of an attribute — which is exactly the assertion whose absence let this
+ship. It skips where Graphviz is not installed.
 
 ## Looking at what you have rated
 
