@@ -1,1 +1,101 @@
-<!doctype html><title>segue rating deck</title><p>placeholder</p>
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>segue rating deck</title>
+<style>
+  :root { color-scheme: light dark; --ink: #111; --paper: #fff; --muted: #555; --line: #ccc; }
+  @media (prefers-color-scheme: dark) {
+    :root { --ink: #eee; --paper: #16181c; --muted: #aaa; --line: #444; }
+  }
+  body { margin: 0; padding: 2rem 1rem; background: var(--paper); color: var(--ink);
+         font: 16px/1.5 system-ui, sans-serif; display: flex; justify-content: center; }
+  main { max-width: 34rem; width: 100%; }
+  h1 { font-size: 2rem; margin: 0 0 .25rem; }
+  .kind { color: var(--muted); font-size: .9rem; text-transform: lowercase; }
+  .why { margin: 1.25rem 0; padding-left: 1rem; border-left: 3px solid var(--line);
+         color: var(--muted); font-size: .95rem; }
+  .why li { margin: .35rem 0; }
+  .rate { display: flex; gap: .5rem; margin: 2rem 0 1rem; }
+  button { flex: 1; padding: 1rem 0; font-size: 1.25rem; cursor: pointer;
+           color: var(--ink); background: var(--paper); border: 2px solid var(--line);
+           border-radius: .4rem; }
+  button:hover { border-color: var(--ink); }
+  button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+  .keys, .progress { color: var(--muted); font-size: .85rem; }
+  .done { font-size: 1.25rem; }
+</style>
+<main>
+  <div id="card" aria-live="polite">
+    <p class="progress">loading…</p>
+  </div>
+  <div class="rate">
+    <button data-rating="1" aria-label="1, strongly not for me">1</button>
+    <button data-rating="2" aria-label="2">2</button>
+    <button data-rating="3" aria-label="3">3</button>
+    <button data-rating="4" aria-label="4">4</button>
+    <button data-rating="5" aria-label="5, a favourite">5</button>
+  </div>
+  <p class="keys">
+    Keys <b>1</b>–<b>5</b> rate and advance · <b>s</b> or space skips · <b>b</b> goes back.
+    Going back re-rates; a rating cannot be withdrawn, only changed.
+  </p>
+  <p class="progress" id="progress"></p>
+</main>
+<script>
+  let index = 0;
+  let rated = 0;
+  // The card currently on screen, captured by show() and consumed by rate().
+  // Holding it here (rather than re-fetching /api/card in rate()) avoids a
+  // second round-trip per keystroke and, more importantly, a race: if the
+  // owner presses a rating key twice in quick succession, the second fetch
+  // could resolve before the first POST lands and both would rate the same
+  // qid onto what is now the wrong index. Clearing it synchronously at the
+  // top of rate(), before the first await, is what actually closes the race
+  // — a second keypress sees current === null and is dropped.
+  let current = null;
+
+  async function show() {
+    const response = await fetch(`/api/card?i=${index}`);
+    const card = document.getElementById('card');
+    if (response.status === 404) {
+      current = null;
+      card.innerHTML = '<p class="done">That is the whole deck. Nothing left to rate.</p>';
+      document.getElementById('progress').textContent = '';
+      return;
+    }
+    const c = await response.json();
+    current = c;
+    const why = c.degree !== null
+      ? `<p class="why">connects ${c.degree} things in the graph</p>`
+      : `<ul class="why">${c.routes.map(r => `<li>${r}</li>`).join('')}</ul>`;
+    card.innerHTML =
+      `<h1>${c.label}</h1><p class="kind">${c.kind} · ${c.classes}</p>${why}`;
+    document.getElementById('progress').textContent =
+      `card ${index + 1} · ${rated} rated this session`;
+  }
+
+  async function rate(value) {
+    if (!current) return;
+    const qid = current.qid;
+    current = null;
+    await fetch('/api/rate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ qid, rating: value }),
+    });
+    rated++;
+    index++;
+    show();
+  }
+
+  document.querySelectorAll('button[data-rating]').forEach(b =>
+    b.addEventListener('click', () => rate(Number(b.dataset.rating))));
+
+  document.addEventListener('keydown', event => {
+    if (event.key >= '1' && event.key <= '5') { rate(Number(event.key)); }
+    else if (event.key === 's' || event.key === ' ') { index++; show(); event.preventDefault(); }
+    else if (event.key === 'b' && index > 0) { index--; show(); }
+  });
+
+  show();
+</script>
