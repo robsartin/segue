@@ -139,7 +139,8 @@ class ArchitectureTest {
               "..ingest..",
               "..mcp..",
               "..app..",
-              "..retract..")
+              "..retract..",
+              "..rate..")
           .because(
               "ADR 40: the seeding tool resolves and reports — it never writes the graph, never"
                   + " opens the database, and is deliberately not an MCP tool (ADR 26)");
@@ -306,6 +307,13 @@ class ArchitectureTest {
    * rather than a second traversal that can drift. What this rule guarantees is that nothing
    * durable changes: no claim reaches the log, the database or a store the exporter did not create
    * itself.
+   *
+   * <p><b>There are two dev-side tools that write, not one.</b> This Javadoc said "the one dev-side
+   * tool that [writes]" while ADR 46 was adding a second — {@code rate}, which writes a rating
+   * through {@code AffinityStore.put} — so the sentence was literally false and the rule below
+   * covered only half of what it claimed. Both packages are banned now, and they write to different
+   * layers: {@code retract} appends a world-fact claim through {@code IngestService}, {@code rate}
+   * writes the taste layer and never touches {@code ingest} at all (ADR 33).
    */
   @ArchTest
   static final ArchRule theExporterOnlyReads =
@@ -317,17 +325,19 @@ class ArchitectureTest {
                   .or(
                       ArchConditions.dependOnClassesThat(
                           JavaClass.Predicates.equivalentTo(IngestService.class)))
-                  // ADR 44 added a fourth dev-side tool, and it is the first one that writes.
-                  // Without this clause the exporter could reach RetractRun and append a
-                  // retraction through it, inheriting a looser fence than its own — the exact
-                  // shape theRatingsToolOpensNothingElse already refuses for its siblings.
+                  // ADR 44 added a fourth dev-side tool, and it was the first one that writes;
+                  // ADR 46's rating deck is the second. Without these two clauses the exporter
+                  // could reach RetractRun and append a retraction through it, or RateServer and
+                  // write a rating through that, inheriting a looser fence than its own — the
+                  // exact shape theRatingsToolOpensNothingElse already refuses for its siblings.
+                  // The two writers write to different layers and neither is the exporter's.
                   .or(
                       ArchConditions.dependOnClassesThat(
-                          JavaClass.Predicates.resideInAPackage("..retract.."))))
+                          JavaClass.Predicates.resideInAnyPackage("..retract..", "..rate.."))))
           .because(
               "ADR 41: the exporter is a read-only tool — it never appends to the log, never"
-                  + " writes the graph, and cannot reach the one class that is allowed to,"
-                  + " nor the one dev-side tool that is (ADR 44)");
+                  + " writes the graph, and cannot reach the one class that is allowed to, nor"
+                  + " either of the two dev-side tools that write (ADR 44, ADR 46)");
 
   /**
    * ADR 41: the exporter is offline as well as read-only.
@@ -414,6 +424,7 @@ class ArchitectureTest {
               "..seed..",
               "..export..",
               "..retract..",
+              "..rate..",
               "java.net..",
               "javax.net..")
           .because(
@@ -646,6 +657,52 @@ class ArchitectureTest {
                   + " hold a rating at all, and RateServer owns no logger that prints one");
 
   /**
+   * ADR 46: the deck needs a log, an engine, the recommender's sweep and nothing else.
+   *
+   * <p>The sixth tool's half of the fence every dev tool carries — {@link #seedNeverOpensAStore},
+   * {@link #theRatingsToolOpensNothingElse}, {@link #theRecommenderOpensNothingElse}, {@link
+   * #theRetractionToolOpensNothingElse} — and for the same reason: a dependency on a sibling lets
+   * this tool inherit that sibling's fence instead of its own. It writes a rating and nothing else,
+   * so reaching {@code retract} (which appends a world-fact claim) or {@code ratings} (which reads
+   * every note) would each be a way around a rule this package is otherwise held to.
+   *
+   * <p><b>{@code recommend} is deliberately NOT banned, and it is the only sibling pair in the
+   * project that may depend on each other.</b> The candidate half of the deck is the recommender's
+   * own {@code CandidateSweep}, {@code Routes} and {@code Sweep}, so that a card's routes are the
+   * routes that tool would give for the same pair rather than a second implementation that can
+   * drift. ADR 46 argues that dependency and ADR 45 moved {@code QidList} into {@code support}
+   * rather than let a shared reader create it by accident. It runs one way only: {@link
+   * #theRecommenderOpensNothingElse} bans the return trip.
+   *
+   * <p><b>{@code java.net} is deliberately NOT banned either</b>, and this is the one dev tool that
+   * could not carry that clause. Its whole shape is an HTTP server: {@code RateServer} binds an
+   * {@code InetSocketAddress} on {@link java.net.InetAddress#getLoopbackAddress()} and parses the
+   * {@code Origin} header with {@link java.net.URI}. What the siblings' {@code java.net} ban buys
+   * them — nothing leaves the machine — is bought here by the bind address and the Origin allowlist
+   * instead, which is ADR 46's own argument and is tested over a real socket in {@code
+   * RateServerTest} rather than asserted here.
+   */
+  @ArchTest
+  static final ArchRule theRatingDeckOpensNothingElse =
+      noClasses()
+          .that()
+          .resideInAPackage("..rate..")
+          .should()
+          .dependOnClassesThat()
+          .resideInAnyPackage(
+              "..jena..",
+              "..mcp..",
+              "..app..",
+              "..seed..",
+              "..export..",
+              "..ratings..",
+              "..retract..")
+          .because(
+              "ADR 46: the deck replays one local log into one in-memory graph and serves it on"
+                  + " loopback — it needs no second engine and no sibling tool but the recommender,"
+                  + " whose sweep it reuses on purpose, and cannot become an MCP tool by accident");
+
+  /**
    * ADR 45: the recommender needs a log, an engine and nothing else.
    *
    * <p>The same fence its siblings carry, with the same reasoning. {@code seed}, {@code export},
@@ -674,6 +731,7 @@ class ArchitectureTest {
               "..export..",
               "..ratings..",
               "..retract..",
+              "..rate..",
               "java.net..",
               "javax.net..")
           .because(
@@ -745,6 +803,7 @@ class ArchitectureTest {
                           "..seed..",
                           "..export..",
                           "..ratings..",
+                          "..rate..",
                           "java.net..",
                           "javax.net..")))
           .because(
