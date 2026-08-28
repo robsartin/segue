@@ -24,10 +24,17 @@ import java.util.function.ToIntFunction;
  * change inside one session rather than after eight hundred cards. The card shows that same degree,
  * so a card near the top says why it is near the top.
  *
- * <p><b>Already-rated entities are excluded rather than re-asked, and that is the whole of the
- * resume mechanism.</b> The deck is "everything unrated", recomputed at startup from {@code
- * AffinityStore.readRatings()}. There is no position file to persist, to corrupt, or to leave
- * personal data lying in.
+ * <p><b>In its default mode, already-rated entities are excluded rather than re-asked, and that is
+ * the whole of the resume mechanism.</b> The deck is then "everything unrated", recomputed at
+ * startup from {@code AffinityStore.readRatings()}. There is no position file to persist, to
+ * corrupt, or to leave personal data lying in.
+ *
+ * <p><b>Revise mode (issue #109) inverts exactly that selection, and only that.</b> Given a target
+ * rating, {@link #dealRevision} deals the known entities holding it and nothing else, so the
+ * sentence above describes one of two modes rather than the whole of this class. The ordering, the
+ * skipping of entities the graph does not hold, and the absence of any stored position are the same
+ * in both; what changes is which side of the {@code ratings} map a qid has to be on to be dealt.
+ * The two modes never mix: a run is one or the other.
  */
 public final class Deck {
 

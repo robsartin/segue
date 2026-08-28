@@ -42,8 +42,9 @@ public final class RateRun {
    * Build the deck.
    *
    * @param ratings the note-free bulk read, {@code AffinityStore.readRatings()}, used <b>twice</b>
-   *     and for two different things. Its key set is the exclusion — an entity already rated is not
-   *     dealt again, which is the whole of {@code Deck}'s resume mechanism. Its values are the
+   *     and for two different things. Its key set is the selection — in the default mode an entity
+   *     already rated is not dealt again, which is the whole of {@code Deck}'s resume mechanism,
+   *     and under {@code --revise} the same key set is read the other way round. Its values are the
    *     weighting: {@code Recommendations.regardFor} is what {@code RecommendCli} passes its own
    *     sweep, and passing {@code EQUAL_REGARD} here instead (as this did until issue #101's final
    *     review) made the deck's candidate cards diverge from {@code ./gradlew recommend}'s for the

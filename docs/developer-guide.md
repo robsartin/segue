@@ -1518,10 +1518,12 @@ therefore unrated, so there is nothing about it to reconsider, and mixing discov
 pass would change what the pass measures. With no `--revise`, behaviour is exactly what the rest of
 this section describes.
 
-### Two card shapes, because "why is this here" only has one answer at a time
+### Three card shapes, because they answer different questions
 
-`Card.known` and `Card.candidate` are readable in full in `Card.java`; the shape each produces is
-the point. A known entity already earned its place on your list, so the useful thing to show is
+`Card.known`, `Card.candidate` and `Card.rated` are readable in full in `Card.java`; the shape each
+produces is the point. The first two split on "why is this here"; the third, added by `--revise`
+(issue #109), is a known card plus the rating the entity currently holds, and answers "what did you
+say last time" instead. A known entity already earned its place on your list, so the useful thing to show is
 how much of the graph hangs off it — the same in-graph degree `Deck` sorted the deck by, so a card
 near the top visibly explains its own position. A candidate is something you may never have heard
 of, so the useful thing is the routes that reached it. Those come from `Routes.bestFor` by way of
@@ -1530,8 +1532,8 @@ same `PathRanking.rank`. The third is not shared. `SegueService.findPaths` hands
 to `ViewMapper.toPathViews` and returns structured `PathView` records; the deck calls
 `PathResult.render()`, whose only two callers in `src/main` are dev-side — `RecommendationReport`
 and `Deck.routeLines`. The route *set* differs too: `Routes.MAX_HOPS` is 2 where `find_paths`
-defaults to 4, and `bestFor` keeps only the top-ranked route per reaching entity. Neither card
-shape carries a note field; there is nowhere on either `Card` to put one.
+defaults to 4, and `bestFor` keeps only the top-ranked route per reaching entity. No card shape
+carries a note field; there is nowhere on a `Card` to put one, in any of the three.
 
 ### No session file: the deck is "everything unrated", recomputed every run
 
@@ -1542,7 +1544,9 @@ no position to persist, nothing to corrupt, and nothing
 left lying around between runs; quitting mid-deck costs nothing, and the next run picks up
 whatever is still unrated. `Deck`'s class javadoc is the authority on the ordering itself — degree
 descending for known entities, a candidate mixed in roughly every fifth card — and is worth reading
-before changing either number.
+before changing either number. It now says which of the two modes each of its claims belongs to;
+under `--revise` there is still no stored position, and the same degree-descending order applies to
+a selection made the other way round.
 
 ### Ratings are the only thing it writes
 

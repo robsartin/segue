@@ -8,13 +8,18 @@ import java.util.Objects;
 import java.util.OptionalInt;
 
 /**
- * One dealt entity, in the two shapes the page renders.
+ * One dealt entity, in the three shapes the page renders.
  *
- * <p><b>Two shapes, because "why is this here" only has an answer for one of them.</b> A known
- * entity is on the owner's list already, so the useful thing to show is how much the graph hangs
- * off it — which is also the number the deck sorted by, so the card explains its own position. A
- * candidate is something the owner may never have heard of, so the useful thing is the routes tying
- * it to what they know.
+ * <p><b>The first two exist because "why is this here" only has an answer for one of them.</b> A
+ * known entity is on the owner's list already, so the useful thing to show is how much the graph
+ * hangs off it — which is also the number the deck sorted by, so the card explains its own
+ * position. A candidate is something the owner may never have heard of, so the useful thing is the
+ * routes tying it to what they know.
+ *
+ * <p><b>The third answers a different question</b> (issue #109). A revision card is a known entity
+ * the owner has already rated, so what it owes them is not "why is this here" but "what did you say
+ * last time" — the degree, as a known card, plus the rating it currently holds. See {@link
+ * #rated(NodeRecord, int, int)}.
  *
  * <p><b>There is no note field here and there never should be.</b> Issue #85 made a rating ordinary
  * data and a note protected; the deck writes ratings, and a type with nowhere to put a note cannot
