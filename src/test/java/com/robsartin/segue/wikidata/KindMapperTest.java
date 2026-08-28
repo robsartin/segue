@@ -57,11 +57,49 @@ class KindMapperTest {
   }
 
   @Test
-  @DisplayName("the first mapped class wins, even when an unmapped one comes first")
-  void firstMappedWins() {
-    // Real entities carry several P31 values. Picking the first RECOGNISED one is what
-    // stops an obscure class shadowing "human".
+  @DisplayName("an unmapped class does not shadow a mapped one")
+  void unmappedClassesAreSkipped() {
+    // Real entities carry several P31 values, most of them classes this list has never heard
+    // of. Those are skipped rather than counted, which is what stops an obscure class
+    // shadowing "human".
     assertThat(KindMapper.fromInstanceOf(List.of("Q99999999", "Q5"))).isEqualTo(NodeKind.PERSON);
+  }
+
+  @Test
+  @DisplayName("a film that Wikidata also calls a city is a WORK, whichever order it states them")
+  void aWorkOutranksAPlaceStatedBesideIt() {
+    // Issue #87. Q1219310 "National Lampoon's Vacation" states P31 = Q11424 (film) AND Q515
+    // (city) - the second statement is unsourced and simply wrong upstream, but it is really
+    // there. The old rule took the first RECOGNISED class, so a comedy became a PLACE the
+    // moment something handed the classes over city-first, which nothing prevents: the SPARQL
+    // reverse lookup collects them into a set keyed on row order, and Wikidata's own JSON
+    // orders them by statement age. Order is not a signal and must not decide the kind.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q515", "Q11424"))).isEqualTo(NodeKind.WORK);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q11424", "Q515"))).isEqualTo(NodeKind.WORK);
+  }
+
+  @Test
+  @DisplayName("when several kinds are stated, the more specific claim wins by a fixed precedence")
+  void precedenceResolvesEveryPairOfKinds() {
+    // The precedence is PERSON > WORK > GROUP > EVENT > PLACE, and it is asserted here in both
+    // directions so that no case can pass by accident of ordering. Every pair below was found
+    // in a real graph, not invented: a singer typed as a musical group as well as a human, a
+    // concert film typed as a concert, a television series typed as an organisation, and the
+    // film above.
+    assertOrderIndependently("Q5", "Q215380", NodeKind.PERSON); // human over musical group
+    assertOrderIndependently("Q11424", "Q182832", NodeKind.WORK); // film over concert
+    assertOrderIndependently("Q5398426", "Q43229", NodeKind.WORK); // TV series over organisation
+    assertOrderIndependently("Q43229", "Q1656682", NodeKind.GROUP); // organisation over event
+    assertOrderIndependently("Q132241", "Q515", NodeKind.EVENT); // festival over city
+  }
+
+  @Test
+  @DisplayName("a mapped class beats CONCEPT however many unmapped classes surround it")
+  void aMappedClassBeatsTheFallback() {
+    // CONCEPT is the answer for "we could not place this" (ADR 22), so it can never outrank a
+    // class the list does recognise - otherwise a single unknown class would erase a known one.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q99999999", "Q515", "Q99999998")))
+        .isEqualTo(NodeKind.PLACE);
   }
 
   @Test
@@ -164,5 +202,10 @@ class KindMapperTest {
         .isEqualTo(NodeKind.CONCEPT);
     assertThat(KindMapper.fromInstanceOf(List.of("Q378427"))) // literary award
         .isEqualTo(NodeKind.CONCEPT);
+  }
+
+  private static void assertOrderIndependently(String a, String b, NodeKind expected) {
+    assertThat(KindMapper.fromInstanceOf(List.of(a, b))).isEqualTo(expected);
+    assertThat(KindMapper.fromInstanceOf(List.of(b, a))).isEqualTo(expected);
   }
 }

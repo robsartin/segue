@@ -33,6 +33,26 @@ composes film scores. All four at the same time, all four worth traversing.
 - **One flat relation namespace across all domains.** Music, film and literature relations
   share `EdgeTypes` rather than living in per-domain vocabularies.
 
+**Amendment (2026-08-28, issue #87): when a source states classes belonging to more than one
+kind, a fixed precedence decides which kind the entity is.** Six kinds do not stop a source
+asserting several of them at once. `Q1219310`, "National Lampoon's Vacation", states `P31` =
+`Q11424` (film) **and** `Q515` (city); the second statement is unsourced and simply wrong
+upstream, but it is really there, and it made a comedy a `PLACE` in a real graph.
+`KindMapper` took the first class it recognised, and that order carries no meaning — Wikidata's
+entity JSON lists statements oldest first, the SPARQL reverse lookup binds them in row order, so
+the same entity could resolve two different ways depending on which call happened to learn it.
+**The kinds are now ranked — PERSON, WORK, GROUP, EVENT, PLACE, CONCEPT — and the highest-ranked
+kind an entity states wins, whatever order the classes arrive in.** The ranking and the argument
+for each rung live in `KindMapper.PRECEDENCE`; in short, `Q5` (human) is the least ambiguous
+statement Wikidata makes, a thing that is both a work and something else is the work it was
+released as, and every place-class conflict observed so far is a place class attached to something
+that is not a place. CONCEPT ranks last because it means "we could not place this" (ADR 22) and
+must never outrank a class the whitelist does recognise. Measured over the whole graph, 10 of
+123,752 entities state two kinds and four of them change: a film out of `PLACE`, a singer out of
+`GROUP`, and three concert recordings out of `EVENT` into `WORK`. Adding a seventh kind now means
+deciding where it ranks — a static check fails the build if `PRECEDENCE` does not rank every
+constant of `NodeKind` exactly once.
+
 ## Alternatives considered
 
 - **A node type per domain concept** — the intuitive model and the one most graph examples
@@ -45,6 +65,21 @@ composes film scores. All four at the same time, all four worth traversing.
   source, and far too large and too deep to traverse or reason about at personal scale.
 - **Untyped nodes, kind inferred from edges** — maximally flexible, but gives disambiguation
   and search nothing to filter on, which the MCP tool surface needs.
+
+Two more, weighed for the issue-#87 amendment above:
+
+- **The most specific stated class wins, resolved through `P279` subclass chains** — more
+  faithful than a ranking, and disqualified twice over. It is a round trip per unknown class,
+  and `KindMapper` is re-applied by both projections **offline** at boot (ADR 42), so a mapper
+  that could reach the network could not run where it is needed most. It would not even settle
+  the case that prompted this: neither "city" nor "film" is a subclass of the other.
+- **Refuse to choose, and flag the conflict** — the honest option, and the wrong one here on
+  both halves. `CONCEPT` is a worse answer than a ranked one rather than a safer one: ADR 31
+  reads a high-degree `CONCEPT` intermediate as a hub, so refusing would demote the film's
+  routes as well as mislabel it. And the flag has nowhere to go — `isMapped`, the existing
+  "report what we could not map" seam, has no production caller to report through. Building
+  that surface for ten entities would be speculation; the ranking is deterministic, so a
+  conflict report can be added later against unchanged data.
 
 ## Consequences
 

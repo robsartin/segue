@@ -180,10 +180,12 @@ public final class PathRanking {
   /**
    * Whether the classes this node states make it a body one is ELECTED to.
    *
-   * <p>Any stated class is enough, not the first one: a real institution wears several, and the
-   * recognition class is not reliably at the front — the American Academy of Arts and Sciences
-   * states learned society, academic publisher, nonprofit organization, in that order. That is the
-   * one place this differs from the kind derivation, which takes the first class it recognises.
+   * <p>Any stated class is enough, and position means nothing: a real institution wears several,
+   * and the recognition class is not reliably at the front — the American Academy of Arts and
+   * Sciences states learned society, academic publisher, nonprofit organization, in that order. The
+   * kind derivation reaches the same conclusion about order by a different route (issue #87): it
+   * reads every recognised class and ranks the KINDS, where this reads every class and asks one
+   * yes-or-no question. Neither is allowed to care which class came first.
    *
    * <p>No kind test, deliberately. "High-degree {@code CONCEPT}" means "we could not place this and
    * half the graph touches it"; a stated class means something on its own, so a learned society the
