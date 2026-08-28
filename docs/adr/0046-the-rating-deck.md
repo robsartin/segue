@@ -262,10 +262,14 @@ old shape.**
   saw no violation only because javac inlines a compile-time `int` and the reference never reaches
   the bytecode ArchUnit reads. A class that needs to say "1 to 5" must not have to name the type
   that carries a rating value to do it.
-- **`theRatingDeckLogsNoRating`'s named exception is withdrawn.** "Ratings are the only thing it
-  writes" above records that `RateServer` is excluded by name because it must construct the record
-  it writes. It no longer constructs one, so the exception is gone and the rule now bans
-  `AffinityRecord` across the whole of `rate`, with no exception at all.
+- **`theRatingDeckLogsNoRating`'s named exception is withdrawn.** The section above headed
+  **"Ratings only: three fences, and one stated exception"** records that `RateServer` is excluded
+  by name because it must construct the record it writes. It no longer constructs one, so the
+  exception is gone and the rule now bans `AffinityRecord` across the whole of `rate`, with no
+  exception at all. **That heading is stale as written**: read it as "three fences, and no
+  exception", and read its `affinity.put(new AffinityRecord(...))` sentence as describing what the
+  handler used to do. (The first draft of this amendment cited *"Ratings are the only thing it
+  writes"*, which is the developer guide's heading, not this ADR's.)
 - **Two `only reads` fences gained `updateRating`.** `theRatingsToolOnlyReads` and
   `theRecommenderOnlyReads` each named `AffinityStore.put` as the write they forbid. A second write
   method on the port would have walked straight through both, so both now name it too.
@@ -279,7 +283,22 @@ old shape.**
   after a response that was `ok`, and the banner prefers it over the server's snapshot. The page
   needs no round trip to know this: it is what sent the value. It applies to an ordinary card too —
   a card rated a minute ago and returned to *is* a revision of that rating, and showing the value
-  given is the same protection against a reflexive second answer the banner exists for.
+  given is the same protection against a reflexive second answer the banner exists for. **The
+  wording stays as it is**, on review: "this is a revision, not a new card" is literally true of a
+  default-mode card the owner rated ten seconds ago and has just pressed `b` to return to — it is a
+  revision of that rating, and it is not a new card, because they have already seen it. A second,
+  gentler wording for the default mode would mean two sentences to keep true and would soften the
+  one message whose bluntness is the entire reason it exists.
+- **Two sentences in the Decision above now name the wrong port method, and both should be read as
+  `updateRating`.** "Degree ordering, with the arithmetic" ends "Rating records a `put`; skipping
+  records nothing at all" — the contrast it draws is between recording something and recording
+  nothing, and that still holds exactly; only the method's name has changed. "No un-rate" says
+  pressing `b` and choosing a different number "is a second `put` against the same qid, **which
+  needs no new port method**." That clause is now false, and it is false for a reason worth keeping
+  rather than quietly correcting: re-rating really did need no new port method to *record the
+  rating* — `put` did that correctly. What it needed one for is everything `put` also writes. The
+  paragraph's actual claim survives untouched: there is still no delete, still one row per entity,
+  and a rating can still be changed but never withdrawn.
 - **The `Origin` allowlist now guards `GET /api/card` as well as `POST /api/rate`.** "The Origin
   allowlist, ADR 28's argument used a second time" above says the check runs "before honouring
   `POST /api/rate`", and only that endpoint called `originAllowed`. The asymmetry was defensible
