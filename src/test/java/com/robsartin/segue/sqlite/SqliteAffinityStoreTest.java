@@ -1,6 +1,7 @@
 package com.robsartin.segue.sqlite;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.robsartin.segue.domain.AffinityRecord;
 import com.robsartin.segue.domain.NodeAssertion;
@@ -186,6 +187,49 @@ class SqliteAffinityStoreTest {
   void readsNoScoresWhenNothingIsRated() {
     try (SqliteAffinityStore store = SqliteAffinityStore.inMemory()) {
       assertThat(store.readRatings()).isEmpty();
+    }
+  }
+
+  @Test
+  @DisplayName("updateRating changes the rating and leaves an existing note exactly as it was")
+  void updateRatingKeepsTheNote() {
+    try (SqliteAffinityStore store = SqliteAffinityStore.inMemory()) {
+      store.put(new AffinityRecord("Q900001", 3, "invented note for the test suite", FIRST));
+
+      store.updateRating("Q900001", 2, LATER);
+
+      AffinityRecord after = store.find("Q900001").orElseThrow();
+      assertThat(after.rating()).isEqualTo(2);
+      assertThat(after.note()).isEqualTo("invented note for the test suite");
+      assertThat(after.updatedAt()).isEqualTo(LATER);
+    }
+  }
+
+  @Test
+  @DisplayName("updateRating inserts when there is no row yet, with no note to preserve")
+  void updateRatingInsertsWhenAbsent() {
+    // The deck's default mode writes first ratings through this same call, so a method that could
+    // only UPDATE would refuse the commoner of its two cases.
+    try (SqliteAffinityStore store = SqliteAffinityStore.inMemory()) {
+      store.updateRating("Q900002", 5, FIRST);
+
+      AffinityRecord written = store.find("Q900002").orElseThrow();
+      assertThat(written.rating()).isEqualTo(5);
+      assertThat(written.note()).isNull();
+      assertThat(written.updatedAt()).isEqualTo(FIRST);
+    }
+  }
+
+  @Test
+  @DisplayName("updateRating refuses a rating off the scale rather than storing one")
+  void updateRatingRefusesOffTheScale() {
+    // The one write into this table that does not build an AffinityRecord, so it would otherwise
+    // be the one write with no range check at all.
+    try (SqliteAffinityStore store = SqliteAffinityStore.inMemory()) {
+      assertThatThrownBy(() -> store.updateRating("Q900003", 9, FIRST))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageNotContaining("9");
+      assertThat(store.find("Q900003")).isEmpty();
     }
   }
 

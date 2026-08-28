@@ -6,10 +6,12 @@ import com.robsartin.segue.domain.AffinityRecord;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.port.AffinityStore;
+import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +33,16 @@ class RateServerTest {
     @Override
     public void put(AffinityRecord affinity) {
       written.add(affinity);
+    }
+
+    /**
+     * The write the deck actually makes. Recorded as the record it is equivalent to — the deck
+     * never has a note, so the note-free write and a note-free record carry the same information,
+     * and every existing assertion on {@code written} keeps meaning what it meant.
+     */
+    @Override
+    public void updateRating(String qid, int rating, Instant updatedAt) {
+      written.add(new AffinityRecord(qid, rating, null, updatedAt));
     }
 
     @Override
@@ -280,6 +292,47 @@ class RateServerTest {
 
     assertThat(response.statusCode()).isEqualTo(204);
     assertThat(affinity.written).hasSize(1);
+  }
+
+  @Test
+  @DisplayName(
+      "re-rating an entity that already has a note leaves the note alone (issue #109 review)")
+  void reRatingKeepsTheNoteThatIsAlreadyThere() throws Exception {
+    // The failure --revise made reachable. Before this branch the deck could only deal UNRATED
+    // entities, and a note requires a rating (note_affinity writes both), so no note-bearing row
+    // was reachable from here at all. dealRevision inverts that: it selects exactly the
+    // already-rated population, which is precisely where SegueService.noteAffinity writes notes.
+    //
+    // A real store, not the recording fake — the erasure happened in the SQL, where the upsert
+    // takes excluded.note, so a fake that only remembers what it was handed cannot show it.
+    try (SqliteAffinityStore store = SqliteAffinityStore.inMemory()) {
+      store.put(
+          new AffinityRecord(
+              "Q900001", 3, "invented note, never Rob's", Instant.parse("2026-01-01T00:00:00Z")));
+      Card card =
+          Card.rated(new NodeRecord("Q900001", NodeKind.GROUP, "Test Band", List.of()), 42, 3);
+      RateServer revising = new RateServer(List.of(card), store, 0);
+      revising.start();
+      try {
+        HttpResponse<String> response =
+            client.send(
+                HttpRequest.newBuilder(
+                        URI.create("http://127.0.0.1:" + revising.port() + "/api/rate"))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString("{\"qid\":\"Q900001\",\"rating\":2}"))
+                    .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(204);
+        assertThat(store.find("Q900001")).isPresent();
+        assertThat(store.find("Q900001").orElseThrow().rating()).isEqualTo(2);
+        assertThat(store.find("Q900001").orElseThrow().note())
+            .as("the affinity table is the one thing in segue with no source to regenerate it from")
+            .isEqualTo("invented note, never Rob's");
+      } finally {
+        revising.stop();
+      }
+    }
   }
 
   @Test

@@ -1,6 +1,7 @@
 package com.robsartin.segue.port;
 
 import com.robsartin.segue.domain.AffinityRecord;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -43,6 +44,34 @@ public interface AffinityStore extends AutoCloseable {
    * answers the question anyone actually asks of it - when did this last change.
    */
   void put(AffinityRecord affinity);
+
+  /**
+   * Change what the user thinks of one entity, and <b>leave the note exactly as it is</b> (issue
+   * #109 review).
+   *
+   * <p><b>A signature with nowhere to put a note, on purpose.</b> {@link #put} writes the whole
+   * row, note included, which is right for {@code note_affinity} — the one caller that has a note
+   * to write. It is wrong for the rating deck. {@code
+   * ArchitectureTest.theRatingDeckNeverReadsANote} bans every class in {@code rate} from calling
+   * {@code AffinityRecord.note()}, so the deck structurally cannot read a note and carry it back;
+   * before {@code --revise} that fence cost nothing, because the deck could only reach UNRATED
+   * entities and a note requires a rating. {@code Deck.dealRevision} inverts exactly that: it
+   * selects the already-rated population, which is precisely where notes live. Re-rating through
+   * {@link #put} then wrote {@code note = null} over a note nothing can regenerate.
+   *
+   * <p>So the fix is a second write with no note in it, rather than a deck allowed to read one. An
+   * implementation must not mention the note column at all — neither reading it nor writing it —
+   * which is the same reasoning that makes {@link #readRatings()}'s {@code Map<String, Integer>} a
+   * fence rather than a convenience.
+   *
+   * <p><b>It inserts when the row is absent.</b> "Update" names the intent, not a SQL verb: the
+   * deck's default mode deals unrated entities and writes their first rating through this same
+   * path, so a method that could only update would refuse the commoner case. A row created here has
+   * no note because there is nobody to have written one.
+   *
+   * @param rating 1 to 5; an implementation refuses anything else, through {@code RatingScale}
+   */
+  void updateRating(String qid, int rating, Instant updatedAt);
 
   /** What the user thinks of this entity, or empty if they have never said. */
   Optional<AffinityRecord> find(String qid);

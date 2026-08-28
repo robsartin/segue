@@ -1,6 +1,6 @@
 package com.robsartin.segue.rate;
 
-import com.robsartin.segue.domain.AffinityRecord;
+import com.robsartin.segue.domain.RatingScale;
 import com.robsartin.segue.ingest.GraphProjector;
 import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
@@ -34,9 +34,9 @@ public final class RateCli {
       "usage: --known <file of QIDs> [--db <segue.db>] [--port <n>, default "
           + DEFAULT_PORT
           + "] [--revise <"
-          + AffinityRecord.MIN_RATING
+          + RatingScale.MIN
           + "-"
-          + AffinityRecord.MAX_RATING
+          + RatingScale.MAX
           + ">]";
 
   private RateCli() {}
@@ -93,12 +93,12 @@ public final class RateCli {
 
   private static int revise(String value) {
     int rating = number("--revise", value);
-    if (rating < AffinityRecord.MIN_RATING || rating > AffinityRecord.MAX_RATING) {
+    if (rating < RatingScale.MIN || rating > RatingScale.MAX) {
       throw usage(
           "--revise must be from "
-              + AffinityRecord.MIN_RATING
+              + RatingScale.MIN
               + " to "
-              + AffinityRecord.MAX_RATING
+              + RatingScale.MAX
               + ": that is the whole of the scale");
     }
     return rating;

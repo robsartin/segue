@@ -1,6 +1,6 @@
 package com.robsartin.segue.rate;
 
-import com.robsartin.segue.domain.AffinityRecord;
+import com.robsartin.segue.domain.RatingScale;
 import com.robsartin.segue.port.AffinityStore;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -152,9 +152,17 @@ public final class RateServer {
     try {
       String qid = field(body, "qid");
       int rating = Integer.parseInt(field(body, "rating"));
-      // Let AffinityRecord do the range check: one definition of the scale, in the type that
-      // carries it. Its message names no value, which is deliberate (ADR 33).
-      affinity.put(new AffinityRecord(qid, rating, null, Instant.now()));
+      // RatingScale, not AffinityRecord: one definition of the scale, in a class that carries no
+      // rating of its own. Its message names no value, which is deliberate (ADR 33).
+      RatingScale.check(rating);
+      // updateRating, never put — in BOTH modes, and this handler could not tell them apart if it
+      // wanted to (it holds a List<Card> and no flag). put writes the whole row, and the deck can
+      // never have a note to write: theRatingDeckNeverReadsANote bans every class here from
+      // reading one. Through put, re-rating a --revise card wrote note = null over a note only the
+      // owner could ever restore. Through updateRating the note column is never mentioned, and the
+      // default mode — where the row is absent and gets its first rating — is served by the same
+      // call, because an inserted row has no note for anything to preserve.
+      affinity.updateRating(qid, rating, Instant.now());
     } catch (IllegalArgumentException e) {
       send(exchange, 400, "application/json", EMPTY_JSON);
       return;

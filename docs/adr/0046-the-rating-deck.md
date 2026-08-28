@@ -221,6 +221,55 @@ Nothing above this amendment is withdrawn — it described, and still describes,
 `reviseRating` supplied. What changed is that "everything unrated, recomputed at startup" is now
 one of two modes this tool can deal, not the whole of it.
 
+**Amendment (2026-08-28, issue #109 final review): revising a rating preserves the note, because
+`--revise` is the first thing in segue that can reach a note-bearing row.**
+
+The amendment above shipped a silent, irreversible data loss. `RateServer` wrote every rating as
+`affinity.put(new AffinityRecord(qid, rating, null, Instant.now()))`, and `SqliteAffinityStore`'s
+upsert sets `note = excluded.note` — so every write through the deck put `NULL` in the note column.
+Before `--revise` that was harmless, and harmless for a reason worth stating precisely: the deck
+could only deal **unrated** entities, a note cannot exist without a rating (`note_affinity` writes
+both), so no row carrying a note was reachable from this tool at all. `dealRevision` inverts
+exactly that. It selects the already-rated population — which is precisely where the `note_affinity`
+MCP tool writes notes. `note_affinity(Q…, 3, "great live, thin on record")`, then `--revise 3`,
+then pressing `2`, left `rating = 2, note = NULL`, with no message, no log line, and no source
+anywhere to restore the words from.
+
+**Decision: the taste-layer port gains a rating-only write, and the deck uses it — in both modes.**
+`AffinityStore.updateRating(String qid, int rating, Instant updatedAt)` is a signature with nowhere
+to put a note; `SqliteAffinityStore` implements it with SQL that never names the `note` column, so
+an existing note survives an update untouched and a row inserted through it simply has none. It
+inserts as well as updates, because the deck's default mode writes **first** ratings through the
+same call and a method that could only update would refuse its commoner case.
+
+**The fix is a narrower write, not a wider deck, and that is the point.** The obvious alternative —
+have the deck read the existing record and write the note back — was refused: it requires the deck
+to read `AffinityRecord.note()`, which `ArchitectureTest.theRatingDeckNeverReadsANote` forbids for
+every class in `rate` and should go on forbidding. A tool that never sees a note cannot erase one
+either, once the write it makes has no note in it. `RateServer` calls `updateRating` in **both**
+modes and could not distinguish them if it wanted to: it holds a `List<Card>` and no mode flag.
+`put` stays what it was — the whole-row write, and `SegueService.noteAffinity`'s alone, because
+that is the one caller with a note to write.
+
+**Consequential moves, each small and each stated here because this ADR's earlier text names the
+old shape.**
+
+- **The scale's bounds moved to `RatingScale` (`domain`), and the Decision above should now be read
+  as naming it.** That paragraph says `--revise` is "validated against `AffinityRecord.MIN_RATING`/
+  `MAX_RATING`"; the constants are now `RatingScale.MIN`/`MAX`, and `AffinityRecord`'s own compact
+  constructor calls `RatingScale.check`. The reason is a fence that was passing for an invisible
+  reason: `RateCli` named those constants in its usage string, and `theRatingDeckLogsNoRating`
+  saw no violation only because javac inlines a compile-time `int` and the reference never reaches
+  the bytecode ArchUnit reads. A class that needs to say "1 to 5" must not have to name the type
+  that carries a rating value to do it.
+- **`theRatingDeckLogsNoRating`'s named exception is withdrawn.** "Ratings are the only thing it
+  writes" above records that `RateServer` is excluded by name because it must construct the record
+  it writes. It no longer constructs one, so the exception is gone and the rule now bans
+  `AffinityRecord` across the whole of `rate`, with no exception at all.
+- **Two `only reads` fences gained `updateRating`.** `theRatingsToolOnlyReads` and
+  `theRecommenderOnlyReads` each named `AffinityStore.put` as the write they forbid. A second write
+  method on the port would have walked straight through both, so both now name it too.
+
 ## Alternatives considered
 
 - **A controller in the Spring app** — the server and the port already exist. Refused because it

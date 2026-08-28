@@ -1495,9 +1495,9 @@ without recording anything, `b` goes back.
 ./gradlew rate --args="--known $HOME/known.csv --revise 3"
 ```
 
-`--revise <rating>` (1–5, the same range `AffinityRecord` enforces everywhere else) switches the
-deck from its default selection to `Deck`'s `dealRevision`: instead of everything unrated, it deals
-every known entity currently holding exactly that rating. This exists because a rating of 3 is an
+`--revise <rating>` (1–5, the same range `RatingScale` defines and `AffinityRecord` enforces
+everywhere else) switches the deck from its default selection to `Deck`'s `dealRevision`: instead
+of everything unrated, it deals every known entity currently holding exactly that rating. This exists because a rating of 3 is an
 arithmetic no-op — `Recommendations.regardFor` centres its weighting on `NEUTRAL_RATING`, so a 3
 weighs exactly the same as no rating at all — and the deck used to have no way back to an entity
 once it held any rating, 3 included. See [ADR 46](adr/0046-the-rating-deck.md)'s 2026-08-28
@@ -1543,13 +1543,24 @@ before changing either number.
 
 ### Ratings are the only thing it writes
 
-Four ArchUnit rules hold the boundary: `rate` may call `AffinityStore.put` and nothing that
-appends to the assertion log or touches the graph; it may never call `AffinityRecord.note()`; no
-class in the package may depend on `AffinityRecord` at all, with one named exception —
-`RateServer`, because it is the class that has to construct the record it writes; and it may not
+**And it writes them through `AffinityStore.updateRating`, never `put`.** `put` writes the whole
+row, note column included, which is right for `note_affinity` — the one caller that has a note to
+write — and wrong here: it wrote `note = NULL` over every entity the deck re-rated. That was
+unreachable until `--revise`, because the deck could only deal unrated entities and a note requires
+a rating; `dealRevision` deals exactly the rated population, which is where notes live.
+`updateRating` has nowhere to put a note and its SQL never names the column, so an existing note
+survives and an inserted row simply has none. `RateServer` uses it in both modes and could not tell
+them apart if it wanted to. See [ADR 46](adr/0046-the-rating-deck.md)'s second 2026-08-28
+amendment.
+
+Four ArchUnit rules hold the boundary: `rate` may call `AffinityStore.updateRating` and nothing
+that appends to the assertion log or touches the graph; it may never call `AffinityRecord.note()`;
+no class in the package may depend on `AffinityRecord` at all, with no exception — `RateServer`
+used to be named as one, and lost it when its write stopped constructing a record; and it may not
 reach `jena`, `mcp`, `app`, `seed`, `export`, `ratings` or `retract`, the sibling fence every dev
-tool carries. Read the exception in `ArchitectureTest.theRatingDeckLogsNoRating`'s own javadoc
-rather than assuming it: every other class in `rate` still cannot hold a rating in any form.
+tool carries. The bounds of the scale live on `RatingScale`, which carries no rating, so a class
+that only needs to say "1 to 5" — `RateCli`'s usage string and its `--revise` check — can say it
+without naming the type that carries one.
 
 The fourth rule, `theRatingDeckOpensNothingElse`, has two deliberate holes, and both are argued in
 its javadoc. `recommend` is allowed, because the candidate half of the deck IS that tool's

@@ -387,7 +387,9 @@ class ArchitectureTest {
           .resideInAPackage("..ratings..")
           .should(
               ArchConditions.callMethodWhere(
-                  APPLIES_A_CLAIM.or(callTo("put", AffinityStore.class))))
+                  APPLIES_A_CLAIM
+                      .or(callTo("put", AffinityStore.class))
+                      .or(callTo("updateRating", AffinityStore.class))))
           .because(
               "ADR 43: listing your ratings is a read — the tool never appends to the log, never"
                   + " writes the graph, and never writes the taste layer it exists to display");
@@ -516,7 +518,10 @@ class ArchitectureTest {
           .that()
           .resideInAPackage("..recommend..")
           .should(
-              ArchConditions.callMethodWhere(APPLIES_A_CLAIM.or(callTo("put", AffinityStore.class)))
+              ArchConditions.callMethodWhere(
+                      APPLIES_A_CLAIM
+                          .or(callTo("put", AffinityStore.class))
+                          .or(callTo("updateRating", AffinityStore.class)))
                   .or(
                       ArchConditions.dependOnClassesThat(
                           JavaClass.Predicates.equivalentTo(IngestService.class))))
@@ -558,10 +563,11 @@ class ArchitectureTest {
    * #onlyTheRatingsToolReadsEveryRating} keeps {@code readAll} — the read that carries a note — as
    * the listing tool's. Past that they diverge. This rule also bans {@code AffinityStore.find} in
    * {@code recommend} and forbids that package to name {@code AffinityRecord} at all; {@code rate}
-   * has no {@code find} ban anywhere, and {@link #theRatingDeckLogsNoRating} lets exactly one class
-   * name the record — {@code RateServer}, which has to construct the one it writes. What holds the
-   * deck off the words is {@link #theRatingDeckNeverReadsANote}, which bans the accessor for every
-   * class in {@code rate}, {@code RateServer} included and with no exception.
+   * has no {@code find} ban anywhere. Since the issue-#109 review the two packages agree on the
+   * record itself — {@link #theRatingDeckLogsNoRating} bans it across {@code rate} with no
+   * exception, the deck's one write having moved to {@code AffinityStore.updateRating} — and what
+   * holds the deck off the words in its own right is {@link #theRatingDeckNeverReadsANote}, which
+   * bans the accessor for every class in {@code rate}, {@code RateServer} included.
    */
   @ArchTest
   static final ArchRule theRecommenderReadsRatingsAndNeverNotes =
@@ -631,6 +637,13 @@ class ArchitectureTest {
    *
    * <p>{@code Card} has no note field, so there is nothing for the page to render even by accident;
    * this stops the field being reintroduced by someone who thinks it would be handy.
+   *
+   * <p><b>Held twice over since the issue-#109 review</b>, and deliberately kept anyway. {@link
+   * #theRatingDeckLogsNoRating} now bans the whole package from naming {@code AffinityRecord}, so
+   * this accessor is already out of reach; but that rule defends a different thing (a rating in a
+   * log line) and could be relaxed by a future decision that has no view on notes. This rule is the
+   * one that says <em>why</em> the deck must not see the words, and it is the reason {@code
+   * AffinityStore.updateRating} exists rather than a deck that reads a note and carries it back.
    */
   @ArchTest
   static final ArchRule theRatingDeckNeverReadsANote =
@@ -643,33 +656,42 @@ class ArchitectureTest {
                   + " and must never be able to display the second");
 
   /**
-   * ADR 33: no rating reaches a log line. RateServer holds one just long enough to write it.
+   * ADR 33: no rating reaches a log line, and no class in {@code rate} may name the type that
+   * carries one.
    *
-   * <p>Narrower than it looks, and the narrowing is the whole decision. Written blanket first —
-   * {@code noClasses().that().resideInAPackage("..rate..")} against {@code AffinityRecord} as a
-   * type — it failed naming {@link com.robsartin.segue.rate.RateServer}, because that class must
-   * construct the record it writes: {@code affinity.put(new AffinityRecord(...))} in {@code rate}
-   * is not a bug, it is the one write this package exists to make. The deck logs a port, a count
-   * and a path; a qid paired with a score is the personal part, and the easiest way to leak it is a
-   * debug line added while chasing something else. Excluding {@code RateServer} by name states that
-   * exception where it can be read rather than designing around it silently, and every other class
-   * in {@code rate} — {@code Card}, {@code Deck}, {@code RateRun}, {@code RateCli} — still cannot
-   * hold a rating at all.
+   * <p><b>The named exception is withdrawn (issue #109 review), and the withdrawal is the
+   * decision.</b> This rule used to exclude {@code RateServer} by simple name, because that class
+   * built the record it wrote: {@code affinity.put(new AffinityRecord(qid, rating, null, now))}.
+   * That {@code null} was the bug {@code --revise} made reachable — the upsert took {@code
+   * excluded.note} and erased a note the owner could never restore — so {@code RateServer} now
+   * calls {@code AffinityStore.updateRating}, a write with nowhere to put a note, and constructs no
+   * record at all. With the last legitimate use gone the exception could only shelter a new one.
+   *
+   * <p><b>Two classes were reaching the record for reasons that had nothing to do with holding a
+   * rating</b>, and both now read the scale from {@code RatingScale} instead. {@code RateCli} is
+   * the instructive one: it named {@code AffinityRecord.MIN_RATING}/{@code MAX_RATING} in its usage
+   * string and its {@code --revise} check, and this rule <em>passed anyway</em>, because javac
+   * inlines a compile-time {@code int} constant and the reference is simply not in the bytecode
+   * ArchUnit reads. A fence that holds only until somebody touches a non-constant member is a fence
+   * the next reader will mistake for decoration. Moving the bounds to a class that carries no
+   * rating fixes the source and the bytecode at once.
+   *
+   * <p>What the rule protects is unchanged: the deck logs a port, a count and a path, and a qid
+   * paired with a score is the personal part — the easiest way to leak it being a debug line added
+   * while chasing something else. Now no class in {@code rate} can hold one to log.
    */
   @ArchTest
   static final ArchRule theRatingDeckLogsNoRating =
       noClasses()
           .that()
           .resideInAPackage("..rate..")
-          .and()
-          .haveSimpleNameNotEndingWith("RateServer")
           .should()
           .dependOnClassesThat()
           .haveFullyQualifiedName("com.robsartin.segue.domain.AffinityRecord")
           .because(
-              "ADR 33 keeps affinity out of every log line. RateServer is the single exception,"
-                  + " because it must build the record it writes; nothing else in the deck may"
-                  + " hold a rating at all, and RateServer owns no logger that prints one");
+              "ADR 33 keeps affinity out of every log line. The deck writes through"
+                  + " AffinityStore.updateRating, which needs no record and has nowhere to put a"
+                  + " note, so nothing in this package may hold a rating at all");
 
   /**
    * ADR 46: the deck needs a log, an engine, the recommender's sweep and nothing else.

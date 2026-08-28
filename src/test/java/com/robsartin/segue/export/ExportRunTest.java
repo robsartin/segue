@@ -213,6 +213,11 @@ class ExportRunTest {
           public void put(AffinityRecord affinity) {}
 
           @Override
+          public void updateRating(String qid, int rating, Instant updatedAt) {
+            throw new UnsupportedOperationException("the exporter never writes a rating");
+          }
+
+          @Override
           public Optional<AffinityRecord> find(String qid) {
             return WREN.equals(qid)
                 ? Optional.of(
