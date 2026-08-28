@@ -131,6 +131,15 @@ public final class RateServer {
   }
 
   private void card(HttpExchange exchange) throws IOException {
+    // Checked here as well as on /api/rate (issue #109 review). Only the write path used to carry
+    // the allowlist, on the reasoning that a hostile page could at worst learn whether a qid was
+    // on the known-list. That stopped being the worst case when the card body grew currentRating:
+    // under the DNS-rebinding scenario this class's own javadoc names as the reason the allowlist
+    // exists, a hostile page could read the owner's actual ratings, one index at a time.
+    if (!originAllowed(exchange)) {
+      send(exchange, 403, "application/json", EMPTY_JSON);
+      return;
+    }
     int index = indexFrom(exchange.getRequestURI().getQuery());
     if (index < 0 || index >= deck.size()) {
       send(exchange, 404, "application/json", EMPTY_JSON);

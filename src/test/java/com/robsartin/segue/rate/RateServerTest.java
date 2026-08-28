@@ -180,6 +180,21 @@ class RateServerTest {
   }
 
   @Test
+  @DisplayName("a card request carrying a foreign Origin is refused, so ratings cannot be read out")
+  void refusesAForeignOriginOnACard() throws Exception {
+    // /api/card carried no Origin check at all until the issue-#109 review. Once the body grew
+    // currentRating, the read path leaked the ratings themselves rather than mere known-list
+    // membership — under exactly the DNS-rebinding scenario the allowlist exists to stop.
+    HttpResponse<String> response =
+        client.send(
+            request("/api/card?i=0").header("Origin", "https://evil.example.com").build(),
+            HttpResponse.BodyHandlers.ofString());
+
+    assertThat(response.statusCode()).isEqualTo(403);
+    assertThat(response.body()).doesNotContain("Test Band");
+  }
+
+  @Test
   @DisplayName("a rating outside 1-5 is refused rather than stored")
   void refusesARatingOffTheScale() throws Exception {
     HttpResponse<String> response =

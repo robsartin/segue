@@ -269,6 +269,13 @@ old shape.**
 - **Two `only reads` fences gained `updateRating`.** `theRatingsToolOnlyReads` and
   `theRecommenderOnlyReads` each named `AffinityStore.put` as the write they forbid. A second write
   method on the port would have walked straight through both, so both now name it too.
+- **The `Origin` allowlist now guards `GET /api/card` as well as `POST /api/rate`.** "The Origin
+  allowlist, ADR 28's argument used a second time" above says the check runs "before honouring
+  `POST /api/rate`", and only that endpoint called `originAllowed`. The asymmetry was defensible
+  while a card body carried a label, a kind and a degree: under the rebinding scenario a hostile
+  page learned at most whether some qid was on the owner's known-list. This amendment's own
+  `currentRating` field changed that — a page walking `?i=0,1,2…` could read the ratings
+  themselves. Read that section as naming both endpoints.
 
 ## Alternatives considered
 
