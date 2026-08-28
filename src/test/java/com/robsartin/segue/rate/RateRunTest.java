@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalInt;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -60,11 +61,39 @@ class RateRunTest {
 
       List<Card> deck =
           RateRun.buildDeck(
-              graph, List.of(KNOWN_ONE, KNOWN_TWO), Map.of(KNOWN_TWO, 4), 0, notes::add);
+              graph,
+              List.of(KNOWN_ONE, KNOWN_TWO),
+              Map.of(KNOWN_TWO, 4),
+              0,
+              OptionalInt.empty(),
+              notes::add);
 
       assertThat(deck).extracting(Card::qid).containsExactly(KNOWN_ONE);
       assertThat(notes).anyMatch(n -> n.contains("1 card(s)"));
       assertThat(notes).noneMatch(n -> n.contains(KNOWN_ONE) || n.contains(KNOWN_TWO));
+    }
+  }
+
+  @Test
+  @DisplayName("revise mode deals the rated entities and says so, without naming a rating")
+  void buildsAReviseDeck() throws Exception {
+    try (TinkerGraphStore graph = new TinkerGraphStore()) {
+      graph.upsertNode(new NodeRecord("Q900001", NodeKind.GROUP, "One", List.of()));
+      graph.upsertNode(new NodeRecord("Q900002", NodeKind.GROUP, "Two", List.of()));
+      List<String> notes = new ArrayList<>();
+
+      List<Card> deck =
+          RateRun.buildDeck(
+              graph,
+              List.of("Q900001", "Q900002"),
+              Map.of("Q900001", 3, "Q900002", 5),
+              0,
+              OptionalInt.of(3),
+              notes::add);
+
+      assertThat(deck).extracting(Card::qid).containsExactly("Q900001");
+      assertThat(deck.get(0).currentRating()).hasValue(3);
+      assertThat(notes).noneMatch(n -> n.contains("Q900001") || n.contains("Q900002"));
     }
   }
 
@@ -80,7 +109,9 @@ class RateRunTest {
       padDegreeTo(graph, ANCESTOR, MIN_CANDIDATE_DEGREE);
       List<String> notes = new ArrayList<>();
 
-      List<Card> deck = RateRun.buildDeck(graph, List.of(KNOWN_ONE), Map.of(), 10, notes::add);
+      List<Card> deck =
+          RateRun.buildDeck(
+              graph, List.of(KNOWN_ONE), Map.of(), 10, OptionalInt.empty(), notes::add);
 
       // The candidate branch actually ran and actually found something, or this test would pass
       // for the wrong reason — the same emptiness that made the vacuous regex pass before.
@@ -109,11 +140,13 @@ class RateRunTest {
       List<String> everything = new ArrayList<>(LOVED);
       everything.addAll(LUKEWARM);
 
-      List<Card> unweighted = RateRun.buildDeck(graph, everything, Map.of(), 1, note -> {});
+      List<Card> unweighted =
+          RateRun.buildDeck(graph, everything, Map.of(), 1, OptionalInt.empty(), note -> {});
       // Counting alone, the candidate six of your things reach beats the one three of them do.
       assertThat(unweighted).extracting(Card::qid).contains(CROWDED).doesNotContain(BELOVED);
 
-      List<Card> weighted = RateRun.buildDeck(graph, everything, ratings(), 1, note -> {});
+      List<Card> weighted =
+          RateRun.buildDeck(graph, everything, ratings(), 1, OptionalInt.empty(), note -> {});
       assertThat(weighted).extracting(Card::qid).contains(BELOVED).doesNotContain(CROWDED);
     }
   }

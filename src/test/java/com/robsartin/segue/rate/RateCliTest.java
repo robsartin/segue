@@ -87,4 +87,25 @@ class RateCliTest {
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("--port");
   }
+
+  @Test
+  @DisplayName("--revise is parsed and off by default")
+  void parsesRevise() {
+    assertThat(RateCli.parse(new String[] {"--known", "k.csv"}, null, "/home/x").revise())
+        .isEmpty();
+    assertThat(
+            RateCli.parse(new String[] {"--known", "k.csv", "--revise", "3"}, null, "/home/x")
+                .revise())
+        .hasValue(3);
+  }
+
+  @Test
+  @DisplayName("a --revise outside the 1-5 scale is refused, naming the scale")
+  void refusesAReviseOffTheScale() {
+    assertThatThrownBy(
+            () ->
+                RateCli.parse(new String[] {"--known", "k.csv", "--revise", "9"}, null, "/home/x"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("1 to 5");
+  }
 }

@@ -1,5 +1,6 @@
 package com.robsartin.segue.rate;
 
+import com.robsartin.segue.domain.AffinityRecord;
 import com.robsartin.segue.ingest.GraphProjector;
 import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
@@ -12,6 +13,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.OptionalInt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,7 +31,13 @@ public final class RateCli {
   private static final int DEFAULT_CANDIDATES = 200;
 
   private static final String USAGE =
-      "usage: --known <file of QIDs> [--db <segue.db>] [--port <n>, default " + DEFAULT_PORT + "]";
+      "usage: --known <file of QIDs> [--db <segue.db>] [--port <n>, default "
+          + DEFAULT_PORT
+          + "] [--revise <"
+          + AffinityRecord.MIN_RATING
+          + "-"
+          + AffinityRecord.MAX_RATING
+          + ">]";
 
   private RateCli() {}
 
@@ -43,12 +51,16 @@ public final class RateCli {
    * @param known the entities you already have. ADR 40's list, the same shape {@code RecommendCli}
    *     reads
    * @param port loopback only; 0 asks the OS to pick one, which the running server reports back
+   * @param revise absent by default; when present, the deck deals already-rated entities holding
+   *     exactly this rating instead of unrated ones (issue #109) — a candidate sweep has nothing to
+   *     offer a revision pass, since a candidate is by definition unrated
    */
-  public record Options(Path database, Path known, int port) {
+  public record Options(Path database, Path known, int port, OptionalInt revise) {
 
     public Options {
       Objects.requireNonNull(database, "database");
       Objects.requireNonNull(known, "known");
+      Objects.requireNonNull(revise, "revise");
     }
   }
 
@@ -57,6 +69,7 @@ public final class RateCli {
     Path database = null;
     Path known = null;
     int port = DEFAULT_PORT;
+    OptionalInt revise = OptionalInt.empty();
 
     for (int i = 0; i < args.length; i++) {
       String flag = args[i];
@@ -66,6 +79,7 @@ public final class RateCli {
         case "--db" -> database = Path.of(value);
         case "--known" -> known = Path.of(value);
         case "--port" -> port = number(flag, value);
+        case "--revise" -> revise = OptionalInt.of(revise(value));
         default -> throw usage("unknown option " + flag);
       }
     }
@@ -74,7 +88,20 @@ public final class RateCli {
       throw usage("--known is required: the deck is a statement about entities you have");
     }
     return new Options(
-        database != null ? database : defaultDatabase(envDatabase, userHome), known, port);
+        database != null ? database : defaultDatabase(envDatabase, userHome), known, port, revise);
+  }
+
+  private static int revise(String value) {
+    int rating = number("--revise", value);
+    if (rating < AffinityRecord.MIN_RATING || rating > AffinityRecord.MAX_RATING) {
+      throw usage(
+          "--revise must be from "
+              + AffinityRecord.MIN_RATING
+              + " to "
+              + AffinityRecord.MAX_RATING
+              + ": that is the whole of the scale");
+    }
+    return rating;
   }
 
   private static int number(String flag, String value) {
@@ -126,7 +153,12 @@ public final class RateCli {
 
       List<Card> deck =
           RateRun.buildDeck(
-              graph, QidList.read(options.known()), rated, DEFAULT_CANDIDATES, RateCli::note);
+              graph,
+              QidList.read(options.known()),
+              rated,
+              DEFAULT_CANDIDATES,
+              options.revise(),
+              RateCli::note);
 
       RateServer server = new RateServer(deck, affinity, options.port());
       server.start();

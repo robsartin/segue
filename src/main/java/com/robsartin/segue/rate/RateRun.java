@@ -50,16 +50,22 @@ public final class RateRun {
    *     same {@code --known} file the moment anything was rated. The deck exists to collect the
    *     ratings; showing candidates chosen as though none had been collected is the one thing it
    *     must not do
+   * @param reviseRating absent for the normal unrated sweep; when present (issue #109), the
+   *     candidate sweep is skipped entirely rather than run and discarded — a candidate is by
+   *     definition unrated, so a revision pass has nothing there to reconsider, and the sweep alone
+   *     costs real graph work on a real store
    */
   public static List<Card> buildDeck(
       GraphStore graph,
       List<String> known,
       Map<String, Integer> ratings,
       int candidateCount,
+      OptionalInt reviseRating,
       Consumer<String> notes) {
     Objects.requireNonNull(graph, "graph");
     Objects.requireNonNull(known, "known");
     Objects.requireNonNull(ratings, "ratings");
+    Objects.requireNonNull(reviseRating, "reviseRating");
     Objects.requireNonNull(notes, "notes");
 
     Set<String> alreadyRated = ratings.keySet();
@@ -68,7 +74,14 @@ public final class RateRun {
         known.size() + " entity(ies) on your list, " + alreadyRated.size() + " already rated");
 
     List<Explained> candidates = new ArrayList<>();
-    if (candidateCount > 0) {
+    if (reviseRating.isPresent()) {
+      // A count, never the rating value or a qid (ADR 33) — "up for reconsideration" says how
+      // many, not which ones or what they are currently rated.
+      int target = reviseRating.getAsInt();
+      long upForReconsideration =
+          ratings.values().stream().filter(rating -> rating == target).count();
+      notes.accept(upForReconsideration + " card(s) up for reconsideration");
+    } else if (candidateCount > 0) {
       Sweep sweep =
           new CandidateSweep(graph, RecognitionInstitutions::isRecognitionInstitution)
               .over(known, Scorer.LIFT, MIN_CANDIDATE_DEGREE, Recommendations.regardFor(ratings));
@@ -81,12 +94,7 @@ public final class RateRun {
 
     List<Card> deck =
         Deck.deal(
-            known,
-            qid -> graph.edges(qid).size(),
-            graph::node,
-            ratings,
-            candidates,
-            OptionalInt.empty());
+            known, qid -> graph.edges(qid).size(), graph::node, ratings, candidates, reviseRating);
     notes.accept(deck.size() + " card(s) to rate");
     return deck;
   }
