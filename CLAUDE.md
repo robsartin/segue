@@ -549,6 +549,32 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   Vienna Philharmonic. The table lives in `wikidata` beside `KindMapper` and reaches `domain` as a
   `Predicate<String>`, the same way the degree does; there is deliberately no degrees-only overload,
   because half the rule silently prefers the academy.
+- ~~One general hub measure should replace those two special cases.~~ **Looked for, measured, and
+  refused (issue #88, ADR 31's fourth amendment.)** Seven measures computed from the graph — degree
+  and every monotone function of it, degree percentile within kind, dominant edge-type share,
+  clustering coefficient, neighbourhood kind mix, degree over neighbour degree — were run against a
+  38-node gold set on a copy of the real graph, and **every one overlaps**. The reason is one
+  sentence: *a film and an award are the same shape*. `The Great Buck Howard` has five edges, one
+  edge type, all-person neighbours and no triangles; `Disney Legends` has twenty-two, one edge type,
+  all-person neighbours and no triangles. Only what the node IS separates them, which is the kind in
+  the first rule and the stated class in the second. **The recommender's candidate-degree
+  normalisation cannot be borrowed** — ranking compares routes between one FIXED pair, so any score
+  normalised by the endpoints orders identically to the unnormalised one; it is provably inert, not
+  weakly useful. The best candidate (`kind != WORK`, degree ≥ `HUB_DEGREE`, ≥ 90% person-or-group
+  neighbours) demotes **Metallica and Immanuel Kant** and loses the 21 institutions below
+  `HUB_DEGREE`, so it is worse on both rules' own acceptance cases. **Do not re-open this with a
+  measure that was only run against the hubs** — that candidate passes any such test.
+- **The class table is the mechanism, so it goes stale, and it did.** Between #66 and #88 the graph
+  went 54,448 → 123,752 nodes and grew institutions that NEITHER rule could see — a hall of fame at
+  500 edges that ranking actively preferred, because every competing academy route was marked a hub
+  and it was not. Four classes added (hall of fame, professional association, scientific society,
+  writers union) with the counts in ADR 31. Two traps recorded there and fenced by
+  `RecognitionInstitutionsTest`: **an award class must never go in** (`Q618779`, `Q11448906` — ADR
+  38 registered P166 so a novel could route through its prize), and **fit the meaning, not the
+  population** — every node stating `Q45400320` in the real graph is an academy and the class means
+  *open-access publisher*. **Hub demotion is partial by construction**: the American Association for
+  the Advancement of Science and the Polish Academy of Learning both carry 500 edges and state
+  nothing but publisher and organization classes, so nothing safe reaches them.
 - Validity conflict resolution is first-writer-wins in both adapters. Deliberately
   deferred, not solved.
 - Provenance in the Gremlin adapter is packed into an opaque edge property

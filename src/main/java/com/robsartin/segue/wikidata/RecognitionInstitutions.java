@@ -35,6 +35,30 @@ import java.util.Map;
  * at 498 edges and the Vienna Philharmonic states {@code Q163740}. Only the classes that say what
  * the body IS are listed.
  *
+ * <p><b>The table is the mechanism, so it has to be fed (issue #88).</b> The same graph, grown from
+ * 54,448 nodes to 123,752, wore four classes this table had never heard of — and the institutions
+ * wearing them are not small: a hall of fame at 500 edges, a writers' union at 408. Issue #88 went
+ * looking for one measure computed from the graph that would make the feeding unnecessary, and
+ * found that none exists (ADR 31's fourth amendment). Re-measure when the graph grows again; the
+ * growth path is {@link KindMapper}'s — from data, with the label AND description confirmed, never
+ * guessed.
+ *
+ * <p><b>Fit the meaning, not the population — and that trap has teeth here.</b> Every node stating
+ * {@code Q45400320} in the real graph is an academy, so a table fitted to who wears a class would
+ * have taken it; it means <em>open-access publisher</em>, and the academies wear it because they
+ * publish. Ranking on it would demote a route through anything else that publishes. The publisher
+ * classes beside it ({@code Q96888669} academic publisher, {@code Q2085381} publishing house) are
+ * out for the same reason, and the award classes ({@code Q618779} award, {@code Q11448906} science
+ * award) for a different one: ADR 38 registered {@code P166} precisely so a single-authored novel
+ * could route through the prize it won, and a hall of fame is a list of the notable where a Hugo is
+ * a fact about one book.
+ *
+ * <p><b>It will never be complete, and that is measured rather than conceded.</b> The American
+ * Association for the Advancement of Science and the Polish Academy of Learning both carry 500
+ * edges and state nothing but publisher and organization classes, so no safe entry can reach them;
+ * the Royal Society of Arts states {@code Q163740} and nothing else. Hub demotion is therefore
+ * partial by construction, which is worth knowing before anything is built on top of it.
+ *
  * <p>It lives here beside {@link KindMapper} because deciding what a Wikidata class MEANS is this
  * adapter's job (ADR 42). {@code PathRanking} takes it as a {@code Predicate} over a class qid, the
  * way it takes the degree lookup, so {@code domain} stays free of any source's vocabulary.
@@ -49,6 +73,16 @@ public final class RecognitionInstitutions {
     put("Q955824", "learned society"); // American Academy of Arts and Sciences, 33
     put("Q414147", "academy of sciences"); // American Academy of Arts and Letters, 8
     put("Q178790", "labor union"); // Writers Guild of America West, 11; SAG-AFTRA, 6
+
+    // Re-measured for issue #88 on a graph that had grown from 54,448 nodes to 123,752, and the
+    // four below are what it had outgrown: each one carries an institution that neither the
+    // degree rule nor the three classes above could see. The counts are in-graph EDGES, not
+    // seeds - a different unit from the three lines above, and named rather than blended,
+    // because the graph is now far past the point where a seed count says anything useful.
+    put("Q1046088", "hall of fame"); // National Inventors Hall of Fame, 500; Grammy, 38
+    put("Q829080", "professional association"); // Polish Writers' Union, 408; APA, 181
+    put("Q748019", "scientific society"); // American Astronomical Society, 179; Zoological, 152
+    put("Q12057459", "writers union"); // PEN America, 76; Authors Guild, 30
   }
 
   private RecognitionInstitutions() {}

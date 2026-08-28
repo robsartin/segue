@@ -336,6 +336,198 @@ these as the exact opposite of one.
   this amendment's central fact expires. Re-measure the degree distribution before reasoning from
   this again.
 
+**Amendment (2026-08-28, issue #88): one measure for both kinds of hub was looked for on the real
+graph, measured in both directions, and refused. The two rules stay; what grew was the class
+table.**
+
+Nothing above is withdrawn and no ordering changes. This records a generalisation that was
+proposed as the prerequisite for issue #78 — a general interest vocabulary, P921 "main subject"
+and P131 "located in" — attempted, and not built, because the general measure is worse than the
+two special cases on their own acceptance cases.
+
+The premise was reasonable and it is worth stating before the refutation. The two amendments above
+are one idea in two costumes: **an intermediate that connects too many things explains nothing.**
+The first approximates that with degree-plus-kind, the second with a class whitelist, and neither
+was written for a vocabulary of aboutness and location. The recommender learned the same lesson
+independently and got further (ADR 45): discounting a busy intermediate was not enough there, and
+normalising by the *candidate's own degree* was the step that produced a list worth reading.
+
+### The measurement
+
+A copy of the live graph — 307,037 assertions, **123,752 nodes and 152,547 edges** — replayed
+offline through the real `GraphProjector` into a `TinkerGraphStore`, with a gold set of 38
+intermediates read out of that graph rather than imagined: **17 that must be demoted** (the awards
+of issue #52, the institutions of issue #66, and the busy institutions found alongside them) and
+**21 that must keep working** (The Clash, Guns N' Roses, Mötley Crüe, The Beatles, Kiss, Van Halen,
+the Eagles, the Traveling Wilburys, Monty Python, the Bee Gees, The Who, six musicians and authors,
+and the three works the earlier acceptance cases route through — CSI, the *Saturday Night Live 50th
+Anniversary Special*, *The Great Buck Howard*).
+
+A measure subsumes both rules only if some threshold on it puts all 17 above all 21. **Every
+candidate overlaps**, and most of them wildly:
+
+| measure | lowest must-demote | highest must-keep |
+|---|---|---|
+| degree, and every monotone function of it — inverse frequency, information content | 22 (Disney Legends) | **503** (David Bowie) |
+| degree percentile within its own kind | 0.949 (SAG-AFTRA) | **1.000** (SNL 50th Anniversary Special) |
+| dominant edge-type share — "it only ever does one thing" | 0.984 (Writers Guild of America, East) | **1.000** (The Great Buck Howard); Chopin 0.990 |
+| local clustering coefficient — "its neighbours never meet elsewhere" | Disney Legends is the **most** clustered node in the gold set, at 0.0216 | CSI and *The Great Buck Howard* are at 0.0000 |
+| share of neighbours that are a PERSON or a GROUP | 0.984 (SAG-AFTRA) | **1.000** (CSI, SNL 50th, *The Great Buck Howard*) |
+| neighbour-kind concentration | 0.500 (Rock and Roll Hall of Fame) | **1.000** (SNL 50th) |
+| degree over median neighbour degree | 0.14 (Disney Legends) | **503** (David Bowie) |
+
+**The reason is one sentence, and it is why no eighth measure would have worked either. A film and
+an award are the same shape.** *The Great Buck Howard* has five edges, all of one type, every
+neighbour a person, no triangles. Disney Legends has twenty-two edges, all of one type, every
+neighbour a person, no triangles. One is the film two people made together and the other is a list
+of people who were famous, and **nothing in the graph's shape distinguishes them** — only what the
+node IS, which is the kind in the first amendment and the stated class in the second. Hub-ness is
+not a structural property that the vocabulary happens to express; it is a semantic property that
+degree stands in for where the source said nothing we understood.
+
+### The recommender's normalisation cannot be borrowed, and that is arithmetic rather than taste
+
+Dividing by the candidate's own degree is what worked in ADR 45, and it has no analogue here.
+Ranking compares routes **between one fixed pair**, so the degrees of both endpoints are the same
+constant in every comparison it makes: any score normalised by them orders routes identically to
+the unnormalised one. It is not a weak signal, it is provably inert.
+
+That is the real difference between the two problems, and it is worth naming rather than
+regretting. **Recommendation ranks candidates and can ask "is this one specific to me"** — the
+candidate is the free variable, so its degree is information. **Routing ranks explanations and can
+only ask "does this route mean anything"** — the only free variable is the intermediate, and
+normalising the intermediate by itself says nothing.
+
+### The strongest candidate, and both directions of what it cost
+
+The measure that came closest was "a busy node that is not itself a collaboration and whose
+neighbourhood is nothing but people": `kind != WORK`, degree ≥ `HUB_DEGREE`, and at least 90% of
+neighbours a PERSON or a GROUP. It separates the gold set exactly — the exemption for WORK is what
+buys it, since a film's cast is the colliding case above. Swept over every node in the real graph
+against the two rules as they stood when the question was asked — three classes in the table:
+**117 nodes both agree on, 125 flagged only by the new measure, 23 flagged only by the two rules.**
+Re-swept against the table this amendment leaves behind, the gap only widens: 123, 119 and 43.
+
+**What it wrongly demotes.** Metallica, at 14 edges, because the graph holds its members and not
+its records. Immanuel Kant at 19, Aristotle, Joseph Conrad, James Joyce, Louis Pasteur, Niels Bohr,
+Max Planck — people whose entire presence is `INFLUENCED_BY`, which is the one relation in the
+vocabulary that states an artistic or intellectual debt and the one ADR 45 weights highest. And
+some thirty bands in the same position as Metallica. Verified as routes, not as flags: *Weezer ↔
+Judas Priest* leads today with **Metallica** and under the candidate with *Sum 41*.
+
+**What it wrongly keeps.** Every institution below `HUB_DEGREE` that the class rule catches at any
+size — the Académie Française at 3 edges, the Royal Society of Edinburgh at 4, the British Academy
+at 2. Of the 94 nodes stating one of the three original classes, **63 carry fewer than ten edges**
+and 21 of those carry between two and nine, which is to say they can be intermediates and this
+measure would let all 21 through. It is the common case rather than the tail, and it grew with the
+table: 167 nodes state a recognition class now, 126 of them below ten edges and 40 in the two-to-
+nine band. Again as routes: *Henri Bergson ↔ the Comte de Buffon* leads today with "both influenced
+by **Charles Darwin**" and under the candidate with "both members of the **Académie Française**";
+*David Hume ↔ Georg Cantor* leads today with **Bertrand Russell** and under the candidate with the
+**Royal Society of Edinburgh**. That is precisely the failure the second amendment exists to
+prevent, arriving again.
+
+A degree-only variant of the same idea — "a list of a hundred people is a hub, whatever it calls
+itself" — was measured too, because it needs no class table at all. Every all-people node of 46
+edges or more in the real graph is an institution or an award, so it works today; the nearest
+false positive is at **41** edges and the next two at 37 and 33 are bands. A 12% margin between two
+populations that both grow with the graph is not a threshold, it is a coincidence with a date on
+it.
+
+### The decision
+
+**Keep both rules. `PathRanking` is unchanged by this amendment.** A general measure is only worth
+having if it is at least as good on the cases the special cases were built for, and this one loses
+21 institutions and demotes Metallica and Kant to gain about a dozen busy ones — most of which four
+lines of table cover instead, at no cost to anything else.
+
+### What the measurement found instead: the table had gone stale, and it always will
+
+The same sweep showed the class table has already been outgrown once. Between issue #66 and this
+amendment the graph went from 54,448 nodes to 123,752, and four classes arrived carrying
+institutions that **neither** rule could see — including a hall of fame at 500 edges that today's
+ranking actively prefers, because every competing route through an academy is marked as a hub and
+it is not. Four entries added to `RecognitionInstitutions`, each measured here and confirmed
+against Wikidata by label AND description:
+
+| class | means | worn by, in edges |
+|---|---|---|
+| `Q1046088` | hall of fame | National Inventors Hall of Fame 500, Grammy Hall of Fame 38 |
+| `Q829080` | professional association | Polish Writers' Union 408, American Psychological Association 181 |
+| `Q748019` | scientific society | American Astronomical Society 179, Zoological Society of London 152 |
+| `Q12057459` | writers union | PEN America 76, Authors Guild 30 |
+
+`Q1046088` is the loose end the second amendment recorded and declined to pull: "three award nodes
+in the graph are classified `GROUP` rather than `CONCEPT`… adding `award` to this table is a
+different decision". It still is — **`Q618779` award and `Q11448906` science award stay out**,
+because ADR 38 registered `P166` precisely so a single-authored novel could route through the prize
+it won, and those two classes are worn by the Hugo, the Darwin Medal and the Balzan Prize. A hall
+of fame is a list of the notable; a Hugo is a fact about one book. `Q12057459` has no English
+description at all, so it was confirmed instead by its aliases ("writers' guild", "writers'
+association") and by its being a subclass of `Q829080`, which is in the table above it.
+
+**The near-miss is the part worth keeping.** `Q45400320` looked like the missing society class:
+every node in the real graph that states it is an academy — the Royal Society, the Romanian
+Academy, the Polish Academy of Sciences. It means **open-access publisher**, and the academies wear
+it because they publish. A table fitted to its population rather than to its meaning would have
+taken it and would then have demoted a route through anything else that publishes. That is the trap
+the second amendment named for `Q43229` and `Q163740`, in a costume that fools a sweep instead of a
+guess. `RecognitionInstitutionsTest` now fences the three publisher classes and the two award
+classes by name.
+
+**And the table will never be complete, which is measured rather than conceded.** The American
+Association for the Advancement of Science and the Polish Academy of Learning both carry 500 edges
+and state nothing but publisher and organization classes; the Royal Society of Arts states
+`Q163740` and nothing else. No safe entry reaches them and no measure above separates them.
+**Hub demotion is partial by construction** — worth knowing before anything is built on the
+assumption that it is total.
+
+### What this means for issue #78, which asked the question
+
+- **Aboutness is already covered, and by the rule that exists.** A P921 subject node is a `CONCEPT`
+  and is busy by construction, which is the exact shape issue #52 measured on awards. The rule
+  judges the intermediate rather than the relation, so registering the property changes nothing
+  about it. Demonstrated on a synthetic hub-rich vocabulary in `PathRankingTest` rather than waited
+  for.
+- **Location is not covered by anything.** "Both are in New York" routes through a `PLACE`: the
+  degree rule is `CONCEPT`-only on purpose and a city states no class meaning "elected to". #78
+  needs a third rule and should stop expecting a general one.
+- **That third rule belongs with the property that creates the need, not here.** The graph holds
+  exactly one `PLACE` — New York City, at a single edge — and six `EVENT`s that could be an
+  intermediate at all, because nothing in the vocabulary relates anything to a place. Widening the
+  degree rule today would be a no-op against everything that exists, which is the argument the
+  third amendment used to refuse a rule for edition nodes. The gap is pinned by a test instead, so
+  the day P131 is registered the failure is loud.
+
+### Consequences of the fourth amendment
+
+- **`find_paths` ordering is unchanged except where the four new classes bite**, and there it moves
+  the way the second amendment's did: an institution route stops leading. Nothing that was demoted
+  is promoted, and every acceptance case from both earlier amendments was re-run on the replayed
+  copy and is untouched — Gottfried ↔ Seyfried through CSI, Hanks ↔ O'Brien through *The Great Buck
+  Howard*, Darwin ↔ Vonnegut through Thoreau, Cheap Trick ↔ Scorpions through Mötley Crüe, Red Hot
+  Chili Peppers ↔ Nine Inch Nails through The Clash, the Rolling Stones ↔ Counting Crows through
+  Guns N' Roses. Huston ↔ Arthur, the pair the first amendment was written for, still leads at four
+  hops with two specific acting awards bridged by a person who won both, and the Walk of Fame route
+  is still below it.
+- **Measured on the eight institutions the new classes catch: of 785 contested pairs among their
+  neighbours, 285 lead with a different route and 74 of those now lead with a hub-free one** —
+  Darwin ↔ Haeckel leaves the Zoological Society of London for a shared influence, Updike ↔ Auster
+  leaves PEN America for Jonathan Lethem. The other 211 swap one institution for another, because
+  in those neighbourhoods every route is an institution route; ranking has nothing better to offer
+  and says so by returning them anyway.
+- **The maintenance cost is now explicit.** The class table is the mechanism, so it has to be fed
+  from measurement as the graph grows, and the growth path is `KindMapper`'s. Re-measure both this
+  and `HUB_DEGREE` together — they drift for the same reason.
+- **The negative result is the deliverable.** Nothing in `domain` changed, so nothing pins it in
+  code except the gold-set numbers above; that is what this ADR is for. Do not re-open it with a
+  measure that was not run against the 21 must-keep nodes as well as the 17 must-demote ones — the
+  candidate above passes any test built only from the hubs.
+- **What would reopen it.** A source that states *why* a node exists rather than what class it is —
+  or a Wikidata property that separates "was elected to" from "worked with", which `P463` does not.
+  Either would give the semantic signal the graph's shape is standing in for, and this whole
+  amendment is an argument that only a semantic signal can do the job.
+
 ## Alternatives considered
 
 - **Rank inside each adapter** — no port change, and it duplicates the comparator in two
