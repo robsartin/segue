@@ -14,7 +14,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
+import java.util.OptionalInt;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -30,19 +30,21 @@ class DeckTest {
   private static final Map<String, Integer> DEGREES =
       Map.of("Q900001", 3, "Q900002", 90, "Q900003", 20, "Q900004", 50);
 
-  private static List<Card> deal(List<String> known, Set<String> rated, List<Explained> cands) {
+  private static List<Card> deal(
+      List<String> known, Map<String, Integer> ratings, List<Explained> cands) {
     return Deck.deal(
         known,
         q -> DEGREES.getOrDefault(q, 0),
         q -> Optional.ofNullable(NODES.get(q)),
-        rated,
-        cands);
+        ratings,
+        cands,
+        OptionalInt.empty());
   }
 
   @Test
   @DisplayName("known entities are dealt by in-graph degree, highest first")
   void ordersKnownByDegreeDescending() {
-    List<Card> cards = deal(List.of("Q900001", "Q900002", "Q900003"), Set.of(), List.of());
+    List<Card> cards = deal(List.of("Q900001", "Q900002", "Q900003"), Map.of(), List.of());
 
     assertThat(cards).extracting(Card::qid).containsExactly("Q900002", "Q900003", "Q900001");
     assertThat(cards.get(0).degree()).hasValue(90);
@@ -51,7 +53,8 @@ class DeckTest {
   @Test
   @DisplayName("an entity that is already rated is never dealt")
   void excludesAlreadyRated() {
-    List<Card> cards = deal(List.of("Q900001", "Q900004", "Q900002"), Set.of("Q900004"), List.of());
+    List<Card> cards =
+        deal(List.of("Q900001", "Q900004", "Q900002"), Map.of("Q900004", 4), List.of());
 
     assertThat(cards).extracting(Card::qid).doesNotContain("Q900004");
     assertThat(cards).hasSize(2);
@@ -60,7 +63,7 @@ class DeckTest {
   @Test
   @DisplayName("an entity on the list but absent from the graph is skipped, not dealt blank")
   void skipsEntitiesMissingFromTheGraph() {
-    List<Card> cards = deal(List.of("Q900002", "Q900999"), Set.of(), List.of());
+    List<Card> cards = deal(List.of("Q900002", "Q900999"), Map.of(), List.of());
 
     assertThat(cards).extracting(Card::qid).containsExactly("Q900002");
   }
@@ -93,8 +96,9 @@ class DeckTest {
             known,
             q -> DEGREES.getOrDefault(q, 1),
             q -> Optional.ofNullable(NODES.containsKey(q) ? NODES.get(q) : extra.get(q)),
-            Set.of(),
-            List.of(one, two));
+            Map.of(),
+            List.of(one, two),
+            OptionalInt.empty());
 
     assertThat(cards.get(4).qid()).isEqualTo("Q900101");
     assertThat(cards).extracting(Card::qid).contains("Q900102");
@@ -106,7 +110,7 @@ class DeckTest {
   void excludesAlreadyRatedCandidate() {
     Explained candidate = candidateFor("Q900103", "Already Rated Candidate");
 
-    List<Card> cards = deal(List.of(), Set.of("Q900103"), List.of(candidate));
+    List<Card> cards = deal(List.of(), Map.of("Q900103", 2), List.of(candidate));
 
     assertThat(cards).isEmpty();
   }
@@ -131,7 +135,13 @@ class DeckTest {
         new Explained(new Recommendation(candidateEnd, 1.0, 12, List.of()), List.of(route));
 
     List<Card> cards =
-        Deck.deal(List.of(), q -> 0, q -> Optional.empty(), Set.of(), List.of(explained));
+        Deck.deal(
+            List.of(),
+            q -> 0,
+            q -> Optional.empty(),
+            Map.of(),
+            List.of(explained),
+            OptionalInt.empty());
 
     // Pinned to the exact readable form PathResult.render() produces for this fixture — not
     // merely "some non-empty string arrived". A card exists to answer "why am I being shown
@@ -141,6 +151,69 @@ class DeckTest {
     assertThat(cards.get(0).routes())
         .containsExactly(
             "      Route Known -[INFLUENCED_BY]-> Route Candidate [invented invented:1]\n");
+  }
+
+  @Test
+  @DisplayName("revise mode deals only the entities at that rating, and nothing else")
+  void reviseDealsOnlyThatRating() {
+    List<Card> cards =
+        Deck.deal(
+            List.of("Q900001", "Q900002", "Q900003"),
+            q -> DEGREES.getOrDefault(q, 0),
+            q -> Optional.ofNullable(NODES.get(q)),
+            Map.of("Q900001", 3, "Q900002", 5, "Q900003", 3),
+            List.of(),
+            OptionalInt.of(3));
+
+    assertThat(cards).extracting(Card::qid).containsExactlyInAnyOrder("Q900001", "Q900003");
+  }
+
+  @Test
+  @DisplayName("a revise card carries the rating it currently has, so it is not re-rated blind")
+  void reviseCardShowsTheCurrentRating() {
+    List<Card> cards =
+        Deck.deal(
+            List.of("Q900002"),
+            q -> DEGREES.getOrDefault(q, 0),
+            q -> Optional.ofNullable(NODES.get(q)),
+            Map.of("Q900002", 5),
+            List.of(),
+            OptionalInt.of(5));
+
+    assertThat(cards).hasSize(1);
+    assertThat(cards.get(0).currentRating()).hasValue(5);
+  }
+
+  @Test
+  @DisplayName("revise mode deals no candidates, because a candidate has no rating to revise")
+  void reviseDealsNoCandidates() {
+    List<Card> cards =
+        Deck.deal(
+            List.of("Q900001"),
+            q -> DEGREES.getOrDefault(q, 0),
+            q -> Optional.ofNullable(NODES.get(q)),
+            Map.of("Q900001", 3),
+            List.of(candidateFor("Q900101", "Candidate One")),
+            OptionalInt.of(3));
+
+    assertThat(cards).extracting(Card::qid).containsExactly("Q900001");
+  }
+
+  @Test
+  @DisplayName(
+      "without revise, the deck still deals only unrated entities and no card shows a rating")
+  void defaultModeIsUnchanged() {
+    List<Card> cards =
+        Deck.deal(
+            List.of("Q900001", "Q900002"),
+            q -> DEGREES.getOrDefault(q, 0),
+            q -> Optional.ofNullable(NODES.get(q)),
+            Map.of("Q900002", 4),
+            List.of(),
+            OptionalInt.empty());
+
+    assertThat(cards).extracting(Card::qid).containsExactly("Q900001");
+    assertThat(cards.get(0).currentRating()).isEmpty();
   }
 
   private static Explained candidateFor(String qid, String label) {

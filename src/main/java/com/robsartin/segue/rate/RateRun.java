@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.function.Consumer;
 
@@ -79,7 +80,13 @@ public final class RateRun {
     }
 
     List<Card> deck =
-        Deck.deal(known, qid -> graph.edges(qid).size(), graph::node, alreadyRated, candidates);
+        Deck.deal(
+            known,
+            qid -> graph.edges(qid).size(),
+            graph::node,
+            ratings,
+            candidates,
+            OptionalInt.empty());
     notes.accept(deck.size() + " card(s) to rate");
     return deck;
   }

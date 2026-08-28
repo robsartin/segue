@@ -26,7 +26,8 @@ public record Card(
     NodeKind kind,
     String classes,
     OptionalInt degree,
-    List<String> routes) {
+    List<String> routes,
+    OptionalInt currentRating) {
 
   public Card {
     Objects.requireNonNull(qid, "qid");
@@ -35,6 +36,7 @@ public record Card(
     Objects.requireNonNull(classes, "classes");
     Objects.requireNonNull(degree, "degree");
     routes = List.copyOf(Objects.requireNonNull(routes, "routes"));
+    Objects.requireNonNull(currentRating, "currentRating");
   }
 
   /** An entity already on the owner's list, showing the degree the deck ordered it by. */
@@ -46,7 +48,8 @@ public record Card(
         node.kind(),
         ClassLabels.describe(node.instanceOf()),
         OptionalInt.of(degree),
-        List.of());
+        List.of(),
+        OptionalInt.empty());
   }
 
   /** Something the owner does not have, shown with the routes that reached it. */
@@ -58,6 +61,26 @@ public record Card(
         node.kind(),
         ClassLabels.describe(node.instanceOf()),
         OptionalInt.empty(),
-        routeLines);
+        routeLines,
+        OptionalInt.empty());
+  }
+
+  /**
+   * An entity already rated, dealt for reconsideration (issue #109).
+   *
+   * <p><b>It carries the rating it already has, and that is the point of the card.</b> A revision
+   * pass that hid the current value would invite a considered 2 to become a reflexive 4 — worse
+   * than not offering revision at all, because it would look like new information.
+   */
+  public static Card rated(NodeRecord node, int degree, int currentRating) {
+    Objects.requireNonNull(node, "node");
+    return new Card(
+        node.qid(),
+        node.label(),
+        node.kind(),
+        ClassLabels.describe(node.instanceOf()),
+        OptionalInt.of(degree),
+        List.of(),
+        OptionalInt.of(currentRating));
   }
 }

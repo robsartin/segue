@@ -6,8 +6,10 @@ import com.robsartin.segue.recommend.Explained;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.ToIntFunction;
@@ -40,17 +42,32 @@ public final class Deck {
 
   private Deck() {}
 
+  /**
+   * Build the deck.
+   *
+   * <p><b>Revise mode deals no candidates, and that is not an omission.</b> A candidate is by
+   * definition something the owner does not have and has not rated, so there is nothing there to
+   * reconsider; mixing discovery into a revision pass would also change what the pass measures.
+   */
   public static List<Card> deal(
       List<String> knownQids,
       ToIntFunction<String> degreeByQid,
       Function<String, Optional<NodeRecord>> nodeByQid,
-      Set<String> alreadyRated,
-      List<Explained> candidates) {
+      Map<String, Integer> ratings,
+      List<Explained> candidates,
+      OptionalInt reviseRating) {
     Objects.requireNonNull(knownQids, "knownQids");
     Objects.requireNonNull(degreeByQid, "degreeByQid");
     Objects.requireNonNull(nodeByQid, "nodeByQid");
-    Objects.requireNonNull(alreadyRated, "alreadyRated");
+    Objects.requireNonNull(ratings, "ratings");
     Objects.requireNonNull(candidates, "candidates");
+    Objects.requireNonNull(reviseRating, "reviseRating");
+
+    if (reviseRating.isPresent()) {
+      return dealRevision(knownQids, degreeByQid, nodeByQid, ratings, reviseRating.getAsInt());
+    }
+
+    Set<String> alreadyRated = ratings.keySet();
 
     List<Card> known = new ArrayList<>();
     for (String qid : knownQids) {
@@ -78,6 +95,33 @@ public final class Deck {
     }
 
     return interleave(known, fresh);
+  }
+
+  /**
+   * Select known qids currently rated exactly {@code target}, dealt for reconsideration. No
+   * candidates: see the class-level note on {@link #deal}.
+   */
+  private static List<Card> dealRevision(
+      List<String> knownQids,
+      ToIntFunction<String> degreeByQid,
+      Function<String, Optional<NodeRecord>> nodeByQid,
+      Map<String, Integer> ratings,
+      int target) {
+    List<Card> revision = new ArrayList<>();
+    for (String qid : knownQids) {
+      Integer rating = ratings.get(qid);
+      if (rating == null || rating != target) {
+        continue;
+      }
+      nodeByQid
+          .apply(qid)
+          .ifPresent(node -> revision.add(Card.rated(node, degreeByQid.applyAsInt(qid), rating)));
+    }
+    revision.sort(
+        Comparator.comparingInt((Card c) -> c.degree().orElse(0))
+            .reversed()
+            .thenComparing(Card::qid));
+    return List.copyOf(revision);
   }
 
   private static List<String> routeLines(Explained explained) {
