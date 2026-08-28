@@ -28,9 +28,12 @@ surface at six and each of them is bulk work belonging to the operator, not to a
 ADR 40 declined a seventh tool for bulk seeding, ADR 41 declined one for the exporter, ADR 43
 declined one for reading ratings back in bulk, and ADR 45 made the fullest case yet for a seventh
 tool — for exactly the "what should I explore next" conversational question — and still declined
-it, on the same file-of-personal-data ground ADR 40 established. ADR 39 set the shape this follows
-for reads: one qid, on `get_entity`, no bulk verb. Five ADRs in a row have looked at a piece of
-bulk taste-layer work and put it on the owner's own machine instead of the MCP surface.
+it, on the same file-of-personal-data ground ADR 40 established. ADR 39 declined one too, but for a
+single-item read rather than bulk work, and answered it the other way: the read stayed **on** the
+MCP surface, folded into `get_entity`, rather than moving to a dev tool. Five ADRs in a row have
+looked at a proposed seventh tool and said no — four of them by putting bulk taste-layer work on
+the owner's own machine instead, and ADR 39 by showing that the single-item case did not need a
+new tool at all.
 
 ## Decision
 
@@ -81,8 +84,9 @@ are needed together.
 The check is stricter than ADR 28's own text implies, and the strictness is deliberate rather than
 incidental. `RateServer.originAllowed` parses the header as a `URI` and compares `URI.getHost()`
 exactly against `{127.0.0.1, localhost, ::1}`; it does not compare the raw header text with
-`String.startsWith`. `"http://127.0.0.1.evil.com"` is a valid string *prefix* of an allowed
-origin and a completely different host — a `startsWith` check would have let it through. The
+`String.startsWith`. `"http://127.0.0.1.evil.com"` *starts with* the allowed origin
+`"http://127.0.0.1"` as a string, while naming a completely different host — a `startsWith` check
+would have let it through. The
 literal string `"null"` — what a browser sends as the `Origin` of a sandboxed iframe or a `data:`
 navigation, and which an attacker can manufacture at will — is deliberately not in the allowed
 set, because it is the opposite of an allowlist entry: it is a shape the attacker chooses, not the
@@ -119,9 +123,10 @@ field to put one in, so this is belt on top of the type-level guarantee. `theRat
 forbids depending on `AffinityRecord` from a log line's reach at all (ADR 33) — with one named
 exception: `RateServer` is excluded by class name, because it is the class that must construct the
 `AffinityRecord` it writes (`affinity.put(new AffinityRecord(...))` in its `rate` handler is the
-one legitimate write this package exists to make). Every other class in the package — `Card`,
-`Deck`, `RateRun`, `RateCli` — still cannot hold a rating at all, and `RateServer` itself owns no
-logger that prints one.
+one legitimate write this package exists to make). The rule's own condition — every class in
+`..rate..` other than that one name — is the authority for who else it covers, so a class added to
+the package later is bound by it automatically rather than by an enumeration here going stale;
+`RateServer` itself owns no logger that prints a rating.
 
 ### Degree ordering, with the arithmetic
 

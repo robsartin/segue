@@ -1489,11 +1489,13 @@ The Spring app already serves HTTP on `127.0.0.1:8080`, so the machinery to do t
 and that is the objection: it would put a taste-layer *writer* on the MCP server's own port, and
 [ADR 32](adr/0032-layering-and-archunit.md) confines Spring to `app` and `mcp` for a reason that
 has nothing to do with this feature. As a seventh MCP tool it fails the same way five ADRs before
-it have — [ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md),
+it have — [ADR 39](adr/0039-affinity-capture-and-read.md) declined a `get_affinity` tool and
+folded the read into `get_entity` instead, and
+[ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md),
 [ADR 41](adr/0041-graph-exporter-views-and-formats.md),
 [ADR 43](adr/0043-listing-your-own-ratings.md) and
 [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) each declined one for adjacent bulk
-work, and this reuses the recommender's own `CandidateSweep`, `Routes` and `Sweep` for its
+work — and this reuses the recommender's own `CandidateSweep`, `Routes` and `Sweep` for its
 candidate cards without reopening that question: the input is still ADR 40's file of everything
 you already have, and handing that to a model is what ADR 40 already refused.
 
