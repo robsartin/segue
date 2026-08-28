@@ -1,6 +1,7 @@
 package com.robsartin.segue.rate;
 
 import com.robsartin.segue.domain.NodeRecord;
+import com.robsartin.segue.domain.PathResult;
 import com.robsartin.segue.recommend.Explained;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -80,7 +81,10 @@ public final class Deck {
   }
 
   private static List<String> routeLines(Explained explained) {
-    return explained.routes().stream().map(Object::toString).toList();
+    // PathResult.render() — the same rendering RecommendationReport uses, citations included
+    // (see its javadoc). The record's default toString() is a Java object dump, not something a
+    // reader chose "why am I being shown this" from.
+    return explained.routes().stream().map(PathResult::render).toList();
   }
 
   private static List<Card> interleave(List<Card> known, List<Card> candidates) {

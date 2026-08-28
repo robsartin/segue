@@ -133,12 +133,14 @@ class DeckTest {
     List<Card> cards =
         Deck.deal(List.of(), q -> 0, q -> Optional.empty(), Set.of(), List.of(explained));
 
+    // Pinned to the exact readable form PathResult.render() produces for this fixture — not
+    // merely "some non-empty string arrived". A card exists to answer "why am I being shown
+    // this"; the reader-facing text is the whole point, so the assertion has to be on that text,
+    // not on a superset check that a raw Object::toString() dump would also satisfy.
     assertThat(cards).hasSize(1);
-    assertThat(cards.get(0).routes()).hasSize(1);
-    assertThat(cards.get(0).routes().get(0))
-        .contains("INFLUENCED_BY")
-        .contains(knownEnd.label())
-        .contains(candidateEnd.label());
+    assertThat(cards.get(0).routes())
+        .containsExactly(
+            "      Route Known -[INFLUENCED_BY]-> Route Candidate [invented invented:1]\n");
   }
 
   private static Explained candidateFor(String qid, String label) {
