@@ -126,11 +126,7 @@ public final class RateCli {
 
       List<Card> deck =
           RateRun.buildDeck(
-              graph,
-              QidList.read(options.known()),
-              rated.keySet(),
-              DEFAULT_CANDIDATES,
-              RateCli::note);
+              graph, QidList.read(options.known()), rated, DEFAULT_CANDIDATES, RateCli::note);
 
       RateServer server = new RateServer(deck, affinity, options.port());
       server.start();

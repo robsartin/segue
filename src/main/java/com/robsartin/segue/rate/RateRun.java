@@ -11,6 +11,7 @@ import com.robsartin.segue.recommend.Sweep;
 import com.robsartin.segue.wikidata.RecognitionInstitutions;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -36,16 +37,31 @@ public final class RateRun {
 
   private RateRun() {}
 
+  /**
+   * Build the deck.
+   *
+   * @param ratings the note-free bulk read, {@code AffinityStore.readRatings()}, used <b>twice</b>
+   *     and for two different things. Its key set is the exclusion — an entity already rated is not
+   *     dealt again, which is the whole of {@code Deck}'s resume mechanism. Its values are the
+   *     weighting: {@code Recommendations.regardFor} is what {@code RecommendCli} passes its own
+   *     sweep, and passing {@code EQUAL_REGARD} here instead (as this did until issue #101's final
+   *     review) made the deck's candidate cards diverge from {@code ./gradlew recommend}'s for the
+   *     same {@code --known} file the moment anything was rated. The deck exists to collect the
+   *     ratings; showing candidates chosen as though none had been collected is the one thing it
+   *     must not do
+   */
   public static List<Card> buildDeck(
       GraphStore graph,
       List<String> known,
-      Set<String> alreadyRated,
+      Map<String, Integer> ratings,
       int candidateCount,
       Consumer<String> notes) {
     Objects.requireNonNull(graph, "graph");
     Objects.requireNonNull(known, "known");
-    Objects.requireNonNull(alreadyRated, "alreadyRated");
+    Objects.requireNonNull(ratings, "ratings");
     Objects.requireNonNull(notes, "notes");
+
+    Set<String> alreadyRated = ratings.keySet();
 
     notes.accept(
         known.size() + " entity(ies) on your list, " + alreadyRated.size() + " already rated");
@@ -54,7 +70,7 @@ public final class RateRun {
     if (candidateCount > 0) {
       Sweep sweep =
           new CandidateSweep(graph, RecognitionInstitutions::isRecognitionInstitution)
-              .over(known, Scorer.LIFT, MIN_CANDIDATE_DEGREE, Recommendations.EQUAL_REGARD);
+              .over(known, Scorer.LIFT, MIN_CANDIDATE_DEGREE, Recommendations.regardFor(ratings));
       Routes routes = new Routes(graph, RecognitionInstitutions::isRecognitionInstitution);
       for (Recommendation candidate : Recommendations.rank(sweep.candidates(), candidateCount)) {
         candidates.add(new Explained(candidate, routes.bestFor(candidate, ROUTES_PER_CARD)));

@@ -66,6 +66,14 @@ dev-side tool is not the same question as exposing it as a tool call: the input 
 file of everything the owner already has, and handing that file (or its contents, through an
 answer) to a model is what ADR 40 already refused.
 
+The reuse extends to what the sweep is weighted by. `RateRun` passes
+`Recommendations.regardFor(ratings)` over the same `AffinityStore.readRatings()` map it already
+reads for the already-rated exclusion, which is what `RecommendCli` passes its own sweep. It passed
+`Recommendations.EQUAL_REGARD` until the final review of issue #101, and the effect was that the
+deck's candidate cards and `./gradlew recommend`'s output for the same `--known` file disagreed the
+moment anything was rated — the tool whose purpose is collecting ratings was the one tool choosing
+candidates as though none had been collected.
+
 ### Port 8090, not 8080
 
 `RateCli.DEFAULT_PORT` is 8090 so the deck and the MCP server can run at the same time and nothing
