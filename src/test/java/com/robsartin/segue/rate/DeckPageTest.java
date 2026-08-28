@@ -102,4 +102,103 @@ class DeckPageTest {
             liveId)
         .isTrue();
   }
+
+  private static String script() throws Exception {
+    String html = page();
+    return html.substring(html.indexOf("<script>"));
+  }
+
+  /**
+   * The source of one brace-balanced block, given the text that opens it.
+   *
+   * <p>Crude on purpose: this file's script is a hundred lines of plain functions with no template
+   * literals holding braces and no nested object literals that would defeat a brace count, so a
+   * scanner is enough — and it is what lets an assertion say "inside {@code rate}" rather than
+   * "somewhere in the page", which is the difference between a test that bites and one that a
+   * comment mentioning the right word would satisfy.
+   */
+  private static String blockAfter(String script, String opener) {
+    int at = script.indexOf(opener);
+    assertThat(at).as("expected to find %s in the page script", opener).isNotNegative();
+    int open = script.indexOf('{', at);
+    int depth = 0;
+    for (int i = open; i < script.length(); i++) {
+      char c = script.charAt(i);
+      if (c == '{') {
+        depth++;
+      } else if (c == '}') {
+        depth--;
+        if (depth == 0) {
+          return script.substring(open, i + 1);
+        }
+      }
+    }
+    throw new AssertionError("unbalanced braces after " + opener);
+  }
+
+  @Test
+  @DisplayName("a rating that the server did not accept neither counts nor advances the card")
+  void aFailedRatingDoesNotAdvance() throws Exception {
+    String rate = blockAfter(script(), "async function rate(");
+
+    // Before issue #101's final review this was `await fetch(...); rated++; index++; show();` —
+    // a 400 or a 403 counted as a saved rating and moved the deck on, and the owner had no way
+    // to know. A rating cannot be withdrawn (ADR 46), so a lost one is lost.
+    assertThat(rate).as("the rate POST's outcome must be checked").contains("response.ok");
+    assertThat(rate.indexOf("response.ok"))
+        .as("the ok check must come before the session count and the index move")
+        .isLessThan(rate.indexOf("rated++"))
+        .isLessThan(rate.indexOf("index++"));
+
+    // And the harder half: if the handler throws, com.sun.net.httpserver closes the connection
+    // with no response at all, the promise REJECTS, and nothing after the await runs — which
+    // used to leave `current` null and every subsequent rating key inert until the owner
+    // pressed s or b. Reproduced against a store throwing what SqliteAffinityStore raises on
+    // SQLITE_BUSY, which RateCli's own javadoc anticipates.
+    assertThat(rate).as("a rejected fetch must be caught, not left to reject").contains("catch");
+  }
+
+  @Test
+  @DisplayName("a held rating key writes one rating, not a run of them")
+  void ignoresAutoRepeat() throws Exception {
+    String keydown = blockAfter(script(), "addEventListener('keydown'");
+
+    // Auto-repeat delivers roughly thirty events a second and a loopback round-trip takes a few
+    // milliseconds, so a finger resting on '4' for a second wrote about fifteen ratings of 4 to
+    // whatever cards went past. None of them can be withdrawn.
+    assertThat(keydown).contains("event.repeat");
+    assertThat(keydown.indexOf("event.repeat"))
+        .as("the repeat guard must run before any key is acted on")
+        .isLessThan(keydown.indexOf("rate("));
+  }
+
+  @Test
+  @DisplayName("a key pressed with a modifier belongs to the browser, not to the deck")
+  void ignoresModifiedKeys() throws Exception {
+    String keydown = blockAfter(script(), "addEventListener('keydown'");
+
+    // Cmd/Ctrl+S skipped a card and swallowed the browser's save dialog; Ctrl/Alt+1..5 recorded
+    // a rating the owner was not asking for.
+    assertThat(keydown).contains("ctrlKey").contains("metaKey").contains("altKey");
+    assertThat(keydown.indexOf("Key"))
+        .as("the modifier guard must run before any key is acted on")
+        .isLessThan(keydown.indexOf("rate("));
+  }
+
+  @Test
+  @DisplayName("skip and back cannot move the index while a request is in flight")
+  void skipAndBackAreGuarded() throws Exception {
+    String script = script();
+    String keydown = blockAfter(script, "addEventListener('keydown'");
+
+    // s/b used to mutate `index` inline, with no guard at all: pressing skip while a rate POST
+    // was in flight advanced the index twice and one card was never dealt. No rating is
+    // misapplied by that; a card is silently lost, which on a deck of eight hundred is invisible.
+    assertThat(keydown)
+        .as("the key handler must delegate rather than move the index itself")
+        .doesNotContain("index++")
+        .doesNotContain("index--");
+    assertThat(blockAfter(script, "function skip(")).contains("busy");
+    assertThat(blockAfter(script, "function back(")).contains("busy");
+  }
 }
