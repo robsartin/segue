@@ -86,6 +86,32 @@ data into a structure whose whole purpose is to be traversed and cited.
   MCP surface stays at ADR 26's six tools). `NoteNeverLeavesThroughAToolTest` proves it
   behaviourally, over every tool the mcp package carries rather than the ones somebody
   remembered.)*
+
+  *(Amended 2026-08-28, issue #101 — see **ADR 46**. One clause of the paragraph above has stopped
+  being true, and it is the third rule's: `onlyTheRecommenderReadsEveryRating` no longer means "the
+  note-free bulk read is the recommender's alone". It now reads
+  `resideOutsideOfPackages("..recommend..", "..rate..")`, so the rating deck may call
+  `AffinityStore.readRatings()` as well. It reads the same note-free `Map<String, Integer>`, for
+  the same kind of reason the recommender does: `recommend` weights every candidate by it, and
+  `rate` uses the keys to skip entities already rated and the values to weight the candidates it
+  deals. Both are `./gradlew` dev-side tools off the MCP surface, so what this rule actually
+  protects — ADR 26's six tools, against a bulk read arriving as a field on an existing one — is
+  untouched. ADR 46 records the widening, which is what `theRecommenderReadsRatingsAndNeverNotes`'
+  javadoc asks for when it says that widening the taste layer's readership stays an ADR-level
+  decision.*
+
+  ***The widening is one method, and no note reaches either package** — though not by the same
+  route in each, which is worth stating rather than smoothing over.
+  `onlyTheRatingsToolReadsANote` shuts `AffinityRecord.note()` out of everything but `ratings` and
+  `sqlite`, and `onlyTheRatingsToolReadsEveryRating` keeps `readAll` — the read that carries a note
+  — as the listing tool's alone; both cover `recommend` and `rate` equally.
+  `theRecommenderReadsRatingsAndNeverNotes` then goes further for `recommend` only: it also bans
+  `AffinityStore.find` there and forbids that package to name `AffinityRecord` at all. `rate` has
+  no `find` ban, and `theRatingDeckLogsNoRating` lets exactly one class name the record —
+  `RateServer`, which has to construct the one it writes — so the deck is kept off the note by two
+  rules that ban the accessor rather than by a ban on the type, with
+  `theRatingDeckNeverReadsANote` banning `AffinityRecord.note()` inside `rate` a second time, by
+  name.)*
 - **Affinity is personal data** under ADR 16: never logged, and kept out of version control.
   *(Amended 2026-08-28, issue #85: read this as "a note is personal data, and a rating is the
   owner's data" — see the bullet above. Neither one is ever logged, neither one is ever committed,
