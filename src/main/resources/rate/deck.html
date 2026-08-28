@@ -12,6 +12,13 @@
   main { max-width: 34rem; width: 100%; }
   h1 { font-size: 2rem; margin: 0 0 .25rem; }
   .kind { color: var(--muted); font-size: .9rem; text-transform: lowercase; }
+  /* Issue #109: a revision card must be unmistakable, never confusable with a fresh card — the
+     whole risk of a revision pass is a considered 2 becoming a reflexive 4 on a second look. Every
+     other caption on this page (.kind, .why, .keys, .progress, .done) only sets `color` against
+     the page's own background; this is the one element with a genuine fill, reversed against
+     --ink/--paper so it reads as a flag in both color schemes, not a differently-colored caption. */
+  .revision { margin: 0 0 1rem; padding: .6rem 1rem; background: var(--ink); color: var(--paper);
+              font-weight: 700; font-size: 1rem; border-radius: .4rem; }
   .why { margin: 1.25rem 0; padding-left: 1rem; border-left: 3px solid var(--line);
          color: var(--muted); font-size: .95rem; }
   .why li { margin: .35rem 0; }
@@ -101,12 +108,26 @@
   }
 
   function renderCard(c) {
+    const nodes = [];
+
+    // Issue #109: a revision card carries the rating it already has, and must show it — the
+    // whole point of the card is not letting a considered rating be re-guessed blind. Gated on
+    // c.currentRating so an ordinary card (currentRating === null) never shows this at all.
+    if (c.currentRating !== null) {
+      const revision = document.createElement('p');
+      revision.className = 'revision';
+      revision.textContent = `Currently rated ${c.currentRating} — this is a revision, not a new card.`;
+      nodes.push(revision);
+    }
+
     const h1 = document.createElement('h1');
     h1.textContent = c.label;
+    nodes.push(h1);
 
     const kind = document.createElement('p');
     kind.className = 'kind';
     kind.textContent = `${c.kind} · ${c.classes}`;
+    nodes.push(kind);
 
     let why;
     if (c.degree !== null) {
@@ -122,12 +143,14 @@
         why.appendChild(li);
       }
     }
+    nodes.push(why);
 
     // label, kind, classes and every route line are Wikidata-derived text from an
     // openly editable source, so they are built as DOM nodes (textContent /
     // createTextNode) rather than interpolated into innerHTML — a vandalised label
-    // containing markup is inert text here, never executable.
-    document.getElementById('card').replaceChildren(h1, kind, why);
+    // containing markup is inert text here, never executable. currentRating is our own
+    // integer, never Wikidata text, but it is rendered the same way for consistency.
+    document.getElementById('card').replaceChildren(...nodes);
   }
 
   async function show() {

@@ -94,6 +94,47 @@ class RateServerTest {
   }
 
   @Test
+  @DisplayName("a card built with Card.known has no current rating, and the JSON says so")
+  void unratedCardSerialisesCurrentRatingAsNull() throws Exception {
+    HttpResponse<String> response =
+        client.send(request("/api/card?i=0").build(), HttpResponse.BodyHandlers.ofString());
+
+    ObjectMapper mapper = JsonMapper.builder().build();
+    JsonNode node = mapper.readTree(response.body());
+
+    assertThat(node.has("currentRating"))
+        .as("currentRating must be present, even when null")
+        .isTrue();
+    assertThat(node.path("currentRating").isNull()).isTrue();
+  }
+
+  @Test
+  @DisplayName(
+      "a card built with Card.rated (issue #109) serialises the rating it already has, exactly")
+  void revisionCardSerialisesItsExistingRating() throws Exception {
+    Card revision =
+        Card.rated(new NodeRecord("Q900002", NodeKind.GROUP, "Rated Band", List.of()), 7, 3);
+    RateServer revisionServer = new RateServer(List.of(revision), affinity, 0);
+    revisionServer.start();
+    try {
+      HttpResponse<String> response =
+          client.send(
+              HttpRequest.newBuilder(
+                      URI.create("http://127.0.0.1:" + revisionServer.port() + "/api/card?i=0"))
+                  .build(),
+              HttpResponse.BodyHandlers.ofString());
+
+      ObjectMapper mapper = JsonMapper.builder().build();
+      JsonNode node = mapper.readTree(response.body());
+
+      assertThat(node.path("currentRating").isNull()).isFalse();
+      assertThat(node.path("currentRating").asInt()).isEqualTo(3);
+    } finally {
+      revisionServer.stop();
+    }
+  }
+
+  @Test
   @DisplayName("a rating is written to the affinity store, with no note")
   void writesARating() throws Exception {
     HttpResponse<String> response =

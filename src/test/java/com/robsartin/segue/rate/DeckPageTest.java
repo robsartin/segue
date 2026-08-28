@@ -201,4 +201,89 @@ class DeckPageTest {
     assertThat(blockAfter(script, "function skip(")).contains("busy");
     assertThat(blockAfter(script, "function back(")).contains("busy");
   }
+
+  @Test
+  @DisplayName(
+      "a revision card's existing rating (issue #109) is rendered from the real value, inside its"
+          + " own guard, and actually attached to the DOM")
+  void rendersTheCurrentRatingOnARevisionCard() throws Exception {
+    String renderCard = blockAfter(script(), "function renderCard(");
+
+    // An unrated card (currentRating === null) must not get a revision banner at all — this is
+    // what stops the deck's ordinary cards from claiming a rating they do not have.
+    assertThat(matches(renderCard, "c\\.currentRating\\s*!==?\\s*null"))
+        .as("expected renderCard to branch on whether c.currentRating is present")
+        .isTrue();
+
+    // Everything that builds and shows the banner must live INSIDE that guard's own block.
+    // blockAfter locates the brace immediately following the guard text and balances it, so this
+    // fails if the banner element were built unconditionally, with the guard merely present
+    // somewhere else in the function.
+    String guarded = blockAfter(renderCard, "c.currentRating !== null");
+
+    // The element's text must interpolate the ACTUAL c.currentRating value (a template literal
+    // referencing it), not a fixed label — a hard-coded "Currently rated" with no ${c...} would
+    // read as compliant while showing the wrong number on every card.
+    Matcher element =
+        Pattern.compile(
+                "const\\s+(\\w+)\\s*=\\s*document\\.createElement\\([^)]*\\)[\\s\\S]*?"
+                    + "\\1\\.textContent\\s*=\\s*`[^`]*\\$\\{\\s*c\\.currentRating\\s*\\}[^`]*`")
+            .matcher(guarded);
+    assertThat(element.find())
+        .as(
+            "expected an element inside the guard whose textContent interpolates the actual"
+                + " c.currentRating value")
+        .isTrue();
+    String varName = element.group(1);
+
+    // Built is not the same as shown: the element has to actually reach the card region, not be
+    // constructed and left unattached.
+    assertThat(
+            matches(
+                guarded,
+                "(nodes\\.push\\(\\s*"
+                    + Pattern.quote(varName)
+                    + "\\s*\\)|appendChild\\(\\s*"
+                    + Pattern.quote(varName)
+                    + "\\s*\\)|replaceChildren\\([^)]*\\b"
+                    + Pattern.quote(varName)
+                    + "\\b)"))
+        .as("the revision element must actually be handed to the DOM, not built and discarded")
+        .isTrue();
+
+    // The XSS fix from #101 (see the class comment in deck.html) must not be undone for the one
+    // piece of text on this card that this task adds.
+    assertThat(guarded).doesNotContain("innerHTML");
+  }
+
+  @Test
+  @DisplayName(
+      "the revision banner has a real background fill, not just colored text, so a revision card"
+          + " cannot be mistaken for one of the page's plain muted captions")
+  void revisionBannerIsVisuallyDistinct() throws Exception {
+    String html = page();
+    String renderCard = blockAfter(script(), "function renderCard(");
+    String guarded = blockAfter(renderCard, "c.currentRating !== null");
+
+    Matcher classAssign =
+        Pattern.compile("(\\w+)\\.className\\s*=\\s*['\"](\\w[\\w-]*)['\"]").matcher(guarded);
+    assertThat(classAssign.find())
+        .as("expected the revision element to carry a class name naming its own CSS rule")
+        .isTrue();
+    String className = classAssign.group(2);
+
+    String style = html.substring(html.indexOf("<style>"), html.indexOf("</style>"));
+    Matcher rule =
+        Pattern.compile("\\." + Pattern.quote(className) + "\\s*\\{([^}]*)\\}").matcher(style);
+    assertThat(rule.find()).as("expected a CSS rule for ." + className).isTrue();
+    String declarations = rule.group(1);
+
+    // .kind, .why, .keys, .progress and .done all only set `color` against the page's own
+    // background (var(--paper)). A revision card has to look different from a plain caption, not
+    // merely be captioned — a genuine background fill, distinct from the page's own background,
+    // is the bar this asserts.
+    assertThat(matches(declarations, "background\\s*:\\s*(?!var\\(--paper\\)|none|transparent)\\S"))
+        .as("the revision banner needs its own background fill to be unmistakable at a glance")
+        .isTrue();
+  }
 }

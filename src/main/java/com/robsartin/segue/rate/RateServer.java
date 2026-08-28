@@ -209,6 +209,8 @@ public final class RateServer {
         + "\""
         + ",\"degree\":"
         + (card.degree().isPresent() ? card.degree().getAsInt() : "null")
+        + ",\"currentRating\":"
+        + (card.currentRating().isPresent() ? card.currentRating().getAsInt() : "null")
         + ",\"routes\":"
         + routes
         + "}";

@@ -1488,6 +1488,33 @@ server never address each other by accident; `--port 0` asks the OS to pick one,
 which. Open the printed address in a browser: `1`–`5` rates and advances, `s` or space skips
 without recording anything, `b` goes back.
 
+### Reconsidering a rating you already gave: `--revise`
+
+```bash
+# deal only the entities you already rated exactly 3, instead of the unrated ones
+./gradlew rate --args="--known $HOME/known.csv --revise 3"
+```
+
+`--revise <rating>` (1–5, the same range `AffinityRecord` enforces everywhere else) switches the
+deck from its default selection to `Deck`'s `dealRevision`: instead of everything unrated, it deals
+every known entity currently holding exactly that rating. This exists because a rating of 3 is an
+arithmetic no-op — `Recommendations.regardFor` centres its weighting on `NEUTRAL_RATING`, so a 3
+weighs exactly the same as no rating at all — and the deck used to have no way back to an entity
+once it held any rating, 3 included. See [ADR 46](adr/0046-the-rating-deck.md)'s 2026-08-28
+amendment (issue #109) for what a real 973-rating session measured before this was built.
+
+**The card shows the rating it already has, and that is the point.** A revision card that hid its
+current value would invite a considered rating to be re-guessed blind — a 2 becoming a reflexive 4
+on a second look reads as new information rather than the re-judgment it actually is, which is
+worse than not offering revision at all. `deck.html` renders it as a filled banner ("Currently
+rated N — this is a revision, not a new card"), the one element on the card with a real background
+fill rather than just coloured text, so it cannot be mistaken for an ordinary caption.
+
+`--revise` deals no candidates: a candidate is by definition absent from the known-list and
+therefore unrated, so there is nothing about it to reconsider, and mixing discovery into a revision
+pass would change what the pass measures. With no `--revise`, behaviour is exactly what the rest of
+this section describes.
+
 ### Two card shapes, because "why is this here" only has one answer at a time
 
 `Card.known` and `Card.candidate` are readable in full in `Card.java`; the shape each produces is
@@ -1505,9 +1532,10 @@ shape carries a note field; there is nowhere on either `Card` to put one.
 
 ### No session file: the deck is "everything unrated", recomputed every run
 
-`RateCli` reads every existing rating once, with `AffinityStore.readRatings()`, and `Deck.deal`
-excludes anything already rated from both the known list and the candidate stream — that exclusion
-is the entire resume mechanism. There is no position to persist, nothing to corrupt, and nothing
+This describes the default mode — no `--revise` — where `RateCli` reads every existing rating
+once, with `AffinityStore.readRatings()`, and `Deck.deal` excludes anything already rated from both
+the known list and the candidate stream — that exclusion is the entire resume mechanism. There is
+no position to persist, nothing to corrupt, and nothing
 left lying around between runs; quitting mid-deck costs nothing, and the next run picks up
 whatever is still unrated. `Deck`'s class javadoc is the authority on the ordering itself — degree
 descending for known entities, a candidate mixed in roughly every fifth card — and is worth reading

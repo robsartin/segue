@@ -172,6 +172,55 @@ second `put` against the same qid, which needs no new port method. The consequen
 stating plainly: a first rating can be changed, but it can never be withdrawn — there is no verb
 in this tool, or anywhere else in segue, that removes one.
 
+**Amendment (2026-08-28, issue #109): revision, because "everything unrated" made reconsideration
+impossible.**
+
+A real session produced 973 ratings — 541 fives, 309 fours, 121 threes, one 2, one 1. Those 973
+ratings moved exactly **one** entity in the top 25 of `./gradlew recommend`'s output against
+running with no ratings at all, and the last 164 entities in that ranking did not move at all. The
+reason is arithmetic, not a bug: `Recommendations.regardFor` centres its weighting on
+`NEUTRAL_RATING` (3), so a rating of 3 weighs exactly 1.0 — identical to an entity with no rating at
+all. **The 121 threes are no-ops.** They cost a keystroke each and moved nothing, because "no
+opinion yet" and "I said 3" produce the same number.
+
+The deck could not reach them. `Deck.deal`'s only mode excluded every already-rated entity —
+"`readRatings` is now shared with `rate`" above calls that exclusion "the whole of its resume
+mechanism," and the Consequences bullet "a rating can be changed but never withdrawn" said
+correction was possible in principle without saying the deck offered no path back to a rating once
+given, because nothing dealt an already-rated entity a second time. A 3 recorded on a first pass,
+honestly meant as "I don't know" or "it's fine," had no way to become the 2 or 4 it may have
+actually meant.
+
+**Decision: `--revise <rating>` deals already-rated entities holding exactly that rating, instead
+of unrated ones.** `RateCli` gained the flag, validated against `AffinityRecord.MIN_RATING`/
+`MAX_RATING` — the same range check the scale itself uses. `Deck.deal` gained an `OptionalInt
+reviseRating` parameter and, when present, runs a separate selection (`dealRevision`) that walks the
+known list and keeps only the qids the `ratings` map holds at exactly that value, instead of the
+exclusion path above. The default run — no `--revise` — is unchanged: `Deck.deal` with an empty
+`OptionalInt` behaves exactly as the rest of this Decision section describes.
+
+**The card must show the rating it already has, and that is non-negotiable.** The one risk a
+revision pass introduces that a first pass does not: a considered 2, re-shown blind, becomes a
+reflexive 4 on the second look — worse than not offering revision at all, because a rating that
+just happened to be typed again reads as fresh judgment rather than as what it is, an unexamined
+repeat. `Card` gained a third static factory, `Card.rated(node, degree, currentRating)`, carrying
+the existing value; the deck's JSON carries it as `currentRating` beside `degree` (present or
+`null`, the same treatment `degree` already gets); and `deck.html` renders it as a filled,
+reversed-color banner — the one element on the card with a real background fill, not just colored
+text — reading "Currently rated N — this is a revision, not a new card," built with `textContent`
+and `document.createElement`, never `innerHTML`, the same way every other label on the card is
+built. An unrated card shows no such banner; the gate is `currentRating !== null`.
+
+**Revise mode deals no candidates.** A candidate is by definition something absent from the
+known-list and therefore unrated — there is nothing to reconsider about it, and mixing discovery
+into a revision pass would change what the pass measures. `dealRevision` selects only from
+`knownQids`, never from the candidate sweep, and sorts by the same degree-descending rule the
+default deck uses.
+
+Nothing above this amendment is withdrawn — it described, and still describes, `Deck.deal` with no
+`reviseRating` supplied. What changed is that "everything unrated, recomputed at startup" is now
+one of two modes this tool can deal, not the whole of it.
+
 ## Alternatives considered
 
 - **A controller in the Spring app** — the server and the port already exist. Refused because it
