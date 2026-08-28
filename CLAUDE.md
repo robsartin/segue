@@ -515,7 +515,11 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   of esteem; every other type's direction says which end is the person, the work or the prize. The
   ADR has the per-type table and the before/after measurement — top 25 items citing more than they
   are cited went 18 → 2, and the all-inbound ancestors scored identically.
-- **The recommender reads ratings and cannot read a note**, which no other tool's fence says. It
+- **The recommender reads ratings and cannot read a note.** That was the one fence no sibling tool
+  had until ADR 46: `rate` now reads the same `readRatings` and is held off the note by
+  `theRatingDeckNeverReadsANote`. What is still particular to `recommend` is the SHAPE — `find`
+  banned and `AffinityRecord` unnameable, where `rate` has no `find` ban and lets `RateServer` name
+  the record it constructs. It
   used to be banned from `AffinityStore` as a type; issue #85 narrowed that to
   `theRecommenderReadsRatingsAndNeverNotes` — `AffinityRecord` banned as a type, `find` and
   `readAll` banned as calls, `readRatings` (a `Map<String, Integer>`) allowed. The old argument is

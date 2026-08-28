@@ -37,14 +37,21 @@ import org.slf4j.LoggerFactory;
  * application performs at boot, so a recommendation's routes are the routes {@code find_paths}
  * would return — and it is thrown away when the JVM exits.
  *
- * <p><b>It reads ratings and cannot read notes</b>, which is the one fence no sibling tool has, and
- * it is narrower than it was. ADR 45 banned {@code AffinityStore} outright as a type, because ADR
- * 33 made the whole taste layer personal data; issue #85 split that — a rating is the known-list at
- * higher resolution, a note is the owner's own words — so {@code
- * theRecommenderReadsRatingsAndNeverNotes} now bans {@code AffinityRecord} and the two methods that
- * return one, leaving {@code readRatings}. This class is the only one in the package that touches
- * the store at all: everything below it takes regard as a function (ADR 45's seam, now wired to
- * {@code Recommendations.regardFor}).
+ * <p><b>It reads ratings and cannot read notes</b>, and the fence is narrower than it was. ADR 45
+ * banned {@code AffinityStore} outright as a type, because ADR 33 made the whole taste layer
+ * personal data; issue #85 split that — a rating is the known-list at higher resolution, a note is
+ * the owner's own words — so {@code theRecommenderReadsRatingsAndNeverNotes} now bans {@code
+ * AffinityRecord} and the two methods that return one, leaving {@code readRatings}. This class is
+ * the only one in the package that touches the store at all: everything below it takes regard as a
+ * function (ADR 45's seam, now wired to {@code Recommendations.regardFor}).
+ *
+ * <p>This paragraph used to call that shape "the one fence no sibling tool has". Issue #101 (ADR
+ * 46) made it false: the rating deck reads the same {@code readRatings} — {@code
+ * onlyTheRecommenderReadsEveryRating} now names {@code ..recommend..} and {@code ..rate..} — and is
+ * held off the note by {@code theRatingDeckNeverReadsANote}. What is still particular to this tool
+ * is the shape rather than the effect: {@code recommend} may not call {@code AffinityStore.find}
+ * and may not name {@code AffinityRecord} at all, where {@code rate} has no {@code find} ban and
+ * lets {@code RateServer} name the record it has to construct.
  *
  * <p><b>No {@code System.out}.</b> ADR 30 makes SLF4J the only logging API and an ArchUnit rule
  * enforces it project-wide, so the recommendations go to the operator's chosen file and the log

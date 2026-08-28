@@ -544,9 +544,24 @@ class ArchitectureTest {
    *
    * <p>Three fences, and they are answering different questions. This one says the recommender
    * cannot see the words. {@link #onlyTheRatingsToolReadsANote} says the same of everything else in
-   * the project, at the accessor. {@link #onlyTheRecommenderReadsEveryRating} says the note-free
-   * bulk read is this tool's alone, so widening the taste layer's readership stays an ADR-level
-   * decision even though the score is now ordinary data.
+   * the project, at the accessor. {@link #onlyTheRecommenderReadsEveryRating} keeps the note-free
+   * bulk read off the MCP surface, so widening the taste layer's readership stays an ADR-level
+   * decision even though the score is now ordinary data. That sentence used to end "is this tool's
+   * alone"; issue #101 (ADR 46) took the decision it asks for and widened the rule to {@code
+   * resideOutsideOfPackages("..recommend..", "..rate..")}, so the rating deck may call {@code
+   * readRatings} as well — it needs the same map to know which entities it has already dealt.
+   *
+   * <p><b>The deck reading scores does not let it reach a note — but it is held off one differently
+   * from this package, and the difference is worth reading rather than assuming.</b> Two rules
+   * cover both equally: {@link #onlyTheRatingsToolReadsANote} shuts {@code AffinityRecord.note()}
+   * out of everything but {@code ratings} and {@code sqlite}, and {@link
+   * #onlyTheRatingsToolReadsEveryRating} keeps {@code readAll} — the read that carries a note — as
+   * the listing tool's. Past that they diverge. This rule also bans {@code AffinityStore.find} in
+   * {@code recommend} and forbids that package to name {@code AffinityRecord} at all; {@code rate}
+   * has no {@code find} ban anywhere, and {@link #theRatingDeckLogsNoRating} lets exactly one class
+   * name the record — {@code RateServer}, which has to construct the one it writes. What holds the
+   * deck off the words is {@link #theRatingDeckNeverReadsANote}, which bans the accessor for every
+   * class in {@code rate}, {@code RateServer} included and with no exception.
    */
   @ArchTest
   static final ArchRule theRecommenderReadsRatingsAndNeverNotes =

@@ -103,6 +103,14 @@ projection of the log (ADR 19, ADR 24), and the join is made above both ports in
   are too personal to leave, but that ADR 26 pins the surface at six and nothing on it needs the
   whole table. `onlyTheRecommenderReadsEveryRating` is what keeps that honest, because
   `ToolSurfaceTest` counts tools and a bulk read would arrive as a field.)*
+
+  *(Amended 2026-08-28, issue #101 — see **ADR 46**. One clause above has stopped being true:
+  `readRatings` no longer "belongs to `recommend`" alone. `onlyTheRecommenderReadsEveryRating` now
+  reads `resideOutsideOfPackages("..recommend..", "..rate..")`, because the rating deck needs the
+  same note-free map to know which entities it has already dealt. Everything the amendment above
+  actually rests on is unchanged: both readers are `./gradlew` dev-side tools, neither is an MCP
+  tool, `ToolSurfaceTest` still counts tools, and `readAll` still belongs to `ratings` alone. What
+  is absent from a `Map<String, Integer>` is absent from it for either caller.)*
 - **Affinity as a field on the graph node** — no join at all, and it puts personal data inside the
   structure ADR 33 exists to keep it out of.
 - **1-10, or thumbs up/down** — ten points invites false precision about the difference between a 6

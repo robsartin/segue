@@ -725,7 +725,8 @@ Mechanically:
   It has **two** bulk reads, and which one you may call is the boundary: `readAll` returns whole
   rows including the note and is reserved to the `ratings` dev tool
   ([ADR 43](adr/0043-listing-your-own-ratings.md)); `readRatings` returns a `Map<String, Integer>`
-  and is reserved to `recommend` (issue #85). Both reservations are ArchUnit rules. See
+  and is reserved to `recommend` and — since [ADR 46](adr/0046-the-rating-deck.md) — `rate` (issues
+  #85 and #101). Both reservations are ArchUnit rules. See
   [Looking at what you have rated](#looking-at-what-you-have-rated).
 - `note_affinity` is the only writer. There is no read tool: `get_entity` carries the rating back,
   and listing every rating is a Gradle task rather than a seventh tool.
