@@ -3,9 +3,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>segue rating deck</title>
 <style>
-  :root { color-scheme: light dark; --ink: #111; --paper: #fff; --muted: #555; --line: #ccc; }
+  :root { color-scheme: light dark; --ink: #111; --paper: #fff; --muted: #555; --line: #767676; }
   @media (prefers-color-scheme: dark) {
-    :root { --ink: #eee; --paper: #16181c; --muted: #aaa; --line: #444; }
+    :root { --ink: #eee; --paper: #16181c; --muted: #aaa; --line: #808080; }
   }
   body { margin: 0; padding: 2rem 1rem; background: var(--paper); color: var(--ink);
          font: 16px/1.5 system-ui, sans-serif; display: flex; justify-content: center; }
@@ -49,27 +49,84 @@
   // second round-trip per keystroke and, more importantly, a race: if the
   // owner presses a rating key twice in quick succession, the second fetch
   // could resolve before the first POST lands and both would rate the same
-  // qid onto what is now the wrong index. Clearing it synchronously at the
-  // top of rate(), before the first await, is what actually closes the race
-  // — a second keypress sees current === null and is dropped.
+  // qid onto what is now the wrong index.
+  //
+  // The guard is symmetric: BOTH show() and rate() null out `current`
+  // synchronously, before their first await, and only the function that
+  // just resolved a fetch is allowed to set it back. That closes two races,
+  // not one: a second keypress while a rate() POST is in flight sees
+  // current === null and is dropped (rate/rate); and — the one a
+  // one-directional guard misses — pressing 's' or 'b' starts a new show()
+  // GET while `current` still names the OLD card, so a rating key pressed
+  // before that GET resolves would otherwise rate the card just skipped
+  // past, onto an index that has already moved on. Nulling it at the top of
+  // show() too closes that: rate() sees current === null during the whole
+  // window a card is in flight and does nothing, rather than silently
+  // mis-rating and silently dropping the card the owner meant to rate.
   let current = null;
 
+  function appendRouteText(li, text) {
+    // PathResult.render() emits one 6-space-indented, newline-terminated line per hop — but by
+    // the time this string reaches the browser, RateServer's hand-rolled JSON escaper has already
+    // replaced every '\n' with a single space (it has to escape it somehow to stay valid JSON;
+    // confirmed live against a real candidate card — the wire payload's routes[] carries zero '\n'
+    // characters). So a hop boundary does not arrive as a newline here, it arrives as a run of
+    // several spaces: the collapsed '\n' plus the next hop's 6-space indent. Splitting on 4+
+    // consecutive spaces reconstructs the line-per-hop structure the server already destroyed,
+    // without depending on any one hop's own text ever containing a run that long (verified
+    // against real data: within-hop text never exceeds a single space; the hop-boundary run is 7).
+    // A `\n` alternative is kept too, in case a future fix stops collapsing it server-side.
+    const lines = text.split(/\n| {4,}/).map(s => s.trim()).filter(s => s.length > 0);
+    lines.forEach((line, i) => {
+      if (i > 0) li.appendChild(document.createElement('br'));
+      li.appendChild(document.createTextNode(line));
+    });
+  }
+
+  function renderCard(c) {
+    const h1 = document.createElement('h1');
+    h1.textContent = c.label;
+
+    const kind = document.createElement('p');
+    kind.className = 'kind';
+    kind.textContent = `${c.kind} · ${c.classes}`;
+
+    let why;
+    if (c.degree !== null) {
+      why = document.createElement('p');
+      why.className = 'why';
+      why.textContent = `connects ${c.degree} things in the graph`;
+    } else {
+      why = document.createElement('ul');
+      why.className = 'why';
+      for (const route of c.routes) {
+        const li = document.createElement('li');
+        appendRouteText(li, route);
+        why.appendChild(li);
+      }
+    }
+
+    // label, kind, classes and every route line are Wikidata-derived text from an
+    // openly editable source, so they are built as DOM nodes (textContent /
+    // createTextNode) rather than interpolated into innerHTML — a vandalised label
+    // containing markup is inert text here, never executable.
+    document.getElementById('card').replaceChildren(h1, kind, why);
+  }
+
   async function show() {
+    current = null;
     const response = await fetch(`/api/card?i=${index}`);
-    const card = document.getElementById('card');
     if (response.status === 404) {
-      current = null;
-      card.innerHTML = '<p class="done">That is the whole deck. Nothing left to rate.</p>';
+      const done = document.createElement('p');
+      done.className = 'done';
+      done.textContent = 'That is the whole deck. Nothing left to rate.';
+      document.getElementById('card').replaceChildren(done);
       document.getElementById('progress').textContent = '';
       return;
     }
     const c = await response.json();
     current = c;
-    const why = c.degree !== null
-      ? `<p class="why">connects ${c.degree} things in the graph</p>`
-      : `<ul class="why">${c.routes.map(r => `<li>${r}</li>`).join('')}</ul>`;
-    card.innerHTML =
-      `<h1>${c.label}</h1><p class="kind">${c.kind} · ${c.classes}</p>${why}`;
+    renderCard(c);
     document.getElementById('progress').textContent =
       `card ${index + 1} · ${rated} rated this session`;
   }
