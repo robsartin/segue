@@ -448,6 +448,42 @@ class ArchitectureTest {
                   + " tool; nothing on the MCP surface may enumerate it at all");
 
   /**
+   * ADR 33 as amended by issue #85: the score is ordinary data, the note is not, and this rule is
+   * where the new line is drawn.
+   *
+   * <p>The line used to run around the whole taste layer. Issue #85 moved it to run between the two
+   * fields, and the argument is short: a rating is the known-list at higher resolution — 815
+   * entities chosen because the owner likes them are already handed to a model — while a note is
+   * free text no schema constrains. "Reminds me of Dad's funeral" is a categorically different fact
+   * from "4/5", and an MCP tool result enters a model's context, which leaves the machine.
+   *
+   * <p>So the note is confined at the one place it can be read back from storage: {@code
+   * AffinityRecord.note()}. Two packages may call it. {@code ratings} is the owner's own listing
+   * tool (ADR 43), where reading both fields is the entire purpose. {@code sqlite} is not a reader
+   * at all — it is the table, and it calls the accessor to bind a prepared-statement parameter on
+   * the way in. Everything else may hold an {@code AffinityRecord} and read its rating, and cannot
+   * see the words: {@code mcp} above all, but also {@code export}, {@code recommend} and every
+   * package nobody has written yet.
+   *
+   * <p><b>This is what makes the leak fixed in issue #85 stay fixed.</b> {@code get_entity}
+   * returned the note from the day ADR 39 shipped, through a single call to this accessor in {@code
+   * ViewMapper}, and a wire type with no note field would be re-grown by exactly that call. {@code
+   * NoteNeverLeavesThroughAToolTest} proves the surface as it stands; this proves the field nobody
+   * has thought of yet.
+   */
+  @ArchTest
+  static final ArchRule onlyTheRatingsToolReadsANote =
+      noClasses()
+          .that()
+          .resideOutsideOfPackages("..ratings..", "..sqlite..")
+          .should()
+          .callMethodWhere(callTo("note", AffinityRecord.class))
+          .because(
+              "ADR 33 as amended by issue #85: the rating is ordinary data and may be read"
+                  + " anywhere; the note is personal free text, read by the owner's own listing"
+                  + " tool and by nothing that answers an MCP call");
+
+  /**
    * ADR 45: the recommender reads, and it cannot write either layer.
    *
    * <p>The fifth dev-side tool, and the second one whose fence has to name {@code
@@ -479,35 +515,67 @@ class ArchitectureTest {
                   + " allowed to");
 
   /**
-   * ADR 45: the recommender cannot see the taste layer at all, and that is the seam being a seam.
+   * ADR 45 as amended by issue #85: the recommender reads ratings, and it still cannot read a note.
    *
    * <p>The rule with the most to say about this tool, because ADR 33's stated payoff is
    * "recommendations are derived by traversing the world graph and filtering through affinity" and
-   * this is the tool that derives them. The filtering half is <b>not built</b>: the {@code
-   * affinity} table is empty, so every known entity counts for one, and the weighting arrives as
-   * {@code Recommendations.EQUAL_REGARD} - a {@code ToDoubleFunction} over a qid, the same shape
-   * {@code PathRanking} takes a degree in.
+   * this is the tool that derives them. <b>The filtering half is now built</b> — {@code
+   * Recommendations.regardFor} turns the ratings into the weight per known entity that {@code
+   * CandidateSweep} was always multiplying by.
    *
-   * <p>Banning the <em>type</em> rather than the two calls is what makes that a decision instead of
-   * a to-do. {@code find} is available everywhere else in the project, so a well-meaning change
-   * could give this tool one rating at a time and call it the affinity weighting - eight hundred
-   * lookups being a bulk read spelled slowly, and precisely what ADR 39 declined to put in front of
-   * a caller that is not the owner. When the weighting is really built it will change this rule,
-   * ADR 39 and ADR 45 together, which is the argument being had rather than skipped.
+   * <p><b>The rule is narrowed rather than deleted, and the narrowing is the whole decision.</b> It
+   * used to ban {@code AffinityStore} as a <em>type</em>, on the reasoning that {@code find} is
+   * available everywhere and eight hundred single-qid lookups are a bulk read spelled slowly. That
+   * instinct was right and it survives here in the only form that still has work to do: the
+   * recommender may hold the store and call {@code readRatings}, whose {@code Map<String, Integer>}
+   * has nowhere to put a note, and it may not call {@code find} or {@code readAll} or so much as
+   * name {@code AffinityRecord} — the three ways a note could reach this package.
+   *
+   * <p>Three fences, and they are answering different questions. This one says the recommender
+   * cannot see the words. {@link #onlyTheRatingsToolReadsANote} says the same of everything else in
+   * the project, at the accessor. {@link #onlyTheRecommenderReadsEveryRating} says the note-free
+   * bulk read is this tool's alone, so widening the taste layer's readership stays an ADR-level
+   * decision even though the score is now ordinary data.
    */
   @ArchTest
-  static final ArchRule theRecommenderNeverReadsTheTasteLayer =
+  static final ArchRule theRecommenderReadsRatingsAndNeverNotes =
       noClasses()
           .that()
           .resideInAPackage("..recommend..")
-          .should()
-          .dependOnClassesThat(
-              JavaClass.Predicates.equivalentTo(AffinityStore.class)
-                  .or(JavaClass.Predicates.equivalentTo(AffinityRecord.class)))
+          .should(
+              ArchConditions.dependOnClassesThat(
+                      JavaClass.Predicates.equivalentTo(AffinityRecord.class))
+                  .or(
+                      ArchConditions.callMethodWhere(
+                          callTo("find", AffinityStore.class)
+                              .or(callTo("readAll", AffinityStore.class)))))
           .because(
-              "ADR 45 and ADR 33: the affinity weighting is a seam and not a wire — the recommender"
-                  + " takes regard as a function, and giving it a store is a decision to be argued"
-                  + " in an ADR rather than an import to be added");
+              "ADR 45 as amended by issue #85: the recommender weights by the score and cannot"
+                  + " reach the note — readRatings returns a map of qid to rating, and the two"
+                  + " reads that carry free text stay out of this package");
+
+  /**
+   * Issue #85: the note-free bulk read belongs to the recommender, and to nothing on the MCP
+   * surface.
+   *
+   * <p>The sibling of {@link #onlyTheRatingsToolReadsEveryRating}, one field narrower and for a
+   * different reason. That rule protects a note; this one protects nothing personal at all now that
+   * the score is ordinary data — what it protects is <b>ADR 26's six tools</b>. A bulk read
+   * appearing on the surface would arrive as a field on an existing tool rather than as a seventh
+   * tool, and {@code ToolSurfaceTest} counts tools, so it would not notice. ADR 45 recorded a
+   * re-open condition for a conversational recommendation and issue #85 deliberately did not
+   * exercise it; until an ADR does, {@code get_entity} answers one qid at a time.
+   */
+  @ArchTest
+  static final ArchRule onlyTheRecommenderReadsEveryRating =
+      noClasses()
+          .that()
+          .resideOutsideOfPackage("..recommend..")
+          .should()
+          .callMethodWhere(callTo("readRatings", AffinityStore.class))
+          .because(
+              "ADR 26 and issue #85: the score is ordinary data, and reading every score at once is"
+                  + " still the recommender's job rather than a field on an MCP tool");
 
   /**
    * ADR 45: the recommender needs a log, an engine and nothing else.

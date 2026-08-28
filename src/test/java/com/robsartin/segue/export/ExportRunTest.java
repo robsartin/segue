@@ -20,6 +20,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -223,6 +224,14 @@ class ExportRunTest {
           // and ADR 43 gave the bulk read to a dev tool that is not the exporter.
           @Override
           public List<AffinityRecord> readAll() {
+            throw new UnsupportedOperationException(
+                "the exporter never reads the whole taste layer");
+          }
+
+          // Unusable for the same reason. Issue #85 added a note-free bulk read for the
+          // recommender; the exporter still asks about one node at a time.
+          @Override
+          public Map<String, Integer> readRatings() {
             throw new UnsupportedOperationException(
                 "the exporter never reads the whole taste layer");
           }

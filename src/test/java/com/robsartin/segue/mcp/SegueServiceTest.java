@@ -560,7 +560,7 @@ class SegueServiceTest {
   }
 
   @Test
-  @DisplayName("getEntity surfaces the affinity once the entity has been rated (ADR 39's read)")
+  @DisplayName("getEntity surfaces the rating once the entity has been rated (ADR 39's read)")
   void getEntitySurfacesAffinity() {
     ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Rated", WIKIDATA));
     service().noteAffinity("Q1", 4, "an invented note");
@@ -568,8 +568,10 @@ class SegueServiceTest {
     ToolResult<EntityView> result = service().getEntity("Q1");
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
-    assertThat(result.payload().affinity())
-        .isEqualTo(new AffinityView(4, "an invented note", RATED_AT));
+    // The rating, and nothing else the user wrote: issue #85 moved ADR 33's line to run between
+    // the score and the note rather than around the pair. NoteNeverLeavesThroughAToolTest proves
+    // the same thing of the whole surface; this one records what the read path returns.
+    assertThat(result.payload().affinity()).isEqualTo(new AffinityView(4, RATED_AT));
   }
 
   // ---- noteAffinity -------------------------------------------------------
@@ -582,7 +584,8 @@ class SegueServiceTest {
     ToolResult<AffinityView> result = service().noteAffinity("Q1", 5, "an invented note");
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
-    assertThat(result.payload()).isEqualTo(new AffinityView(5, "an invented note", RATED_AT));
+    // Stored in full; returned as the rating alone (issue #85).
+    assertThat(result.payload()).isEqualTo(new AffinityView(5, RATED_AT));
     assertThat(affinity.find("Q1"))
         .contains(new AffinityRecord("Q1", 5, "an invented note", RATED_AT));
   }
@@ -595,7 +598,8 @@ class SegueServiceTest {
     ToolResult<AffinityView> result = service().noteAffinity("Q1", 2, null);
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
-    assertThat(result.payload()).isEqualTo(new AffinityView(2, null, RATED_AT));
+    assertThat(result.payload()).isEqualTo(new AffinityView(2, RATED_AT));
+    assertThat(affinity.find("Q1")).contains(new AffinityRecord("Q1", 2, null, RATED_AT));
   }
 
   @Test
@@ -606,7 +610,9 @@ class SegueServiceTest {
     ToolResult<AffinityView> result = service().noteAffinity("Q1", 3, "   ");
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
-    assertThat(result.payload().note()).isNull();
+    // Asserted on the stored row rather than on the result: since issue #85 the wire view has no
+    // note field to inspect, and "blank means absent" is a fact about what was written down.
+    assertThat(affinity.find("Q1")).contains(new AffinityRecord("Q1", 3, null, RATED_AT));
   }
 
   @Test

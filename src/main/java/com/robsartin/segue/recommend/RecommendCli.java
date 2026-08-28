@@ -3,6 +3,7 @@ package com.robsartin.segue.recommend;
 import com.robsartin.segue.domain.Recommendations;
 import com.robsartin.segue.domain.Scorer;
 import com.robsartin.segue.ingest.GraphProjector;
+import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import com.robsartin.segue.wikidata.RecognitionInstitutions;
@@ -10,6 +11,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,11 +37,14 @@ import org.slf4j.LoggerFactory;
  * application performs at boot, so a recommendation's routes are the routes {@code find_paths}
  * would return — and it is thrown away when the JVM exits.
  *
- * <p><b>It cannot see the taste layer at all</b>, which is the one fence no sibling tool has:
- * {@code theRecommenderNeverReadsTheTasteLayer} bans {@code AffinityStore} as a type. The affinity
- * weighting ADR 33 promises is present as a seam and unused — see {@code
- * Recommendations.EQUAL_REGARD} — because the table is empty, and wiring it up is a decision to be
- * argued rather than a line to be added.
+ * <p><b>It reads ratings and cannot read notes</b>, which is the one fence no sibling tool has, and
+ * it is narrower than it was. ADR 45 banned {@code AffinityStore} outright as a type, because ADR
+ * 33 made the whole taste layer personal data; issue #85 split that — a rating is the known-list at
+ * higher resolution, a note is the owner's own words — so {@code
+ * theRecommenderReadsRatingsAndNeverNotes} now bans {@code AffinityRecord} and the two methods that
+ * return one, leaving {@code readRatings}. This class is the only one in the package that touches
+ * the store at all: everything below it takes regard as a function (ADR 45's seam, now wired to
+ * {@code Recommendations.regardFor}).
  *
  * <p><b>No {@code System.out}.</b> ADR 30 makes SLF4J the only logging API and an ArchUnit rule
  * enforces it project-wide, so the recommendations go to the operator's chosen file and the log
@@ -197,11 +202,21 @@ public final class RecommendCli {
     }
 
     try (SqliteAssertionLog assertions = new SqliteAssertionLog(options.database());
+        SqliteAffinityStore affinity = new SqliteAffinityStore(options.database());
         TinkerGraphStore graph = new TinkerGraphStore()) {
       long applied = GraphProjector.project(assertions, graph);
       log.info("replayed {} assertion(s) from {}", applied, options.database());
 
-      new RecommendRun(graph, RecognitionInstitutions::isRecognitionInstitution)
+      // The one line in this tool that reads the taste layer, and it reads half of it (issue #85).
+      // A count, never a qid and never a score: how much somebody has rated is a fact about them,
+      // and ADR 33 keeps all of it out of every log line.
+      Map<String, Integer> ratings = affinity.readRatings();
+      log.info("weighting by {} rating(s)", ratings.size());
+
+      new RecommendRun(
+              graph,
+              RecognitionInstitutions::isRecognitionInstitution,
+              Recommendations.regardFor(ratings))
           .run(options, RecommendCli::note);
     } catch (IOException e) {
       throw new UncheckedIOException("could not write " + options.out(), e);

@@ -98,9 +98,10 @@ retract/  The retraction tool (ADR 44): appends one Retraction claim so the
 recommend/ The recommender (ADR 45): ranks entities ABSENT from a supplied known-list by
           candidate-degree-normalised lift, excludes hub intermediates through PathRanking.isHub,
           weights edge types, and explains every candidate with real find_paths routes. Run as
-          `./gradlew recommend`. Dev-side, plain Java, READ-ONLY, offline, NOT a seventh MCP tool —
-          and the only tool that may not even see AffinityStore, because the affinity weighting is
-          a seam (Recommendations.EQUAL_REGARD) rather than a wire.
+          `./gradlew recommend`. Dev-side, plain Java, READ-ONLY, offline, NOT a seventh MCP tool.
+          Since issue #85 it WEIGHTS by rating — Recommendations.regardFor over the note-free
+          AffinityStore.readRatings — and it is still the only tool fenced from every read that
+          could carry a note.
 ingest/   IngestService (the only write path) and GraphProjector (boot replay).
 support/  Plain-Java cross-cutting helpers with no project dependencies of their
           own — UuidV7, the RFC 9562 v7 id generator used for request correlation, and
@@ -152,6 +153,17 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   overwrites.** Negative affinity is 1-2, not a separate concept. One row per
   entity keyed by qid, with `updated_at` — there is no history table, and taste
   drift is deliberately not retained (ADR 39).
+- **The score is ordinary data; the note is not** (issue #85, amending ADR 33).
+  A model may read a rating, weight recommendations by it and discuss it — it is
+  the known-list at higher resolution, and that list is already handed over. A
+  note is free text nothing constrains, so it never appears in an MCP tool result:
+  `AffinityView` has no note field, `note_affinity` does not echo the words it was
+  given, and `./gradlew listRatings` is the only reader. Three ArchUnit rules hold
+  it (`onlyTheRatingsToolReadsANote`, `theRecommenderReadsRatingsAndNeverNotes`,
+  `onlyTheRecommenderReadsEveryRating`) plus `NoteNeverLeavesThroughAToolTest`,
+  which discovers every `@McpTool` method by classpath scan rather than naming
+  them. **Adding a taste dimension now means deciding which side of that line it
+  falls on before adding it.**
 
 ## Gotchas already paid for
 - **Never put real affinity data in the repository.** ADR 33 makes taste personal data, and this
@@ -401,12 +413,16 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   recreate the failure. Adding a third format means adding its extensions to `OutputFormat` too.
   ADR 41's issue-#57 amendment.
 
-- **`AffinityStore.readAll` exists, and exactly one package may call it.** ADR 39 declined a bulk
-  `list_affinity` MCP tool on ADR 16 data-minimisation grounds — it is the one call that exposes
-  the whole taste layer to a model — and that reasoning STANDS. What it accidentally also did was
-  lock out the OWNER, who cannot regenerate a rating from any source. ADR 43 changed the caller,
-  not the surface: the port gained a bulk read, `./gradlew listRatings` uses it, and
-  `onlyTheRatingsToolReadsEveryRating` fails the build if anything outside `..ratings..` calls it.
+- **`AffinityStore` has TWO bulk reads, and each belongs to exactly one package.** `readAll`
+  returns whole rows, notes included, and is the `ratings` dev tool's alone
+  (`onlyTheRatingsToolReadsEveryRating`); `readRatings` returns a note-free `Map<String, Integer>`
+  and is the recommender's alone (`onlyTheRecommenderReadsEveryRating`, issue #85). The reason the
+  second one is still fenced has CHANGED — a score is no longer too personal to leave, but ADR 26
+  pins the surface at six tools and nothing on it needs the whole table.
+  ADR 39 declined a bulk `list_affinity` MCP tool on ADR 16 data-minimisation grounds, and what it
+  accidentally also did was lock out the OWNER, who cannot regenerate a rating from any source.
+  ADR 43 changed the caller, not the surface: the port gained a bulk read, `./gradlew listRatings`
+  uses it, and the rule fails the build if anything outside `..ratings..` calls it.
   Don't "expose it on `get_entity`" or add a field carrying it — `ToolSurfaceTest` counts TOOLS and
   would not notice a new field, which is exactly why the fence is at the call site. Also new there:
   `theRatingsToolOnlyReads` is the only rule in the project that forbids **`AffinityStore.put`**.
@@ -482,10 +498,21 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   of esteem; every other type's direction says which end is the person, the work or the prize. The
   ADR has the per-type table and the before/after measurement — top 25 items citing more than they
   are cited went 18 → 2, and the all-inbound ancestors scored identically.
-- **The recommender may not depend on `AffinityStore` at all**, which no other tool's fence says.
-  Banning the type rather than the calls is the point: `find` is available everywhere else, and
-  eight hundred single-qid lookups are the bulk read ADR 39 declined, spelled slowly. Building the
-  real affinity weighting changes that rule, ADR 39 and ADR 45 together.
+- **The recommender reads ratings and cannot read a note**, which no other tool's fence says. It
+  used to be banned from `AffinityStore` as a type; issue #85 narrowed that to
+  `theRecommenderReadsRatingsAndNeverNotes` — `AffinityRecord` banned as a type, `find` and
+  `readAll` banned as calls, `readRatings` (a `Map<String, Integer>`) allowed. The old argument is
+  intact where it still bites: `find` is available everywhere else, and eight hundred single-qid
+  lookups are a bulk read spelled slowly. **`RecommendCli` is the only class in the package that
+  touches the store**; everything below it takes regard as a function.
+- **The affinity weighting is centred on 3, not proportional to the rating.** `regardFor` gives a 5
+  weight 5/3, a 1 weight 1/3, and an UNRATED entity weight 1.0 — because most of the known-list is
+  unrated (it comes from ADR 40's file, not the taste layer), and a proportional weighting would
+  bury everything unrated the moment the first rating was written. An empty table therefore
+  reproduces ADR 45's measured ranking exactly. **None of this has met a real rating**: the
+  `affinity` table has zero rows, and `AffinityWeightedRecommendationTest` demonstrates the
+  movement on invented ratings in a scratch database. Whether 5/3 is the right strength is
+  unmeasured — settle it the way the degree floor was settled, by running two and reading both.
 
 - **The taste layer's classes deliberately have no package of their own.**
   `AffinityRecord` sits in `domain`, `AffinityStore` in `port`,
@@ -581,8 +608,8 @@ Six tools, no more:
 - `add_entity(qid)` → upsert, returns id
 - `expand_entity(qid, maxNewEdges?)` → runs adapters, returns new edges
 - `get_entity(qid)` → node plus neighbours grouped by edge type, plus this
-  entity's affinity if it has been rated (ADR 39: the taste layer's read path is
-  here, and there is no seventh tool)
+  entity's RATING if it has been rated (ADR 39: the taste layer's read path is
+  here, and there is no seventh tool; issue #85 removed the note from it)
 - `find_paths(fromQid, toQid, maxHops?)` → routes with per-hop citations
 - `note_affinity(qid, rating, note?)` → taste layer, its own table
 
@@ -595,9 +622,11 @@ Wilco's lineup is a claim about the world. Separate tables so recommendations ca
 be re-derived by traversing the world graph filtered through affinity. Landed in
 increment 5: `AffinityStore`, `SqliteAffinityStore`, `TasteTools`, and the
 `affinity` field on `get_entity`. Recommendations landed later, in `recommend/`
-(ADR 45) — and the affinity half of that sentence is still NOT built: the table
-is empty, so `Recommendations.EQUAL_REGARD` is the seam and an ArchUnit rule
-keeps the recommender from seeing `AffinityStore` at all.
+(ADR 45), and the affinity half of that sentence landed with issue #85:
+`Recommendations.regardFor` weights each known entity by its rating, so a
+candidate reached by three things rated 5 outranks one reached by six rated 2.
+The table still holds zero rows, so that is demonstrated on invented ratings and
+has never met a real one.
 
 ### The open risk
 

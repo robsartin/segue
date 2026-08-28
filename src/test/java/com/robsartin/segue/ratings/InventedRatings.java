@@ -102,6 +102,16 @@ final class InventedRatings {
       return List.copyOf(ratings.values());
     }
 
+    /**
+     * Deliberately unusable. The note-free bulk read exists for the recommender (issue #85); the
+     * listing tool reads whole rows, and a fake that answered both would let this one quietly start
+     * using the wrong one without failing anything.
+     */
+    @Override
+    public Map<String, Integer> readRatings() {
+      throw new UnsupportedOperationException("the ratings tool reads whole rows, notes included");
+    }
+
     @Override
     public void close() {}
   }

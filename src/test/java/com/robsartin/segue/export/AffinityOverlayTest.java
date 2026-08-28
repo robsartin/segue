@@ -50,6 +50,12 @@ class AffinityOverlayTest {
       throw new UnsupportedOperationException("the exporter never reads the whole taste layer");
     }
 
+    /** Unusable for the same reason, and issue #85 did not change it: the overlay asks per node. */
+    @Override
+    public Map<String, Integer> readRatings() {
+      throw new UnsupportedOperationException("the exporter never reads the whole taste layer");
+    }
+
     @Override
     public void close() {}
   }
