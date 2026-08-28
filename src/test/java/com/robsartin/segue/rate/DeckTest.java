@@ -2,10 +2,15 @@ package com.robsartin.segue.rate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.robsartin.segue.domain.EdgeRecord;
+import com.robsartin.segue.domain.Hop;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
+import com.robsartin.segue.domain.PathResult;
+import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.domain.Recommendation;
 import com.robsartin.segue.recommend.Explained;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -94,6 +99,46 @@ class DeckTest {
     assertThat(cards.get(4).qid()).isEqualTo("Q900101");
     assertThat(cards).extracting(Card::qid).contains("Q900102");
     assertThat(cards).hasSize(7);
+  }
+
+  @Test
+  @DisplayName("a candidate that is already rated is not dealt")
+  void excludesAlreadyRatedCandidate() {
+    Explained candidate = candidateFor("Q900103", "Already Rated Candidate");
+
+    List<Card> cards = deal(List.of(), Set.of("Q900103"), List.of(candidate));
+
+    assertThat(cards).isEmpty();
+  }
+
+  @Test
+  @DisplayName(
+      "a candidate's routes reach the dealt card intact, not just Card.candidate's own constructor")
+  void candidateRoutesSurviveDealing() {
+    NodeRecord knownEnd = new NodeRecord("Q900501", NodeKind.PERSON, "Route Known", List.of());
+    NodeRecord candidateEnd =
+        new NodeRecord("Q900502", NodeKind.GROUP, "Route Candidate", List.of());
+    EdgeRecord edge =
+        new EdgeRecord(
+            knownEnd.qid(),
+            candidateEnd.qid(),
+            "INFLUENCED_BY",
+            null,
+            null,
+            List.of(new Provenance("invented", "invented:1", Instant.EPOCH, 1.0)));
+    PathResult route = new PathResult(List.of(new Hop(knownEnd, edge, candidateEnd, false)));
+    Explained explained =
+        new Explained(new Recommendation(candidateEnd, 1.0, 12, List.of()), List.of(route));
+
+    List<Card> cards =
+        Deck.deal(List.of(), q -> 0, q -> Optional.empty(), Set.of(), List.of(explained));
+
+    assertThat(cards).hasSize(1);
+    assertThat(cards.get(0).routes()).hasSize(1);
+    assertThat(cards.get(0).routes().get(0))
+        .contains("INFLUENCED_BY")
+        .contains(knownEnd.label())
+        .contains(candidateEnd.label());
   }
 
   private static Explained candidateFor(String qid, String label) {
