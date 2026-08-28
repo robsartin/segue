@@ -186,10 +186,13 @@ rather than a threshold:
   society that `KindMapper`'s whitelist has not learned falls through to `CONCEPT` and needs the
   same treatment; making the rule depend on the whitelist would reintroduce the coupling the
   amendment above already had to pay for once.
-- **Any stated class counts, not the first.** `KindMapper` takes the first class it recognises; this
-  takes any. Real institutions wear several and the recognition class is not reliably in front — the
-  American Academy of Arts and Sciences states learned society, academic publisher, nonprofit
-  organization, in that order.
+- **Any stated class counts, and position means nothing.** Real institutions wear several and the
+  recognition class is not reliably in front — the American Academy of Arts and Sciences states
+  learned society, academic publisher, nonprofit organization, in that order. *(Amended 2026-08-28,
+  issue #87: this bullet used to read "not the first", contrasting with a `KindMapper` that took
+  the first class it recognised. It no longer does — ADR 21's amendment ranks the kinds — so the
+  two rules now agree that P31 order is noise, and differ only in what they ask of the classes:
+  this one asks a yes-or-no question of each, the mapping ranks the kinds they imply.)*
 
 **What was deliberately left out, and it is the trap.** All five institutions also state a broad
 organization class — `Q163740` nonprofit organization or `Q43229` organization — and a table built

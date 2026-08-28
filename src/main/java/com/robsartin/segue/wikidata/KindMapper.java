@@ -2,10 +2,12 @@ package com.robsartin.segue.wikidata;
 
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Maps Wikidata's {@code P31} (instance of) onto segue's six kinds.
@@ -17,6 +19,9 @@ import java.util.Objects;
  *
  * <p>Unmapped classes become {@link NodeKind#CONCEPT} and are reported by {@link
  * #isMapped(String)}, so the whitelist can grow from real data rather than speculation.
+ *
+ * <p>An entity can state several classes this list knows, and when they disagree the {@code
+ * PRECEDENCE} below decides which kind wins - never the order the classes arrived in.
  */
 public final class KindMapper {
 
@@ -96,6 +101,57 @@ public final class KindMapper {
     put("Q198", NodeKind.EVENT); // war
   }
 
+  /**
+   * Which kind wins when an entity's stated classes disagree, most decisive first (issue #87, ADR
+   * 21).
+   *
+   * <p>Entities routinely state several classes, and the order they arrive in is noise: the entity
+   * JSON lists statements oldest first, {@link ReverseClaims} collects them into a set keyed on
+   * whatever order SPARQL bound the rows, and neither is a claim about which class matters most.
+   * The list below is the whole rule, and it gives the same answer whatever the order.
+   *
+   * <p>It is argued from entities that really do state two kinds, not from taste:
+   *
+   * <ul>
+   *   <li><b>PERSON first.</b> {@code Q5} (human) is the least ambiguous statement Wikidata makes.
+   *       A solo singer also typed as a musical group is a person carrying a loose second class,
+   *       never a band carrying a loose "human".
+   *   <li><b>WORK next.</b> A thing that is both a work and something else is the work: a concert
+   *       film is a film, a residency released as a record is the album, a television series also
+   *       typed as an organisation is the series, and a comedy also typed as a city is the comedy.
+   *       WORK is also the kind {@code PERFORMED} and {@code AUTHORED} point at.
+   *   <li><b>GROUP over EVENT.</b> An organisation that runs a conference is the organisation; the
+   *       conference is an edge away, and usually an entity of its own.
+   *   <li><b>PLACE last of the five.</b> Every conflict involving a place class observed so far is
+   *       that class attached loosely to something that is not a place - which is the failure this
+   *       ordering exists to stop.
+   *   <li><b>CONCEPT last of all.</b> It means "we could not place this" (ADR 22), so it must never
+   *       outrank a class the whitelist does recognise.
+   * </ul>
+   *
+   * <p>Deliberately NOT "the most specific class wins" through {@code P279}. That needs a subclass
+   * walk, which is a network call, and both projections re-derive kinds offline (ADR 42) - a mapper
+   * that reached the network could not run there at all. It would also not settle the case that
+   * prompted this: neither "city" nor "film" is a subclass of the other.
+   */
+  private static final List<NodeKind> PRECEDENCE =
+      List.of(
+          NodeKind.PERSON,
+          NodeKind.WORK,
+          NodeKind.GROUP,
+          NodeKind.EVENT,
+          NodeKind.PLACE,
+          NodeKind.CONCEPT);
+
+  static {
+    if (Set.copyOf(PRECEDENCE).size() != NodeKind.values().length) {
+      // An unranked kind would sort ahead of every ranked one, silently. Adding a constant to
+      // NodeKind has to mean deciding where it sits here.
+      throw new IllegalStateException(
+          "precedence must rank every kind exactly once: " + PRECEDENCE);
+    }
+  }
+
   private KindMapper() {}
 
   private static void put(String qid, NodeKind kind) {
@@ -110,8 +166,10 @@ public final class KindMapper {
   /**
    * The kind implied by an entity's {@code P31} values.
    *
-   * <p>Real entities carry several. The first RECOGNISED one wins, so an obscure class listed ahead
-   * of "human" does not shadow it.
+   * <p>Real entities carry several, most of them classes this list has never heard of. Those are
+   * skipped, so an obscure class listed ahead of "human" does not shadow it. When more than one
+   * class IS recognised and they disagree, {@code PRECEDENCE} decides - not the order the classes
+   * happened to arrive in, which is an accident of how they were fetched (issue #87).
    */
   public static NodeKind fromInstanceOf(List<String> instanceOfQids) {
     if (instanceOfQids == null) {
@@ -120,7 +178,7 @@ public final class KindMapper {
     return instanceOfQids.stream()
         .map(BY_CLASS::get)
         .filter(Objects::nonNull)
-        .findFirst()
+        .min(Comparator.comparingInt(PRECEDENCE::indexOf))
         .orElse(NodeKind.CONCEPT);
   }
 
