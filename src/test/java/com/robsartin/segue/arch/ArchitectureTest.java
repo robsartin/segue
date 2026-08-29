@@ -16,8 +16,8 @@ import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.GraphStore;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaAccess;
-import com.tngtech.archunit.core.domain.JavaCall;
 import com.tngtech.archunit.core.domain.JavaClass;
+import com.tngtech.archunit.core.domain.JavaCodeUnitAccess;
 import com.tngtech.archunit.core.domain.properties.HasName;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
@@ -188,7 +188,23 @@ class ArchitectureTest {
                   + " its Javadoc.");
 
   /**
-   * A call to {@code name} on an owner assignable to {@code owner}.
+   * A call or a method reference is both an access, and neither is a subtype of the other.
+   *
+   * <p>ArchUnit models {@code r.note()} as a {@code JavaMethodCall} under {@code JavaCall}, and
+   * {@code AffinityRecord::note} as a {@code JavaMethodReference} under {@code
+   * JavaCodeUnitReference}. Those two are <em>siblings</em>: they meet only at {@link
+   * JavaCodeUnitAccess}, and the nearest condition that accepts a predicate over both is {@code
+   * accessTargetWhere}, which takes {@code JavaAccess<?>}. This predicate is typed to fit that, and
+   * every rule below is written with {@code accessTargetWhere} rather than {@code callMethodWhere}
+   * for exactly this reason — see {@link #callTo}.
+   */
+  private static final DescribedPredicate<JavaAccess<?>> A_CALL_OR_A_METHOD_REFERENCE =
+      DescribedPredicate.describe(
+          "a call or a method reference", JavaCodeUnitAccess.class::isInstance);
+
+  /**
+   * A call to {@code name}, <b>or a method reference to it</b>, on an owner assignable to {@code
+   * owner}.
    *
    * <p>Assignability, not the exact owner, for the same reason {@link #noPrintStackTrace} needs it:
    * javac encodes the call-site owner as the <em>static type of the receiver expression</em>. A
@@ -196,10 +212,44 @@ class ArchitectureTest {
    * the implementation, and the exact-owner form would miss it — which is the shape a bypass would
    * most plausibly take, since a class reaching around {@code IngestService} is a class that has
    * already helped itself to a concrete store.
+   *
+   * <p><b>The reference form, since issue #104.</b> This predicate was typed {@code
+   * DescribedPredicate<JavaCall<?>>} and fed to {@code callMethodWhere}, which meant every rule
+   * built on it was <em>structurally incapable</em> of seeing {@code
+   * affinity.find(qid).map(AffinityRecord::note)} — a leak in the one form that reads as tidier
+   * than the one the fences caught. Nothing was using it: the gap was dormant, and found by reading
+   * the class hierarchy rather than by a failure.
+   *
+   * <p><b>Every rule below was verified against the reference form, because a rule that has only
+   * seen the direct call has never been tested against the form this widening is about.</b>
+   * Thirteen method references planted across {@code mcp}, {@code rate}, {@code recommend}, {@code
+   * export}, {@code ratings} and {@code retract} left all twelve rules built on this predicate
+   * <em>green</em> beforehand and failed every one of them afterwards. That is the only evidence
+   * that this predicate, rather than some neighbouring clause, is what holds those lines — and the
+   * one rule that did catch a planted reference beforehand, {@link #theRatingDeckLogsNoRating},
+   * caught it as a <em>type</em> dependency and would not have seen a reference to a method on a
+   * type the package may name.
+   *
+   * <p><b>Bound references match too, which is why neither string above says "unbound".</b> The
+   * planted violations were all unbound ({@code AffinityRecord::note}), because that is the form
+   * issue #104 was written about; the issue-#104 review then checked {@code t::note} on a parameter
+   * and {@code held::note} on a field, and both are caught. The wording matters more here than it
+   * looks: these two strings are what a developer reads <em>at the moment a fence fires</em>, and
+   * reporting a real bound-reference leak under text that says only unbound ones are covered would
+   * send them looking for a second hole that is not there.
+   *
+   * <p><b>{@link #A_CALL_OR_A_METHOD_REFERENCE} is not decoration.</b> {@code JavaAccess} also
+   * covers field accesses, and a record's component field carries the accessor's name — so without
+   * that clause {@code callTo("note", AffinityRecord.class)} would match {@code AffinityRecord}'s
+   * own generated {@code note()} reading {@code this.note}, and {@link
+   * #onlyTheRatingsToolReadsANote} would fail against correct production code in {@code domain}. A
+   * fence that has to be loosened to let the guarded class compile is a fence nobody keeps.
    */
-  private static DescribedPredicate<JavaCall<?>> callTo(String name, Class<?> owner) {
-    return JavaCall.Predicates.target(HasName.Predicates.name(name))
-        .and(JavaAccess.Predicates.targetOwner(JavaClass.Predicates.assignableTo(owner)));
+  private static DescribedPredicate<JavaAccess<?>> callTo(String name, Class<?> owner) {
+    return A_CALL_OR_A_METHOD_REFERENCE
+        .and(JavaAccess.Predicates.target(HasName.Predicates.name(name)))
+        .and(JavaAccess.Predicates.targetOwner(JavaClass.Predicates.assignableTo(owner)))
+        .as("a call or a method reference to %s.%s", owner.getSimpleName(), name);
   }
 
   /**
@@ -215,7 +265,7 @@ class ArchitectureTest {
   static final ArchRule noPrintStackTrace =
       noClasses()
           .should()
-          .callMethodWhere(callTo("printStackTrace", Throwable.class))
+          .accessTargetWhere(callTo("printStackTrace", Throwable.class))
           .because("ADR 30: SLF4J is the only logging API, and stack traces belong in a logger");
 
   /** ADR 30: no competing logging API. */
@@ -242,7 +292,7 @@ class ArchitectureTest {
    * The three writes that put a claim somewhere durable: both halves of {@code IngestService.apply}
    * and the log append that must precede them.
    */
-  private static final DescribedPredicate<JavaCall<?>> APPLIES_A_CLAIM =
+  private static final DescribedPredicate<JavaAccess<?>> APPLIES_A_CLAIM =
       callTo("record", GraphStore.class)
           .or(callTo("upsertNode", GraphStore.class))
           .or(callTo("append", AssertionLog.class))
@@ -277,7 +327,7 @@ class ArchitectureTest {
           .that()
           .resideOutsideOfPackage("..ingest..")
           .should()
-          .callMethodWhere(APPLIES_A_CLAIM)
+          .accessTargetWhere(APPLIES_A_CLAIM)
           .because(
               "ADR 19: the log is the source of truth and only ingest projects it — a graph write"
                   + " that skipped the log would be gone at the next boot");
@@ -321,7 +371,7 @@ class ArchitectureTest {
           .that()
           .resideInAPackage("..export..")
           .should(
-              ArchConditions.callMethodWhere(APPLIES_A_CLAIM)
+              ArchConditions.accessTargetWhere(APPLIES_A_CLAIM)
                   .or(
                       ArchConditions.dependOnClassesThat(
                           JavaClass.Predicates.equivalentTo(IngestService.class)))
@@ -386,7 +436,7 @@ class ArchitectureTest {
           .that()
           .resideInAPackage("..ratings..")
           .should(
-              ArchConditions.callMethodWhere(
+              ArchConditions.accessTargetWhere(
                   APPLIES_A_CLAIM
                       .or(callTo("put", AffinityStore.class))
                       .or(callTo("updateRating", AffinityStore.class))))
@@ -455,7 +505,7 @@ class ArchitectureTest {
           .that()
           .resideOutsideOfPackage("..ratings..")
           .should()
-          .callMethodWhere(callTo("readAll", AffinityStore.class))
+          .accessTargetWhere(callTo("readAll", AffinityStore.class))
           .because(
               "ADR 16, ADR 39 and ADR 43: the owner may enumerate their taste layer from a dev-side"
                   + " tool; nothing on the MCP surface may enumerate it at all");
@@ -490,7 +540,7 @@ class ArchitectureTest {
           .that()
           .resideOutsideOfPackages("..ratings..", "..sqlite..")
           .should()
-          .callMethodWhere(callTo("note", AffinityRecord.class))
+          .accessTargetWhere(callTo("note", AffinityRecord.class))
           .because(
               "ADR 33 as amended by issue #85: the rating is ordinary data and may be read"
                   + " anywhere; the note is personal free text, read by the owner's own listing"
@@ -518,7 +568,7 @@ class ArchitectureTest {
           .that()
           .resideInAPackage("..recommend..")
           .should(
-              ArchConditions.callMethodWhere(
+              ArchConditions.accessTargetWhere(
                       APPLIES_A_CLAIM
                           .or(callTo("put", AffinityStore.class))
                           .or(callTo("updateRating", AffinityStore.class)))
@@ -578,7 +628,7 @@ class ArchitectureTest {
               ArchConditions.dependOnClassesThat(
                       JavaClass.Predicates.equivalentTo(AffinityRecord.class))
                   .or(
-                      ArchConditions.callMethodWhere(
+                      ArchConditions.accessTargetWhere(
                           callTo("find", AffinityStore.class)
                               .or(callTo("readAll", AffinityStore.class)))))
           .because(
@@ -609,7 +659,7 @@ class ArchitectureTest {
           .that()
           .resideOutsideOfPackages("..recommend..", "..rate..")
           .should()
-          .callMethodWhere(callTo("readRatings", AffinityStore.class))
+          .accessTargetWhere(callTo("readRatings", AffinityStore.class))
           .because(
               "ADR 26 and issues #85 and #101: the score is ordinary data, and reading every score"
                   + " at once is a dev-side tool's job — the recommender or the rating deck — rather"
@@ -627,7 +677,7 @@ class ArchitectureTest {
       noClasses()
           .that()
           .resideInAPackage("..rate..")
-          .should(ArchConditions.callMethodWhere(APPLIES_A_CLAIM))
+          .should(ArchConditions.accessTargetWhere(APPLIES_A_CLAIM))
           .because(
               "ADR 46: the deck records what the owner thinks and never what the world says — it"
                   + " appends no claim, records no edge and upserts no node");
@@ -650,7 +700,7 @@ class ArchitectureTest {
       noClasses()
           .that()
           .resideInAPackage("..rate..")
-          .should(ArchConditions.callMethodWhere(callTo("note", AffinityRecord.class)))
+          .should(ArchConditions.accessTargetWhere(callTo("note", AffinityRecord.class)))
           .because(
               "issue #85: a rating is ordinary data and a note is not — the deck writes the first"
                   + " and must never be able to display the second");
@@ -806,7 +856,7 @@ class ArchitectureTest {
           .that()
           .resideInAPackage("..retract..")
           .should(
-              ArchConditions.callMethodWhere(
+              ArchConditions.accessTargetWhere(
                   APPLIES_A_CLAIM
                       .or(callTo("put", AffinityStore.class))
                       .or(callTo("updateRating", AffinityStore.class))

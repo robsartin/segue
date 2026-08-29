@@ -423,3 +423,44 @@ away.
   invented graph in memory or in a `@TempDir`, and every name, QID and route in the suite and in
   this document that is not a real Wikidata entity's is made up. The real-graph figures quoted above
   are counts and rankings, produced against a copy, with no known-list content in them.
+
+**Amendment (2026-08-29, issue #115): this ADR predates the rule about what an ADR may quote, and
+it publishes the strongest of the three exposures that rule was written for.**
+
+Nothing above is withdrawn, no decision changes and no sentence above is edited.
+[ADR 51](0051-what-an-adr-may-quote.md), decided today, says an ADR may publish an aggregate over
+the owner's data but may not present an entity name as his taste, his holdings, or a tool's output
+over them. This document does the third of those, and it would not be written this way now.
+
+**What is exposed: a ranked list, which is a taste profile.** The `--scorer` comparison table and
+the issue-#84 amendment's before-and-after top ten are **the recommender's actual output for this
+owner's known-list**, with scores. Every candidate is there because of what it connects to on that
+list, so the ranking describes the list even though nothing named in it is on the list. ADR 33's
+issue-#85 amendment already drew this conclusion in general terms — it calls the known-list "a
+statement of taste, handed to a tool and, through its output, to whoever reads it." This document
+is that output, and the sentence was written before anybody noticed it applied here.
+
+**The last consequence above reads too narrowly, and is qualified rather than withdrawn.** It says
+the real-graph figures are "counts and rankings, produced against a copy, with no known-list content
+in them." The counts are exactly that and the claim holds for them. **A ranking is different**: it
+is derived from the known-list, which makes it known-list content at one remove, and that is the
+whole of what ADR 51 adds to `CLAUDE.md`'s existing rule about ratings and notes.
+
+**Why the names stay, and this is the weaker case of the two ADRs amended today.** They are
+illustrative rather than load-bearing. The argument here is that counting connections rediscovers
+fame and only normalising by the candidate's own degree finds surprise; the *scores* carry that,
+and the issue-#84 amendment's headline — of the top 25, the items citing more than they are cited
+went from 18 to 2 — is an aggregate that survives with every name removed. Unlike ADR 31's degree
+collision, nothing here would become uncheckable. **This amendment does not claim the names are
+needed.** They stay for the reason below and because ADR 1 makes this text immutable, not because
+the argument depends on them.
+
+**Redaction would not un-publish.** This repository is public and was created on 2026-08-24; the
+scorer table has been on `main` since 2026-08-27 and the before-and-after ten since 2026-08-28,
+each through a merged pull request. Git history retains what an edit removes and GitHub keeps its
+pull-request refs indefinitely — the lesson this project already recorded about commit email
+addresses, where a force-push does not reach them either. An edit would break immutability in
+exchange for a false impression that the content had gone.
+
+**What the rule changes going forward.** The same comparison would be published with the scores and
+the aggregate and without the names, or with invented ones beside a note that they are invented.
