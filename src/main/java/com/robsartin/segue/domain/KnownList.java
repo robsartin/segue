@@ -37,7 +37,10 @@ public final class KnownList {
    *
    * <p>The promoted portion is sorted, deliberately: {@code Map} iteration order is not guaranteed,
    * and this list feeds {@code CandidateSweep}'s known-list filter, so two runs over the same
-   * ratings must produce the same list (ADR 45 makes the same argument for its own tiebreak).
+   * ratings must produce the same list. {@code Recommendations.rank} makes the same argument for
+   * its own qid tiebreak, crediting ADR 43, whose comparators end in {@code qid} so that two runs
+   * over an unchanged table produce byte-identical files. (This comment cited ADR 45 until the
+   * review of issue #106; ADR 45 makes no such argument.)
    */
   public static List<String> promoted(List<String> fromFile, Map<String, Integer> ratings) {
     Objects.requireNonNull(fromFile, "fromFile");

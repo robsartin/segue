@@ -10,10 +10,11 @@ related: [bulk-seeding-as-a-dev-tool, the-rating-deck, recommend-by-normalised-l
 
 ## Context
 
-[ADR 46](0046-the-rating-deck.md) closes with a bullet headed *"A candidate's rating is recorded but
-changes no score, today"*, and names what closing it would cost: deriving the known-list from the
-taste layer reopens [ADR 40](0040-bulk-seeding-as-a-dev-tool.md) and [ADR 43](0043-listing-your-own-ratings.md).
-This is that argument, and this is its issue — #106.
+[ADR 46](0046-the-rating-deck.md)'s Consequences open with a bullet headed *"A candidate's rating
+is recorded but changes no score, today"* — the first of that section's four — and it names what
+closing the gap would cost: deriving the known-list from the taste layer reopens
+[ADR 40](0040-bulk-seeding-as-a-dev-tool.md) and [ADR 43](0043-listing-your-own-ratings.md). This
+is that argument, and this is its issue — #106.
 
 ### `--known` did not mean what the recommender assumed it meant
 
@@ -65,8 +66,17 @@ them.
 - **At both call sites that read a `--known` file, and there are exactly two.**
   `RecommendRun.run` and `RateCli.known` each wrap `QidList.read` in `KnownList.promoted`. (The
   third `QidList.read` call in `src/main`, `ExportRun`'s, reads `--qids` for a subgraph view and is
-  not a known-list at all.) One rule, applied where the list is composed, rather than a filter
-  inside `CandidateSweep` that only one of the two tools would have gone through.
+  not a known-list at all.) One rule, applied where the list is *composed*, rather than a filter
+  inside `CandidateSweep`.
+
+  **The reason is `--revise`, and it is not that the sweep is missed by one of the tools** — both
+  tools run one (`RecommendRun.run`, `RateRun.buildDeck`). It is that `rate` has a mode that does
+  not: when `--revise` is present `RateRun` skips the sweep entirely, and `Deck.dealRevision` walks
+  the known list directly. A filter living inside the sweep would therefore have left the revision
+  pass applying a different definition of "known" from the one `recommend` applies to the same file
+  — the deck deciding for itself what the owner has, which is the exact divergence ADR 46's own
+  issue-#101 review had already had to fix once for the candidate weighting. Composing in `domain`
+  puts the answer where every reader of the list gets the same one.
 
 - **The threshold is 4, and that is a judgement rather than a measurement.** Stated plainly because
   the numbers around it were measured. ADR 45's degree floor came from watching a normalised score

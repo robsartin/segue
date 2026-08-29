@@ -99,7 +99,11 @@ public final class RecommendRun {
     notes.accept(PERSONAL_DATA_WARNING);
 
     List<String> known = KnownList.promoted(QidList.read(options.known()), ratings);
-    notes.accept(known.size() + " entity(ies) on the list at " + options.known());
+    // The count is the COMPOSED list, so it does not belong to the file path alone: issue #106
+    // adds everything rated at or above KnownList.PROMOTION_RATING that the file does not name,
+    // and this line read "N entity(ies) on the list at <path>" while N exceeded the file's rows.
+    notes.accept(
+        known.size() + " entity(ies) known — the list at " + options.known() + " plus promotions");
 
     Sweep sweep =
         new CandidateSweep(graph, recognitionInstitutionClass)

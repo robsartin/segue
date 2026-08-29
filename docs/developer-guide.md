@@ -1532,9 +1532,14 @@ check or the ordering; both are narrower or stricter than they look, on purpose.
 `--known` is the same file `recommend` takes, and it goes through the same
 `KnownList.promoted` composition
 ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)): the deck's known cards are the
-file plus everything rated 4 or 5 that the file does not name. In the default mode that adds no
-cards, because a promoted entity is by definition already rated and the deck deals only unrated
-ones — what it changes is the candidate half, which no longer offers back something rated highly.
+file plus everything rated 4 or 5 that the file does not name. It adds no known cards, because a
+promoted entity is rated by definition and the default deck deals only unrated ones. **It does not
+stop the deck offering back something you rated highly, either — `Deck.deal` already skipped every
+already-rated candidate before this, and still does.** What changes is which candidates the sweep
+produces: promoted entities leave the candidate pool, and the sweep seeds from a larger known set,
+so different entities fill the same slots. `RateRun` passes the sweep `recommend`'s own measured
+defaults, so at those defaults the deck's candidates and `./gradlew recommend`'s agree, which is
+what ADR 46's issue-#101 review made true and this keeps true.
 `--db` defaults to `SEGUE_DB` if it is set and
 `${user.home}/.segue/segue.db` otherwise, which is what `export`, `ratings`, `retract` and
 `recommend` do too (`seed` has no `--db`: it never opens a store).
