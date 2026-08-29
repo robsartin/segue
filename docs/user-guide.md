@@ -603,12 +603,14 @@ and the route built entirely from *referenced* Wikidata statements is returned a
 whose statements cite no source. That is
 [ADR 31](adr/0031-path-ranking-by-confidence.md) in one observation.
 
-Awards are the *only* non-collaboration edge in the vocabulary, and that restraint is deliberate —
-"shares a genre" or "shares an occupation" would connect everybody to everybody through a hub node
-with tens of thousands of members. The measurements behind that are in
-[ADR 38, on award received as the first non-collaboration edge](adr/0038-award-received-as-the-first-non-collaboration-edge.md).
+Nothing was admitted alongside it, and that restraint is deliberate — "shares a genre" or "shares an
+occupation" would connect everybody to everybody through a hub node with tens of thousands of
+members. Exactly one relation has joined the vocabulary since, on the same kind of measurement and
+refusing the same candidates: `ABOUT`, what a work is about. The numbers behind both are in
+[ADR 38, on award received as the first non-collaboration edge](adr/0038-award-received-as-the-first-non-collaboration-edge.md)
+and [ADR 47, on main subject](adr/0047-main-subject-as-the-route-through-what-a-book-is-about.md).
 The practical consequence for you: **a person who has won nothing and collaborated with nobody in
-your graph will connect to nothing.**
+your graph will connect to nothing** — and a book connects only if Wikidata says what it is about.
 
 Some awards turn out to be hubs too, which is what the specificity half of the ranking is for. An
 award for one *work* — a Hugo for a particular novel, an Oscar for a particular performance — is a
@@ -697,13 +699,17 @@ They are not equally interesting, though, and it is worth knowing which is which
   a novel has exactly one author, so without it two novelists who never collaborated connect to
   nothing at all — see [the second example](#a-second-example-two-novelists-with-no-shared-credit).
   That is a real connection and a much weaker claim about either of them.
+- **`ABOUT` says only that two works are about the same thing.** It is in the vocabulary for the same
+  reason awards are — a technical book has no co-credit and usually no prize either — and it is the
+  weakest of the four claims, because two authors picking the same topic need never have heard of
+  each other. [ADR 47](adr/0047-main-subject-as-the-route-through-what-a-book-is-about.md).
 - **Everything else is collaboration**: `MEMBER_OF`, `PERFORMED`, `ACTED_IN`, `AUTHORED`,
   `DIRECTED` and the rest all say two entities worked on the same thing.
 
 Where that difference stops being a matter of taste and becomes arithmetic is in the recommender —
 `./gradlew recommend`, on your own machine, not on the tool surface. It weighs a hop of influence at
-**1.0**, a hop of collaboration at **0.5** and a shared award at **0.2**, so one influence hop
-counts for five award hops. It also reads the arrow: a candidate whose own item cites something you
+**1.0**, a hop of collaboration at **0.5**, a shared award at **0.2** and a shared subject at
+**0.1**, so one influence hop counts for five award hops and ten subject hops. It also reads the arrow: a candidate whose own item cites something you
 like has said that about *itself*, so that hop is worth a fifth of the same hop pointing the other
 way, where somebody else cited the candidate. The measurements behind all of that are in
 [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md).
