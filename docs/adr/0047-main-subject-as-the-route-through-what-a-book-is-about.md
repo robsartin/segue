@@ -315,14 +315,31 @@ shelf.
 **Which sharpens ADR 51 rather than merely applying it.** ADR 51 says a world fact stays a world
 fact and that the framing is the offence. What this case adds is that the framing and the evidence
 are sometimes wholly separable, so the repair costs no evidence at all — and that this is not the
-general situation. ADR 31's exposure is a `seeds` column whose every value is a measurement over the
-known-list, and a gold set selected out of that graph; ADR 45's is a ranking the recommender
-produced from the list. Neither has an innocent framing to be rewritten into, and ADR 51 accepts a
-real loss of evidence in both. Here there is nothing to lose. **The three ADRs found in breach are
-not one kind of mistake**, and a reviewer applying ADR 51 has a question that sorts them: is the
-evidence itself derived from the private store, or is it a public fact that a sentence has claimed
-ownership of? Only the second kind can be repaired by rewriting the sentence, and only the first
-kind costs something to fix.
+general situation. **The three ADRs found in breach are three different cases rather than one
+mistake repeated**, and each amendment says as much about its own document:
+
+- **This one.** The evidence is public — `P921` statements anybody can read — and a sentence has
+  claimed ownership of it. The names are load-bearing and they stay; the possessive goes. Nothing
+  is lost.
+- **[ADR 45](0045-recommend-by-normalised-lift-with-routes.md).** The evidence is a ranking the
+  recommender produced over the known-list, so there is no innocent framing to be rewritten into —
+  the output *is* the disclosure. But its amendment is explicit that the names there are
+  "illustrative rather than load-bearing", that "nothing here would become uncheckable" without
+  them, and that they stay because redaction would not un-publish and ADR 1 makes the text
+  immutable — "not because the argument depends on them". The names would simply go, and no
+  argument would go with them: exposure that cost nothing to incur and would cost nothing to
+  avoid, with no repair available after the fact.
+- **[ADR 31](0031-path-ranking-by-confidence.md).** The evidence is a `seeds` column and a gold set
+  selected out of the owner's own graph, and there the names *are* load-bearing — a negative result
+  about degree collision that a reader can check only because the colliding nodes are real.
+  Removing them is, in that amendment's words, "a real loss of evidence, and it is the trade ADR 51
+  makes deliberately."
+
+**Two questions sort a new case, in this order.** Is the evidence itself derived from the private
+store, or is it a public fact that a sentence has claimed ownership of? Only the second is repaired
+by rewriting the sentence, and that repair is free. If it is the first, are the names carrying the
+argument? Where they are not, removing them costs nothing and the exposure is pure waste; where they
+are, ADR 51 costs an argument, which is the case it has in mind when it says that sometimes it will.
 
 **Redaction would not un-publish, and the smallness of the fix is what makes that worth saying.**
 This repository is public and was created on 2026-08-24. This ADR reached `main` on 2026-08-29
