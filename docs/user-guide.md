@@ -291,6 +291,14 @@ default (declared as `segue.max-new-edges` in `src/main/resources/application.ya
 keeps the most-linked neighbours rather than an arbitrary slice, so a small bound still returns the
 famous ones first — but the result tells you when it stopped early, and you should believe it.
 
+**Trap: expanding a `CONCEPT` is capped far below whatever you ask for, and raising `maxNewEdges`
+will not lift it.** A broad subject is the one seed where an expansion is a flood rather than a
+discovery — asking Wikidata which items point at a broad subject fills the answer with works nobody
+here has read — so `expand_entity` applies a much smaller ceiling to a `CONCEPT` seed and reports
+`partial` when it bites. A request already under the ceiling is honoured exactly as asked. Every
+other kind is unaffected. See
+[ADR 49](adr/0049-a-kind-scoped-ceiling-on-concept-expansion.md).
+
 ### `get_entity(qid)`
 
 Reads one entity back: the node, its neighbours **grouped by the relationship type** connecting
@@ -922,7 +930,9 @@ Passing a deliberately tiny `maxNewEdges`:
 
 `truncated: true` is the signal, and the detail string names the bound that was hit. Raise
 `maxNewEdges` and call again — expanding the same entity twice is safe, and the second call is
-faster because its neighbours are already known nodes.
+faster because its neighbours are already known nodes. The one seed where raising it does nothing is
+a `CONCEPT`, which is capped whatever you ask for; the detail names the ceiling it actually applied
+rather than the number you sent.
 
 One subtlety worth knowing if your graph is literary: forward claims are considered before
 reverse-discovered ones, so a novelist's awards are kept ahead of their discovered works. At a small

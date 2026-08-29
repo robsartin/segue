@@ -261,8 +261,25 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   is what the books actually state — **not** the subjects a person would name; Tanenbaum's
   Computer Networks carries no P921 and Effective Java is not in Wikidata, so **the shelf is
   not covered and the ADR says so**. Weighed as a fourth tier, `ABOUTNESS = 0.1`, below
-  `RECOGNITION`. **Never expand a subject node** — one `expand_entity` on a broad CONCEPT pulls
-  up to 500 edges; nothing in the code stops it yet, that is issue #112. ADR 47.
+  `RECOGNITION`. **Never expand a subject node** — one `expand_entity` on a broad CONCEPT would pull
+  up to 500 edges. **Bounded since ADR 49** (issue #112); the discipline is still a human one, and
+  the ceiling bounds the damage rather than expressing the policy. ADR 47.
+- **A CONCEPT expansion is capped by a ceiling on the REQUEST, not by a smaller default** (issue
+  #112, ADR 49). `ExpansionBounds.effective(kind, requested)` in `domain` is the whole rule and is
+  the authority on the number; `SegueService.expandEntity` resolves the request through it before
+  building the `ExpandContext`. **The direction is the point**: a caller asking for 200 gets the
+  ceiling, a caller asking for 5 gets 5. A default would be bypassed by exactly the call the guard
+  exists to stop. Consequences worth knowing: the ceiling reaches `ReverseClaims` as the SPARQL
+  `LIMIT`, so a bounded CONCEPT expansion never fetches past it rather than fetching 500 and
+  discarding; a bitten ceiling arrives as `partial` naming the effective bound, through the same
+  OBSERVED `truncated` comparison `findPaths` uses (issue #65). **The refusal is deliberately NOT at
+  `SourceAdapter.supports`** — `WikidataSourceAdapter.supports` returns `true` unconditionally and
+  is the only implementation in `src/main`, so declining CONCEPT there would leave the adapter loop
+  with nothing to run and report a successful expansion that added nothing: a silent zero, not a
+  reason. **It bounds one call**: ten calls still add ten times the ceiling, and that is a separate
+  issue rather than a reason to lower the number. 25 is a judgement informed by a distribution —
+  measured on the real graph, 99.9% of CONCEPTs sit below it — not a measurement of the right
+  ceiling.
 - **A forward-heavy property spends the `maxNewEdges` bound before the reverse pass sees
   it.** ADR 36 concatenates forward claims first (they carry references and qualifiers;
   truthy triples do not), so a novelist's dozen P166 awards are kept ahead of every
@@ -696,7 +713,8 @@ Six tools, no more:
 
 - `search_entities(query, kind?, limit?)` → candidates with QIDs and disambiguation
 - `add_entity(qid)` → upsert, returns id
-- `expand_entity(qid, maxNewEdges?)` → runs adapters, returns new edges
+- `expand_entity(qid, maxNewEdges?)` → runs adapters, returns new edges; a CONCEPT seed is
+  capped below whatever was requested (ADR 49)
 - `get_entity(qid)` → node plus neighbours grouped by edge type, plus this
   entity's RATING if it has been rated (ADR 39: the taste layer's read path is
   here, and there is no seventh tool; issue #85 removed the note from it)
