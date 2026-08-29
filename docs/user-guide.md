@@ -692,9 +692,10 @@ influence and one through a shared award, come back in whatever order confidence
 
 They are not equally interesting, though, and it is worth knowing which is which:
 
-- **`INFLUENCED_BY` is the only relationship in the vocabulary that states an artistic debt.**
-  Somebody has said, on the record, that this artist came from that one. A route through a shared
-  influence says the two ends draw on the same source.
+- **`INFLUENCED_BY` states an artistic debt.** Somebody has said, on the record, that this artist
+  came from that one. A route through a shared influence says the two ends draw on the same source.
+  (`BASED_ON` states a debt too — one work deferring to an earlier one — but between *works* rather
+  than between people, so it is not what a route between two artists turns on.)
 - **`RECEIVED_AWARD` says only that the same body recognised both.** It is in the vocabulary because
   a novel has exactly one author, so without it two novelists who never collaborated connect to
   nothing at all — see [the second example](#a-second-example-two-novelists-with-no-shared-credit).
@@ -703,15 +704,18 @@ They are not equally interesting, though, and it is worth knowing which is which
   reason awards are — a technical book has no co-credit and usually no prize either — and it is the
   weakest of the four claims, because two authors picking the same topic need never have heard of
   each other. [ADR 47](adr/0047-main-subject-as-the-route-through-what-a-book-is-about.md).
-- **Everything else is collaboration**: `MEMBER_OF`, `PERFORMED`, `ACTED_IN`, `AUTHORED`,
-  `DIRECTED` and the rest all say two entities worked on the same thing.
+- **Most of the rest is collaboration**: `MEMBER_OF`, `PERFORMED`, `ACTED_IN`, `AUTHORED` and
+  `DIRECTED` all say two entities worked on the same thing. Not quite all of it, though —
+  `PART_OF`/`HAS_PART` are containment (a song is on an album, which is not working together) and
+  `SIMILAR_TO` is a similarity source's opinion. `EdgeTypes` is the list; this is the shape.
 
 Where that difference stops being a matter of taste and becomes arithmetic is in the recommender —
 `./gradlew recommend`, on your own machine, not on the tool surface. It weighs a hop of influence at
 **1.0**, a hop of collaboration at **0.5**, a shared award at **0.2** and a shared subject at
-**0.1**, so one influence hop counts for five award hops and ten subject hops. It also reads the arrow: a candidate whose own item cites something you
-like has said that about *itself*, so that hop is worth a fifth of the same hop pointing the other
-way, where somebody else cited the candidate. The measurements behind all of that are in
+**0.1**, so one influence hop counts for five award hops and ten subject hops. It also reads the
+arrow: a candidate whose own item cites something you like has said that about *itself*, so that hop
+is worth a fifth of the same hop pointing the other way, where somebody else cited the candidate.
+The measurements behind all of that are in
 [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md).
 
 **So: when two routes are the same length and equally well evidenced, the one through a shared

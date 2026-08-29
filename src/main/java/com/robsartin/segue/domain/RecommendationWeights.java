@@ -22,12 +22,13 @@ import java.util.Map;
  * <p><b>Four tiers, and the ordering is what the measurement supports.</b>
  *
  * <ul>
- *   <li><b>{@link #INFLUENCE}</b> — {@code INFLUENCED_BY} is the only relation in the vocabulary
- *       that states an artistic debt rather than an employment or a prize, and it is the one
- *       relation stated ABOUT the pair. It is also where the degree arithmetic has the most work to
- *       do: measured over the first hop out of 815 known entities, an influence intermediate has a
- *       median degree of 51 against 1 to 5 for every other type, because the thing artists cite is
- *       a famous artist.
+ *   <li><b>{@link #INFLUENCE}</b> — {@code INFLUENCED_BY} states an artistic debt rather than an
+ *       employment or a prize, and it is the one relation stated ABOUT the pair. It is not the only
+ *       relation this table marks as a debt — {@code BASED_ON} is marked {@code A_DEBT} too, and
+ *       sits in a different tier, which is exactly why tier and direction are two dimensions rather
+ *       than one. It is also where the degree arithmetic has the most work to do: measured over the
+ *       first hop out of 815 known entities, an influence intermediate has a median degree of 51
+ *       against 1 to 5 for every other type, because the thing artists cite is a famous artist.
  *   <li><b>{@link #COLLABORATION}</b> — {@code MEMBER_OF}, {@code PERFORMED}, {@code ACTED_IN} and
  *       the rest say two entities worked on the same thing. Real evidence, and the bulk of the
  *       graph. Halving it is also what dissolved the co-membership artefact: with every type equal,
@@ -41,10 +42,11 @@ import java.util.Map;
  *       "we both won this" is the weakest reason to listen to somebody in the vocabulary.
  *   <li><b>{@link #ABOUTNESS}</b> — {@code ABOUT} says two works share a subject, which is a fact
  *       about the world's card catalogue rather than about either work's author. Admitted for the
- *       same reason as {@code RECOGNITION} (a single-authored technical book has no collaboration
- *       to find either), but weaker evidence than a prize a body chose to award, so it sits below
- *       it rather than beside it. See {@link #ABOUTNESS}'s own javadoc for the full argument,
- *       including the hub-degree wrinkle it does not paper over.
+ *       same reason as {@code RECOGNITION} (a technical book whose authors appear on nothing else
+ *       the shelf holds has no collaboration to find either — it need not be single-authored, and
+ *       three of the four ADR 47 demonstrated are not), but weaker evidence than a prize a body
+ *       chose to award, so it sits below it rather than beside it. See {@link #ABOUTNESS}'s own
+ *       javadoc for the full argument, including the hub-degree wrinkle it does not paper over.
  * </ul>
  *
  * <p><b>And one dimension that is not a tier at all: which way the relation points (issue #84).</b>
@@ -84,22 +86,28 @@ public final class RecommendationWeights {
    * Both works are about the same thing. A fact about the world's card catalogue rather than about
    * either entity; worth a tenth.
    *
-   * <p>{@code ABOUT} is admitted for the reason {@link #RECOGNITION} was (ADR 38, issue #111):
-   * single-authored work has no collaboration to find, so a technical bookshelf needs a route that
-   * is not co-credit or prize. That does not make the two facts equally strong evidence. An award
-   * is chosen by a body that compared candidates against each other; a shared subject is two
-   * authors happening to write about the same topic, which two books about software engineering do
-   * constantly and without knowing the other exists. It sits below {@link #RECOGNITION}, not beside
-   * it.
+   * <p>{@code ABOUT} is admitted for the reason {@link #RECOGNITION} was (ADR 38, issue #111): a
+   * book whose authors appear on nothing else the shelf holds has no collaboration to find, so a
+   * technical bookshelf needs a route that is not co-credit or prize. The rule is disjoint author
+   * sets, not a single author — the four books ADR 47 measured have one, three, two and four
+   * authors respectively and share none of them. That does not make the two facts equally strong
+   * evidence. An award is chosen by a body that compared candidates against each other; a shared
+   * subject is two authors happening to write about the same topic, which two books about software
+   * engineering do constantly and without knowing the other exists. It sits below {@link
+   * #RECOGNITION}, not beside it.
    *
    * <p>The measurement left an awkward fact on the table rather than a clean one: 96% of award
-   * nodes sit below {@link PathRanking#HUB_DEGREE}, so a shared minor award already tends to
-   * survive hub exclusion where a shared subject — a broader thing to have in common — more often
-   * does not. Weighing {@code ABOUT} above {@code RECOGNITION} would have fought that gap; weighing
-   * it below compounds it. The compounding is accepted rather than corrected for here, because the
-   * reason to rank it low is independent of the hub arithmetic — the evidence really is weaker —
-   * and using the weight to offset a hub-survival difference would be tuning the number to a side
-   * effect instead of to what the relation is worth.
+   * nodes sit below {@link PathRanking#HUB_DEGREE} (2,062 of 2,148), so awards are not being held
+   * back by hub exclusion at all — the typical shared award is a non-hub and survives it. Issue
+   * #111 reads that as a shared minor award already outranking a shared subject on hub count.
+   * <b>That second half is the issue's prediction and not a measurement</b>, and the only
+   * subject-degree data this project has contradicts it: the two subjects ADR 47 admitted reached
+   * degree 3 and 2, so they were not hubs either and nothing was demoted. Weighing {@code ABOUT}
+   * above {@code RECOGNITION} would have fought the predicted gap; weighing it below compounds it.
+   * The compounding is accepted rather than corrected for here, because the effect was never
+   * observed, and because the reason to rank it low is independent of the hub arithmetic either way
+   * — the evidence really is weaker — and using the weight to offset a hub-survival difference
+   * would be tuning the number to a side effect instead of to what the relation is worth.
    */
   public static final double ABOUTNESS = 0.1;
 

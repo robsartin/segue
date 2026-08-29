@@ -112,19 +112,22 @@ public final class EdgeTypes {
    * measure, admit one, argue it in an ADR (issue #111).
    *
    * <p><b>Why it had to exist.</b> The vocabulary above this comment models creative
-   * <em>collaboration</em> — co-credits, membership, influence, recognition. Two single-authored
-   * technical books share no author, no award, no genre in this vocabulary at all, so a bookshelf
-   * of them is a set of disconnected islands and {@code find_paths} returns nothing between any
-   * pair. {@code ABOUT} gives a route through what the books are about rather than who wrote them.
+   * <em>collaboration</em> — co-credits, membership, influence, recognition. Two technical books
+   * with disjoint author sets share no author, no award, no genre in this vocabulary at all, so a
+   * bookshelf of them is a set of disconnected islands and {@code find_paths} returns nothing
+   * between any pair. Being single-authored is not the condition and the four books ADR 47 measured
+   * are mostly not — {@code Design Patterns} has four authors — what matters is that no author
+   * appears on a second book on the shelf. {@code ABOUT} gives a route through what the books are
+   * about rather than who wrote them.
    *
-   * <p><b>Registered DIRECT, and this corrects issue #111's own text.</b> The issue that opened
+   * <p><b>Registered DIRECT, correcting what issue #111 originally said.</b> The issue that opened
    * this work asserted P921 is "stated on the work, pointing at the subject, so it is {@code
-   * inverted}" — but {@code inverted} means the STORED direction is the reverse of the STATED one,
-   * and it is not that here. Compare {@link #AUTHORED}: Wikidata states {@code book P50 person},
-   * and segue stores the reverse, {@code person AUTHORED book} — that mismatch is what {@code
-   * inverted} means. P921 states {@code book P921 subject}, and segue wants exactly that, {@code
-   * book ABOUT subject} — the stored direction and the stated direction agree, which by {@link
-   * EdgeType#direct}'s own contract makes this DIRECT.
+   * inverted}" — its body has since been corrected, but {@code inverted} means the STORED direction
+   * is the reverse of the STATED one, and it is not that here. Compare {@link #AUTHORED}: Wikidata
+   * states {@code book P50 person}, and segue stores the reverse, {@code person AUTHORED book} —
+   * that mismatch is what {@code inverted} means. P921 states {@code book P921 subject}, and segue
+   * wants exactly that, {@code book ABOUT subject} — the stored direction and the stated direction
+   * agree, which by {@link EdgeType#direct}'s own contract makes this DIRECT.
    *
    * <p><b>Not {@code fallbackOnly}.</b> The issue-#33 condition is that Wikidata defines another
    * property as this one's inverse and that property is already registered here. P921's inverse

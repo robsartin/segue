@@ -243,8 +243,9 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
 - **Awards did not fix a technical bookshelf, and `ABOUT` (P921) is the second — and so far
   last — property admitted ADR 38's way.** Clean Code, SICP, The Pragmatic Programmer and
   Design Patterns share no author and state no P166 at all, so ADR 38's repair reaches none of
-  them. **P921 is DIRECT, not `inverted` — issue #111's own text says `inverted` and is
-  wrong**: `inverted` means the STORED direction reverses the STATED one (P50: Wikidata says
+  them. **P921 is DIRECT, not `inverted` — issue #111 was filed saying `inverted` and that was
+  wrong** (its body has since been corrected): `inverted` means the STORED direction reverses the
+  STATED one (P50: Wikidata says
   `book P50 person`, segue stores `person AUTHORED book`), and P921 states `book P921 subject`
   which is exactly what segue stores. Not `fallbackOnly` either: P921 states no P1696, and its
   P7087 inverse *label item* Q70782961 is not a registrable property. **The admission turned on

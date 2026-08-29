@@ -58,11 +58,13 @@ different rates.
 
 Issue #111 was written to admit `P921` aimed at the subjects a person would name — Java, operating
 systems, graph theory, object-oriented design. Measuring the other end killed that version of it.
-**The owner's books do not say they are about those subjects.** All four of the books that carry
-`P921` point at `computer programming` (`Q80006`) or `software engineering` (`Q80993`) or both.
-*Design Patterns* additionally states `Q181156` (software design pattern) and `Q79872`
-(object-oriented programming), and those four QIDs are the whole of what the four books state:
-nothing on any of them points at Java, at graph theory or at operating systems. Book-shaped items per
+**The owner's books do not say they are about those subjects.** Take the four this ADR demonstrates
+on — *Clean Code*, SICP, *The Pragmatic Programmer*, *Design Patterns*. All four point at `computer
+programming` (`Q80006`) or `software engineering` (`Q80993`) or both. *Design Patterns* additionally
+states `Q181156` (software design pattern) and `Q79872` (object-oriented programming), and those four
+QIDs are the whole of what those four books state: nothing on any of them points at Java, at graph
+theory or at operating systems. (Other books on the shelf carry `P921` too, pointing elsewhere — see
+[What this cannot reach](#what-this-cannot-reach).) Book-shaped items per
 named subject bear the same shape out: Java 12, birdwatching 12, computer network 9, performance
 engineering 1, **object-oriented design 0**.
 
@@ -80,9 +82,11 @@ never exist.
   owner's books actually state, rather than at the subjects a person would name. Both labels and
   descriptions were confirmed against Wikidata rather than inferred from the QIDs.
 
-- **DIRECT, and this corrects issue #111's own text.** The issue asserts that because `P921` is
-  stated on the work pointing at the subject, it is `inverted` in ADR 22's sense. **That is wrong,
-  and a reader who finds the issue should know it is wrong.** `inverted` means the *stored* direction
+- **DIRECT, correcting what issue #111 originally said.** The issue was filed asserting that because
+  `P921` is stated on the work pointing at the subject, it is `inverted` in ADR 22's sense. **That
+  was wrong.** Its body has since been corrected to say so; this ADR records the reasoning, because
+  the correction is a one-line parenthetical there and the rule is worth stating once properly.
+  `inverted` means the *stored* direction
   reverses the *stated* one. `P50` is `inverted` because Wikidata states `book P50 person` and segue
   stores `person -AUTHORED-> book`. Wikidata states `book P921 subject` and segue wants
   `book -ABOUT-> subject` — the same direction — so by `EdgeType.direct`'s own contract this is
@@ -231,8 +235,9 @@ a subject mismatch, which a later measurement could revisit.
   recommendations while `find_paths` still shows it.
 
 - **Both subjects are `CONCEPT`, which is what makes the hub rule applicable at all.** Checked
-  against `KindMapper`: `Q80006` states three `P31` classes and `Q80993` states seven, and none of
-  those ten is in the whitelist, so both fall through to `CONCEPT` — the same fallback ADR 38
+  against `KindMapper`: `Q80006` states three `P31` classes and `Q80993` states seven — eight distinct
+  between them, since `Q11862829` and `Q4671286` appear on both — and not one of the eight is in the
+  whitelist, so both fall through to `CONCEPT`. That is the same fallback ADR 38
   requires for an award node, and the kind ADR 31's issue-#52 amendment keys its demotion on.
 
 - **The vocabulary now says something about *aboutness* as well as work and recognition**, and
