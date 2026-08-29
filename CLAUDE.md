@@ -240,6 +240,23 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   and the roles-as-edges invariant. **Question 3 is now answered (issue #52, ADR 31's
   amendment); the other four are not.** Adding a property is answering question 1; do it in an
   ADR, not in passing.
+- **Awards did not fix a technical bookshelf, and `ABOUT` (P921) is the second — and so far
+  last — property admitted ADR 38's way.** Clean Code, SICP, The Pragmatic Programmer and
+  Design Patterns share no author and state no P166 at all, so ADR 38's repair reaches none of
+  them. **P921 is DIRECT, not `inverted` — issue #111 was filed saying `inverted` and that was
+  wrong** (its body has since been corrected): `inverted` means the STORED direction reverses the
+  STATED one (P50: Wikidata says
+  `book P50 person`, segue stores `person AUTHORED book`), and P921 states `book P921 subject`
+  which is exactly what segue stores. Not `fallbackOnly` either: P921 states no P1696, and its
+  P7087 inverse *label item* Q70782961 is not a registrable property. **The admission turned on
+  one number: science fiction is 16,552 as a genre (P136) and 228 as a main subject (P921)** —
+  the same concept 72× smaller, because P136 is what a work is *in* and P921 only what it is
+  *about*. Retargeted at `Q80006` computer programming and `Q80993` software engineering, which
+  is what the books actually state — **not** the subjects a person would name; Tanenbaum's
+  Computer Networks carries no P921 and Effective Java is not in Wikidata, so **the shelf is
+  not covered and the ADR says so**. Weighed as a fourth tier, `ABOUTNESS = 0.1`, below
+  `RECOGNITION`. **Never expand a subject node** — one `expand_entity` on a broad CONCEPT pulls
+  up to 500 edges; nothing in the code stops it yet, that is issue #112. ADR 47.
 - **A forward-heavy property spends the `maxNewEdges` bound before the reverse pass sees
   it.** ADR 36 concatenates forward claims first (they carry references and qualifiers;
   truthy triples do not), so a novelist's dozen P166 awards are kept ahead of every

@@ -29,7 +29,20 @@ class EdgeTypesTest {
   @Test
   @DisplayName("all() returns the expected number of entries")
   void allReturnsExpectedCount() {
-    assertThat(EdgeTypes.all()).hasSize(14);
+    assertThat(EdgeTypes.all()).hasSize(15);
+  }
+
+  @Test
+  @DisplayName("ABOUT is registered on P921, direct, because segue wants the same direction stated")
+  void aboutIsRegistered() {
+    // Issue #111. Wikidata states P921 on the WORK ("book P921 subject"), and segue wants
+    // exactly that: book -ABOUT-> subject. That is the direction Wikidata already states it in,
+    // so this is DIRECT, not inverted — unlike P50, which is inverted because segue wants the
+    // reverse of what Wikidata states.
+    assertThat(EdgeTypes.ABOUT.wikidataProperty()).isEqualTo("P921");
+    assertThat(EdgeTypes.ABOUT.wikidataInverted()).isFalse();
+    assertThat(EdgeTypes.ABOUT.wikidataFallbackOnly()).isFalse();
+    assertThat(EdgeTypes.ABOUT.symmetric()).isFalse();
   }
 
   @Test
@@ -134,7 +147,8 @@ class EdgeTypesTest {
             EdgeTypes.BASED_ON,
             EdgeTypes.PART_OF,
             EdgeTypes.INFLUENCED_BY,
-            EdgeTypes.RECEIVED_AWARD);
+            EdgeTypes.RECEIVED_AWARD,
+            EdgeTypes.ABOUT);
 
     assertThat(direct).noneMatch(EdgeType::wikidataInverted);
     assertThat(direct).noneMatch(EdgeType::symmetric);

@@ -73,7 +73,7 @@ weight table, because a second copy of one is a drift generator.
 | Which Wikidata `P31` classes map to which kind? | `KindMapper` |
 | What is a hop of each relation worth to a recommendation, and does its direction mean anything? | `RecommendationWeights` |
 
-Counted on 2026-08-28 against those files, that is six kinds, fourteen relations and fifty-three
+Counted on 2026-08-28 against those files, that is six kinds, fifteen relations and fifty-three
 class mappings. The numbers are here to sanity-check a reading, not to be cited; two of the three
 are expected to grow, and the first is not.
 
@@ -146,7 +146,7 @@ The same edge means different things to the two consumers, and that is deliberat
   confidence rank equally**. Every registered relation is legitimate evidence that two entities are
   connected. [ADR 31](adr/0031-path-ranking-by-confidence.md).
 - **The recommender reads both the type and the arrow.** `RecommendationWeights` puts every relation
-  in one of three tiers, and separately marks whether its direction states a *debt*. A hop the
+  in a tier, and separately marks whether its direction states a *debt*. A hop the
   candidate is the subject of — the candidate citing your list, rather than being cited by it — is
   worth a fraction of the same hop stated about it, and **only the candidate's own hop is asked**;
   discounting the hop out of your own entities would demote exactly the ancestors the tool exists to
@@ -1399,16 +1399,22 @@ answer is whatever is thinnest.
 
 ### Edge type carries more of the signal than the arithmetic does
 
-`RecommendationWeights` puts every relation in one of three tiers: influence at 1.0, collaboration
-at 0.5, recognition at 0.2. Two consequences worth knowing before touching it:
+`RecommendationWeights` is the table, and it is the authority on which tiers exist and what each is
+worth; the tiers run from influence at the top down to aboutness at the bottom. Three consequences
+worth knowing before touching it:
 
 - Halving collaboration is what stops one band's discography counting as thirty reasons. The
   artefact is visible in the report's own "N of yours through M shared intermediates" column — run
   `--scorer resource-allocation` and look for a candidate reached by **one** of your entities
   through a hundred intermediates.
-- `RECEIVED_AWARD` is a fifth and deliberately not zero. Awards are the only relation the vocabulary
-  has for single-authored work ([ADR 38](adr/0038-award-received-as-the-first-non-collaboration-edge.md)),
+- `RECEIVED_AWARD` is deliberately not zero. Awards were the first relation the vocabulary had for
+  work with no co-credit to share ([ADR 38](adr/0038-award-received-as-the-first-non-collaboration-edge.md)),
   so zeroing them blinds the recommender to a whole domain.
+- `ABOUT` sits below it, and the reasoning is in the constant's own javadoc rather than here. The
+  short version: it is admitted for the same reason awards were, but a body choosing a winner is
+  stronger evidence than two authors happening to pick the same topic
+  ([ADR 47](adr/0047-main-subject-as-the-route-through-what-a-book-is-about.md)). The javadoc also
+  records the hub-degree wrinkle that was deliberately *not* corrected for by tuning the number.
 
 Adding a relation type to `EdgeTypes` fails `RecommendationWeightsTest.everyRegisteredTypeIsNamed`
 until it has been weighed here. That is deliberate: inheriting a default is not a decision.
