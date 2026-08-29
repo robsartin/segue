@@ -1554,9 +1554,17 @@ promoted entity is rated by definition and the default deck deals only unrated o
 stop the deck offering back something you rated highly, either — `Deck.deal` already skipped every
 already-rated candidate before this, and still does.** What changes is which candidates the sweep
 produces: promoted entities leave the candidate pool, and the sweep seeds from a larger known set,
-so different entities fill the same slots. `RateRun` passes the sweep `recommend`'s own measured
-defaults, so at those defaults the deck's candidates and `./gradlew recommend`'s agree, which is
-what ADR 46's issue-#101 review made true and this keeps true.
+so different entities fill the same slots. `RateCli`'s `--min-degree` defaults to the same
+`Recommendations.MIN_CANDIDATE_DEGREE` `recommend`'s does — by reference, not by a second copy of
+the number `RateRun` used to hold (issue #119) — so at those defaults the deck's candidates and
+`./gradlew recommend`'s agree, which is what ADR 46's issue-#101 review made true and this keeps
+true. Move it the same way `recommend --min-degree` does, to rate the floor-5 candidate list
+against the floor-12 one instead of only reading about the difference:
+
+```bash
+./gradlew rate --args="--known $HOME/known.csv --min-degree 5"
+```
+
 `--db` defaults to `SEGUE_DB` if it is set and
 `${user.home}/.segue/segue.db` otherwise, which is what `export`, `ratings`, `retract` and
 `recommend` do too (`seed` has no `--db`: it never opens a store).
@@ -1600,6 +1608,12 @@ entity absent from the file** — 78 of them, on the measurement ADR 48 records.
 therefore unrated, so there is nothing about it to reconsider, and mixing discovery into a revision
 pass would change what the pass measures. With no `--revise`, behaviour is exactly what the rest of
 this section describes.
+
+**`--min-degree` together with `--revise` is refused, not silently accepted (issue #119).**
+Revision mode runs no candidate sweep, so the floor has nothing to filter; `RateCli.parse` catches
+the combination and names both flags in the refusal, on the same reasoning `export`'s `--format`
+contradiction check uses — a flag that looks like it moved something but did not is worse than one
+the parser refuses outright.
 
 ### Three card shapes, because they answer different questions
 
