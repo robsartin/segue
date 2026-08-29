@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.domain.EdgeRecord;
 import com.robsartin.segue.domain.Hop;
+import com.robsartin.segue.domain.KnownList;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.PathResult;
@@ -166,6 +167,30 @@ class DeckTest {
             OptionalInt.of(3));
 
     assertThat(cards).extracting(Card::qid).containsExactly("Q900003", "Q900001");
+  }
+
+  @Test
+  @DisplayName(
+      "revise also deals a suppressed entity that is off the known list — the walk widens to"
+          + " known-list plus suppressed, not known-list alone (issue #106)")
+  void reviseReachesASuppressedEntityOffTheKnownList() {
+    // Q900008 is deliberately absent from knownQids — that is exactly what KnownList.suppressed
+    // means (issue #106's javadoc: "deliberately not part of the known-list"). Before
+    // dealRevision's walk widens, this entity is unreachable at any --revise target: it is on
+    // no list dealRevision ever iterates.
+    NodeRecord suppressedNode =
+        new NodeRecord("Q900008", NodeKind.PERSON, "Suppressed, off the list", List.of());
+
+    List<Card> cards =
+        Deck.deal(
+            List.of("Q900001"),
+            q -> DEGREES.getOrDefault(q, 0),
+            q -> Optional.ofNullable(q.equals("Q900008") ? suppressedNode : NODES.get(q)),
+            Map.of("Q900001", 3, "Q900008", KnownList.SUPPRESSION_RATING),
+            List.of(),
+            OptionalInt.of(KnownList.SUPPRESSION_RATING));
+
+    assertThat(cards).extracting(Card::qid).containsExactly("Q900008");
   }
 
   @Test

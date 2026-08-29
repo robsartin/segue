@@ -27,7 +27,7 @@ than a seventh MCP tool.
 ./gradlew exportGraph --args="--view neighbourhood --qid Q42 --out $HOME/one.graphml"  # ADR 41; read-only; the --out extension picks the format
 ./gradlew listRatings --args="--sort recent --out $HOME/ratings.txt"   # ADR 43; read-only; the OUTPUT IS PERSONAL DATA
 ./gradlew retractEntity --args="--qid Q12345 --reason 'wrong entity' --dry-run"   # ADR 44; appends a retraction; --dry-run reports and writes nothing
-./gradlew recommend --args="--known $HOME/known.csv --out $HOME/next.txt"   # ADR 45; read-only; ranks what you do NOT have, with routes; the OUTPUT IS PERSONAL DATA; the list is that file PLUS what you rated 4-5 (ADR 48)
+./gradlew recommend --args="--known $HOME/known.csv --out $HOME/next.txt"   # ADR 45; read-only; ranks what you do NOT have, with routes; the OUTPUT IS PERSONAL DATA; the list is that file PLUS what you rated 4-5 (ADR 48), and anything you rated 1-2 is excluded outright (ADR 50)
 ./gradlew rate --args="--known $HOME/known.csv"   # ADR 46; loopback page at 127.0.0.1:8090; WRITES ratings only, no un-rate
 ```
 
@@ -68,8 +68,13 @@ Full reasoning: `docs/adr/0018-graph-engine-gremlin.md`. All decisions are recor
 
 ```
 domain/   records + Wikidata-derived edge vocabulary. NO third-party deps. Also KnownList
-          (ADR 48): the pure rule composing a --known file with what you rated 4 or 5, so
-          `recommend` and `rate` cannot apply two different answers.
+          (ADR 48, ADR 50): pure rules turning a --known file and the ratings map into the
+          populations the dev tools need. promoted (RecommendRun, RateCli) and suppressed
+          (RecommendRun, RateRun) are each read by BOTH tools, so `recommend` and `rate`
+          cannot apply two different answers. revisitable is read inside `rate` alone
+          (Deck.dealRevision, RateRun.buildDeck) — `recommend` has no revision pass — and
+          lives here so the deal and the count that precedes it cannot diverge. One home per
+          question, whoever asks.
 port/     GraphStore, AssertionLog, AffinityStore, SourceAdapter, EntityResolver
           — the seams.
 tinker/   Gremlin adapter (the chosen one).
@@ -109,12 +114,17 @@ recommend/ The recommender (ADR 45): ranks entities ABSENT from the known-list b
           theRecommenderReadsRatingsAndNeverNotes bans find and readAll and the AffinityRecord
           type, while still letting it read scores. Since issue #106 (ADR 48) the KNOWN-LIST is
           the --known file PLUS everything rated >= KnownList.PROMOTION_RATING (4) that the file
-          does not name, so a highly rated entity stops being recommended back.
+          does not name, so a highly rated entity stops being recommended back; and since ADR 50
+          CandidateSweep.over takes KnownList.suppressed (rated <= 2) as a SEPARATE set, so a
+          rejected candidate stops being offered back too.
 rate/     The rating deck (ADR 46): a loopback page on 127.0.0.1:8090 that deals one
           entity per keystroke — known entities by degree, a recommend candidate every fifth
           card — `1`-`5` rates and advances, `s`/space skips, `b` goes back. Run as `./gradlew
           rate`. Its known cards come from the same KnownList.promoted composition `recommend`
-          uses (ADR 48), so --revise 4 and --revise 5 now reach entities the file never named.
+          uses (ADR 48), so --revise 4 and --revise 5 now reach entities the file never named,
+          and its sweep takes the same KnownList.suppressed `recommend` passes (ADR 50).
+          --revise walks KnownList.revisitable (known + suppressed), so --revise 1 and
+          --revise 2 reach a suppressed entity that is deliberately NOT on the known-list.
           Dev-side, NOT a seventh MCP tool, and — with retract — one of only two dev
           tools that WRITE: AffinityStore.put alone, fenced by four ArchUnit rules, one of
           which (theRatingDeckLogsNoRating) names a single exception — the class that
@@ -585,7 +595,8 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   **It has since met real ratings, and the weighting alone barely moved anything**: 973 real
   ratings — the overwhelming majority of them a 4 or a 5 — changed ONE entity in the top 25 against
   no ratings at all (ADR 46's issue-#109 amendment). A list of acts you chose to go and see cannot disagree with itself.
-  What did move the ranking was ADR 48 changing the list's MEMBERSHIP, not reweighting its members.
+  What did move the ranking was changing MEMBERSHIP rather than reweighting members — ADR 48
+  adding to the known-list, then ADR 50 removing rejected entities from the candidate pool.
   The gate still exercises this on invented ratings only — `AffinityWeightedRecommendationTest` —
   because real ratings are personal data and stay out of this repository.
 
@@ -597,13 +608,39 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   call sites (`RecommendRun.run`, `RateCli.known`; `ExportRun`'s `QidList.read` is `--qids` and is
   not a known-list). **Promotion removes as well as reweights** — a promoted entity is on the list,
   so `CandidateSweep` drops it from the candidate pool, which is the point. **The threshold 4 is a
-  judgement, not a measurement**, and the ADR says so. **Suppression is deliberately NOT built**:
-  the same 167 held exactly TWO ratings below neutral against 87 above, and a rule against two data
-  points is what this issue's history is made of — don't add one without a distribution.
+  judgement, not a measurement**, and the ADR says so. **Suppression WAS deliberately left unbuilt
+  and has since been built** — ADR 48 declined it on two ratings below neutral against 87, and set
+  an arithmetic re-open condition that #119's lower deck floor met: one 177-card pass rated 72 of
+  177 below neutral. ADR 50 is the decision; see its own gotcha below.
   **The deck is now self-feeding** (a promotion's own connections score future candidates), and
   what bounds it is expansion coverage, not any rule in the code: of 123,752 nodes, 16,860 —
   **13.6%** — are the subject of a stored edge, so promotion reorders the pool far more than it
   grows it. That is the measured argument for expansion work, not for tuning this.
+
+- **A rating of 2 or below now SUPPRESSES the candidate, and the reason it is not a negative weight
+  is arithmetic.** `Recommendations.regardFor` centres on `NEUTRAL_RATING`, so its lowest possible
+  output is **1/3 — still positive**: admitting a disliked entity to the known-list would make it
+  *boost* whatever it touches. A true negative signal needs weights below zero, which rewrites ADR
+  45's arithmetic into scores with no defined meaning. So `KnownList.suppressed` excludes the
+  entity from the candidate pool instead, and `CandidateSweep.over` takes it as a **separate
+  parameter, never unioned into `known`** — the sweep reports `knownFound`/`knownMissing`, and
+  folding rejections in would make both describe something other than the known-list. The seed loop
+  never consults it, so a suppressed entity can still be an INTERMEDIATE. **The boundary is 2
+  because 3 is exactly neutral** (`NEUTRAL_RATING = 3`, so 3/3 = 1.0, identical to unrated);
+  suppressing 3 would newly suppress 111 entities that were only shrugged at (117 threes in the
+  table, less the 6 on the --known file that CandidateSweep already excludes as known).
+  **`--revise` can still reach a suppressed entity** — `KnownList.revisitable` is known ∪
+  suppressed — and that is load-bearing, not a convenience: `AffinityStore` has no delete, so
+  re-rating to 3+ is the ONLY way back, and an unreachable suppression is issue #109's trap one
+  layer out. Measured on a copy of the real graph: at the default floor 12 the pool went 1,027 →
+  1,011 and 7 of the top 25 left, every one suppressed (including ranks 1 and 2); at floor 5 — where
+  those ratings were actually collected — the pool went 1,676 → 1,604 and 16 of the top 25 left,
+  again every one suppressed. **The effect is purely subtractive**: no score changes, survivor order
+  is identical, the list backfills from the tail. **The honest limitation, and it belongs with #117
+  and #118**: the default floor sees only 16 of the 72 off-list suppressed entities, and the floor
+  measures what segue has FETCHED rather than how obscure something is — so suppressing an entity
+  that was only ever offered because segue had under-fetched it is a judgement made on incomplete
+  information, and nothing re-opens the question when ingest improves. ADR 50.
 
 - **The taste layer's classes deliberately have no package of their own.**
   `AffinityRecord` sits in `domain`, `AffinityStore` in `port`,

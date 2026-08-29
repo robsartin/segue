@@ -21,6 +21,7 @@ import com.robsartin.segue.domain.Recommendations;
 import com.robsartin.segue.domain.Scorer;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -59,7 +60,12 @@ class RoutesTest {
 
   private Recommendation ancestor() {
     return new CandidateSweep(graph, INSTITUTIONS)
-            .over(List.of(KNOWN_ONE, KNOWN_TWO), Scorer.LIFT, FLOOR, Recommendations.EQUAL_REGARD)
+            .over(
+                List.of(KNOWN_ONE, KNOWN_TWO),
+                Set.of(),
+                Scorer.LIFT,
+                FLOOR,
+                Recommendations.EQUAL_REGARD)
             .candidates()
             .stream()
             .filter(candidate -> candidate.entity().qid().equals(ANCESTOR))
@@ -112,6 +118,7 @@ class RoutesTest {
         new CandidateSweep(graph, INSTITUTIONS)
                 .over(
                     List.of(KNOWN_ONE, KNOWN_TWO),
+                    Set.of(),
                     Scorer.LIFT,
                     FLOOR,
                     qid -> KNOWN_TWO.equals(qid) ? 5.0 : 1.0)

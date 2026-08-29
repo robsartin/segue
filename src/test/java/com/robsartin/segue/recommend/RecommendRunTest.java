@@ -11,6 +11,7 @@ import static com.robsartin.segue.recommend.InventedWorld.padDegreeTo;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.domain.EdgeTypes;
+import com.robsartin.segue.domain.KnownList;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.Recommendations;
 import com.robsartin.segue.domain.Scorer;
@@ -158,6 +159,21 @@ class RecommendRunTest {
     // ANCESTOR is exactly the candidate itRecommendsWhatTheListDoesNotName finds; rating it
     // promotes it into the known-list that CandidateSweep filters candidates against.
     List<Explained> explained = run(options(KNOWN_ONE, KNOWN_TWO), Map.of(ANCESTOR, 4));
+
+    assertThat(explained).isEmpty();
+  }
+
+  @Test
+  @DisplayName(
+      "an entity rated at or below the suppression threshold is never recommended, even though"
+          + " it would otherwise qualify (issue #106) — proves the suppressed set actually"
+          + " reaches CandidateSweep from RecommendRun, not just that CandidateSweep honours one"
+          + " in isolation")
+  void aRejectedCandidateIsNeverRecommended() throws IOException {
+    // ANCESTOR is exactly the candidate itRecommendsWhatTheListDoesNotName finds unaided.
+    // Suppressing it must be what keeps it out here — nothing else in this fixture would.
+    List<Explained> explained =
+        run(options(KNOWN_ONE, KNOWN_TWO), Map.of(ANCESTOR, KnownList.SUPPRESSION_RATING));
 
     assertThat(explained).isEmpty();
   }

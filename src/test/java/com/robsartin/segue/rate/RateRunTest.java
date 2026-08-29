@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.EdgeTypes;
+import com.robsartin.segue.domain.KnownList;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.Provenance;
@@ -130,6 +131,41 @@ class RateRunTest {
   }
 
   @Test
+  @DisplayName(
+      "revise also reaches a rejected entity off the known list, and the count says so — a"
+          + " suppressed entity is exactly the case Deck.dealRevision must widen its walk for"
+          + " (issue #106)")
+  void reviseReachesASuppressedEntityOffTheList() throws Exception {
+    // Q900009 is never on the known list, unlike reviseCountsOnlyWhatItCanDeal's off-list
+    // entity — it is suppressed instead (rated at KnownList.SUPPRESSION_RATING), which is
+    // precisely the entity a revision pass exists to let the owner reconsider. If the count
+    // undercounts what dealRevision actually deals, that is the exact "121 vs 84" bug this
+    // class's own comment warns about, reintroduced one rating tier down.
+    try (TinkerGraphStore graph = new TinkerGraphStore()) {
+      graph.upsertNode(new NodeRecord("Q900001", NodeKind.GROUP, "On the list", List.of()));
+      graph.upsertNode(
+          new NodeRecord("Q900009", NodeKind.GROUP, "Rejected, off the list", List.of()));
+      List<String> notes = new ArrayList<>();
+
+      List<Card> deck =
+          RateRun.buildDeck(
+              graph,
+              List.of("Q900001"),
+              Map.of(
+                  "Q900001", KnownList.SUPPRESSION_RATING,
+                  "Q900009", KnownList.SUPPRESSION_RATING),
+              0,
+              MIN_CANDIDATE_DEGREE,
+              OptionalInt.of(KnownList.SUPPRESSION_RATING),
+              notes::add);
+
+      assertThat(deck).extracting(Card::qid).containsExactlyInAnyOrder("Q900001", "Q900009");
+      assertThat(notes).anyMatch(n -> n.contains("2") && n.contains("up for reconsideration"));
+      assertThat(notes).noneMatch(n -> n.contains("Q900001") || n.contains("Q900009"));
+    }
+  }
+
+  @Test
   @DisplayName("the candidate sweep runs too, and its notes still name no entity")
   void theCandidateSweepNotesNameNoEntity() throws Exception {
     try (TinkerGraphStore graph = new TinkerGraphStore()) {
@@ -158,6 +194,42 @@ class RateRunTest {
       assertThat(notes)
           .noneMatch(
               n -> n.contains(KNOWN_ONE) || n.contains(SHARED_ARTIST) || n.contains(ANCESTOR));
+    }
+  }
+
+  @Test
+  @DisplayName(
+      "a candidate rated at or below the suppression threshold is excluded from the sweep, even"
+          + " though it would otherwise qualify (issue #106)")
+  void aRejectedCandidateIsExcludedFromTheSweep() throws Exception {
+    // Same fixture as theCandidateSweepNotesNameNoEntity — ANCESTOR is findable unaided. The
+    // deck itself would exclude ANCESTOR either way, because Deck.deal already refuses to deal
+    // any already-rated candidate regardless of the rating's value; that filter alone would make
+    // a "the deck omits it" assertion pass even with the suppressed set silently dropped. The
+    // "candidate(s) mixed in" count comes from CandidateSweep's own output, before Deck.deal ever
+    // sees it, so it is the assertion that actually proves the wiring, not just the outcome.
+    try (TinkerGraphStore graph = new TinkerGraphStore()) {
+      node(graph, KNOWN_ONE, NodeKind.GROUP, "one you know");
+      node(graph, SHARED_ARTIST, NodeKind.PERSON, "the artist you cite");
+      node(graph, ANCESTOR, NodeKind.GROUP, "who that artist cites");
+      edge(graph, KNOWN_ONE, SHARED_ARTIST, EdgeTypes.INFLUENCED_BY.code());
+      edge(graph, SHARED_ARTIST, ANCESTOR, EdgeTypes.INFLUENCED_BY.code());
+      padDegreeTo(graph, ANCESTOR, MIN_CANDIDATE_DEGREE);
+      List<String> notes = new ArrayList<>();
+
+      List<Card> deck =
+          RateRun.buildDeck(
+              graph,
+              List.of(KNOWN_ONE),
+              Map.of(ANCESTOR, KnownList.SUPPRESSION_RATING),
+              10,
+              MIN_CANDIDATE_DEGREE,
+              OptionalInt.empty(),
+              notes::add);
+
+      assertThat(deck).extracting(Card::qid).doesNotContain(ANCESTOR);
+      assertThat(notes).anyMatch(n -> n.contains("0 candidate(s) mixed in"));
+      assertThat(notes).noneMatch(n -> n.contains("1 candidate(s) mixed in"));
     }
   }
 
