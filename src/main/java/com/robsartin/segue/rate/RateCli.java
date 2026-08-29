@@ -1,5 +1,6 @@
 package com.robsartin.segue.rate;
 
+import com.robsartin.segue.domain.KnownList;
 import com.robsartin.segue.domain.RatingScale;
 import com.robsartin.segue.ingest.GraphProjector;
 import com.robsartin.segue.sqlite.SqliteAffinityStore;
@@ -154,7 +155,7 @@ public final class RateCli {
       List<Card> deck =
           RateRun.buildDeck(
               graph,
-              QidList.read(options.known()),
+              known(options.known(), rated),
               rated,
               DEFAULT_CANDIDATES,
               options.revise(),
@@ -170,6 +171,14 @@ public final class RateCli {
     } catch (IOException e) {
       throw new UncheckedIOException("could not serve the deck", e);
     }
+  }
+
+  /**
+   * The file plus what has already been rated 4 or 5 (issue #106) — a seam so the composition is
+   * testable without a database, a server or {@code main}'s blocking join.
+   */
+  static List<String> known(Path knownFile, Map<String, Integer> ratings) {
+    return KnownList.promoted(QidList.read(knownFile), ratings);
   }
 
   private static void note(String message) {

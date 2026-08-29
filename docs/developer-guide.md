@@ -362,7 +362,7 @@ view, and ADR 44 a fourth rather than a mode of one of them.
 
 | Package | Contents | Depends on |
 | --- | --- | --- |
-| `domain` | Records and the borrowed edge vocabulary (`EdgeTypes`). No third-party dependencies at all. | nothing |
+| `domain` | Records and the borrowed edge vocabulary (`EdgeTypes`), plus `KnownList` — the pure rule composing a `--known` file with the entities rated highly enough to count as owned ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)), which lives here so both dev tools that read such a file apply the same one. No third-party dependencies at all. | nothing |
 | `port` | The seams: `GraphStore`, `AssertionLog`, `AffinityStore`, `SourceAdapter`, `EntityResolver`, and their small value types. | `domain` |
 | `tinker` | The chosen Gremlin adapter ([ADR 18](adr/0018-graph-engine-gremlin.md)). | `port`, `domain` |
 | `jena` | The RDF reference adapter, kept working as a cross-check. | `port`, `domain` |
@@ -376,8 +376,8 @@ view, and ADR 44 a fourth rather than a mode of one of them.
 | `export` | The graph exporter ([ADR 41](adr/0041-graph-exporter-views-and-formats.md)): `ViewSelector` and the two writers, run as `./gradlew exportGraph`. Plain Java, read-only. | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `support` |
 | `ratings` | The taste-layer reader ([ADR 43](adr/0043-listing-your-own-ratings.md)): every rating with its label, note and `updated_at`, run as `./gradlew listRatings`. Plain Java, read-only, offline. | `port`, `domain`, `sqlite` |
 | `retract` | The retraction tool ([ADR 44](adr/0044-retraction-as-a-new-claim.md)): appends one `Retraction` claim so the projection stops showing an entity and its edges, run as `./gradlew retractEntity`. Plain Java, offline, and the only dev tool that writes a world-fact claim. | `port`, `domain`, `ingest`, `sqlite` |
-| `recommend` | The recommender ([ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md)): ranks entities absent from a supplied known-list by how much more of that list reaches them than their size predicts, and explains each with real routes. Run as `./gradlew recommend`. Plain Java, read-only, offline, and since issue #85 it weights every candidate by the owner's ratings — `Recommendations.regardFor` over `AffinityStore.readRatings`, the note-free half of the taste layer. (This row said it "cannot see the taste layer at all" until the final review of issue #101; that was already false on `main`.) | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `support` |
-| `rate` | The rating deck ([ADR 46](adr/0046-the-rating-deck.md)): a loopback page on 127.0.0.1:8090 dealing one unrated entity per keystroke, run as `./gradlew rate`. Plain Java, offline, and the only dev tool that writes a rating. | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `recommend`, `support` |
+| `recommend` | The recommender ([ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md)): ranks entities absent from the known-list by how much more of that list reaches them than their size predicts, and explains each with real routes. Run as `./gradlew recommend`. The list is the supplied `--known` file plus everything rated 4 or 5 that the file does not name, through `KnownList.promoted` ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)) — so a highly rated entity stops being offered back. Plain Java, read-only, offline, and since issue #85 it weights every candidate by the owner's ratings — `Recommendations.regardFor` over `AffinityStore.readRatings`, the note-free half of the taste layer. (This row said it "cannot see the taste layer at all" until the final review of issue #101; that was already false on `main`.) | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `support` |
+| `rate` | The rating deck ([ADR 46](adr/0046-the-rating-deck.md)): a loopback page on 127.0.0.1:8090 dealing one unrated entity per keystroke, run as `./gradlew rate`. Plain Java, offline, and the only dev tool that writes a rating. Composes its known list through the same `KnownList.promoted` `recommend` does ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)). | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `recommend`, `support` |
 
 ### Which rules a machine enforces
 
@@ -1373,11 +1373,42 @@ same for the next one.
 ./gradlew recommend --args="--known $HOME/known.csv --out $HOME/deep.txt --min-degree 25 --top 50"
 ```
 
-`--known` is a file of QIDs — one per line, or ADR 40's mapping file unchanged. `--out` has no
+`--known` is a file of QIDs — one per line, or ADR 40's mapping file unchanged. **It is no longer
+the whole list**: see the next subsection. `--out` has no
 default, because the output is personal data: it is your known-list plus what the graph makes of it,
 and the file says so on its first line. Read
 [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) before changing the scoring; almost
 every number in it was measured rather than chosen.
+
+### The list is the file plus what you rated highly
+
+`RecommendRun` does not use `QidList.read(--known)` directly. It wraps it in
+`KnownList.promoted(fromFile, ratings)`, which appends every entity rated at or above
+`KnownList.PROMOTION_RATING` that the file does not already name
+([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md), issue #106). `RateCli.known`
+composes the same list for the deck; those two are the only `--known` readers in `src/main`
+(`ExportRun`'s `QidList.read` reads `--qids` for a subgraph view, which is a different thing).
+
+The reason is that the file means **"acts I have seen live"** — ADR 40 produced it from a concert
+history — while `--known` means "things I have". Everything liked but never attended fell in the
+gap, so the recommender could offer back an entity the owner had rated 5. Measured on the real
+graph: 167 ratings sat on entities the file does not name, 87 of them a 4 or a 5.
+
+Two things follow that are easy to trip over.
+
+- **Promotion removes as well as reweights.** A promoted entity is on the known-list, so
+  `CandidateSweep` filters it out of the candidate pool entirely. That is the intent — it is the
+  failure ADR 48 was written against — but it means the candidate pool shrinks as the owner rates.
+- **Two runs a rating apart can differ from identical arguments.** The list is no longer
+  reproducible from the file alone, and a saved output is only interpretable alongside the taste
+  layer as it stood when it ran. `KnownList.promoted` sorts the promoted portion for the same
+  reason `Recommendations.rank` breaks ties on qid: `Map` iteration order is not guaranteed, and
+  two runs over unchanged ratings must still agree.
+
+The threshold is 4 and ADR 48 says plainly that it is a judgement rather than a measurement, which
+is unusual for a number in this area. **Suppression is deliberately unbuilt**: a low rating
+removes nothing, because the same 167 held exactly two ratings below neutral against 87 above, and
+a rule shipped against two data points is the mistake this issue's history is made of.
 
 ### The score, in one formula
 
@@ -1453,9 +1484,15 @@ method left, `readRatings`, returns a `Map<String, Integer>` with nowhere to put
 `RecommendCli` is the only class in the package that touches the store; everything below it still
 sees a function.
 
-**Untested against real ratings.** The `affinity` table held zero rows when this landed;
-`AffinityWeightedRecommendationTest` demonstrates the movement against invented ratings in a
-scratch database and nothing else has ever exercised it.
+**It has now met real ratings, and the reading is not what it looks like.** The `affinity` table
+held zero rows when this landed, and `AffinityWeightedRecommendationTest` still demonstrates the
+movement against invented ratings in a scratch database — that is what the gate exercises, because
+the real ratings are personal data and stay out of the repository. What the real data added is a
+warning about how to read the weighting: 973 ratings — the overwhelming majority of them a 4 or a
+5 — moved **one** entity in the top 25 against no ratings at all
+([ADR 46](adr/0046-the-rating-deck.md)'s issue-#109 amendment). A list of things you already chose cannot disagree with itself. The movement that
+finally arrived came from promotion changing *membership* of the list rather than from reweighting
+its existing members — see [ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md).
 
 ### Four things this is not allowed to do
 
@@ -1472,7 +1509,12 @@ The best case any dev-side tool has had, and it still lost. *"What should I expl
 a conversational question — unlike seeding, exporting, listing ratings or retracting. What settles it
 is what the question needs: a file naming everything you already know, which is the personal data
 [ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md) refused to hand a model, or the taste layer as the
-known-list, which needs the bulk read ADR 39 refused. ADR 45 records a re-open condition rather than
+known-list, which needs the bulk read ADR 39 refused. **The second half of that sentence has since
+been partly overtaken and the conclusion is unchanged**: since
+[ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md) the known-list *is* partly derived
+from the taste layer, through the bulk read ADR 46 had already granted to the two dev-side tools.
+What has not moved is the first half — the file is still required, still lives outside the
+repository, and is still not something a model may be handed. ADR 45 records a re-open condition rather than
 shutting the door: a *bounded* version — "given these five things I have rated, what next?" — is an
 argument on its own terms, and it amends ADR 26 rather than arriving as a field on an existing tool.
 
@@ -1487,7 +1529,18 @@ check or the ordering; both are narrower or stricter than they look, on purpose.
 ./gradlew rate --args="--known $HOME/known.csv"
 ```
 
-`--known` is the same file `recommend` takes. `--db` defaults to `SEGUE_DB` if it is set and
+`--known` is the same file `recommend` takes, and it goes through the same
+`KnownList.promoted` composition
+([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)): the deck's known cards are the
+file plus everything rated 4 or 5 that the file does not name. It adds no known cards, because a
+promoted entity is rated by definition and the default deck deals only unrated ones. **It does not
+stop the deck offering back something you rated highly, either — `Deck.deal` already skipped every
+already-rated candidate before this, and still does.** What changes is which candidates the sweep
+produces: promoted entities leave the candidate pool, and the sweep seeds from a larger known set,
+so different entities fill the same slots. `RateRun` passes the sweep `recommend`'s own measured
+defaults, so at those defaults the deck's candidates and `./gradlew recommend`'s agree, which is
+what ADR 46's issue-#101 review made true and this keeps true.
+`--db` defaults to `SEGUE_DB` if it is set and
 `${user.home}/.segue/segue.db` otherwise, which is what `export`, `ratings`, `retract` and
 `recommend` do too (`seed` has no `--db`: it never opens a store).
 `--port` defaults to `RateCli.DEFAULT_PORT`, 8090 rather than 8080, so the deck and a running MCP
@@ -1519,6 +1572,12 @@ fill rather than just coloured text, so it cannot be mistaken for an ordinary ca
 it shows is what the session has written, falling back to what the server dealt**: `RateServer`
 holds the deck as it stood at startup, so pressing `b` after re-rating a card would otherwise
 re-announce the value that card no longer has.
+
+**`--revise 4` and `--revise 5` now reach entities the file never named**, because
+`Deck.dealRevision` walks the composed known list and
+[ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md) put the promoted entities on it.
+A rating of 3 is below the promotion threshold, so **`--revise 3` still cannot reach a three on an
+entity absent from the file** — 78 of them, on the measurement ADR 48 records.
 
 `--revise` deals no candidates: a candidate is by definition absent from the known-list and
 therefore unrated, so there is nothing about it to reconsider, and mixing discovery into a revision

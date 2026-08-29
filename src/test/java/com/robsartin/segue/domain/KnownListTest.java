@@ -1,0 +1,61 @@
+package com.robsartin.segue.domain;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+/** Issue #106: a rating of 4 or 5 counts as having something, even when the file omits it. */
+class KnownListTest {
+
+  @Test
+  @DisplayName("an entity rated at or above the threshold joins the list")
+  void promotesAHighRating() {
+    assertThat(KnownList.promoted(List.of("Q900001"), Map.of("Q900002", 5)))
+        .containsExactlyInAnyOrder("Q900001", "Q900002");
+  }
+
+  @Test
+  @DisplayName("a rating below the threshold does not join, and 3 is below it")
+  void leavesTheRestAlone() {
+    assertThat(KnownList.promoted(List.of("Q900001"), Map.of("Q900002", 3, "Q900003", 1)))
+        .containsExactly("Q900001");
+  }
+
+  @Test
+  @DisplayName("an entity already on the file is not duplicated by its own rating")
+  void doesNotDuplicate() {
+    assertThat(KnownList.promoted(List.of("Q900001"), Map.of("Q900001", 5)))
+        .containsExactly("Q900001");
+  }
+
+  @Test
+  @DisplayName("the file's order is preserved and promotions follow, so two runs agree")
+  void isDeterministic() {
+    List<String> first =
+        KnownList.promoted(List.of("Q900002", "Q900001"), Map.of("Q900003", 5, "Q900004", 4));
+    List<String> second =
+        KnownList.promoted(List.of("Q900002", "Q900001"), Map.of("Q900004", 4, "Q900003", 5));
+
+    assertThat(first).startsWith("Q900002", "Q900001");
+    assertThat(first).isEqualTo(second);
+  }
+
+  @Test
+  @DisplayName(
+      "the promoted portion is actually sorted, not incidentally matching by luck of Map.of's"
+          + " own iteration order")
+  void promotedPortionIsSortedStructurally() {
+    // Three keys, not two: empirically, an unsorted implementation reproduces this exact
+    // lexicographic order by luck of Map.of's internal hashing only a minority of the time (about
+    // 1 run in 6, measured across dozens of separate JVM launches), where the two-key case above
+    // was observed to pass by luck on every sampled JVM salt. This is the test that would actually
+    // catch a missing .sort(...).
+    List<String> result =
+        KnownList.promoted(List.of(), Map.of("Q900050", 5, "Q900010", 4, "Q900030", 5));
+
+    assertThat(result).containsExactly("Q900010", "Q900030", "Q900050");
+  }
+}

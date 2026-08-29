@@ -4,14 +4,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.robsartin.segue.rate.RateCli.Options;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /** Everything that can be refused before a store is opened (ADR 45's shape, ADR 46). */
 class RateCliTest {
 
   private static final String HOME = "/home/invented";
+
+  @TempDir private Path dir;
 
   private static Options parse(String... args) {
     return RateCli.parse(args, null, HOME);
@@ -107,5 +115,28 @@ class RateCliTest {
                 RateCli.parse(new String[] {"--known", "k.csv", "--revise", "9"}, null, "/home/x"))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("1 to 5");
+  }
+
+  @Test
+  @DisplayName(
+      "an entity rated 4 or 5 but absent from the file joins the deck's known-list (issue #106)")
+  void knownJoinsWhatWasRatedHighly() throws IOException {
+    Path list = dir.resolve("known.csv");
+    Files.writeString(list, "Q900001\n", StandardCharsets.UTF_8);
+
+    List<String> known = RateCli.known(list, Map.of("Q900002", 5, "Q900003", 2));
+
+    assertThat(known).containsExactlyInAnyOrder("Q900001", "Q900002");
+  }
+
+  @Test
+  @DisplayName("an entity already on the file is not duplicated by its own rating")
+  void knownDoesNotDuplicate() throws IOException {
+    Path list = dir.resolve("known.csv");
+    Files.writeString(list, "Q900001\n", StandardCharsets.UTF_8);
+
+    List<String> known = RateCli.known(list, Map.of("Q900001", 5));
+
+    assertThat(known).containsExactly("Q900001");
   }
 }

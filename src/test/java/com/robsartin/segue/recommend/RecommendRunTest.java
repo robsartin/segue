@@ -22,6 +22,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -64,7 +65,11 @@ class RecommendRunTest {
   }
 
   private List<Explained> run(Options options) throws IOException {
-    return new RecommendRun(graph, INSTITUTIONS, Recommendations.EQUAL_REGARD)
+    return run(options, Map.of());
+  }
+
+  private List<Explained> run(Options options, Map<String, Integer> ratings) throws IOException {
+    return new RecommendRun(graph, INSTITUTIONS, Recommendations.EQUAL_REGARD, ratings)
         .run(options, notes::add);
   }
 
@@ -82,7 +87,7 @@ class RecommendRunTest {
   @DisplayName("the warning comes first, before a candidate exists and long before the file does")
   void theWarningComesFirst() throws IOException {
     Options options = options(KNOWN_ONE, KNOWN_TWO);
-    new RecommendRun(graph, INSTITUTIONS, Recommendations.EQUAL_REGARD)
+    new RecommendRun(graph, INSTITUTIONS, Recommendations.EQUAL_REGARD, Map.of())
         .run(
             options,
             note -> {
@@ -101,7 +106,7 @@ class RecommendRunTest {
   void theCountsArriveBeforeTheWrite() throws IOException {
     Options options = options(KNOWN_ONE, KNOWN_TWO);
     List<String> beforeTheFile = new ArrayList<>();
-    new RecommendRun(graph, INSTITUTIONS, Recommendations.EQUAL_REGARD)
+    new RecommendRun(graph, INSTITUTIONS, Recommendations.EQUAL_REGARD, Map.of())
         .run(
             options,
             note -> {
@@ -143,5 +148,17 @@ class RecommendRunTest {
 
     assertThat(notes)
         .noneMatch(note -> note.contains("Q900") || note.contains("who that artist cites"));
+  }
+
+  @Test
+  @DisplayName(
+      "an entity rated 4 or higher but absent from the file is promoted onto the known-list, so"
+          + " it is no longer recommended back (issue #106)")
+  void aHighlyRatedCandidateIsNoLongerRecommended() throws IOException {
+    // ANCESTOR is exactly the candidate itRecommendsWhatTheListDoesNotName finds; rating it
+    // promotes it into the known-list that CandidateSweep filters candidates against.
+    List<Explained> explained = run(options(KNOWN_ONE, KNOWN_TWO), Map.of(ANCESTOR, 4));
+
+    assertThat(explained).isEmpty();
   }
 }
