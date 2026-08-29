@@ -27,7 +27,7 @@ than a seventh MCP tool.
 ./gradlew exportGraph --args="--view neighbourhood --qid Q42 --out $HOME/one.graphml"  # ADR 41; read-only; the --out extension picks the format
 ./gradlew listRatings --args="--sort recent --out $HOME/ratings.txt"   # ADR 43; read-only; the OUTPUT IS PERSONAL DATA
 ./gradlew retractEntity --args="--qid Q12345 --reason 'wrong entity' --dry-run"   # ADR 44; appends a retraction; --dry-run reports and writes nothing
-./gradlew recommend --args="--known $HOME/known.csv --out $HOME/next.txt"   # ADR 45; read-only; ranks what you do NOT have, with routes; the OUTPUT IS PERSONAL DATA
+./gradlew recommend --args="--known $HOME/known.csv --out $HOME/next.txt"   # ADR 45; read-only; ranks what you do NOT have, with routes; the OUTPUT IS PERSONAL DATA; the list is that file PLUS what you rated 4-5 (ADR 48)
 ./gradlew rate --args="--known $HOME/known.csv"   # ADR 46; loopback page at 127.0.0.1:8090; WRITES ratings only, no un-rate
 ```
 
@@ -67,7 +67,9 @@ Full reasoning: `docs/adr/0018-graph-engine-gremlin.md`. All decisions are recor
 ## Architecture
 
 ```
-domain/   records + Wikidata-derived edge vocabulary. NO third-party deps.
+domain/   records + Wikidata-derived edge vocabulary. NO third-party deps. Also KnownList
+          (ADR 48): the pure rule composing a --known file with what you rated 4 or 5, so
+          `recommend` and `rate` cannot apply two different answers.
 port/     GraphStore, AssertionLog, AffinityStore, SourceAdapter, EntityResolver
           — the seams.
 tinker/   Gremlin adapter (the chosen one).
@@ -98,18 +100,22 @@ retract/  The retraction tool (ADR 44): appends one Retraction claim so the
           kind of row, through IngestService, holding no GraphStore at all. (ADR
           46's `rate` is the other dev tool that writes, but only ever to the
           taste layer, through AffinityStore — never through IngestService.)
-recommend/ The recommender (ADR 45): ranks entities ABSENT from a supplied known-list by
+recommend/ The recommender (ADR 45): ranks entities ABSENT from the known-list by
           candidate-degree-normalised lift, excludes hub intermediates through PathRanking.isHub,
           weights edge types, and explains every candidate with real find_paths routes. Run as
           `./gradlew recommend`. Dev-side, plain Java, READ-ONLY, offline, NOT a seventh MCP tool.
           Since issue #85 it WEIGHTS by rating — Recommendations.regardFor over the note-free
           AffinityStore.readRatings — under a fence written at the CALL SITES:
           theRecommenderReadsRatingsAndNeverNotes bans find and readAll and the AffinityRecord
-          type, while still letting it read scores.
+          type, while still letting it read scores. Since issue #106 (ADR 48) the KNOWN-LIST is
+          the --known file PLUS everything rated >= KnownList.PROMOTION_RATING (4) that the file
+          does not name, so a highly rated entity stops being recommended back.
 rate/     The rating deck (ADR 46): a loopback page on 127.0.0.1:8090 that deals one
           entity per keystroke — known entities by degree, a recommend candidate every fifth
           card — `1`-`5` rates and advances, `s`/space skips, `b` goes back. Run as `./gradlew
-          rate`. Dev-side, NOT a seventh MCP tool, and — with retract — one of only two dev
+          rate`. Its known cards come from the same KnownList.promoted composition `recommend`
+          uses (ADR 48), so --revise 4 and --revise 5 now reach entities the file never named.
+          Dev-side, NOT a seventh MCP tool, and — with retract — one of only two dev
           tools that WRITE: AffinityStore.put alone, fenced by four ArchUnit rules, one of
           which (theRatingDeckLogsNoRating) names a single exception — the class that
           constructs what it writes. No un-rate: AffinityStore has no delete, so going back
@@ -547,10 +553,30 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   weight 5/3, a 1 weight 1/3, and an UNRATED entity weight 1.0 — because most of the known-list is
   unrated (it comes from ADR 40's file, not the taste layer), and a proportional weighting would
   bury everything unrated the moment the first rating was written. An empty table therefore
-  reproduces ADR 45's measured ranking exactly. **None of this has met a real rating**: the
-  `affinity` table has zero rows, and `AffinityWeightedRecommendationTest` demonstrates the
-  movement on invented ratings in a scratch database. Whether 5/3 is the right strength is
+  reproduces ADR 45's measured ranking exactly. Whether 5/3 is the right strength is
   unmeasured — settle it the way the degree floor was settled, by running two and reading both.
+  **It has since met real ratings, and the weighting alone barely moved anything**: 973 real
+  ratings — the overwhelming majority of them a 4 or a 5 — changed ONE entity in the top 25 against
+  no ratings at all (ADR 46's issue-#109 amendment). A list of acts you chose to go and see cannot disagree with itself.
+  What did move the ranking was ADR 48 changing the list's MEMBERSHIP, not reweighting its members.
+  The gate still exercises this on invented ratings only — `AffinityWeightedRecommendationTest` —
+  because real ratings are personal data and stay out of this repository.
+
+- **The `--known` file means "acts I have seen live", not "things I have", and ADR 48 is the
+  repair.** ADR 40 produced it from a concert history, so everything liked but never attended fell
+  outside it — and `Recommendations.regardFor` weights known-list qids only, so a rating on anything
+  else was inert. Measured on the real graph: 167 ratings sat on entities the file does not name,
+  **87 of them a 4 or a 5**. `KnownList.promoted` now appends those to the list at both `--known`
+  call sites (`RecommendRun.run`, `RateCli.known`; `ExportRun`'s `QidList.read` is `--qids` and is
+  not a known-list). **Promotion removes as well as reweights** — a promoted entity is on the list,
+  so `CandidateSweep` drops it from the candidate pool, which is the point. **The threshold 4 is a
+  judgement, not a measurement**, and the ADR says so. **Suppression is deliberately NOT built**:
+  the same 167 held exactly TWO ratings below neutral against 87 above, and a rule against two data
+  points is what this issue's history is made of — don't add one without a distribution.
+  **The deck is now self-feeding** (a promotion's own connections score future candidates), and
+  what bounds it is expansion coverage, not any rule in the code: of 123,752 nodes, 16,860 —
+  **13.6%** — are the subject of a stored edge, so promotion reorders the pool far more than it
+  grows it. That is the measured argument for expansion work, not for tuning this.
 
 - **The taste layer's classes deliberately have no package of their own.**
   `AffinityRecord` sits in `domain`, `AffinityStore` in `port`,

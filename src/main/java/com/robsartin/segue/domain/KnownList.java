@@ -14,8 +14,8 @@ import java.util.Set;
  * <p><b>The known-list file means "acts I have seen live", and that is not what {@code --known} is
  * for.</b> It was produced from a concert history (ADR 40), so it omits everything liked but never
  * attended. Measured on the real graph: of 167 rated entities absent from the file, <b>87 are rated
- * 4 or 5</b>: bands and performers plainly liked but never attended. The recommender treated
- * those as strangers and could recommend them back.
+ * 4 or 5</b>: bands and performers plainly liked but never attended. The recommender treated those
+ * as strangers and could recommend them back.
  *
  * <p><b>Promotion only, and the distribution is why.</b> The same 167 hold exactly two ratings
  * below neutral, so a suppression rule would ship against two data points. Issue #106 records that

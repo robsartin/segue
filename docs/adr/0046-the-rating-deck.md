@@ -345,6 +345,18 @@ old shape.**
   the known-list from the taste layer itself, which reopens ADR 40 (the seeding list is kept off
   the MCP surface and out of this repository on purpose) and ADR 43 (the bulk read is reserved to
   the owner's own machine). That is its own argument, for its own issue.
+
+  **Amendment (2026-08-29, issue #106): that issue was argued, and the gap is closed —
+  [ADR 48](0048-a-high-rating-counts-as-something-you-have.md).** A rating at or above 4 now counts
+  as something the owner has, so a candidate rated that highly joins the known-list and its
+  connections do reach `Recommendations.regardFor`. This bullet's prediction of the cost was half
+  right. It reopens ADR 40 — the file outside the repository is no longer the sole authority for
+  `--known`, though it remains the authority for what was *seeded*, and nothing on the MCP surface
+  can see either half. It does **not** reopen ADR 43: this amendment's own "`readRatings` is now
+  shared with `rate`" section had already widened that read to both dev-side tools, so ADR 48 needed
+  no new access and widened no fence. What that ADR deliberately did not build is the other
+  direction — a low rating still suppresses nothing, because the same population holds two ratings
+  below neutral against 87 above.
 - **A rating can be changed but never withdrawn.** There is no un-rate anywhere in segue; going
   back and re-rating is the only correction this tool — or any tool — offers.
 - **The taste layer now has two dev-side readers of every rating at once**, `recommend` and
