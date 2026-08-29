@@ -223,7 +223,8 @@ public final class RecommendCli {
       new RecommendRun(
               graph,
               RecognitionInstitutions::isRecognitionInstitution,
-              Recommendations.regardFor(ratings))
+              Recommendations.regardFor(ratings),
+              ratings)
           .run(options, RecommendCli::note);
     } catch (IOException e) {
       throw new UncheckedIOException("could not write " + options.out(), e);

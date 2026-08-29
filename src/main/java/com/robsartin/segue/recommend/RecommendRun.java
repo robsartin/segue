@@ -1,5 +1,6 @@
 package com.robsartin.segue.recommend;
 
+import com.robsartin.segue.domain.KnownList;
 import com.robsartin.segue.domain.Recommendation;
 import com.robsartin.segue.domain.Recommendations;
 import com.robsartin.segue.port.GraphStore;
@@ -11,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -58,6 +60,7 @@ public final class RecommendRun {
   private final GraphStore graph;
   private final Predicate<String> recognitionInstitutionClass;
   private final ToDoubleFunction<String> regard;
+  private final Map<String, Integer> ratings;
 
   /**
    * @param regard what one known entity's connections count for. Still a function and not a store
@@ -65,15 +68,22 @@ public final class RecommendRun {
    *     {@code RecommendCli} turns the note-free bulk read into this argument, and everything below
    *     here sees arithmetic. {@code Recommendations.EQUAL_REGARD} is what an empty {@code
    *     affinity} table produces, and what every test that is not about affinity passes
+   * @param ratings the same note-free bulk read {@code regard} was built from, held here too and
+   *     for a different reason: issue #106's {@link KnownList#promoted} needs the raw map to decide
+   *     which qids join the known-list, which a {@code ToDoubleFunction} cannot enumerate. A rating
+   *     of 4 or 5 for an entity absent from the file makes it known, so {@code CandidateSweep}
+   *     stops offering it back
    */
   public RecommendRun(
       GraphStore graph,
       Predicate<String> recognitionInstitutionClass,
-      ToDoubleFunction<String> regard) {
+      ToDoubleFunction<String> regard,
+      Map<String, Integer> ratings) {
     this.graph = Objects.requireNonNull(graph, "graph");
     this.recognitionInstitutionClass =
         Objects.requireNonNull(recognitionInstitutionClass, "recognitionInstitutionClass");
     this.regard = Objects.requireNonNull(regard, "regard");
+    this.ratings = Objects.requireNonNull(ratings, "ratings");
   }
 
   /**
@@ -88,7 +98,7 @@ public final class RecommendRun {
 
     notes.accept(PERSONAL_DATA_WARNING);
 
-    List<String> known = QidList.read(options.known());
+    List<String> known = KnownList.promoted(QidList.read(options.known()), ratings);
     notes.accept(known.size() + " entity(ies) on the list at " + options.known());
 
     Sweep sweep =
