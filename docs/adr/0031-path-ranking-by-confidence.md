@@ -556,3 +556,47 @@ assumption that it is total.
 endpoint of the low-confidence shortcut. The fixture's model-generated shortcut is
 Cave→McCarthy; all Cave→Hillcoat routes are wikidata-sourced at confidence 1.00.
 The decision is unaffected.*
+
+**Amendment (2026-08-29, issue #115): this ADR predates the rule about what an ADR may quote, and
+it would not pass it. The measurements stay, and here is what they disclose.**
+
+Nothing above is withdrawn. No decision changes, no threshold moves, and no sentence above is
+edited — [ADR 51](0051-what-an-adr-may-quote.md), decided today, says an ADR may publish an
+aggregate over the owner's data but may not present an entity name as his. This document was
+written before that rule existed and would not be written this way now. What follows is the record
+of that, appended where the ADR itself cannot be.
+
+**What is exposed.** Not a rating and not a note, which is why `CLAUDE.md`'s existing sentence never
+caught it. It is one column and one selection:
+
+- The issue-#66 amendment's table has a **`seeds` column**, and each row's first number is *how many
+  of the owner's own entities reach that node*. The node names are facts about Wikidata and their
+  degrees are facts about Wikidata. **The `seeds` count is not** — it is a measurement over his
+  known-list, and reading the column tells you something about the shape of that list which no
+  amount of reading Wikidata would. The count 815 on its own is an aggregate and stays one; a
+  per-node breakdown beside named nodes is a different thing.
+- The gold set of 38 intermediates and the acceptance-case pairs throughout are **nodes chosen out
+  of the owner's own graph** rather than picked from Wikidata at large. They are there because they
+  are connected to what he has.
+
+**Why the names stay: here they are load-bearing.** The claim this ADR is built on is a negative
+one, and a negative result is only worth anything if a reader can check it. *"The Writers Guild of
+America West and Mötley Crüe both carry exactly 11"* is that check. Both nodes are real, both
+degrees are verifiable against Wikidata by anybody who doubts the conclusion, and the conclusion —
+that no degree threshold separates an institution from a band, so the class table is the only
+mechanism left — rests entirely on the collision being real. Replace the two names with invented
+ones and the sentence becomes an assertion that a reader must simply believe, which is exactly the
+kind of ADR this project does not write. The same is true of the interleaved ranges either side of
+it and of the whole issue-#88 gold set, where the deliverable *is* the refusal.
+
+**Why redaction would not help even if the names were expendable.** This repository is public and
+was created on 2026-08-24. This document has been on `main` since that day and the `seeds` table
+since 2026-08-27, both through merged pull requests. Git history retains what an edit removes, and
+GitHub keeps its pull-request refs indefinitely — this project has already
+written that lesson down once, about commit email addresses, and a force-push does not reach them
+either. Editing the text now would break ADR 1's immutability rule to buy a false impression that
+the content had gone. The honest instrument is this paragraph.
+
+**What the rule changes going forward.** A `seeds` column would not be published again; the same
+argument would be made with degrees alone, or with the per-node counts folded into the prose as a
+range. That is a real loss of evidence, and it is the trade ADR 51 makes deliberately.
