@@ -17,9 +17,10 @@ import java.util.Set;
  * 4 or 5</b>: bands and performers plainly liked but never attended. The recommender treated those
  * as strangers and could recommend them back.
  *
- * <p><b>Promotion only, and the distribution is why.</b> The same 167 hold exactly two ratings
- * below neutral, so a suppression rule would ship against two data points. Issue #106 records that
- * as deliberately not built rather than overlooked.
+ * <p><b>Promotion is one half of issue #106; suppression is the other.</b> The distribution that
+ * held suppression back has since changed: a later pass rated <b>72 of 177</b> candidates below
+ * neutral in one sitting, which is not two data points. {@link #suppressed} is the rest of the
+ * issue.
  */
 public final class KnownList {
 
@@ -28,6 +29,16 @@ public final class KnownList {
    * (issue #106) — the ADR that follows says so.
    */
   public static final int PROMOTION_RATING = 4;
+
+  /**
+   * The rating at or below which an entity is suppressed — excluded from recommendations rather
+   * than merely left unweighted. 2, not 3: {@code Recommendations.NEUTRAL_RATING} is 3, so a 3
+   * scores identically to an unrated entity under {@code regardFor} and is not a rejection.
+   * Suppressing it would silently remove every neutral rating from future recommendations, not just
+   * the 72 the owner actually rated down — measured against a real 177-rating pass, that would have
+   * been 117 entities gone for no reason.
+   */
+  public static final int SUPPRESSION_RATING = 2;
 
   private KnownList() {}
 
@@ -59,5 +70,38 @@ public final class KnownList {
     List<String> known = new ArrayList<>(fromFile);
     known.addAll(promotions);
     return List.copyOf(known);
+  }
+
+  /**
+   * Every entity rated at or below {@link #SUPPRESSION_RATING} — "stop offering this back", not a
+   * weight.
+   *
+   * <p><b>Suppression, not negative weighting.</b> {@code Recommendations.regardFor} centres on
+   * {@code NEUTRAL_RATING} (3), so its lowest weight — a rating of 1 — is {@code 1/3}: still
+   * positive. Admitting a disliked entity to the known-list would make it multiply, and so
+   * <em>boost</em>, whatever it connects to, which is backwards. A genuine negative signal would
+   * need weights below zero and would rewrite ADR 45's arithmetic; excluding the entity from the
+   * candidate pool entirely says "not this" without touching that arithmetic at all.
+   *
+   * <p><b>Deliberately not part of the known-list.</b> {@code CandidateSweep.over} takes this as
+   * its own parameter rather than folding it into {@code known} — the sweep reports {@code
+   * knownFound} and {@code knownMissing}, and a rejected entity is not "known"; unioning it in
+   * would corrupt what those two counts describe.
+   *
+   * <p>The result is a {@code Set}: nothing about suppression is ordered, unlike {@link #promoted},
+   * whose list order feeds a deterministic downstream sweep.
+   *
+   * @param ratings qid to a rating from 1 to 5, for the entities that have one
+   */
+  public static Set<String> suppressed(Map<String, Integer> ratings) {
+    Objects.requireNonNull(ratings, "ratings");
+
+    Set<String> rejected = new LinkedHashSet<>();
+    for (Map.Entry<String, Integer> rating : ratings.entrySet()) {
+      if (rating.getValue() <= SUPPRESSION_RATING) {
+        rejected.add(rating.getKey());
+      }
+    }
+    return Set.copyOf(rejected);
   }
 }

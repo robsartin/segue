@@ -58,4 +58,46 @@ class KnownListTest {
 
     assertThat(result).containsExactly("Q900010", "Q900030", "Q900050");
   }
+
+  @Test
+  @DisplayName("a rating at the suppression threshold is suppressed")
+  void suppressesARatingAtTheThreshold() {
+    assertThat(KnownList.suppressed(Map.of("Q900001", 2))).containsExactly("Q900001");
+  }
+
+  @Test
+  @DisplayName(
+      "a rating just above the suppression threshold is not suppressed — 3 is neutral, not"
+          + " rejected")
+  void doesNotSuppressTheNeutralRating() {
+    // The boundary in the other direction: regardFor treats 3 (NEUTRAL_RATING) as exactly
+    // neutral, identical to unrated. Suppressing it would silently remove every neutral rating
+    // from future recommendations, not just the rejected ones.
+    assertThat(KnownList.suppressed(Map.of("Q900001", 3))).isEmpty();
+  }
+
+  @Test
+  @DisplayName("a rating below the threshold is also suppressed")
+  void suppressesARatingBelowTheThreshold() {
+    assertThat(KnownList.suppressed(Map.of("Q900001", 1))).containsExactly("Q900001");
+  }
+
+  @Test
+  @DisplayName("a high rating is never suppressed")
+  void doesNotSuppressAHighRating() {
+    assertThat(KnownList.suppressed(Map.of("Q900001", 4, "Q900002", 5))).isEmpty();
+  }
+
+  @Test
+  @DisplayName("suppression is a Set: unrelated entities are unaffected and order cannot matter")
+  void suppressedIsASetOfOnlyTheRejected() {
+    assertThat(KnownList.suppressed(Map.of("Q900001", 2, "Q900002", 5, "Q900003", 3, "Q900004", 1)))
+        .containsExactlyInAnyOrder("Q900001", "Q900004");
+  }
+
+  @Test
+  @DisplayName("an empty ratings map suppresses nothing")
+  void emptyRatingsSuppressNothing() {
+    assertThat(KnownList.suppressed(Map.of())).isEmpty();
+  }
 }

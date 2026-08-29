@@ -30,6 +30,7 @@ import com.robsartin.segue.domain.Scorer;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.ToDoubleFunction;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -68,6 +69,11 @@ class CandidateSweepTest {
 
   private Sweep sweep(Scorer scorer, int floor, ToDoubleFunction<String> regard) {
     return new CandidateSweep(graph, INSTITUTIONS).over(KNOWN, scorer, floor, regard);
+  }
+
+  private Sweep sweep(Set<String> suppressed) {
+    return new CandidateSweep(graph, INSTITUTIONS)
+        .over(KNOWN, suppressed, Scorer.LIFT, FLOOR, Recommendations.EQUAL_REGARD);
   }
 
   private static Optional<Recommendation> find(Sweep sweep, String qid) {
@@ -307,5 +313,52 @@ class CandidateSweepTest {
 
     assertThat(player.knownReached()).isEqualTo(1);
     assertThat(player.intermediates()).isEqualTo(4);
+  }
+
+  @Test
+  @DisplayName("a suppressed entity is absent from the candidates, even though it would qualify")
+  void aSuppressedEntityIsAbsent() {
+    influenceChain();
+
+    Sweep sweep = sweep(Set.of(ANCESTOR));
+
+    assertThat(find(sweep, ANCESTOR)).isEmpty();
+  }
+
+  @Test
+  @DisplayName("suppressing one candidate does not touch another that would otherwise qualify")
+  void suppressionDoesNotTouchOtherCandidates() {
+    influenceChain();
+
+    Sweep sweep = sweep(Set.of("Q900999"));
+
+    assertThat(find(sweep, ANCESTOR)).isPresent();
+  }
+
+  @Test
+  @DisplayName(
+      "suppression is a separate set from the known-list: the sweep's own counts still describe"
+          + " only the known-list")
+  void suppressionDoesNotFoldIntoTheKnownListCounts() {
+    // ADR 45's counts, knownFound and knownMissing, are a diagnostic about the --known file, not
+    // about what got filtered out. Folding a rejection into knownSet would corrupt that
+    // diagnostic — a suppressed entity is not "known", and it must not inflate knownFound.
+    influenceChain();
+
+    Sweep withoutSuppression = sweep();
+    Sweep withSuppression = sweep(Set.of(ANCESTOR));
+
+    assertThat(withSuppression.knownFound()).isEqualTo(withoutSuppression.knownFound());
+    assertThat(withSuppression.knownMissing()).isEqualTo(withoutSuppression.knownMissing());
+  }
+
+  @Test
+  @DisplayName("an empty suppressed set behaves exactly like no suppression at all")
+  void emptySuppressedSetSuppressesNothing() {
+    influenceChain();
+
+    Sweep sweep = sweep(Set.of());
+
+    assertThat(find(sweep, ANCESTOR)).isPresent();
   }
 }
