@@ -203,6 +203,15 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   enters git, not that the repo is closed (issue #37 corrected an ADR bullet claiming otherwise).
   Ratings and notes in test fixtures, ADR examples, CLAUDE.md snippets and commit messages must be
   invented, not Rob's. `*.db` is gitignored; that covers the file, not a quoted example.
+  **That reaches ratings and notes; ADR 51 extends it to measurements and derived output.** An
+  aggregate over his data may be published — counts, degrees, distributions, thresholds, pool
+  sizes, rank movements. An entity name presented as his taste, his holdings, or a tool's output
+  over them may not: a recommendation ranking is derived from the known-list, so publishing one
+  discloses what he has, and a table column counting how many of his seeds reach each node does
+  the same. A QID that is a world fact stays quotable — the framing decides, not the name. **No
+  test can enforce this** (nothing in the text separates a citation from a disclosure, and the
+  only oracle is the private store CI cannot read), so it is a review obligation. ADRs 31, 45 and
+  47 predate it; 31 and 45 carry dated amendments saying so.
 
 - TinkerPop's `Property` is **not** a `java.util.Optional`. It has `orElse`,
   `orElseGet`, `ifPresent` — but no `map()`.
