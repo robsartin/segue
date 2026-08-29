@@ -1,10 +1,12 @@
 package com.robsartin.segue.rate;
 
+import com.robsartin.segue.domain.KnownList;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.PathResult;
 import com.robsartin.segue.recommend.Explained;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -30,11 +32,17 @@ import java.util.function.ToIntFunction;
  * corrupt, or to leave personal data lying in.
  *
  * <p><b>Revise mode (issue #109) inverts exactly that selection, and only that.</b> Given a target
- * rating, {@link #dealRevision} deals the known entities holding it and nothing else, so the
- * sentence above describes one of two modes rather than the whole of this class. The ordering, the
- * skipping of entities the graph does not hold, and the absence of any stored position are the same
- * in both; what changes is which side of the {@code ratings} map a qid has to be on to be dealt.
- * The two modes never mix: a run is one or the other.
+ * rating, {@link #dealRevision} deals the entities holding it and nothing else, so the sentence
+ * above describes one of two modes rather than the whole of this class. The ordering, the skipping
+ * of entities the graph does not hold, and the absence of any stored position are the same in both;
+ * what changes is which side of the {@code ratings} map a qid has to be on to be dealt. The two
+ * modes never mix: a run is one or the other.
+ *
+ * <p><b>Revision walks the known-list plus the suppressed set, not the known-list alone</b> (issue
+ * #106). A suppressed entity is deliberately never on the known list ({@code KnownList.suppressed}
+ * says so explicitly), so without this widening {@code --revise 2} could never reach the very
+ * entities suppression exists to let the owner reconsider — un-suppression has no other path, since
+ * {@code AffinityStore} has no delete and re-rating to 3 or above is the only way back.
  */
 public final class Deck {
 
@@ -105,8 +113,12 @@ public final class Deck {
   }
 
   /**
-   * Select known qids currently rated exactly {@code target}, dealt for reconsideration. No
-   * candidates: see the class-level note on {@link #deal}.
+   * Select known-or-suppressed qids currently rated exactly {@code target}, dealt for
+   * reconsideration. No candidates: see the class-level note on {@link #deal}.
+   *
+   * <p>The walk is {@code knownQids} unioned with {@code KnownList.suppressed(ratings)}, not {@code
+   * knownQids} alone (issue #106) — a suppressed entity is deliberately absent from the known list,
+   * so without the union it could never be selected here, whatever {@code target} was asked for.
    */
   private static List<Card> dealRevision(
       List<String> knownQids,
@@ -114,8 +126,11 @@ public final class Deck {
       Function<String, Optional<NodeRecord>> nodeByQid,
       Map<String, Integer> ratings,
       int target) {
+    Set<String> revisitable = new LinkedHashSet<>(knownQids);
+    revisitable.addAll(KnownList.suppressed(ratings));
+
     List<Card> revision = new ArrayList<>();
-    for (String qid : knownQids) {
+    for (String qid : revisitable) {
       Integer rating = ratings.get(qid);
       if (rating == null || rating != target) {
         continue;

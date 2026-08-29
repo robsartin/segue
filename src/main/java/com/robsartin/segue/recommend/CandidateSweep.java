@@ -73,22 +73,6 @@ public final class CandidateSweep {
   }
 
   /**
-   * Every entity worth considering, scored but unranked.
-   *
-   * @param known the entities you already have — the membership oracle, and the whole reason a
-   *     well-connected node absent from it means something
-   * @param scorer where on the raw-to-lift spectrum to sit
-   * @param minDegree the floor below which a candidate is not ranked. Required under a normalised
-   *     scorer; see {@code Recommendations.MIN_CANDIDATE_DEGREE}
-   * @param regard what one known entity's connections are worth — {@code Recommendations.regardFor}
-   *     over the ratings, which is {@code Recommendations.EQUAL_REGARD} when nothing has been rated
-   */
-  public Sweep over(
-      Collection<String> known, Scorer scorer, int minDegree, ToDoubleFunction<String> regard) {
-    return over(known, Set.of(), scorer, minDegree, regard);
-  }
-
-  /**
    * Every entity worth considering, scored but unranked, with what has been rejected held out.
    *
    * @param known the entities you already have — the membership oracle, and the whole reason a

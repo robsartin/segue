@@ -107,7 +107,12 @@ public final class RecommendRun {
 
     Sweep sweep =
         new CandidateSweep(graph, recognitionInstitutionClass)
-            .over(known, options.scorer(), options.minDegree(), regard);
+            .over(
+                known,
+                KnownList.suppressed(ratings),
+                options.scorer(),
+                options.minDegree(),
+                regard);
 
     notes.accept(
         sweep.candidates().size()

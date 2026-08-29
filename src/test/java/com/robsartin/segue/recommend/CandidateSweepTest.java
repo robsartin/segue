@@ -68,7 +68,7 @@ class CandidateSweepTest {
   }
 
   private Sweep sweep(Scorer scorer, int floor, ToDoubleFunction<String> regard) {
-    return new CandidateSweep(graph, INSTITUTIONS).over(KNOWN, scorer, floor, regard);
+    return new CandidateSweep(graph, INSTITUTIONS).over(KNOWN, Set.of(), scorer, floor, regard);
   }
 
   private Sweep sweep(Set<String> suppressed) {
@@ -289,6 +289,7 @@ class CandidateSweepTest {
         new CandidateSweep(graph, INSTITUTIONS)
             .over(
                 List.of(KNOWN_ONE, KNOWN_TWO, "Q900999"),
+                Set.of(),
                 Scorer.LIFT,
                 FLOOR,
                 Recommendations.EQUAL_REGARD);
