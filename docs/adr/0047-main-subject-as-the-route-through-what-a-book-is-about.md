@@ -257,3 +257,113 @@ a subject mismatch, which a later measurement could revisit.
   where there was one, and the second is more useful than it looks: one concept counts 16,552 through
   `P136` and 228 through `P921`, which says the eventual rule has to be about *how widely a property
   is stated*, not about what the property means.
+
+**Amendment (2026-08-29, issue #123): this ADR predates the rule about what an ADR may quote, and it
+breaches that rule in the plainest form the rule forbids.**
+
+Nothing above is withdrawn, no decision changes and no sentence above is edited.
+[ADR 51](0051-what-an-adr-may-quote.md), decided today, says an ADR may publish an aggregate over
+the owner's data but may not present an entity name as his taste, his holdings, or a tool's output
+over them. This document states holdings, and it would not be written this way now. ADR 51's own
+verification pass — reading each ADR written after 45 rather than assuming they followed the rule
+being drafted — found this one and recorded the finding in its consequences instead of repairing it
+there, on the grounds that the exposure is a different one from the two that issue #115 was filed
+about and deserves its own argument about whether the names are load-bearing. This is that argument.
+
+**What is exposed, and where.** Two things, neither of them a rating, a note, or a measurement over
+the private store — which is why `CLAUDE.md`'s existing sentence never caught it, and why neither of
+the shapes issue #115 was filed about matches it either.
+
+*Books stated as holdings.* The Context opening (`:18–21`) names four books with their QIDs and
+frames them only as a shelf of technical books. The second-measurement paragraph (`:59–66`) names
+the same four and calls them **the owner's books**. The Decision bullet at `:81–83` repeats the
+possessive while naming no book at all. **What this cannot reach** (`:143–164`) tabulates four
+further titles, three of them carrying item QIDs, as books on the same shelf. The first consequence
+(`:209–216`) demonstrates routes among the first four by name.
+
+*Subjects stated as interests.* The measurement at `:31–41` lists twelve subject terms with their
+`P921` counts and introduces them as the subjects the owner actually named. ADR 51 leans on this
+list when it clears ADR 49 — it is the reason two terms named there are traceable to a person
+through this document — but its finding about this ADR is written about the books alone. It is the
+same offence in the same document, and this amendment records it so the two records do not disagree
+by omission.
+
+None of it is restated here. The text above is the record; repeating it in the amendment would
+publish it a second time.
+
+**The names are load-bearing, and issue #123's doubt about that is refused.** The issue asked
+whether the argument might survive as a count — "four demonstration books, all pointing at two
+generic nodes" — with the titles moved to a scratch measurement outside the repository, the way
+ADR 50's suppression figures were handled. Read against the text, it does not. Every claim these
+passages make is checkable against Wikidata by any reader who doubts it: which authors a book states
+under `P50`, whether it states `P166` at all, which `P921` values it carries, and, for the coverage
+table, that two of its rows carry the property the issue and the plan both said they lacked. Those
+are negative claims, and a negative claim is worth nothing if a reader cannot go and check it — the
+same reasoning that keeps the degree collision in [ADR 31](0031-path-ranking-by-confidence.md).
+Replace the titles with a count and the strongest sentence in this ADR, that a plausible expectation
+about what these books say they are about is simply false, becomes an assertion to be taken on
+trust.
+
+**That answer does not clear the document, and this is the part worth keeping.** The Decision bullet
+at `:81–83` names no book and discloses anyway: the possessive alone tells a reader that whatever is
+on the shelf, its subjects are those two nodes. Load-bearing was the wrong axis to settle this on.
+**The disclosure is the possessive, and the repair is three words.** Strike *the owner's* from `:61`
+and from `:82`, and *the subjects the owner actually named* from `:32`, and every title, QID, count
+and route above stays exactly where it is while the document stops saying anything about anyone's
+shelf.
+
+**Which sharpens ADR 51 rather than merely applying it.** ADR 51 says a world fact stays a world
+fact and that the framing is the offence. What this case adds is that the framing and the evidence
+are sometimes wholly separable, so the repair costs no evidence at all — and that this is not the
+general situation. **The three ADRs found in breach are three different cases rather than one
+mistake repeated**, and each amendment says as much about its own document:
+
+- **This one.** The evidence is public — `P921` statements anybody can read — and a sentence has
+  claimed ownership of it. The names are load-bearing and they stay; the possessive goes. Nothing
+  is lost.
+- **[ADR 45](0045-recommend-by-normalised-lift-with-routes.md).** The evidence is a ranking the
+  recommender produced over the known-list, so there is no innocent framing to be rewritten into —
+  the output *is* the disclosure. But its amendment is explicit that the names there are
+  "illustrative rather than load-bearing", that "nothing here would become uncheckable" without
+  them, and that they stay because redaction would not un-publish and ADR 1 makes the text
+  immutable — "not because the argument depends on them". The names would simply go, and no
+  argument would go with them: exposure that cost nothing to incur and would cost nothing to
+  avoid, with no repair available after the fact.
+- **[ADR 31](0031-path-ranking-by-confidence.md).** The evidence is a `seeds` column and a gold set
+  selected out of the owner's own graph, and there the names *are* load-bearing — a negative result
+  about degree collision that a reader can check only because the colliding nodes are real.
+  Removing them is, in that amendment's words, "a real loss of evidence, and it is the trade ADR 51
+  makes deliberately."
+
+**Two questions sort a new case, in this order.** Is the evidence itself derived from the private
+store, or is it a public fact that a sentence has claimed ownership of? Only the second is repaired
+by rewriting the sentence, and that repair is free. If it is the first, are the names carrying the
+argument? Where they are not, removing them costs nothing and the exposure is pure waste; where they
+are, ADR 51 costs an argument, which is the case it has in mind when it says that sometimes it will.
+
+**Redaction would not un-publish, and the smallness of the fix is what makes that worth saying.**
+This repository is public and was created on 2026-08-24. This ADR reached `main` on 2026-08-29
+through merged pull request #113, the same day the rule in ADR 51 was written — which is how a
+document comes to breach a rule that did not exist while it was being drafted. Git history retains
+what an edit removes and GitHub keeps its pull-request refs indefinitely; this project has already
+written that lesson down once, about commit email addresses, where a force-push does not reach them
+either. A three-word edit is far more tempting than a wholesale one and no more effective: three
+words are recoverable from a diff by anybody who looks, and removing them would break ADR 1's
+immutability in exchange for the impression that the sentence had never been written. It was
+written. This paragraph is the honest instrument, and it is the only one available.
+
+**How a future ADR writes this argument.** Name the books; drop the possessive. They are widely-held
+technical works, and the thing being measured is what Wikidata's `P921` statements say those works
+are about — a fact about Wikidata, true whether or not anybody owns a copy. So: *four widely-held
+technical books*, not *the owner's books*; *the two nodes those books state*, not *the two nodes the
+owner's books actually state*. The coverage section says what it means as *works of this kind that
+the property does not reach*, with no shelf in the sentence. The subject measurement keeps all
+twelve terms and all twelve counts, introduced as ordinary technical and hobby subjects measured
+instead of famous ones, which is the methodological point it was making in the first place. The
+route demonstration comes out stronger rather than weaker, because what makes it evidence is that
+every hop rests on a `P921` statement a reader can inspect — which is a sentence about Wikidata, and
+not about a library.
+
+The same constraint binds an amendment. This one names nothing above, because an amendment that
+described the exposure by reproducing it would publish it a second time under cover of confessing
+the first.
