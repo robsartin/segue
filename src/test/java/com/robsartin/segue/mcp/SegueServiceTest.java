@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.robsartin.segue.domain.AffinityRecord;
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.Candidate;
+import com.robsartin.segue.domain.ExpansionBounds;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
@@ -30,6 +31,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -204,6 +206,34 @@ class SegueServiceTest {
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.PARTIAL);
     assertThat(result.detail()).containsIgnoringCase("truncat");
     assertThat(result.payload().truncated()).isTrue();
+  }
+
+  @Test
+  @DisplayName(
+      "a CONCEPT expansion past the ceiling is capped and reported partial, naming the ceiling"
+          + " (issue #112)")
+  void expandEntityCapsAConceptAtTheCeiling() {
+    ingest.record(new NodeAssertion("Q1", NodeKind.CONCEPT, "Broad Concept", WIKIDATA));
+    int flood = ExpansionBounds.CONCEPT_CEILING + 10;
+    List<AssertionRecord> assertions = new ArrayList<>();
+    List<NodeAssertion> neighbors = new ArrayList<>();
+    for (int i = 0; i < flood; i++) {
+      String qid = "Q" + (100 + i);
+      assertions.add(new AssertionRecord("Q1", qid, "ABOUTNESS", null, null, WIKIDATA));
+      neighbors.add(new NodeAssertion(qid, NodeKind.WORK, "Work " + i, WIKIDATA));
+    }
+    SourceAdapter flooding =
+        new StubSourceAdapter("flood", new ExpandResult(assertions, neighbors, false, false));
+
+    // The request asks for far more than the ceiling — exactly the call this rule exists to stop.
+    ToolResult<SegueService.ExpansionSummary> result = service(flooding).expandEntity("Q1", 200);
+
+    assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.PARTIAL);
+    assertThat(result.detail()).containsIgnoringCase("truncat");
+    assertThat(result.detail()).contains(String.valueOf(ExpansionBounds.CONCEPT_CEILING));
+    assertThat(result.payload().truncated()).isTrue();
+    assertThat(result.payload().edgesAdded()).isEqualTo(ExpansionBounds.CONCEPT_CEILING);
+    assertThat(graph.edges("Q1")).hasSize(ExpansionBounds.CONCEPT_CEILING);
   }
 
   @Test

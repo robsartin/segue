@@ -4,6 +4,7 @@ import com.robsartin.segue.domain.AffinityRecord;
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.Candidate;
 import com.robsartin.segue.domain.EdgeRecord;
+import com.robsartin.segue.domain.ExpansionBounds;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
@@ -176,6 +177,13 @@ public final class SegueService {
    * graph is a multigraph by design — Nick Cave both wrote and scored The Proposition, so two
    * assertions can name one pair of nodes. Counting per assertion told a calling model that two
    * entities were lost when one was.
+   *
+   * <p><b>A {@code CONCEPT} seed is bounded below whatever {@code maxNewEdges} was requested</b>
+   * ({@link ExpansionBounds}, issue #112): {@code maxNewEdges} resolves to {@code
+   * ExpansionBounds.effective(node.kind(), maxNewEdges)} before it reaches {@link ExpandContext} or
+   * either bound below, so a caller cannot ask past the ceiling and a bitten ceiling is reported
+   * exactly like any other truncation — through the same observed {@code truncated} flag, arriving
+   * as {@code partial}.
    */
   public ToolResult<ExpansionSummary> expandEntity(String qid, int maxNewEdges) {
     Objects.requireNonNull(qid, "qid");
@@ -187,7 +195,11 @@ public final class SegueService {
       return error("maxNewEdges must be positive, got " + maxNewEdges);
     }
     NodeRecord node = seed.get();
-    ExpandContext ctx = new ExpandContext(maxNewEdges);
+    // Issue #112: a ceiling on CONCEPT, applied to whatever the request resolved to before that
+    // number reaches an adapter or the bound below — the same reason ReverseClaims itself is
+    // asked for no more than this, not merely truncated after the fact.
+    int effectiveMax = ExpansionBounds.effective(node.kind(), maxNewEdges);
+    ExpandContext ctx = new ExpandContext(effectiveMax);
 
     boolean sourceUnavailable = false;
     boolean adapterTruncated = false;
@@ -209,9 +221,11 @@ public final class SegueService {
       }
     }
 
-    boolean truncated = adapterTruncated || collected.size() > maxNewEdges;
+    boolean truncated = adapterTruncated || collected.size() > effectiveMax;
     List<AssertionRecord> bounded =
-        collected.size() > maxNewEdges ? collected.stream().limit(maxNewEdges).toList() : collected;
+        collected.size() > effectiveMax
+            ? collected.stream().limit(effectiveMax).toList()
+            : collected;
 
     int nodesAdded = 0;
     int edgesAdded = 0;
@@ -298,7 +312,7 @@ public final class SegueService {
       reasons.add("a source was unavailable and could not be reached");
     }
     if (truncated) {
-      reasons.add("the result was truncated at the bound of " + maxNewEdges);
+      reasons.add("the result was truncated at the bound of " + effectiveMax);
     }
     if (skippedNeighbors > 0) {
       reasons.add(skippedNeighbors + " neighbour(s) could not be resolved and were skipped");
