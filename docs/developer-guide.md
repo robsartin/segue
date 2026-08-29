@@ -362,7 +362,7 @@ view, and ADR 44 a fourth rather than a mode of one of them.
 
 | Package | Contents | Depends on |
 | --- | --- | --- |
-| `domain` | Records and the borrowed edge vocabulary (`EdgeTypes`), plus `KnownList` — the pure rule composing a `--known` file with the entities rated highly enough to count as owned ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)), which lives here so both dev tools that read such a file apply the same one. No third-party dependencies at all. | nothing |
+| `domain` | Records and the borrowed edge vocabulary (`EdgeTypes`), plus `KnownList` — the pure rules that turn a `--known` file and the ratings map into the three populations both dev tools need: what counts as owned ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)), what is suppressed, and what a revision pass may deal ([ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md)). They live here so both dev tools that read such a file apply the same ones. No third-party dependencies at all. | nothing |
 | `port` | The seams: `GraphStore`, `AssertionLog`, `AffinityStore`, `SourceAdapter`, `EntityResolver`, and their small value types. | `domain` |
 | `tinker` | The chosen Gremlin adapter ([ADR 18](adr/0018-graph-engine-gremlin.md)). | `port`, `domain` |
 | `jena` | The RDF reference adapter, kept working as a cross-check. | `port`, `domain` |
@@ -376,8 +376,8 @@ view, and ADR 44 a fourth rather than a mode of one of them.
 | `export` | The graph exporter ([ADR 41](adr/0041-graph-exporter-views-and-formats.md)): `ViewSelector` and the two writers, run as `./gradlew exportGraph`. Plain Java, read-only. | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `support` |
 | `ratings` | The taste-layer reader ([ADR 43](adr/0043-listing-your-own-ratings.md)): every rating with its label, note and `updated_at`, run as `./gradlew listRatings`. Plain Java, read-only, offline. | `port`, `domain`, `sqlite` |
 | `retract` | The retraction tool ([ADR 44](adr/0044-retraction-as-a-new-claim.md)): appends one `Retraction` claim so the projection stops showing an entity and its edges, run as `./gradlew retractEntity`. Plain Java, offline, and the only dev tool that writes a world-fact claim. | `port`, `domain`, `ingest`, `sqlite` |
-| `recommend` | The recommender ([ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md)): ranks entities absent from the known-list by how much more of that list reaches them than their size predicts, and explains each with real routes. Run as `./gradlew recommend`. The list is the supplied `--known` file plus everything rated 4 or 5 that the file does not name, through `KnownList.promoted` ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)) — so a highly rated entity stops being offered back. Plain Java, read-only, offline, and since issue #85 it weights every candidate by the owner's ratings — `Recommendations.regardFor` over `AffinityStore.readRatings`, the note-free half of the taste layer. (This row said it "cannot see the taste layer at all" until the final review of issue #101; that was already false on `main`.) | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `support` |
-| `rate` | The rating deck ([ADR 46](adr/0046-the-rating-deck.md)): a loopback page on 127.0.0.1:8090 dealing one unrated entity per keystroke, run as `./gradlew rate`. Plain Java, offline, and the only dev tool that writes a rating. Composes its known list through the same `KnownList.promoted` `recommend` does ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)). | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `recommend`, `support` |
+| `recommend` | The recommender ([ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md)): ranks entities absent from the known-list by how much more of that list reaches them than their size predicts, and explains each with real routes. Run as `./gradlew recommend`. The list is the supplied `--known` file plus everything rated 4 or 5 that the file does not name, through `KnownList.promoted` ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)) — so a highly rated entity stops being offered back — and since [ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md) the sweep also takes `KnownList.suppressed` as a separate set, so an entity rated 2 or below stops being offered back too. Plain Java, read-only, offline, and since issue #85 it weights every candidate by the owner's ratings — `Recommendations.regardFor` over `AffinityStore.readRatings`, the note-free half of the taste layer. (This row said it "cannot see the taste layer at all" until the final review of issue #101; that was already false on `main`.) | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `support` |
+| `rate` | The rating deck ([ADR 46](adr/0046-the-rating-deck.md)): a loopback page on 127.0.0.1:8090 dealing one unrated entity per keystroke, run as `./gradlew rate`. Plain Java, offline, and the only dev tool that writes a rating. Composes its known list through the same `KnownList.promoted` `recommend` does ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)), passes the same `KnownList.suppressed` to its sweep, and deals revisions over `KnownList.revisitable` ([ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md)). | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `recommend`, `support` |
 
 ### Which rules a machine enforces
 
@@ -1423,9 +1423,46 @@ Two things follow that are easy to trip over.
   two runs over unchanged ratings must still agree.
 
 The threshold is 4 and ADR 48 says plainly that it is a judgement rather than a measurement, which
-is unusual for a number in this area. **Suppression is deliberately unbuilt**: a low rating
-removes nothing, because the same 167 held exactly two ratings below neutral against 87 above, and
-a rule shipped against two data points is the mistake this issue's history is made of.
+is unusual for a number in this area.
+
+### And a rating of 2 or below takes it off the table entirely
+
+ADR 48 left suppression unbuilt against two ratings below neutral, and set an arithmetic re-open
+condition. Issue #119 let the deck deal candidates at a lower degree floor, one 177-card pass at
+floor 5 rated **72 of 177** below neutral, and
+[ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md) is the decision that followed.
+
+`RecommendRun` and `RateRun` — the only two `CandidateSweep.over` call sites in `src/main` — pass
+`KnownList.suppressed(ratings)` alongside the composed known-list, and `CandidateSweep` tests it at
+the point the known-list check already was. Three things about that are easy to get wrong.
+
+- **It is a separate parameter, not a wider known-list.** The sweep reports `knownFound` and
+  `knownMissing`, and a rejected entity is not known; unioning the two would change what those
+  counts describe. A suppressed entity is also still allowed to be an *intermediate* — the seed loop
+  never consults the set — because "you know two things and this connects them" is a fact about the
+  graph whatever the owner thinks of the connector.
+- **It is suppression rather than a negative weight, and the reason is arithmetic.**
+  `Recommendations.regardFor` centres on `NEUTRAL_RATING`, so its lowest output is `1/3` — still
+  positive. Admitting a rejected entity to the known-list would make it *boost* whatever it
+  connects to. A real negative signal needs weights below zero, which rewrites every downstream
+  number in ADR 45 into something with no defined reading.
+- **The boundary is `KnownList.SUPPRESSION_RATING`, and it is 2 because 3 is exactly neutral.**
+  A 3 already weighs what no rating weighs, so it is the absence of a judgement rather than a
+  rejection. On the table measured for ADR 50 a boundary at 3 would have removed 117 entities that
+  had only been shrugged at.
+
+**Measured effect, on a copy of the real database (ADR 50 has the full figures):** at the default
+floor of 12 the candidate pool went 1,027 → 1,011 and 7 of the top 25 left, every one of them
+suppressed — including ranks 1 and 2. At floor 5, where those ratings were actually collected, the
+pool went 1,676 → 1,604 and 16 of the top 25 left, again every one suppressed. **The effect is
+purely subtractive**: no score changes and the survivors keep their relative order exactly, so the
+list simply loses its rejected members and backfills from below.
+
+**The limitation worth knowing** is recorded in ADR 50 and belongs with issues #117 and #118: the
+default floor sees only 16 of the 72 off-list suppressed entities, and the floor itself measures
+what segue has *fetched* rather than how obscure something is. Suppressing an entity that was only
+ever offered because it had been under-fetched is a judgement made on incomplete information, and
+nothing re-opens the question when ingest improves.
 
 ### The score, in one formula
 
@@ -1508,8 +1545,12 @@ the real ratings are personal data and stay out of the repository. What the real
 warning about how to read the weighting: 973 ratings — the overwhelming majority of them a 4 or a
 5 — moved **one** entity in the top 25 against no ratings at all
 ([ADR 46](adr/0046-the-rating-deck.md)'s issue-#109 amendment). A list of things you already chose cannot disagree with itself. The movement that
-finally arrived came from promotion changing *membership* of the list rather than from reweighting
-its existing members — see [ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md).
+finally arrived came from changing *membership* rather than from reweighting existing members —
+promotion adding to the known-list ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md))
+and then suppression removing from the candidate pool
+([ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md)). Each ADR records its own
+before/after measurement; they were taken against different rating snapshots and are not a
+like-for-like comparison of the two levers.
 
 ### Four things this is not allowed to do
 
@@ -1553,8 +1594,9 @@ file plus everything rated 4 or 5 that the file does not name. It adds no known 
 promoted entity is rated by definition and the default deck deals only unrated ones. **It does not
 stop the deck offering back something you rated highly, either — `Deck.deal` already skipped every
 already-rated candidate before this, and still does.** What changes is which candidates the sweep
-produces: promoted entities leave the candidate pool, and the sweep seeds from a larger known set,
-so different entities fill the same slots. `RateCli`'s `--min-degree` defaults to the same
+produces: promoted entities leave the candidate pool, suppressed ones leave it too
+([ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md)), and the sweep seeds from a larger
+known set, so different entities fill the same slots. `RateCli`'s `--min-degree` defaults to the same
 `Recommendations.MIN_CANDIDATE_DEGREE` `recommend`'s does — by reference, not by a second copy of
 the number `RateRun` used to hold (issue #119) — so at those defaults the deck's candidates and
 `./gradlew recommend`'s agree, which is what ADR 46's issue-#101 review made true and this keeps
@@ -1598,11 +1640,22 @@ it shows is what the session has written, falling back to what the server dealt*
 holds the deck as it stood at startup, so pressing `b` after re-rating a card would otherwise
 re-announce the value that card no longer has.
 
-**`--revise 4` and `--revise 5` now reach entities the file never named**, because
-`Deck.dealRevision` walks the composed known list and
-[ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md) put the promoted entities on it.
-A rating of 3 is below the promotion threshold, so **`--revise 3` still cannot reach a three on an
-entity absent from the file** — 78 of them, on the measurement ADR 48 records.
+**`--revise` walks `KnownList.revisitable`, which is the composed known-list unioned with the
+suppressed set** — one method, called by both `Deck.dealRevision` and the "up for reconsideration"
+count in `RateRun.buildDeck`, so the count and the deal cannot disagree about the population.
+
+`--revise 4` and `--revise 5` reach entities the file never named because
+[ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md) put the promoted entities on the
+known-list. **`--revise 1` and `--revise 2` reach entities the file never named for the opposite
+reason**: a suppressed entity is deliberately *not* on that list, so
+[ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md) widened the walk instead. That is not a
+convenience — `AffinityStore` has no delete, so re-rating to 3 or above is the *only* way to undo a
+rejection, and a suppression that could not be dealt would recreate issue #109's trap one layer out.
+
+A rating of 3 is below the promotion threshold and above the suppression one, so **`--revise 3`
+still cannot reach a three on an entity absent from the file** — 111 of them, on the table measured
+for ADR 50, up from the 78 ADR 48 recorded. It is the last of issue #106's populations still
+unreachable, and ADR 50 says plainly that it wants its own issue.
 
 `--revise` deals no candidates: a candidate is by definition absent from the known-list and
 therefore unrated, so there is nothing about it to reconsider, and mixing discovery into a revision
