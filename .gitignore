@@ -42,3 +42,17 @@ _to_delete/
 # first. No committed .txt is currently needed — if one ever is, name it here with an explicit
 # negation and say in the commit message why it carries no personal data.
 *.txt
+
+# Agent scratch, and the reason it is named here rather than left merely untracked
+# (issue #104 review). The subagent-driven workflow writes task reports and measurements
+# into .superpowers/, and several of issue #104's held the owner's rated entities by name —
+# the taste layer ADR 33 governs, in the same repository that is public. They stayed out of
+# commits only because staging was done by explicit path every time. One `git add -A`, by a
+# human or an agent, would have swept them in. This line makes that discipline a property of
+# the repository instead of a habit.
+.superpowers/
+
+# Contact cards. A vCard is somebody's name, phone number and address — other people's
+# personal data, which ADR 33's reasoning covers even though it is not the taste layer.
+# Same second-lock argument as *.csv and *.txt above.
+*.vcf
