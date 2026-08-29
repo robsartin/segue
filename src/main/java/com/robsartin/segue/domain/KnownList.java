@@ -104,4 +104,34 @@ public final class KnownList {
     }
     return Set.copyOf(rejected);
   }
+
+  /**
+   * Every qid a revision pass may deal at some rating: the known-list plus {@link #suppressed}.
+   *
+   * <p><b>Lives here, not in {@code Deck} or {@code RateRun}, for the reason this class exists at
+   * all</b> — issue #106 already split "what you have" into two populations computed from the same
+   * {@code ratings} map, and writing their union at each caller is the same mistake one layer down:
+   * two independent copies that agree only because nobody has changed either one yet. {@code
+   * Deck.dealRevision} needs this set to select revisable cards; {@code RateRun.buildDeck} needs
+   * the identical set to count them before dealing, and a third contributing set added to one copy
+   * and not the other is exactly how "121 up for reconsideration, 84 cards to rate" happened the
+   * first time (issue #109) — this method is what keeps that from happening a second way.
+   *
+   * <p>A suppressed entity is never itself known — {@link #suppressed}'s own javadoc explains why
+   * the two sets stay separate everywhere else — but a revision pass is the one place that
+   * distinction does not matter: both a known entity and a suppressed one are simply "rated, and so
+   * revisable", and this is the union of the only two ways to be rated and reachable.
+   *
+   * @param known the composed known-list, {@link #promoted}'s result — not the raw {@code --known}
+   *     file, so a promoted entity is revisable too
+   * @param ratings the same note-free bulk read {@link #suppressed} reads
+   */
+  public static Set<String> revisitable(List<String> known, Map<String, Integer> ratings) {
+    Objects.requireNonNull(known, "known");
+    Objects.requireNonNull(ratings, "ratings");
+
+    Set<String> revisitable = new LinkedHashSet<>(known);
+    revisitable.addAll(suppressed(ratings));
+    return Set.copyOf(revisitable);
+  }
 }

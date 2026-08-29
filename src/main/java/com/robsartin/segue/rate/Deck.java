@@ -6,7 +6,6 @@ import com.robsartin.segue.domain.PathResult;
 import com.robsartin.segue.recommend.Explained;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -116,9 +115,11 @@ public final class Deck {
    * Select known-or-suppressed qids currently rated exactly {@code target}, dealt for
    * reconsideration. No candidates: see the class-level note on {@link #deal}.
    *
-   * <p>The walk is {@code knownQids} unioned with {@code KnownList.suppressed(ratings)}, not {@code
-   * knownQids} alone (issue #106) — a suppressed entity is deliberately absent from the known list,
-   * so without the union it could never be selected here, whatever {@code target} was asked for.
+   * <p>The walk is {@link KnownList#revisitable}, not {@code knownQids} alone (issue #106) — a
+   * suppressed entity is deliberately absent from the known list, so without the union it could
+   * never be selected here, whatever {@code target} was asked for. {@code RateRun.buildDeck}'s
+   * reconsideration count is the same union for the same reason: {@code KnownList.revisitable} is
+   * the one place that answer lives, so the count and the deal cannot silently diverge.
    */
   private static List<Card> dealRevision(
       List<String> knownQids,
@@ -126,8 +127,7 @@ public final class Deck {
       Function<String, Optional<NodeRecord>> nodeByQid,
       Map<String, Integer> ratings,
       int target) {
-    Set<String> revisitable = new LinkedHashSet<>(knownQids);
-    revisitable.addAll(KnownList.suppressed(ratings));
+    Set<String> revisitable = KnownList.revisitable(knownQids, ratings);
 
     List<Card> revision = new ArrayList<>();
     for (String qid : revisitable) {

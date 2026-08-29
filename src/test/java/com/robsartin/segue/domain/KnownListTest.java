@@ -100,4 +100,37 @@ class KnownListTest {
   void emptyRatingsSuppressNothing() {
     assertThat(KnownList.suppressed(Map.of())).isEmpty();
   }
+
+  @Test
+  @DisplayName("revisitable is the known list unioned with the suppressed set")
+  void revisitableUnionsKnownAndSuppressed() {
+    assertThat(
+            KnownList.revisitable(
+                List.of("Q900001"), Map.of("Q900001", 3, "Q900002", KnownList.SUPPRESSION_RATING)))
+        .containsExactlyInAnyOrder("Q900001", "Q900002");
+  }
+
+  @Test
+  @DisplayName("an entity neither known nor suppressed is not revisitable")
+  void revisitableExcludesTheNeutralOffListCase() {
+    // The exact case reviseCountsOnlyWhatItCanDeal in RateRunTest depends on: a rating of 3 is
+    // neutral (not suppressed) and the qid is off the known list, so it must not appear.
+    assertThat(KnownList.revisitable(List.of("Q900001"), Map.of("Q900001", 3, "Q900009", 3)))
+        .containsExactly("Q900001");
+  }
+
+  @Test
+  @DisplayName("a qid both known and suppressed is not duplicated")
+  void revisitableDeduplicatesOverlap() {
+    assertThat(
+            KnownList.revisitable(
+                List.of("Q900001"), Map.of("Q900001", KnownList.SUPPRESSION_RATING)))
+        .containsExactly("Q900001");
+  }
+
+  @Test
+  @DisplayName("nothing known and nothing rated is not revisitable")
+  void revisitableIsEmptyWhenBothInputsAreEmpty() {
+    assertThat(KnownList.revisitable(List.of(), Map.of())).isEmpty();
+  }
 }

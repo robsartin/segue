@@ -11,7 +11,6 @@ import com.robsartin.segue.recommend.Routes;
 import com.robsartin.segue.recommend.Sweep;
 import com.robsartin.segue.wikidata.RecognitionInstitutions;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -88,20 +87,19 @@ public final class RateRun {
       // A count, never the rating value or a qid (ADR 33) — "up for reconsideration" says how
       // many, not which ones or what they are currently rated.
       //
-      // Counted over the KNOWN LIST PLUS THE SUPPRESSED SET, not over ratings.values(), because
-      // that union is the exact population Deck.dealRevision walks (issue #106 widened it past
-      // the known list alone, so a rejected entity — suppressed, and so never on the known
-      // list — is still reachable for revision). Counting the whole table put two numbers from
-      // two different populations three lines apart in the log — "121 card(s) up for
-      // reconsideration" then "84 card(s) to rate" — with nothing saying that the 37 are
-      // entities rated at some point and since dropped from the list, which this run will never
-      // deal. Counting the known list alone would silently undercount again the moment a
-      // suppressed, off-list entity is the thing being revised — the same bug, one rating tier
-      // down. What remains between this number and the dealt count is only the entities the
-      // graph does not hold, exactly as in the default mode above.
+      // Counted over KnownList.revisitable(known, ratings) — the known list plus the suppressed
+      // set — not over ratings.values(), because that is the exact population Deck.dealRevision
+      // walks (issue #106 widened it past the known list alone, so a rejected entity —
+      // suppressed, and so never on the known list — is still reachable for revision). The union
+      // lives in KnownList, not written again here, so this count and dealRevision's walk cannot
+      // silently diverge (see KnownList.revisitable's own javadoc). Counting the whole ratings
+      // table put two numbers from two different populations three lines apart in the log — "121
+      // card(s) up for reconsideration" then "84 card(s) to rate" — with nothing saying that the
+      // 37 are entities rated at some point and since dropped from the list, which this run will
+      // never deal. What remains between this number and the dealt count is only the entities
+      // the graph does not hold, exactly as in the default mode above.
       int target = reviseRating.getAsInt();
-      Set<String> revisitable = new LinkedHashSet<>(known);
-      revisitable.addAll(KnownList.suppressed(ratings));
+      Set<String> revisitable = KnownList.revisitable(known, ratings);
       long upForReconsideration =
           revisitable.stream()
               .filter(
