@@ -105,6 +105,35 @@ public final class EdgeTypes {
   public static final EdgeType RECEIVED_AWARD =
       register(EdgeType.direct("RECEIVED_AWARD", "P166", "received"));
 
+  // --- aboutness -----------------------------------------------------------
+
+  /**
+   * What a work is about — the second single-property admission made the way ADR 38 made the first:
+   * measure, admit one, argue it in an ADR (issue #111).
+   *
+   * <p><b>Why it had to exist.</b> The vocabulary above this comment models creative
+   * <em>collaboration</em> — co-credits, membership, influence, recognition. Two single-authored
+   * technical books share no author, no award, no genre in this vocabulary at all, so a bookshelf
+   * of them is a set of disconnected islands and {@code find_paths} returns nothing between any
+   * pair. {@code ABOUT} gives a route through what the books are about rather than who wrote them.
+   *
+   * <p><b>Registered DIRECT, and this corrects issue #111's own text.</b> The issue that opened
+   * this work asserted P921 is "stated on the work, pointing at the subject, so it is {@code
+   * inverted}" — but {@code inverted} means the STORED direction is the reverse of the STATED one,
+   * and it is not that here. Compare {@link #AUTHORED}: Wikidata states {@code book P50 person},
+   * and segue stores the reverse, {@code person AUTHORED book} — that mismatch is what {@code
+   * inverted} means. P921 states {@code book P921 subject}, and segue wants exactly that, {@code
+   * book ABOUT subject} — the stored direction and the stated direction agree, which by {@link
+   * EdgeType#direct}'s own contract makes this DIRECT.
+   *
+   * <p><b>Not {@code fallbackOnly}.</b> The issue-#33 condition is that Wikidata defines another
+   * property as this one's inverse and that property is already registered here. P921's inverse
+   * label item is Q70782961 ("main subject of"), not a property — Wikidata has no separate {@code
+   * Pxxx} for "has main subject" to register, checked rather than assumed. There is no second end
+   * to ingest and nothing to deduplicate.
+   */
+  public static final EdgeType ABOUT = register(EdgeType.direct("ABOUT", "P921", "about"));
+
   // --- influence and affinity -------------------------------------------
   public static final EdgeType INFLUENCED_BY =
       register(EdgeType.direct("INFLUENCED_BY", "P737", "influenced by"));

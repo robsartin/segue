@@ -19,7 +19,7 @@ import java.util.Map;
  *
  * <p>The first says something about the music. The second says both were recognised.
  *
- * <p><b>Three tiers, and the ordering is what the measurement supports.</b>
+ * <p><b>Four tiers, and the ordering is what the measurement supports.</b>
  *
  * <ul>
  *   <li><b>{@link #INFLUENCE}</b> — {@code INFLUENCED_BY} is the only relation in the vocabulary
@@ -39,6 +39,12 @@ import java.util.Map;
  *       the specific awards are exactly what ADR 38 built for the literature side of the graph,
  *       where a novel has one author and there is no collaboration to find. It is a fifth, because
  *       "we both won this" is the weakest reason to listen to somebody in the vocabulary.
+ *   <li><b>{@link #ABOUTNESS}</b> — {@code ABOUT} says two works share a subject, which is a fact
+ *       about the world's card catalogue rather than about either work's author. Admitted for the
+ *       same reason as {@code RECOGNITION} (a single-authored technical book has no collaboration
+ *       to find either), but weaker evidence than a prize a body chose to award, so it sits below
+ *       it rather than beside it. See {@link #ABOUTNESS}'s own javadoc for the full argument,
+ *       including the hub-degree wrinkle it does not paper over.
  * </ul>
  *
  * <p><b>And one dimension that is not a tier at all: which way the relation points (issue #84).</b>
@@ -55,9 +61,9 @@ import java.util.Map;
  * surviving 62% are specific awards which this weighs.
  *
  * <p><b>The numbers are one significant figure, and deliberately so.</b> What is measured is the
- * ORDER; 1.0, 0.5 and 0.2 are the coarsest numbers that express it. Anything more precise would be
- * a tuning claim this project has no way to evaluate — there is no held-out set of recommendations
- * a person has agreed with.
+ * ORDER; 1.0, 0.5, 0.2 and 0.1 are the coarsest numbers that express it. Anything more precise
+ * would be a tuning claim this project has no way to evaluate — there is no held-out set of
+ * recommendations a person has agreed with.
  *
  * <p>It lives in {@code domain} beside {@link EdgeTypes} because the code it keys on is this
  * vocabulary's own, unlike {@code RecognitionInstitutions}, which keys on Wikidata classes and
@@ -73,6 +79,29 @@ public final class RecommendationWeights {
 
   /** Both were recognised by the same body. A fact about institutions; worth a fifth. */
   public static final double RECOGNITION = 0.2;
+
+  /**
+   * Both works are about the same thing. A fact about the world's card catalogue rather than about
+   * either entity; worth a tenth.
+   *
+   * <p>{@code ABOUT} is admitted for the reason {@link #RECOGNITION} was (ADR 38, issue #111):
+   * single-authored work has no collaboration to find, so a technical bookshelf needs a route that
+   * is not co-credit or prize. That does not make the two facts equally strong evidence. An award
+   * is chosen by a body that compared candidates against each other; a shared subject is two
+   * authors happening to write about the same topic, which two books about software engineering do
+   * constantly and without knowing the other exists. It sits below {@link #RECOGNITION}, not beside
+   * it.
+   *
+   * <p>The measurement left an awkward fact on the table rather than a clean one: 96% of award
+   * nodes sit below {@link PathRanking#HUB_DEGREE}, so a shared minor award already tends to
+   * survive hub exclusion where a shared subject — a broader thing to have in common — more often
+   * does not. Weighing {@code ABOUT} above {@code RECOGNITION} would have fought that gap; weighing
+   * it below compounds it. The compounding is accepted rather than corrected for here, because the
+   * reason to rank it low is independent of the hub arithmetic — the evidence really is weaker —
+   * and using the weight to offset a hub-survival difference would be tuning the number to a side
+   * effect instead of to what the relation is worth.
+   */
+  public static final double ABOUTNESS = 0.1;
 
   /**
    * What an esteem-directional hop is worth when the entity being judged is the one <em>making</em>
@@ -145,6 +174,10 @@ public final class RecommendationWeights {
     // The direction here separates a person from a prize, which the hub rule has already dealt
     // with. Nobody is flattered by being an award.
     put(EdgeTypes.RECEIVED_AWARD, RECOGNITION, NO_ESTEEM);
+
+    // The direction here separates a work from its subject, and that is all it says — a book is
+    // not deferring to what it is about, and a subject is not esteemed by being written about.
+    put(EdgeTypes.ABOUT, ABOUTNESS, NO_ESTEEM);
   }
 
   private RecommendationWeights() {}
