@@ -362,7 +362,7 @@ view, and ADR 44 a fourth rather than a mode of one of them.
 
 | Package | Contents | Depends on |
 | --- | --- | --- |
-| `domain` | Records and the borrowed edge vocabulary (`EdgeTypes`), plus `KnownList` — the pure rules that turn a `--known` file and the ratings map into the three populations both dev tools need: what counts as owned ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)), what is suppressed, and what a revision pass may deal ([ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md)). They live here so both dev tools that read such a file apply the same ones. No third-party dependencies at all. | nothing |
+| `domain` | Records and the borrowed edge vocabulary (`EdgeTypes`), plus `KnownList` — the pure rules that turn a `--known` file and the ratings map into the populations the dev tools need: what counts as owned ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)), what is suppressed, and what a revision pass may deal ([ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md)). `promoted` and `suppressed` are each read by both `recommend` and `rate`, so the two tools cannot apply different answers; `revisitable` is read inside `rate` alone — `recommend` has no revision pass — and lives here so `Deck.dealRevision` and `RateRun`'s count of the same population cannot drift apart. No third-party dependencies at all. | nothing |
 | `port` | The seams: `GraphStore`, `AssertionLog`, `AffinityStore`, `SourceAdapter`, `EntityResolver`, and their small value types. | `domain` |
 | `tinker` | The chosen Gremlin adapter ([ADR 18](adr/0018-graph-engine-gremlin.md)). | `port`, `domain` |
 | `jena` | The RDF reference adapter, kept working as a cross-check. | `port`, `domain` |
@@ -1448,8 +1448,9 @@ the point the known-list check already was. Three things about that are easy to 
   number in ADR 45 into something with no defined reading.
 - **The boundary is `KnownList.SUPPRESSION_RATING`, and it is 2 because 3 is exactly neutral.**
   A 3 already weighs what no rating weighs, so it is the absence of a judgement rather than a
-  rejection. On the table measured for ADR 50 a boundary at 3 would have removed 117 entities that
-  had only been shrugged at.
+  rejection. On the table measured for ADR 50 there are 117 threes, 6 of them on the `--known` file
+  and so already excluded as known; a boundary at 3 would newly suppress the other **111**, entities
+  that had only been shrugged at.
 
 **Measured effect, on a copy of the real database (ADR 50 has the full figures):** at the default
 floor of 12 the candidate pool went 1,027 → 1,011 and 7 of the top 25 left, every one of them

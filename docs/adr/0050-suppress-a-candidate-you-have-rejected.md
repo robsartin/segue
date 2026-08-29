@@ -30,8 +30,9 @@ written:
 | --- | --- | --- |
 | below neutral | **72 of 177 — 41%** | 8 of 973 — 0.8% |
 
-A fifty-fold change in the rate of rejection, from one change to which candidates get offered. The
-`affinity` table read for this ADR on 2026-08-29, against a copy of the real database:
+Both figures in that table are quoted from issue #106's 2026-08-29 comment — the state of the
+corpus after #109's revision pass — and were not re-derived here. Everything below **was** read for
+this ADR, on 2026-08-29, from the `affinity` table of a copy of the real database:
 
 | rating | 1 | 2 | 3 | 4 | 5 | total |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -58,8 +59,10 @@ known rather than for being rejected.
 - **The suppressed set reaches the sweep as its own parameter, never unioned into the known-list.**
   `CandidateSweep.over` takes `known` and `suppressed` separately and tests both at the point the
   known-list check already was. Each of the two `.over(` call sites in `src/main` — `RecommendRun`
-  and `RateRun` — passes `KnownList.suppressed(ratings)`, and neither needed a new read: both
-  already held the ratings map for `promoted`.
+  and `RateRun` — passes `KnownList.suppressed(ratings)`, and neither needed a new read. Each
+  already held the ratings map, for a different reason: `RecommendRun` composes `KnownList.promoted`
+  itself, while `RateRun` receives the map for `Recommendations.regardFor` and its already-rated
+  filter (`RateCli.known` does the promotion for the deck).
 
 - **`--revise` can still reach a suppressed entity.** `Deck.dealRevision` and `RateRun`'s
   reconsideration count both take their population from `KnownList.revisitable`, which is the
@@ -81,9 +84,10 @@ multiply — and so boost — every candidate it reaches. The rejection would st
 was meant to argue against.
 
 Getting a real negative signal out of that seam means weights below zero, and that is not a tuning
-change. Every downstream number in ADR 45 assumes a non-negative multiplier: `Scorer` sums per-hop
-contributions and divides by the candidate's degree, and a sum containing negative terms can be
-zero, or negative, for two entirely different reasons — no evidence, or cancelled evidence. The
+change. Every downstream number in ADR 45 assumes a non-negative multiplier. Every `Scorer` sums per-hop
+contributions — `LIFT`, the measured default, then divides that sum by the candidate's degree — and
+a sum containing negative terms can be zero, or negative, for two entirely different reasons: no
+evidence, or cancelled evidence. The
 ranking that comes out has no defined meaning, and neither does the "N of yours through M shared
 intermediate(s)" line the tool prints beside every candidate. **Excluding the entity says "not this"
 without touching that arithmetic at all**, which is why it was chosen over the shape the issue
@@ -96,9 +100,12 @@ identically to no rating at all. **A 3 is not a rejection; it is the absence of 
 the deck records for "I have heard of this and that is all". Suppressing it would remove entities
 the owner declined to judge rather than entities they judged.
 
-The cost is measurable rather than hypothetical: the table read for this ADR holds **117 threes**,
-against 80 ratings at or below 2. A boundary at 3 would have removed those 117 from every future
-sweep, silently, on the strength of a keystroke that means "no opinion".
+The cost is measurable rather than hypothetical. The table read for this ADR holds 117 threes; **6
+of them are on the `--known` file and are already excluded from the candidate pool for being known**,
+so a boundary at 3 would newly suppress the other **111** — against 80 ratings at or below 2. How
+many of the 111 are live in any one run depends on the degree floor, exactly as it does for the
+rejections themselves (below). Whatever that number, they would go silently, on the strength of a
+keystroke that means "no opinion".
 
 This is also the same argument ADR 48 used to reject a promotion threshold of 3, running the other
 way, and it is worth noticing that the two thresholds are not symmetric: promotion at 4 leaves the
@@ -144,15 +151,17 @@ population. Its javadoc records why it is in `domain` rather than in either call
   rejected it* — and every consumer of the merged set would then need the sign to tell them apart.
   `knownFound`/`knownMissing`, `regardFor`'s seed weighting and `dealRevision`'s population each
   want a different subset, and the current shape gives each of them exactly one.
-- **Suppress at 3, so every non-positive rating stops being offered.** Rejected on the 117 threes,
-  and on `NEUTRAL_RATING` — argued above.
+- **Suppress at 3, so every non-positive rating stops being offered.** Rejected on the 111 threes
+  it would newly remove, and on `NEUTRAL_RATING` — argued above.
 - **Suppress at 1 only, the unambiguous rejection.** Would have applied to 3 entities. The
   distribution that re-opened this decision is almost entirely 2s (77 of the 80), so a boundary at 1
   ignores the evidence that made the case. It also reads the scale wrongly: the deck offers five
   keys, and a 2 pressed deliberately is a rejection with a shade of politeness, not a near-miss.
 - **Suppress, and remove the entity from the known-list as well when it is on the file.** Eight of
-  the 80 are on the `--known` file, so they seed the sweep at weight 2/3 while their neighbours are
-  scored. Rejected: the file means "acts I have seen live" (ADR 40), and having seen something is a
+  the 80 are on the `--known` file, so they seed the sweep while their neighbours are scored. Read
+  back individually on the copy, **all eight are rated 2**, so all eight weigh 2/3 today — but that
+  is a fact about this snapshot, not a property of the rule: `regardFor` divides by
+  `NEUTRAL_RATING`, so an on-file entity rated 1 would weigh 1/3. Rejected: the file means "acts I have seen live" (ADR 40), and having seen something is a
   fact about the past that a later low rating does not repeal. Suppression answers "should this be
   offered", not "did this happen".
 - **A time-limited suppression, so a rejection expires.** Rejected as machinery ahead of a need: it
@@ -164,7 +173,7 @@ population. Its javadoc records why it is in `domain` rather than in either call
 
 ## Consequences
 
-### It moved the ranking, which five earlier levers on this data did not
+### It moved the ranking, and every entity it removed from the top 25 was a rejection
 
 Measured on 2026-08-29 by running `./gradlew recommend` against a **copy** of the real database at
 the merge-base and at this branch's head, with the same real `--known` file and `--top 25`. The
@@ -203,8 +212,9 @@ At **floor 5**, which is where the 177-card pass that re-opened this decision wa
 | candidate pool | 1,676 | 1,604 |
 | top 25 unchanged | — | 9 of 25 |
 
-- **72 entities left the candidate pool** — every suppressed entity not on the `--known` file, so at
-  this floor the whole suppressed population was live.
+- **72 entities left the candidate pool** — every suppressed entity not on the `--known` file. The
+  other 8 of the 80 are on the file and were never candidates at any floor, being excluded as known;
+  so at floor 5 every rejection that *could* be a candidate was one.
 - **16 of the previous top 25 are gone, and every one of the sixteen was suppressed** (one rated 1,
   fifteen rated 2). **8 of the top 10**, including rank 1.
 - **16 genuinely new entities entered.** Survivor order again unchanged.
@@ -242,8 +252,10 @@ Three things bound that, and none of them dissolve it:
 
 - The rejection is a first-person judgement about an entity, not about a card. The owner is entitled
   to say no to a name they recognise regardless of how many edges segue holds.
-- `--revise 1` and `--revise 2` reach every suppressed entity, so the judgement is appealable at one
-  keystroke — deliberately, and see above.
+- `--revise 1` and `--revise 2` reach a suppressed entity the projected graph holds a node for —
+  `Deck.dealRevision` deals through `nodeByQid(...).ifPresent(...)`, so a qid with no node is skipped
+  there exactly as it is in the default mode. For anything segue can show a card for, the judgement
+  is appealable at one keystroke; deliberately, and see above.
 - Suppression removes a candidate; it does not retract anything or touch the graph. Nothing about
   the world-fact layer is decided by it.
 
@@ -255,8 +267,8 @@ open here — it belongs with those issues, and this ADR deliberately does not p
 ### Suppression does not un-know anything
 
 Eight of the 80 suppressed entities are on the `--known` file. They stay on the known-list, they
-still seed the sweep, and `regardFor` still weights them — at 2/3, because that is what the scale
-says. Suppression only answers the candidate question. Anyone expecting a low rating to remove
+still seed the sweep, and `regardFor` still weights them — each of the eight was read back
+individually and each is rated 2, so each weighs 2/3, which is what the scale says for a 2. Suppression only answers the candidate question. Anyone expecting a low rating to remove
 something from "what I have" will not find that here, and the alternative above says why.
 
 ### The threes are still stranded, and now more visibly

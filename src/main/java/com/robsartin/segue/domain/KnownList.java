@@ -34,9 +34,11 @@ public final class KnownList {
    * The rating at or below which an entity is suppressed — excluded from recommendations rather
    * than merely left unweighted. 2, not 3: {@code Recommendations.NEUTRAL_RATING} is 3, so a 3
    * scores identically to an unrated entity under {@code regardFor} and is not a rejection.
-   * Suppressing it would silently remove every neutral rating from future recommendations, not just
-   * the 72 the owner actually rated down — measured against a real 177-rating pass, that would have
-   * been 117 entities gone for no reason.
+   * Suppressing it would remove every neutral rating from future recommendations, not just the ones
+   * the owner actually rated down. Measured on the real table when ADR 50 was written: 117 threes,
+   * of which 111 are absent from the known-list file and so would be newly suppressed. (The 72
+   * below neutral that re-opened this decision came from one 177-card pass; the 117 and the 111 are
+   * counts over the whole 1,150-rating table, not over that pass.)
    */
   public static final int SUPPRESSION_RATING = 2;
 

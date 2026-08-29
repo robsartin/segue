@@ -68,9 +68,13 @@ Full reasoning: `docs/adr/0018-graph-engine-gremlin.md`. All decisions are recor
 
 ```
 domain/   records + Wikidata-derived edge vocabulary. NO third-party deps. Also KnownList
-          (ADR 48, ADR 50): the pure rules turning a --known file and the ratings map into
-          the three populations both dev tools need — promoted, suppressed, revisitable — so
-          `recommend` and `rate` cannot apply two different answers.
+          (ADR 48, ADR 50): pure rules turning a --known file and the ratings map into the
+          populations the dev tools need. promoted (RecommendRun, RateCli) and suppressed
+          (RecommendRun, RateRun) are each read by BOTH tools, so `recommend` and `rate`
+          cannot apply two different answers. revisitable is read inside `rate` alone
+          (Deck.dealRevision, RateRun.buildDeck) — `recommend` has no revision pass — and
+          lives here so the deal and the count that precedes it cannot diverge. One home per
+          question, whoever asks.
 port/     GraphStore, AssertionLog, AffinityStore, SourceAdapter, EntityResolver
           — the seams.
 tinker/   Gremlin adapter (the chosen one).
@@ -623,7 +627,8 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   folding rejections in would make both describe something other than the known-list. The seed loop
   never consults it, so a suppressed entity can still be an INTERMEDIATE. **The boundary is 2
   because 3 is exactly neutral** (`NEUTRAL_RATING = 3`, so 3/3 = 1.0, identical to unrated);
-  suppressing 3 would have silently removed 117 entities that were only shrugged at.
+  suppressing 3 would newly suppress 111 entities that were only shrugged at (117 threes in the
+  table, less the 6 on the --known file that CandidateSweep already excludes as known).
   **`--revise` can still reach a suppressed entity** — `KnownList.revisitable` is known ∪
   suppressed — and that is load-bearing, not a convenience: `AffinityStore` has no delete, so
   re-rating to 3+ is the ONLY way back, and an unreachable suppression is issue #109's trap one
