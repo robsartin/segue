@@ -279,7 +279,15 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   reason. **It bounds one call**: ten calls still add ten times the ceiling, and that is a separate
   issue rather than a reason to lower the number. 25 is a judgement informed by a distribution —
   measured on the real graph, 99.9% of CONCEPTs sit below it — not a measurement of the right
-  ceiling.
+  ceiling. **That distribution is ACCUMULATED DEGREE, not expansion yield**, and the two diverge at
+  the failure mode: an ordinary CONCEPT is never expanded directly, so a broad subject that has
+  never been expanded is inside that 99.9% and would still answer one call with 500. Do not write
+  "99.9% expand fully"; the guides and ADR 49 say "sit below the ceiling" for that reason. **The
+  0.072%-at-degree->=10 figure is ADR 47's re-measurement, NOT ADR 31's** — ADR 31 records fifteen
+  of 25,815, 0.058%, on a graph 4.8x smaller. And this is another kind-keyed rule a `KindMapper`
+  gap misfires: CONCEPT is also the "could not place this" bucket, so a mis-kinded WORK is capped
+  at 25 with no override and nothing in the result tells the two cases apart. It joins the list in
+  the P31 precedence gotcha below.
 - **A forward-heavy property spends the `maxNewEdges` bound before the reverse pass sees
   it.** ADR 36 concatenates forward claims first (they carry references and qualifiers;
   truthy triples do not), so a novelist's dozen P166 awards are kept ahead of every
@@ -423,7 +431,7 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   (wrongly, unsourced, but really) calls a city was stored city-first and became a `PLACE` — and
   nothing flagged it, while every kind-keyed rule quietly misfired: ADR 31's hub demotion is
   `CONCEPT`-only, DOT colours by kind, `SourceAdapter.supports(kind)` gates expansion (issue
-  #87). The ranking is **PERSON, WORK, GROUP, EVENT, PLACE, CONCEPT**, argued per rung in
+  #87), and since ADR 49 the expansion ceiling is `CONCEPT`-only too. The ranking is **PERSON, WORK, GROUP, EVENT, PLACE, CONCEPT**, argued per rung in
   `KindMapper.PRECEDENCE` and pinned in both directions by `KindMapperTest`. **Do not resolve
   this with a `P279` subclass walk** — it is a network call and both projections re-derive kinds
   offline, and it could not settle "city vs film" anyway, since neither subclasses the other.

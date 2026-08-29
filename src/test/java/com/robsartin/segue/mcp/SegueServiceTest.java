@@ -237,6 +237,34 @@ class SegueServiceTest {
   }
 
   @Test
+  @DisplayName(
+      "a PERSON expansion past the CONCEPT ceiling is not capped, so the legitimate path is"
+          + " unchanged (issue #112)")
+  void expandEntityDoesNotCapAPerson() {
+    // The guard reads the SEED's kind. Nothing else on this branch would notice if it stopped
+    // doing that: hard-code SegueService's lookup to NodeKind.CONCEPT and every other test still
+    // passes, while every PERSON expansion silently drops to 25.
+    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Well Connected Person", WIKIDATA));
+    int pastTheCeiling = ExpansionBounds.CONCEPT_CEILING + 10;
+    List<AssertionRecord> assertions = new ArrayList<>();
+    List<NodeAssertion> neighbors = new ArrayList<>();
+    for (int i = 0; i < pastTheCeiling; i++) {
+      String qid = "Q" + (100 + i);
+      assertions.add(new AssertionRecord("Q1", qid, "DIRECTED", null, null, WIKIDATA));
+      neighbors.add(new NodeAssertion(qid, NodeKind.WORK, "Work " + i, WIKIDATA));
+    }
+    SourceAdapter generous =
+        new StubSourceAdapter("generous", new ExpandResult(assertions, neighbors, false, false));
+
+    ToolResult<SegueService.ExpansionSummary> result = service(generous).expandEntity("Q1", 200);
+
+    assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
+    assertThat(result.payload().truncated()).isFalse();
+    assertThat(result.payload().edgesAdded()).isEqualTo(pastTheCeiling);
+    assertThat(graph.edges("Q1")).hasSize(pastTheCeiling);
+  }
+
+  @Test
   @DisplayName("expandEntity reports partial and skips an edge whose neighbour cannot be resolved")
   void expandEntitySkipsUnreachableNeighbour() {
     ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));

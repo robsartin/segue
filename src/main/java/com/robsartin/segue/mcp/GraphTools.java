@@ -65,7 +65,13 @@ public class GraphTools {
           discovery: it pulls in hundreds of works that merely mention it. Asking for a larger \
           bound will not raise that ceiling; asking for a smaller one is honoured exactly. The \
           result comes back partial and names the ceiling actually applied. Every other kind is \
-          bounded only by maxNewEdges.\
+          bounded only by maxNewEdges.
+
+          CONCEPT is also the kind an entity gets when its Wikidata classes are not recognised, so \
+          a capped expansion occasionally means "we could not tell what this is" rather than "this \
+          is a broad subject". If the entity is plainly a work, a person or a place, treat the cap \
+          as a classification gap worth reporting to the user rather than as a fact about the \
+          entity.\
           """,
       annotations =
           @McpTool.McpAnnotations(

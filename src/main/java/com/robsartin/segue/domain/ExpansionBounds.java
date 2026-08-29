@@ -18,13 +18,19 @@ package com.robsartin.segue.domain;
  *
  * <p><b>{@link #CONCEPT_CEILING} is a judgement, informed by the graph's own shape.</b> On a copy
  * of the real 123,752-node graph, 89 {@code CONCEPT} nodes (0.072%) sit at in-graph degree 10 or
- * above — confirming ADR 31's recorded figure — and of those, 70 sit between 10 and 24. Below 25
- * covers 16,931 of 16,950 {@code CONCEPT}s, 99.88% of them; below 50 covers 16,946, 99.96%. A
- * ceiling of 25 therefore lets ordinary {@code CONCEPT}s — everything the graph has accumulated by
- * ordinary, indirect means — expand without ever touching it, while stopping a direct flood two
- * orders of magnitude short of the 500-edge failure mode. Only 19 {@code CONCEPT}s in the whole
- * graph sit at or past it, and every one measured in that tail so far is career recognition, not an
- * ordinary subject.
+ * above, and of those, 70 sit between 10 and 24. Below 25 covers 16,931 of 16,950 {@code CONCEPT}s,
+ * 99.88% of them; below 50 covers 16,946, 99.98%. Only 19 in the whole graph sit at or past 25. The
+ * 0.072% matches ADR 47's re-measurement of this same database state — ADR 31's own recorded figure
+ * is fifteen of 25,815, 0.058%, on a graph 4.8x smaller — so the shape has not drifted.
+ *
+ * <p><b>That distribution is accumulated degree, not expansion yield</b>, and conflating the two
+ * would overstate what it proves. An ordinary {@code CONCEPT} is never an expansion seed; its
+ * degree accrues an edge at a time from other entities' forward claims. So the measurement says a
+ * ceiling of 25 sits above nearly every {@code CONCEPT} this graph has ever accumulated. It does
+ * <b>not</b> say a broad subject would return 25 rows if expanded — a broad subject that has never
+ * been expanded is counted in that 99.88% and would still answer with 500. The number is chosen
+ * against the gap between those two facts: comfortably above the ordinary accumulation, and two
+ * orders of magnitude below the flood.
  *
  * <p>Nothing here knows what a source adapter is or what {@code maxNewEdges} means to one — see
  * {@code SegueService.expandEntity}, which is the only caller and feeds the result into the same

@@ -4,7 +4,7 @@ date: "2026-08-29"
 topic: a-kind-scoped-ceiling-on-concept-expansion
 tags: [project, mcp, ingest, graph]
 supersedes: []
-related: [main-subject-as-the-route-through-what-a-book-is-about, reverse-lookup-via-sparql, mcp-tool-surface, mcp-protocol-conformance, six-kind-ontology, path-ranking-by-confidence, assertion-log-source-of-truth, retraction-as-a-new-claim, source-adapter-spi]
+related: [main-subject-as-the-route-through-what-a-book-is-about, store-p31-and-rederive-kind-at-projection, reverse-lookup-via-sparql, mcp-tool-surface, mcp-protocol-conformance, six-kind-ontology, path-ranking-by-confidence, assertion-log-source-of-truth, retraction-as-a-new-claim, source-adapter-spi]
 ---
 # 49. Bound a CONCEPT expansion with a ceiling on the request, not a smaller default
 
@@ -55,15 +55,33 @@ lookup counts it:
 | **all `CONCEPT` nodes** | **16,950** |
 | **all nodes, every kind** | **123,752** |
 
-Read two ways. **A ceiling of 25 lets 16,931 of 16,950 `CONCEPT`s — 99.9% — expand fully**: only 19
-`CONCEPT`s in the whole graph have ever accumulated more edges than that. A ceiling of 50 covers
-99.96%, which is not a meaningfully different answer for twice the room, and both sit two orders of
-magnitude below the 500-edge failure. And **89 `CONCEPT`s sit at degree ≥ 10, 0.072% of the
-graph** — which reproduces [ADR 31](0031-path-ranking-by-confidence.md)'s recorded figure exactly,
-on the same graph state ADR 47 re-measured. That agreement is worth stating because that figure is
-load-bearing elsewhere: it is the evidence ADR 47 used to refuse raising `PathRanking.HUB_DEGREE`,
-and a distribution that contradicted it would have reopened that refusal rather than settled this
-one.
+**A ceiling of 25 sits above 16,931 of 16,950 `CONCEPT`s — 99.9% of them.** Only 19 in the whole
+graph have accumulated more edges than that. A ceiling of 50 sits above 99.98%, which is not a
+meaningfully different answer for twice the room, and both sit two orders of magnitude below the
+500-edge failure.
+
+**What that distribution is, and what it is not.** It is *accumulated in-graph degree*, folded from
+the log. The ceiling bounds something else: *what one reverse expansion returns from Wikidata*. The
+two diverge at exactly the failure mode, so the distinction has to be made rather than glossed. An
+ordinary `CONCEPT` is never an expansion seed — its degree accrues an edge at a time, from other
+entities' forward claims naming it — which is why 99.9% of them sit so far below 25. **A low
+accumulated degree therefore predicts nothing about what expanding that node would return**: the
+two subjects measured above would each answer one call with 500 rows, and an unexpanded node's
+degree cannot distinguish them from any other. So the measurement establishes that a ceiling of 25
+is nearly free for the graph as it stands. It does not establish that a bounded `CONCEPT` expansion
+returns everything there was to find, and this ADR does not claim it. The number is chosen against
+the *gap* between the two facts.
+
+**The 0.072% corroborates rather than measures.** 89 `CONCEPT`s sit at degree ≥ 10, which matches
+[ADR 47](0047-main-subject-as-the-route-through-what-a-book-is-about.md)'s re-measurement of this
+same database state exactly. That figure is load-bearing elsewhere — it is the evidence ADR 47 used
+to refuse raising `PathRanking.HUB_DEGREE` — so a distribution that contradicted it would have
+reopened that refusal rather than settled this one. **It is not ADR 31's figure.**
+[ADR 31](0031-path-ranking-by-confidence.md), where the threshold was set, records something older
+and smaller: *fifteen of 25,815 nodes*, 0.058%, on a graph 4.8× smaller. It contains neither 89 nor
+0.072%, and the agreement being claimed here is with ADR 47's number, not ADR 31's. That the two
+sit 0.058% to 0.072% apart across a 4.8× growth is ADR 47's point that the threshold has not
+drifted, and it survives this re-measurement.
 
 ## Decision
 
@@ -171,6 +189,19 @@ work being done.
   GROUP*, and that sentence still lives outside this repository. What is now in the code is a
   smaller number for one kind. A `CONCEPT` expansion is still allowed, still adds up to the ceiling,
   and still adds works nobody has read — just 25 of them rather than 500.
+
+- **`CONCEPT` is also the "we could not place this" bucket, so the guard fires on classification
+  gaps too.** `KindMapper` maps every class its whitelist does not know to `CONCEPT`, and that
+  fallback is not rare: [ADR 31](0031-path-ranking-by-confidence.md) measured 1,058 of the 1,416
+  `CONCEPT` intermediates in a real graph as works wearing a class the whitelist had not learned.
+  (Those particular classes were added in that same change; the fallback itself is permanent.)
+  `SegueService.expandEntity` reads the kind recorded on the node, so a mis-kinded work is capped at
+  25 and reported `partial` with no override, exactly like a broad subject — and nothing in the
+  result distinguishes the guard doing its job from the guard firing on a gap in `KindMapper`. One
+  thing softens it and does not close it: ADR 42 re-derives kind at projection time from the classes
+  stored on the claim, so a whitelist improvement reaches such a node with no re-fetch, and an
+  expansion afterwards is unbounded. The honest statement is that the blast radius of a
+  `KindMapper` gap now includes this rule.
 
 - **It bounds one call, and calls are not counted.** Ten expansions of the same broad subject add
   ten times the ceiling, and nothing here sees the second one. Fixing that means state across calls,
