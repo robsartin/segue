@@ -33,9 +33,6 @@ public final class RateRun {
   /** As many routes as fit on a card without turning it into a page to read. */
   private static final int ROUTES_PER_CARD = 3;
 
-  /** The recommender's own floor: below this a normalised score divides by too little. */
-  private static final int MIN_CANDIDATE_DEGREE = 12;
-
   private RateRun() {}
 
   /**
@@ -51,6 +48,12 @@ public final class RateRun {
    *     same {@code --known} file the moment anything was rated. The deck exists to collect the
    *     ratings; showing candidates chosen as though none had been collected is the one thing it
    *     must not do
+   * @param minDegree the candidate sweep's floor, passed straight to {@code CandidateSweep.over}.
+   *     {@code RateCli} defaults this to {@code Recommendations.MIN_CANDIDATE_DEGREE} by reference
+   *     — the same constant {@code RecommendCli} defaults to — rather than this class holding a
+   *     second copy that a re-measurement of the shared floor would leave stale (issue #119).
+   *     Unused whenever {@code reviseRating} is present, since revise mode runs no sweep; {@code
+   *     RateCli.parse} refuses that combination before it reaches here
    * @param reviseRating absent for the normal unrated sweep; when present (issue #109), the
    *     candidate sweep is skipped entirely rather than run and discarded — a candidate is by
    *     definition unrated, so a revision pass has nothing there to reconsider, and the sweep alone
@@ -61,6 +64,7 @@ public final class RateRun {
       List<String> known,
       Map<String, Integer> ratings,
       int candidateCount,
+      int minDegree,
       OptionalInt reviseRating,
       Consumer<String> notes) {
     Objects.requireNonNull(graph, "graph");
@@ -100,7 +104,7 @@ public final class RateRun {
     } else if (candidateCount > 0) {
       Sweep sweep =
           new CandidateSweep(graph, RecognitionInstitutions::isRecognitionInstitution)
-              .over(known, Scorer.LIFT, MIN_CANDIDATE_DEGREE, Recommendations.regardFor(ratings));
+              .over(known, Scorer.LIFT, minDegree, Recommendations.regardFor(ratings));
       Routes routes = new Routes(graph, RecognitionInstitutions::isRecognitionInstitution);
       for (Recommendation candidate : Recommendations.rank(sweep.candidates(), candidateCount)) {
         candidates.add(new Explained(candidate, routes.bestFor(candidate, ROUTES_PER_CARD)));

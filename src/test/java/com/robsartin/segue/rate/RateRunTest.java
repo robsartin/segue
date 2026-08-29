@@ -65,6 +65,7 @@ class RateRunTest {
               List.of(KNOWN_ONE, KNOWN_TWO),
               Map.of(KNOWN_TWO, 4),
               0,
+              MIN_CANDIDATE_DEGREE,
               OptionalInt.empty(),
               notes::add);
 
@@ -88,6 +89,7 @@ class RateRunTest {
               List.of("Q900001", "Q900002"),
               Map.of("Q900001", 3, "Q900002", 5),
               0,
+              MIN_CANDIDATE_DEGREE,
               OptionalInt.of(3),
               notes::add);
 
@@ -116,6 +118,7 @@ class RateRunTest {
               List.of("Q900001"),
               Map.of("Q900001", 3, "Q900009", 3),
               0,
+              MIN_CANDIDATE_DEGREE,
               OptionalInt.of(3),
               notes::add);
 
@@ -140,7 +143,13 @@ class RateRunTest {
 
       List<Card> deck =
           RateRun.buildDeck(
-              graph, List.of(KNOWN_ONE), Map.of(), 10, OptionalInt.empty(), notes::add);
+              graph,
+              List.of(KNOWN_ONE),
+              Map.of(),
+              10,
+              MIN_CANDIDATE_DEGREE,
+              OptionalInt.empty(),
+              notes::add);
 
       // The candidate branch actually ran and actually found something, or this test would pass
       // for the wrong reason — the same emptiness that made the vacuous regex pass before.
@@ -149,6 +158,44 @@ class RateRunTest {
       assertThat(notes)
           .noneMatch(
               n -> n.contains(KNOWN_ONE) || n.contains(SHARED_ARTIST) || n.contains(ANCESTOR));
+    }
+  }
+
+  @Test
+  @DisplayName("a lower --min-degree reaches a candidate the default floor excludes (issue #119)")
+  void aLowerFloorReachesCandidatesTheDefaultExcludes() throws Exception {
+    try (TinkerGraphStore graph = new TinkerGraphStore()) {
+      node(graph, KNOWN_ONE, NodeKind.GROUP, "one you know");
+      node(graph, SHARED_ARTIST, NodeKind.PERSON, "the artist you cite");
+      node(graph, ANCESTOR, NodeKind.GROUP, "who that artist cites");
+      edge(graph, KNOWN_ONE, SHARED_ARTIST, EdgeTypes.INFLUENCED_BY.code());
+      edge(graph, SHARED_ARTIST, ANCESTOR, EdgeTypes.INFLUENCED_BY.code());
+      // Below the recommender's default floor of 12, at or above a lowered one of 5 — the
+      // floor-5 candidate list issue #118 measured and issue #119 exists to let this deck rate.
+      int loweredFloor = 5;
+      padDegreeTo(graph, ANCESTOR, loweredFloor);
+
+      List<Card> atTheDefaultFloor =
+          RateRun.buildDeck(
+              graph,
+              List.of(KNOWN_ONE),
+              Map.of(),
+              10,
+              MIN_CANDIDATE_DEGREE,
+              OptionalInt.empty(),
+              note -> {});
+      assertThat(atTheDefaultFloor).extracting(Card::qid).doesNotContain(ANCESTOR);
+
+      List<Card> atTheLoweredFloor =
+          RateRun.buildDeck(
+              graph,
+              List.of(KNOWN_ONE),
+              Map.of(),
+              10,
+              loweredFloor,
+              OptionalInt.empty(),
+              note -> {});
+      assertThat(atTheLoweredFloor).extracting(Card::qid).contains(ANCESTOR);
     }
   }
 
@@ -170,12 +217,26 @@ class RateRunTest {
       everything.addAll(LUKEWARM);
 
       List<Card> unweighted =
-          RateRun.buildDeck(graph, everything, Map.of(), 1, OptionalInt.empty(), note -> {});
+          RateRun.buildDeck(
+              graph,
+              everything,
+              Map.of(),
+              1,
+              MIN_CANDIDATE_DEGREE,
+              OptionalInt.empty(),
+              note -> {});
       // Counting alone, the candidate six of your things reach beats the one three of them do.
       assertThat(unweighted).extracting(Card::qid).contains(CROWDED).doesNotContain(BELOVED);
 
       List<Card> weighted =
-          RateRun.buildDeck(graph, everything, ratings(), 1, OptionalInt.empty(), note -> {});
+          RateRun.buildDeck(
+              graph,
+              everything,
+              ratings(),
+              1,
+              MIN_CANDIDATE_DEGREE,
+              OptionalInt.empty(),
+              note -> {});
       assertThat(weighted).extracting(Card::qid).contains(BELOVED).doesNotContain(CROWDED);
     }
   }

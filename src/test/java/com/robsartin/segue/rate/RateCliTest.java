@@ -3,6 +3,7 @@ package com.robsartin.segue.rate;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.robsartin.segue.domain.Recommendations;
 import com.robsartin.segue.rate.RateCli.Options;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -33,6 +34,9 @@ class RateCliTest {
     assertThat(options.known()).isEqualTo(Path.of("/tmp/known.csv"));
     assertThat(options.port()).isEqualTo(RateCli.DEFAULT_PORT);
     assertThat(options.database()).isEqualTo(Path.of(HOME, ".segue", "segue.db"));
+    // The default run must deal exactly what it always has: the same floor `recommend` defaults
+    // to, by reference rather than by a second copy of the number (issue #119).
+    assertThat(options.minDegree()).isEqualTo(Recommendations.MIN_CANDIDATE_DEGREE);
   }
 
   @Test
@@ -115,6 +119,36 @@ class RateCliTest {
                 RateCli.parse(new String[] {"--known", "k.csv", "--revise", "9"}, null, "/home/x"))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("1 to 5");
+  }
+
+  @Test
+  @DisplayName("the floor is a dial the command line turns, matching --recommend's flag")
+  void theFloorIsADialTheCommandLineTurns() {
+    Options options = parse("--known", "/tmp/known.csv", "--min-degree", "5");
+
+    assertThat(options.minDegree()).isEqualTo(5);
+  }
+
+  @Test
+  @DisplayName("a floor below two would let a node with one edge be normalised to the top")
+  void theFloorHasAFloorOfItsOwn() {
+    assertThatThrownBy(() -> parse("--known", "/tmp/known.csv", "--min-degree", "1"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("--min-degree");
+  }
+
+  @Test
+  @DisplayName("--min-degree with --revise is refused: revise mode runs no sweep for it to floor")
+  void reviseAndMinDegreeAreRefusedTogether() {
+    assertThatThrownBy(
+            () ->
+                parse(
+                    "--known", "/tmp/known.csv",
+                    "--revise", "3",
+                    "--min-degree", "5"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("--min-degree")
+        .hasMessageContaining("--revise");
   }
 
   @Test
