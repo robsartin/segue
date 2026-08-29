@@ -651,6 +651,24 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   that was only ever offered because segue had under-fetched it is a judgement made on incomplete
   information, and nothing re-opens the question when ingest improves. ADR 50.
 
+- **The deck page is tested by running it in a real browser, because reading it as text cannot
+  tell a guard from a guard-shaped comment.** Mutation-testing `DeckPageTest` (issue #103) caught
+  every *deleted* guard in `deck.html` and missed every *defective* one — most sharply, keeping
+  `if (!response.ok)` while deleting its `return` reinstates #101's silent-data-loss defect with
+  the suite green. `DeckBehaviourTest` now drives the page in headless Chrome over the DevTools
+  protocol and asserts on what the owner would see; all eight mutations fail against it. **Do not
+  reach for HtmlUnit** — 5.4.0, the current release, has no `fetch` and does not parse `async`, so
+  the whole script block is a syntax error and the deck never leaves "loading…" (measured, ADR 52).
+  There is deliberately **no new test dependency**: `ProcessBuilder`, `java.net.http.WebSocket` and
+  Jackson are enough, and Chrome is discovered rather than downloaded. The tests skip where no
+  browser is installed, and CI sets `SEGUE_REQUIRE_BROWSER` so that there a missing browser FAILS
+  instead of skipping — the same trap #93 fixed for Graphviz, and the guard itself was
+  positively controlled against a non-existent browser. One mutation is uncaught and is
+  **equivalent, not missed**: deleting the `busy` half of `rate()`'s own guard changes nothing,
+  because `current` is null whenever `busy` is true. Also learned there: **Chrome retries a POST
+  whose connection dies before any response**, so one unanswered rating reached the stub three
+  times — count what the server received by value, not by size.
+
 - **The taste layer's classes deliberately have no package of their own.**
   `AffinityRecord` sits in `domain`, `AffinityStore` in `port`,
   `SqliteAffinityStore` in `sqlite`, `TasteTools` in `mcp` — each where its

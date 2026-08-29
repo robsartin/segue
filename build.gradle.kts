@@ -94,6 +94,19 @@ tasks.test {
     //
     // build/, not a TempDir: `./gradlew clean` removes it, and nothing in the suite reads a graph
     // seeded by a previous run through this default.
+    // DeckBehaviourTest runs the real deck page in a real headless Chrome (issue #103) and skips
+    // itself where none is installed, so `./gradlew check` stays green on a machine without one.
+    // CI sets SEGUE_REQUIRE_BROWSER, which turns that skip into a failure — #93 installed Graphviz
+    // for exactly this reason: the one check standing between deck.html and a silent regression
+    // must not be able to report success by never having run.
+    systemProperty(
+        "segue.chrome",
+        providers.systemProperty("segue.chrome").getOrElse(""),
+    )
+    systemProperty(
+        "segue.requireBrowser",
+        providers.environmentVariable("SEGUE_REQUIRE_BROWSER").getOrElse("false"),
+    )
     systemProperty(
         "segue.database",
         layout.buildDirectory.file("test-data/segue-test.db").get().asFile.absolutePath,

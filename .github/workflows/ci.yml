@@ -35,7 +35,25 @@ jobs:
       - name: Install Graphviz
         run: sudo apt-get update && sudo apt-get install -y graphviz
 
+      # DeckBehaviourTest drives the real deck page in a real headless Chrome (issue #103): the
+      # page is a hundred lines of async/await over fetch, and the only pure-Java browser that
+      # would have needed no install, HtmlUnit, cannot parse or run it. The runner image usually
+      # carries Chrome already; installing it when it does not is cheaper than finding out through
+      # a skipped test.
+      - name: Install Chrome
+        run: |
+          if ! command -v google-chrome >/dev/null 2>&1; then
+            wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+            sudo apt-get update
+            sudo apt-get install -y ./google-chrome-stable_current_amd64.deb
+          fi
+          google-chrome --version
+
       - name: Check
+        # Not a preference: with this set, a missing browser fails the build instead of skipping
+        # the only executable check on deck.html.
+        env:
+          SEGUE_REQUIRE_BROWSER: "true"
         run: ./gradlew --no-daemon check
 
       - name: Upload test and coverage reports
