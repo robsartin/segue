@@ -188,7 +188,7 @@ class ArchitectureTest {
                   + " its Javadoc.");
 
   /**
-   * A call or an unbound method reference is both an access, and neither is a subtype of the other.
+   * A call or a method reference is both an access, and neither is a subtype of the other.
    *
    * <p>ArchUnit models {@code r.note()} as a {@code JavaMethodCall} under {@code JavaCall}, and
    * {@code AffinityRecord::note} as a {@code JavaMethodReference} under {@code
@@ -200,11 +200,11 @@ class ArchitectureTest {
    */
   private static final DescribedPredicate<JavaAccess<?>> A_CALL_OR_A_METHOD_REFERENCE =
       DescribedPredicate.describe(
-          "a call or an unbound method reference", JavaCodeUnitAccess.class::isInstance);
+          "a call or a method reference", JavaCodeUnitAccess.class::isInstance);
 
   /**
-   * A call to {@code name}, <b>or an unbound method reference to it</b>, on an owner assignable to
-   * {@code owner}.
+   * A call to {@code name}, <b>or a method reference to it</b>, on an owner assignable to {@code
+   * owner}.
    *
    * <p>Assignability, not the exact owner, for the same reason {@link #noPrintStackTrace} needs it:
    * javac encodes the call-site owner as the <em>static type of the receiver expression</em>. A
@@ -230,6 +230,14 @@ class ArchitectureTest {
    * caught it as a <em>type</em> dependency and would not have seen a reference to a method on a
    * type the package may name.
    *
+   * <p><b>Bound references match too, which is why neither string above says "unbound".</b> The
+   * planted violations were all unbound ({@code AffinityRecord::note}), because that is the form
+   * issue #104 was written about; the issue-#104 review then checked {@code t::note} on a parameter
+   * and {@code held::note} on a field, and both are caught. The wording matters more here than it
+   * looks: these two strings are what a developer reads <em>at the moment a fence fires</em>, and
+   * reporting a real bound-reference leak under text that says only unbound ones are covered would
+   * send them looking for a second hole that is not there.
+   *
    * <p><b>{@link #A_CALL_OR_A_METHOD_REFERENCE} is not decoration.</b> {@code JavaAccess} also
    * covers field accesses, and a record's component field carries the accessor's name — so without
    * that clause {@code callTo("note", AffinityRecord.class)} would match {@code AffinityRecord}'s
@@ -241,7 +249,7 @@ class ArchitectureTest {
     return A_CALL_OR_A_METHOD_REFERENCE
         .and(JavaAccess.Predicates.target(HasName.Predicates.name(name)))
         .and(JavaAccess.Predicates.targetOwner(JavaClass.Predicates.assignableTo(owner)))
-        .as("a call or an unbound method reference to %s.%s", owner.getSimpleName(), name);
+        .as("a call or a method reference to %s.%s", owner.getSimpleName(), name);
   }
 
   /**
