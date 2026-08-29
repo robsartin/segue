@@ -58,7 +58,20 @@ public class GraphTools {
           maxNewEdges bounds how many new assertions this call will consider; omit it to use the \
           server's configured default. The bound keeps the most-linked neighbours rather than an \
           arbitrary slice, so a small bound still returns the famous ones first. The result reports \
-          whether it had to stop early at that bound, or could not resolve some neighbours.\
+          whether it had to stop early at that bound, or could not resolve some neighbours.
+
+          A CONCEPT seed — a subject, a topic, an award — is capped at a much smaller ceiling than \
+          any maxNewEdges you pass, because expanding a broad subject is a flood rather than a \
+          discovery: it pulls in hundreds of works that merely mention it. Asking for a larger \
+          bound will not raise that ceiling; asking for a smaller one is honoured exactly. The \
+          result comes back partial and names the ceiling actually applied. Every other kind is \
+          bounded only by maxNewEdges.
+
+          CONCEPT is also the kind an entity gets when its Wikidata classes are not recognised, so \
+          a capped expansion occasionally means "we could not tell what this is" rather than "this \
+          is a broad subject". If the entity is plainly a work, a person or a place, treat the cap \
+          as a classification gap worth reporting to the user rather than as a fact about the \
+          entity.\
           """,
       annotations =
           @McpTool.McpAnnotations(
@@ -72,7 +85,8 @@ public class GraphTools {
               required = false,
               description =
                   "Upper bound on new assertions to consider in this call. Omit to use the"
-                      + " server's configured default.")
+                      + " server's configured default. A CONCEPT seed is capped below this — see"
+                      + " the tool description.")
           Integer maxNewEdges) {
     CorrelationId.begin();
     try {

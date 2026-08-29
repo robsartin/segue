@@ -587,6 +587,7 @@ sequenceDiagram
     Tools->>Svc: expandEntity(qid, bound)
     Svc->>Graph: node(qid)
     Graph-->>Svc: NodeRecord, else "unknown entity" error result
+    Svc->>Svc: ExpansionBounds.effective — a CONCEPT seed is capped (ADR 49)
 
     loop every SourceAdapter that supports the seed's kind
         Svc->>Adapter: expand(seed, ExpandContext)
@@ -630,6 +631,14 @@ the bounded assertion list; for each assertion naming a neighbour the graph has 
 identity from the adapter if the adapter supplied it and otherwise fetches it, records the node
 through `IngestService`, and only then records the edge. Every write is log-then-graph. The call
 returns a single `ToolResult` whose outcome is `ok` or `partial`, never a thrown exception.
+
+**The requested bound is resolved through `ExpansionBounds.effective` before anything else sees it**
+(issue #112, [ADR 49](adr/0049-a-kind-scoped-ceiling-on-concept-expansion.md)). A `CONCEPT` seed is
+capped; every other kind's request passes through unchanged. It is a ceiling on the request rather
+than a smaller default, so a caller cannot ask past it and a caller asking for less than it still
+gets what they asked for. Because the effective number is what builds the `ExpandContext`, it is
+also the number the reverse query spends server-side — a bounded `CONCEPT` expansion does not fetch
+five hundred rows and discard most of them.
 
 **Identity the adapter supplied is recorded for a neighbour that already exists, too** (issue #55).
 A node's kind comes from `KindMapper`'s whitelist, which grows as it is measured against real data,
@@ -695,6 +704,14 @@ is Wikidata's inverse of one already in `EdgeTypes` reintroduces the duplicate: 
   bound bites the better-evidenced claims survive.
 - **The bound is spent server-side** in the reverse query, as `ORDER BY DESC(?sitelinks) LIMIT n+1`.
   The extra row is what makes `truncated` an observation rather than a guess.
+- **A `CONCEPT` seed's bound is lowered before the adapter is called at all**
+  ([ADR 49](adr/0049-a-kind-scoped-ceiling-on-concept-expansion.md)). `SegueService.expandEntity`
+  resolves the request through `ExpansionBounds.effective` and builds the `ExpandContext` from the
+  result, so the ceiling reaches `ReverseClaims` as the SPARQL `LIMIT` like any other bound. The
+  measurement behind the number is in the ADR; the short version is that expanding a broad subject
+  hits the reverse lookup's 501-row cap, and 99.9% of the `CONCEPT`s in the real graph sit below the
+  ceiling anyway. A ceiling that bites is reported as `partial` and names itself, which is the same
+  rule as everything else in this list.
 - **Reverse-discovered edges are graded lower and carry no validity dates**, because a truthy triple
   exposes neither references nor qualifiers. That is a priced-in trade, not a bug.
 - **Nothing throws.** An unreachable Action API returns `ExpandResult.unavailable()`; a Query

@@ -261,8 +261,35 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   is what the books actually state — **not** the subjects a person would name; Tanenbaum's
   Computer Networks carries no P921 and Effective Java is not in Wikidata, so **the shelf is
   not covered and the ADR says so**. Weighed as a fourth tier, `ABOUTNESS = 0.1`, below
-  `RECOGNITION`. **Never expand a subject node** — one `expand_entity` on a broad CONCEPT pulls
-  up to 500 edges; nothing in the code stops it yet, that is issue #112. ADR 47.
+  `RECOGNITION`. **Never expand a subject node** — one `expand_entity` on a broad CONCEPT would pull
+  up to 500 edges. **Bounded since ADR 49** (issue #112); the discipline is still a human one, and
+  the ceiling bounds the damage rather than expressing the policy. ADR 47.
+- **A CONCEPT expansion is capped by a ceiling on the REQUEST, not by a smaller default** (issue
+  #112, ADR 49). `ExpansionBounds.effective(kind, requested)` in `domain` is the whole rule and is
+  the authority on the number; `SegueService.expandEntity` resolves the request through it before
+  building the `ExpandContext`. **The direction is the point**: a caller asking for 200 gets the
+  ceiling, a caller asking for 5 gets 5. A default would be bypassed by exactly the call the guard
+  exists to stop. Consequences worth knowing: the ceiling reaches `ReverseClaims` as the SPARQL
+  `LIMIT`, so a bounded CONCEPT expansion never fetches past it rather than fetching 500 and
+  discarding; a bitten ceiling arrives as `partial` naming the effective bound, through the same
+  OBSERVED `truncated` comparison `findPaths` uses (issue #65). **The refusal is deliberately NOT at
+  `SourceAdapter.supports`** — `WikidataSourceAdapter.supports` returns `true` unconditionally and
+  is the only implementation in `src/main`, so declining CONCEPT there would leave the adapter loop
+  with nothing to run and report a successful expansion that added nothing: a silent zero, not a
+  reason. **It bounds one call**: ten calls still add ten times the ceiling, and that is a separate
+  issue rather than a reason to lower the number. 25 is a judgement informed by a distribution —
+  measured on the real graph, 99.9% of CONCEPTs sit below it — not a measurement of the right
+  ceiling. **That distribution is ACCUMULATED DEGREE, not expansion yield**, and the two diverge at
+  the failure mode: an ordinary CONCEPT has not been expanded directly (the discipline, not a law),
+  so a low accumulated degree predicts NOTHING about what expanding that node would return. The TWO
+  subjects measured for #112 each hit the 501-row cap; any other CONCEPT returns whatever it
+  actually has, which its degree does not reveal. Do not write "99.9% expand fully"; the guides and
+  ADR 49 say "sit below the ceiling" for that reason. **The
+  0.072%-at-degree->=10 figure is ADR 47's re-measurement, NOT ADR 31's** — ADR 31 records fifteen
+  of 25,815, 0.058%, on a graph 4.8x smaller. And this is another kind-keyed rule a `KindMapper`
+  gap misfires: CONCEPT is also the "could not place this" bucket, so a mis-kinded WORK is capped
+  at 25 with no override and nothing in the result tells the two cases apart. It joins the list in
+  the P31 precedence gotcha below.
 - **A forward-heavy property spends the `maxNewEdges` bound before the reverse pass sees
   it.** ADR 36 concatenates forward claims first (they carry references and qualifiers;
   truthy triples do not), so a novelist's dozen P166 awards are kept ahead of every
@@ -406,7 +433,7 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   (wrongly, unsourced, but really) calls a city was stored city-first and became a `PLACE` — and
   nothing flagged it, while every kind-keyed rule quietly misfired: ADR 31's hub demotion is
   `CONCEPT`-only, DOT colours by kind, `SourceAdapter.supports(kind)` gates expansion (issue
-  #87). The ranking is **PERSON, WORK, GROUP, EVENT, PLACE, CONCEPT**, argued per rung in
+  #87), and since ADR 49 the expansion ceiling is `CONCEPT`-only too. The ranking is **PERSON, WORK, GROUP, EVENT, PLACE, CONCEPT**, argued per rung in
   `KindMapper.PRECEDENCE` and pinned in both directions by `KindMapperTest`. **Do not resolve
   this with a `P279` subclass walk** — it is a network call and both projections re-derive kinds
   offline, and it could not settle "city vs film" anyway, since neither subclasses the other.
@@ -696,7 +723,8 @@ Six tools, no more:
 
 - `search_entities(query, kind?, limit?)` → candidates with QIDs and disambiguation
 - `add_entity(qid)` → upsert, returns id
-- `expand_entity(qid, maxNewEdges?)` → runs adapters, returns new edges
+- `expand_entity(qid, maxNewEdges?)` → runs adapters, returns new edges; a CONCEPT seed is
+  capped below whatever was requested (ADR 49)
 - `get_entity(qid)` → node plus neighbours grouped by edge type, plus this
   entity's RATING if it has been rated (ADR 39: the taste layer's read path is
   here, and there is no seventh tool; issue #85 removed the note from it)
