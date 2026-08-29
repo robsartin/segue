@@ -280,9 +280,11 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   issue rather than a reason to lower the number. 25 is a judgement informed by a distribution —
   measured on the real graph, 99.9% of CONCEPTs sit below it — not a measurement of the right
   ceiling. **That distribution is ACCUMULATED DEGREE, not expansion yield**, and the two diverge at
-  the failure mode: an ordinary CONCEPT is never expanded directly, so a broad subject that has
-  never been expanded is inside that 99.9% and would still answer one call with 500. Do not write
-  "99.9% expand fully"; the guides and ADR 49 say "sit below the ceiling" for that reason. **The
+  the failure mode: an ordinary CONCEPT has not been expanded directly (the discipline, not a law),
+  so a low accumulated degree predicts NOTHING about what expanding that node would return. The TWO
+  subjects measured for #112 each hit the 501-row cap; any other CONCEPT returns whatever it
+  actually has, which its degree does not reveal. Do not write "99.9% expand fully"; the guides and
+  ADR 49 say "sit below the ceiling" for that reason. **The
   0.072%-at-degree->=10 figure is ADR 47's re-measurement, NOT ADR 31's** — ADR 31 records fifteen
   of 25,815, 0.058%, on a graph 4.8x smaller. And this is another kind-keyed rule a `KindMapper`
   gap misfires: CONCEPT is also the "could not place this" bucket, so a mis-kinded WORK is capped

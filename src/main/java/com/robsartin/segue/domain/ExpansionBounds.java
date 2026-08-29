@@ -24,13 +24,15 @@ package com.robsartin.segue.domain;
  * is fifteen of 25,815, 0.058%, on a graph 4.8x smaller — so the shape has not drifted.
  *
  * <p><b>That distribution is accumulated degree, not expansion yield</b>, and conflating the two
- * would overstate what it proves. An ordinary {@code CONCEPT} is never an expansion seed; its
- * degree accrues an edge at a time from other entities' forward claims. So the measurement says a
- * ceiling of 25 sits above nearly every {@code CONCEPT} this graph has ever accumulated. It does
- * <b>not</b> say a broad subject would return 25 rows if expanded — a broad subject that has never
- * been expanded is counted in that 99.88% and would still answer with 500. The number is chosen
- * against the gap between those two facts: comfortably above the ordinary accumulation, and two
- * orders of magnitude below the flood.
+ * would overstate what it proves. An ordinary {@code CONCEPT} has not been an expansion seed — the
+ * discipline this ceiling bounds rather than replaces — so its degree accrued an edge at a time
+ * from other entities' forward claims. The measurement therefore says a ceiling of 25 sits above
+ * nearly every {@code CONCEPT} this graph has accumulated. It does <b>not</b> say a broad subject
+ * would return 25 rows if expanded: a low accumulated degree predicts nothing about expansion yield
+ * either way. The two subjects measured for issue #112 each hit the 501-row cap; another {@code
+ * CONCEPT} returns whatever it actually has, and its degree here does not reveal which. The number
+ * is chosen against the gap between those two facts — comfortably above the ordinary accumulation,
+ * and 20x below the 500-row flood.
  *
  * <p>Nothing here knows what a source adapter is or what {@code maxNewEdges} means to one — see
  * {@code SegueService.expandEntity}, which is the only caller and feeds the result into the same

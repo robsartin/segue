@@ -57,14 +57,15 @@ lookup counts it:
 
 **A ceiling of 25 sits above 16,931 of 16,950 `CONCEPT`s — 99.9% of them.** Only 19 in the whole
 graph have accumulated more edges than that. A ceiling of 50 sits above 99.98%, which is not a
-meaningfully different answer for twice the room, and both sit two orders of magnitude below the
-500-edge failure.
+meaningfully different answer for twice the room. Both sit far below the 500-edge failure — 20x
+below it at 25, 10x at 50 — which is the gap that matters, and it is not two orders of magnitude.
 
 **What that distribution is, and what it is not.** It is *accumulated in-graph degree*, folded from
 the log. The ceiling bounds something else: *what one reverse expansion returns from Wikidata*. The
 two diverge at exactly the failure mode, so the distinction has to be made rather than glossed. An
-ordinary `CONCEPT` is never an expansion seed — its degree accrues an edge at a time, from other
-entities' forward claims naming it — which is why 99.9% of them sit so far below 25. **A low
+ordinary `CONCEPT` has not been an expansion seed — that is the discipline this ADR bounds rather
+than replaces, and it is why 99.9% of them sit so far below 25: their degree accrued an edge at a
+time, from other entities' forward claims naming them. **A low
 accumulated degree therefore predicts nothing about what expanding that node would return**: the
 two subjects measured above would each answer one call with 500 rows, and an unexpanded node's
 degree cannot distinguish them from any other. So the measurement establishes that a ceiling of 25
@@ -191,16 +192,20 @@ work being done.
   and still adds works nobody has read — just 25 of them rather than 500.
 
 - **`CONCEPT` is also the "we could not place this" bucket, so the guard fires on classification
-  gaps too.** `KindMapper` maps every class its whitelist does not know to `CONCEPT`, and that
-  fallback is not rare: [ADR 31](0031-path-ranking-by-confidence.md) measured 1,058 of the 1,416
+  gaps too.** An entity none of whose Wikidata classes `KindMapper` recognises falls through to
+  `CONCEPT` — `fromInstanceOf` filters the unrecognised ones and `orElse`s the rest — and when that
+  fallback was last measured it was not rare: [ADR 31](0031-path-ranking-by-confidence.md) found
+  1,058 of the 1,416
   `CONCEPT` intermediates in a real graph as works wearing a class the whitelist had not learned.
   (Those particular classes were added in that same change; the fallback itself is permanent.)
   `SegueService.expandEntity` reads the kind recorded on the node, so a mis-kinded work is capped at
   25 and reported `partial` with no override, exactly like a broad subject — and nothing in the
   result distinguishes the guard doing its job from the guard firing on a gap in `KindMapper`. One
   thing softens it and does not close it: ADR 42 re-derives kind at projection time from the classes
-  stored on the claim, so a whitelist improvement reaches such a node with no re-fetch, and an
-  expansion afterwards is unbounded. The honest statement is that the blast radius of a
+  stored on the claim, so a whitelist improvement can reach such a node with no re-fetch and leave a
+  later expansion unbounded. It does not reach all of them — the developer guide records ADR 42's
+  own two limits, a claim stating no classes keeps its recorded kind, and claims written before
+  ADR 42 have no classes to re-derive from. The honest statement is that the blast radius of a
   `KindMapper` gap now includes this rule.
 
 - **It bounds one call, and calls are not counted.** Ten expansions of the same broad subject add
