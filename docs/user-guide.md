@@ -1,9 +1,10 @@
 # Segue user guide
 
 Segue is a personal interest graph. You put the things you care about into it — people, bands,
-films, books, places — and it pulls in their real relationships from Wikidata. The payoff is an
+films, books — and it pulls in their real relationships from Wikidata. The payoff is an
 **explanation**: ask it how two things connect and it hands back the route, hop by hop, with the
-source behind every hop. "You like this because X → Y → Z", and every arrow is citable.
+source behind every hop. "You like this because X → Y → Z", and every arrow is citable. Not
+everything you can store is something it can route through — see [Honest limits](#honest-limits).
 
 You do not use segue directly. You use it through an MCP client — Claude Code, Claude Desktop, or
 anything else that speaks the Model Context Protocol — which launches or connects to the segue
@@ -655,6 +656,11 @@ Those descriptions are illustrations, not the rule: which Wikidata classes land 
 decided by a whitelist in the source (`KindMapper`), and it grows as real data turns up classes it
 did not know.
 
+**`PLACE` is the kind that stores but does not connect.** Worth knowing before you add a city or a
+restaurant expecting a route through it: see
+[a place is something you can store](#a-place-is-something-you-can-store-not-something-you-can-route-through)
+under Honest limits.
+
 **There is no `MUSICIAN`, `BAND` or `FILM` kind, on purpose.** A role is a *relationship*, not a
 kind: one Nick Cave node is a `PERSON` who `PERFORMED` albums, `AUTHORED` novels and
 `WROTE_SCREENPLAY_FOR` films, all at once, rather than three nodes or one node forced to pick a
@@ -910,6 +916,27 @@ And expanding her finds nothing at all:
 A sparsely-linked entity is a valid node with no neighbourhood. It will appear in no route. Nothing
 went wrong; there is simply nothing recorded about who she worked with. Expect this for
 independent, regional and recent artists.
+
+### A place is something you can store, not something you can route through
+
+`PLACE` is one of the six kinds, so nothing stops you adding a city, a venue or a restaurant.
+`add_entity` records it, `get_entity` reads it back, and `note_affinity` will rate it — a rating
+needs no edge at all. Expanding it is where it stops.
+
+A claim is only ingested when the property behind it is registered in segue's controlled
+vocabulary, and **that vocabulary registers no location property**: nothing for where a thing is,
+what contains it, or what stands near it. `EdgeTypes` is the authority on what is registered, and
+reading it beats trusting a list here, which would go stale the day one is admitted. The
+consequence is that the statements which make a place a place are exactly the ones segue does not
+ingest, so adding a place gives you a node you can rate rather than a stop on a route.
+
+That is a decision with a measurement behind it, not a gap waiting to be filled.
+[ADR 53](adr/0053-all-the-owners-interests-bounded-per-domain.md) measured what Wikidata actually
+states about one class of place — enough to store, nothing that maps to a registered relation — and
+concluded that no property admission fixes it.
+[ADR 54](adr/0054-musicbrainz-as-the-second-source.md), which records segue's second source,
+argues that pointing a different source at places would not fix it either: the vocabulary is one
+obstacle and the identity of a place is another.
 
 ### Expansion is bounded, and the bound is visible
 

@@ -3,10 +3,10 @@
 A personal interest graph, with receipts.
 
 A segue is how one thing leads into the next, and that move is the whole point. You put the things
-you care about into segue — people, bands, films, books, places — and it pulls in their real
-relationships from Wikidata. Then you ask it how two of them connect, and it answers with the
-**route**, hop by hop, with the source behind every hop. Not "these are similar": *this* person
-scored *that* film, which *this other* person directed.
+you care about into segue — people, bands, films, books — and it pulls in their real relationships
+from Wikidata. Then you ask it how two of them connect, and it answers with the **route**, hop by
+hop, with the source behind every hop. Not "these are similar": *this* person scored *that* film,
+which *this other* person directed.
 
 Segue runs as an [MCP](https://modelcontextprotocol.io) server. You drive it from an MCP client —
 Claude Code, Claude Desktop, or anything else that speaks the protocol — which calls its six tools
