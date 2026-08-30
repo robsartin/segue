@@ -141,6 +141,9 @@ public final class RateServer {
       send(exchange, 403, "application/json", EMPTY_JSON);
       return;
     }
+    if (!methodAllowed(exchange, "GET")) {
+      return;
+    }
     int index = indexFrom(exchange.getRequestURI().getQuery());
     if (index < 0 || index >= deck.size()) {
       send(exchange, 404, "application/json", EMPTY_JSON);
@@ -156,6 +159,9 @@ public final class RateServer {
   private void rate(HttpExchange exchange) throws IOException {
     if (!originAllowed(exchange)) {
       send(exchange, 403, "application/json", EMPTY_JSON);
+      return;
+    }
+    if (!methodAllowed(exchange, "POST")) {
       return;
     }
     String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
@@ -181,6 +187,29 @@ public final class RateServer {
       return;
     }
     send(exchange, 204, "application/json", new byte[0]);
+  }
+
+  /**
+   * One verb per route, and a 405 that names it — answered here rather than by the caller.
+   *
+   * <p>{@code GET /api/rate} used to fall through to the body parser, find no {@code qid} in an
+   * empty body and answer 400 (issue #107). Adequate, and the wrong thing to say: nothing was
+   * malformed, there was no body to malform. Worse on the other route — {@code POST /api/card}
+   * dealt a card, answering 200 through a verb that has no business reading one.
+   *
+   * <p>The refusal carries {@code Allow}, which RFC 9110 requires of every 405, and it is checked
+   * AFTER the Origin allowlist: a foreign origin is refused whatever verb it arrives on, and a 405
+   * would otherwise tell it which one to try instead.
+   *
+   * @return true when the handler should carry on; false when this method has already answered
+   */
+  private static boolean methodAllowed(HttpExchange exchange, String allowed) throws IOException {
+    if (allowed.equals(exchange.getRequestMethod())) {
+      return true;
+    }
+    exchange.getResponseHeaders().set("Allow", allowed);
+    send(exchange, 405, "application/json", EMPTY_JSON);
+    return false;
   }
 
   private boolean originAllowed(HttpExchange exchange) {

@@ -165,6 +165,32 @@ class RateServerTest {
   }
 
   @Test
+  @DisplayName("a GET on the rating route is a 405 naming what it does take, not a 400")
+  void refusesAGetOnTheRateRoute() throws Exception {
+    // 400 was adequate and said the wrong thing: the body was not malformed, there was no body
+    // to malform. A route that takes one method says which one (issue #107).
+    HttpResponse<String> response =
+        client.send(request("/api/rate").GET().build(), HttpResponse.BodyHandlers.ofString());
+
+    assertThat(response.statusCode()).isEqualTo(405);
+    assertThat(response.headers().firstValue("Allow")).hasValue("POST");
+    assertThat(affinity.written).isEmpty();
+  }
+
+  @Test
+  @DisplayName("a POST on the card route is a 405, and deals no card through the wrong verb")
+  void refusesAPostOnTheCardRoute() throws Exception {
+    HttpResponse<String> response =
+        client.send(
+            request("/api/card?i=0").POST(HttpRequest.BodyPublishers.ofString("{}")).build(),
+            HttpResponse.BodyHandlers.ofString());
+
+    assertThat(response.statusCode()).isEqualTo(405);
+    assertThat(response.headers().firstValue("Allow")).hasValue("GET");
+    assertThat(response.body()).doesNotContain("Test Band");
+  }
+
+  @Test
   @DisplayName("a request carrying a foreign Origin is refused and writes nothing")
   void refusesAForeignOrigin() throws Exception {
     HttpResponse<String> response =
