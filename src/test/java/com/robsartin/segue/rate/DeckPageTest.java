@@ -10,6 +10,23 @@ import java.util.regex.Pattern;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+/**
+ * What the deck page <em>is</em>, read as a file — the half that running it cannot show.
+ *
+ * <p>This class used to carry the page's guards as well, and mutation-testing it (issue #103)
+ * showed what a token-presence assertion is worth: it caught a deleted {@code if (!response.ok)}
+ * and missed the same branch with its {@code return} taken out, which is precisely the
+ * silent-data-loss defect issue #101 fixed. Those five assertions now live in {@code
+ * DeckBehaviourTest}, which runs the page in a real browser and fails against the defective
+ * version, not merely against the guard's absence.
+ *
+ * <p>What is left here is what a browser genuinely cannot answer: that the page reaches no external
+ * host, that the ratings are real buttons, that the region a screen reader is told to watch is the
+ * region the script rewrites, that the card is built as text rather than markup, and that the
+ * revision banner has a background fill rather than merely a colour. Text and markup render
+ * identically until a label contains a tag; a fill is a pixel question no assertion in a DOM can
+ * settle. Both are read from the source on purpose.
+ */
 class DeckPageTest {
 
   private static String page() throws Exception {
@@ -137,147 +154,27 @@ class DeckPageTest {
   }
 
   @Test
-  @DisplayName("a rating that the server did not accept neither counts nor advances the card")
-  void aFailedRatingDoesNotAdvance() throws Exception {
-    String rate = blockAfter(script(), "async function rate(");
-
-    // Before issue #101's final review this was `await fetch(...); rated++; index++; show();` —
-    // a 400 or a 403 counted as a saved rating and moved the deck on, and the owner had no way
-    // to know. A rating cannot be withdrawn (ADR 46), so a lost one is lost.
-    assertThat(rate).as("the rate POST's outcome must be checked").contains("response.ok");
-    assertThat(rate.indexOf("response.ok"))
-        .as("the ok check must come before the session count and the index move")
-        .isLessThan(rate.indexOf("rated++"))
-        .isLessThan(rate.indexOf("index++"));
-
-    // And the harder half: if the handler throws, com.sun.net.httpserver closes the connection
-    // with no response at all, the promise REJECTS, and nothing after the await runs — which
-    // used to leave `current` null and every subsequent rating key inert until the owner
-    // pressed s or b. Reproduced against a store throwing what SqliteAffinityStore raises on
-    // SQLITE_BUSY, which RateCli's own javadoc anticipates.
-    assertThat(rate).as("a rejected fetch must be caught, not left to reject").contains("catch");
-  }
-
-  @Test
-  @DisplayName("a held rating key writes one rating, not a run of them")
-  void ignoresAutoRepeat() throws Exception {
-    String keydown = blockAfter(script(), "addEventListener('keydown'");
-
-    // Auto-repeat delivers roughly thirty events a second and a loopback round-trip takes a few
-    // milliseconds, so a finger resting on '4' for a second wrote about fifteen ratings of 4 to
-    // whatever cards went past. None of them can be withdrawn.
-    assertThat(keydown).contains("event.repeat");
-    assertThat(keydown.indexOf("event.repeat"))
-        .as("the repeat guard must run before any key is acted on")
-        .isLessThan(keydown.indexOf("rate("));
-  }
-
-  @Test
-  @DisplayName("a key pressed with a modifier belongs to the browser, not to the deck")
-  void ignoresModifiedKeys() throws Exception {
-    String keydown = blockAfter(script(), "addEventListener('keydown'");
-
-    // Cmd/Ctrl+S skipped a card and swallowed the browser's save dialog; Ctrl/Alt+1..5 recorded
-    // a rating the owner was not asking for.
-    assertThat(keydown).contains("ctrlKey").contains("metaKey").contains("altKey");
-    assertThat(keydown.indexOf("Key"))
-        .as("the modifier guard must run before any key is acted on")
-        .isLessThan(keydown.indexOf("rate("));
-  }
-
-  @Test
-  @DisplayName("skip and back cannot move the index while a request is in flight")
-  void skipAndBackAreGuarded() throws Exception {
-    String script = script();
-    String keydown = blockAfter(script, "addEventListener('keydown'");
-
-    // s/b used to mutate `index` inline, with no guard at all: pressing skip while a rate POST
-    // was in flight advanced the index twice and one card was never dealt. No rating is
-    // misapplied by that; a card is silently lost, which on a deck of eight hundred is invisible.
-    assertThat(keydown)
-        .as("the key handler must delegate rather than move the index itself")
-        .doesNotContain("index++")
-        .doesNotContain("index--");
-    assertThat(blockAfter(script, "function skip(")).contains("busy");
-    assertThat(blockAfter(script, "function back(")).contains("busy");
-  }
-
-  @Test
-  @DisplayName(
-      "a revision card's existing rating (issue #109) is rendered from the real value, inside its"
-          + " own guard, and actually attached to the DOM")
-  void rendersTheCurrentRatingOnARevisionCard() throws Exception {
+  @DisplayName("every part of a card is built as text, so a vandalised label cannot become markup")
+  void buildsTheCardAsTextNotMarkup() throws Exception {
+    // label, kind, classes and every route line are Wikidata-derived text from an openly editable
+    // source. #101 built them as DOM nodes for that reason, and #109 added the revision banner
+    // under the same rule. A running page cannot see this one: text and markup render identically
+    // until the day a label contains a tag, so what has to be pinned is HOW the card is built.
     String renderCard = blockAfter(script(), "function renderCard(");
 
-    // The value shown must be what the SESSION knows, falling back to what the server dealt.
-    // RateServer holds List.copyOf(deck) from startup, so c.currentRating never refreshes: rating
-    // a card 2 and pressing `b` left the banner asserting the old value on a documented flow.
-    assertThat(matches(renderCard, "writtenThisSession[\\s\\S]*?c\\.currentRating"))
-        .as(
-            "expected the shown rating to prefer what this session wrote over the server's"
-                + " startup snapshot")
-        .isTrue();
-
-    // An unrated card the session has not rated must not get a revision banner at all — this is
-    // what stops the deck's ordinary cards from claiming a rating they do not have.
-    assertThat(matches(renderCard, "rating\\s*!==?\\s*null"))
-        .as("expected renderCard to branch on whether a rating is present")
-        .isTrue();
-
-    // Everything that builds and shows the banner must live INSIDE that guard's own block.
-    // blockAfter locates the brace immediately following the guard text and balances it, so this
-    // fails if the banner element were built unconditionally, with the guard merely present
-    // somewhere else in the function.
-    String guarded = blockAfter(renderCard, "rating !== null");
-
-    // The element's text must interpolate the ACTUAL rating value (a template literal referencing
-    // it), not a fixed label — a hard-coded "Currently rated" with no ${...} would read as
-    // compliant while showing the wrong number on every card.
-    Matcher element =
-        Pattern.compile(
-                "const\\s+(\\w+)\\s*=\\s*document\\.createElement\\([^)]*\\)[\\s\\S]*?"
-                    + "\\1\\.textContent\\s*=\\s*`[^`]*\\$\\{\\s*rating\\s*\\}[^`]*`")
-            .matcher(guarded);
-    assertThat(element.find())
-        .as(
-            "expected an element inside the guard whose textContent interpolates the actual"
-                + " rating value")
-        .isTrue();
-    String varName = element.group(1);
-
-    // Built is not the same as shown: the element has to actually reach the card region, not be
-    // constructed and left unattached.
-    assertThat(
-            matches(
-                guarded,
-                "(nodes\\.push\\(\\s*"
-                    + Pattern.quote(varName)
-                    + "\\s*\\)|appendChild\\(\\s*"
-                    + Pattern.quote(varName)
-                    + "\\s*\\)|replaceChildren\\([^)]*\\b"
-                    + Pattern.quote(varName)
-                    + "\\b)"))
-        .as("the revision element must actually be handed to the DOM, not built and discarded")
-        .isTrue();
-
-    // The XSS fix from #101 (see the class comment in deck.html) must not be undone for the one
-    // piece of text on this card that this task adds.
-    assertThat(guarded).doesNotContain("innerHTML");
-  }
-
-  @Test
-  @DisplayName("the banner's session memory records only ratings the server actually accepted")
-  void theSessionOnlyRemembersRatingsThatLanded() throws Exception {
-    String rate = blockAfter(script(), "async function rate(");
-
-    // The banner now prefers what this session wrote over the server's startup snapshot, so a
-    // value remembered for a POST that was refused or never answered would turn one stale number
-    // into a confidently wrong one. The write into the map has to sit behind the same ok check
-    // that already gates the session count and the index move.
-    assertThat(rate).contains("writtenThisSession.set");
-    assertThat(rate.indexOf("response.ok"))
-        .as("the ok check must come before the session remembers the rating")
-        .isLessThan(rate.indexOf("writtenThisSession.set"));
+    // The markup sinks must never be WRITTEN TO. Not "must not appear": the page's own comment
+    // explains at length why it does not interpolate into innerHTML, and a test that banned the
+    // word would fail on the sentence promising the thing it wants.
+    assertThat(matches(renderCard, "\\b(inner|outer)HTML\\s*="))
+        .as("nothing in a card may be assigned as markup")
+        .isFalse();
+    assertThat(renderCard)
+        .as("nor built as markup another way")
+        .doesNotContain("insertAdjacentHTML")
+        .doesNotContain("document.write");
+    assertThat(renderCard)
+        .as("the card's text must go through textContent or createTextNode")
+        .containsAnyOf("textContent", "createTextNode");
   }
 
   @Test
