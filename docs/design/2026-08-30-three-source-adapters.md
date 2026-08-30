@@ -570,8 +570,16 @@ A class-level ban needs `haveFullyQualifiedName` or an `assignableTo` predicate,
 
 ADR 25's consequence *"Adding a source is implementing one or both interfaces plus a `@Bean`
 method"* needs an amendment saying "and extending the architecture rules that name adapter packages
-— which, on the day this was checked, meant three rules plus two sibling object lists plus a new
-sibling rule, and surfaced two pre-existing defects in the fences themselves".
+— which, on the day this was checked, meant **three rules, plus all four sibling object lists, plus
+a new sibling rule**, and surfaced two pre-existing defects in the fences themselves".
+
+**That tally is read off the pair-ownership table above, and must stay that way.** Every pair the
+table assigns to #91 names the rule that has to change: `tinker → musicbrainz` and
+`jena → musicbrainz` are constrained by nothing but `tinkerDoesNotDependOnJena` and
+`jenaDoesNotDependOnTinker`, whose object lists hold one package each, so those two lists widen for
+#91 as surely as `sqlite`'s and `wikidata`'s do. An earlier draft of this sentence said "two sibling
+object lists", which came from the fallback paragraph — the shape the note is warning **against** —
+rather than from the table.
 
 ### GAP 2 — `mcp` names a `wikidata` exception type to honour its own stated invariant
 
@@ -752,8 +760,9 @@ pairs adding a source creates; GAP 1 has the split.
 
 And the finding that reaches furthest is the one no adapter delivers: **ADR 25's interfaces survive
 contact with a second source; its consequences do not.** Adding a source is not "one or both
-interfaces plus a `@Bean` method". It is that, plus **three architecture rules extended, two sibling
-object lists widened and a new sibling rule written** — one of the three being ADR 33's privacy
-fence — plus an HTTP client with its own rate policy, plus a decision about a bound that two sources
-now share. **And the act of checking that list is what surfaced two defects that had nothing to do
-with a second source**, which may be the most useful thing #91 has produced so far.
+interfaces plus a `@Bean` method". It is that, plus **three architecture rules extended, all four
+sibling object lists widened and a new sibling rule written** — eight rule changes, one of the three
+being ADR 33's privacy fence — plus an HTTP client with its own rate policy, plus a decision about a
+bound that two sources now share. **And the act of checking that list is what surfaced two defects
+that had nothing to do with a second source**, which may be the most useful thing #91 has produced
+so far.
