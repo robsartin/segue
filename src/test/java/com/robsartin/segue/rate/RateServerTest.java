@@ -165,6 +165,32 @@ class RateServerTest {
   }
 
   @Test
+  @DisplayName("a GET on the rating route is a 405 naming what it does take, not a 400")
+  void refusesAGetOnTheRateRoute() throws Exception {
+    // 400 was adequate and said the wrong thing: the body was not malformed, there was no body
+    // to malform. A route that takes one method says which one (issue #107).
+    HttpResponse<String> response =
+        client.send(request("/api/rate").GET().build(), HttpResponse.BodyHandlers.ofString());
+
+    assertThat(response.statusCode()).isEqualTo(405);
+    assertThat(response.headers().firstValue("Allow")).hasValue("POST");
+    assertThat(affinity.written).isEmpty();
+  }
+
+  @Test
+  @DisplayName("a POST on the card route is a 405, and deals no card through the wrong verb")
+  void refusesAPostOnTheCardRoute() throws Exception {
+    HttpResponse<String> response =
+        client.send(
+            request("/api/card?i=0").POST(HttpRequest.BodyPublishers.ofString("{}")).build(),
+            HttpResponse.BodyHandlers.ofString());
+
+    assertThat(response.statusCode()).isEqualTo(405);
+    assertThat(response.headers().firstValue("Allow")).hasValue("GET");
+    assertThat(response.body()).doesNotContain("Test Band");
+  }
+
+  @Test
   @DisplayName("a request carrying a foreign Origin is refused and writes nothing")
   void refusesAForeignOrigin() throws Exception {
     HttpResponse<String> response =
@@ -289,6 +315,60 @@ class RateServerTest {
 
     assertThat(response.statusCode()).isEqualTo(400);
     assertThat(affinity.written).isEmpty();
+  }
+
+  @Test
+  @DisplayName("a rating sent as a JSON string is refused rather than quietly unquoted")
+  void refusesAQuotedRating() throws Exception {
+    // {"rating":"4"} is not what the page sends, and it is not what this endpoint accepts. The
+    // hand-rolled parser read the quoted form through the same branch qid uses and handed "4" to
+    // Integer.parseInt, so a body of a shape nothing here produces still reached the one table
+    // with no source to regenerate it from. Exactness is cheap insurance (issue #107).
+    HttpResponse<String> response =
+        client.send(
+            request("/api/rate")
+                .POST(HttpRequest.BodyPublishers.ofString("{\"qid\":\"Q900001\",\"rating\":\"4\"}"))
+                .build(),
+            HttpResponse.BodyHandlers.ofString());
+
+    assertThat(response.statusCode()).isEqualTo(400);
+    assertThat(affinity.written).isEmpty();
+  }
+
+  @Test
+  @DisplayName("a leading zero is not a number JSON has, so a rating carrying one is refused")
+  void refusesALeadingZeroRating() throws Exception {
+    // {"rating":04} is invalid JSON — a real parser refuses it — and this one used to accept it
+    // as 4. Same reasoning as 4.7: a body no correct client produces must not reach the affinity
+    // table at all (issue #107).
+    HttpResponse<String> response =
+        client.send(
+            request("/api/rate")
+                .POST(HttpRequest.BodyPublishers.ofString("{\"qid\":\"Q900001\",\"rating\":04}"))
+                .build(),
+            HttpResponse.BodyHandlers.ofString());
+
+    assertThat(response.statusCode()).isEqualTo(400);
+    assertThat(affinity.written).isEmpty();
+  }
+
+  @Test
+  @DisplayName("the well-formed body the page actually sends is still accepted and stored")
+  void acceptsTheBodyThePageSends() throws Exception {
+    // The guard on the tightening above. Refusing the two lenient forms is only an improvement
+    // while the one form deck.html posts keeps working; a deck that can no longer record a
+    // rating would be far worse than the looseness it replaced.
+    HttpResponse<String> response =
+        client.send(
+            request("/api/rate")
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("{\"qid\":\"Q900001\",\"rating\":4}"))
+                .build(),
+            HttpResponse.BodyHandlers.ofString());
+
+    assertThat(response.statusCode()).isEqualTo(204);
+    assertThat(affinity.written).hasSize(1);
+    assertThat(affinity.written.get(0).rating()).isEqualTo(4);
   }
 
   @Test

@@ -1,5 +1,6 @@
 package com.robsartin.segue.rate;
 
+import static com.robsartin.segue.domain.Recommendations.MIN_CANDIDATE_DEGREE;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.domain.AssertionRecord;
@@ -20,6 +21,13 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Notes carry counts, and nothing else (ADR 33).
+ *
+ * <p><b>The floor this pads to and passes is {@code Recommendations.MIN_CANDIDATE_DEGREE} itself,
+ * by static import.</b> It used to be a local {@code = 12} whose javadoc cited a {@code
+ * RateRun.MIN_CANDIDATE_DEGREE} that issue #119 had already deleted — a copy of a copy of a number
+ * the authority's own javadoc calls a MEASURED default. Re-measure it and this fixture would have
+ * gone on padding to twelve, flooring at twelve and passing, testing a number the shipped tools no
+ * longer use, with nothing failing (issue #107; the measurement in #117/#118 makes that live).
  *
  * <p><b>Every assertion below that checks for "no rating in a note" checks by looking for one of
  * this fixture's own qids</b>, never by matching a rating-shaped regex. A rating never appears
@@ -48,9 +56,6 @@ class RateRunTest {
 
   private static final String BELOVED = "Q900301";
   private static final String CROWDED = "Q900302";
-
-  /** The recommender's own floor ({@code RateRun.MIN_CANDIDATE_DEGREE}), duplicated to pad to. */
-  private static final int MIN_CANDIDATE_DEGREE = 12;
 
   @Test
   @DisplayName("the deck is built from the graph, and the notes carry counts and no rating")

@@ -170,7 +170,15 @@ public final class RateCli {
     return new IllegalArgumentException(sentence + " " + USAGE);
   }
 
-  public static void main(String[] args) throws IOException {
+  /**
+   * Declares no checked exception, exactly as {@code RecommendCli.main} does not (issue #107).
+   *
+   * <p>The {@code throws IOException} that stood here was dead: every checked exception reachable
+   * in this body is already caught by the local {@code catch (IOException e)} that rethrows it as
+   * an {@link UncheckedIOException}. Verified by the compiler in both directions — the clause's
+   * removal compiles, and adding a statement that really does throw one puts the error back.
+   */
+  public static void main(String[] args) {
     Options options = parse(args, System.getenv("SEGUE_DB"), System.getProperty("user.home"));
 
     // Refuse a database that is not there rather than creating an empty one and dealing nothing:

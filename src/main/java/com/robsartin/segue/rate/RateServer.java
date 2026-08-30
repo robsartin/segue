@@ -141,6 +141,9 @@ public final class RateServer {
       send(exchange, 403, "application/json", EMPTY_JSON);
       return;
     }
+    if (!methodAllowed(exchange, "GET")) {
+      return;
+    }
     int index = indexFrom(exchange.getRequestURI().getQuery());
     if (index < 0 || index >= deck.size()) {
       send(exchange, 404, "application/json", EMPTY_JSON);
@@ -158,10 +161,13 @@ public final class RateServer {
       send(exchange, 403, "application/json", EMPTY_JSON);
       return;
     }
+    if (!methodAllowed(exchange, "POST")) {
+      return;
+    }
     String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
     try {
-      String qid = field(body, "qid");
-      int rating = Integer.parseInt(field(body, "rating"));
+      String qid = stringField(body, "qid");
+      int rating = intField(body, "rating");
       // Qid and RatingScale, not AffinityRecord: one definition of each rule, in classes that
       // carry no rating of their own. RatingScale's message names no value, which is deliberate
       // (ADR 33). Both checks also run inside updateRating, which is where the contract holds them
@@ -181,6 +187,29 @@ public final class RateServer {
       return;
     }
     send(exchange, 204, "application/json", new byte[0]);
+  }
+
+  /**
+   * One verb per route, and a 405 that names it — answered here rather than by the caller.
+   *
+   * <p>{@code GET /api/rate} used to fall through to the body parser, find no {@code qid} in an
+   * empty body and answer 400 (issue #107). Adequate, and the wrong thing to say: nothing was
+   * malformed, there was no body to malform. Worse on the other route — {@code POST /api/card}
+   * dealt a card, answering 200 through a verb that has no business reading one.
+   *
+   * <p>The refusal carries {@code Allow}, which RFC 9110 requires of every 405, and it is checked
+   * AFTER the Origin allowlist: a foreign origin is refused whatever verb it arrives on, and a 405
+   * would otherwise tell it which one to try instead.
+   *
+   * @return true when the handler should carry on; false when this method has already answered
+   */
+  private static boolean methodAllowed(HttpExchange exchange, String allowed) throws IOException {
+    if (allowed.equals(exchange.getRequestMethod())) {
+      return true;
+    }
+    exchange.getResponseHeaders().set("Allow", allowed);
+    send(exchange, 405, "application/json", EMPTY_JSON);
+    return false;
   }
 
   private boolean originAllowed(HttpExchange exchange) {
@@ -275,7 +304,9 @@ public final class RateServer {
   }
 
   /**
-   * One field out of a body this class parses by hand, and <b>every</b> way of failing is an {@link
+   * The value of one field out of a body this class parses by hand, still as text.
+   *
+   * <p><b>Every</b> way of failing here and in its two callers is an {@link
    * IllegalArgumentException} — which is the type {@link #rate} catches and turns into a 400.
    *
    * <p>Two ways it used to fail differently, both found by issue #101's final review and both
@@ -293,7 +324,7 @@ public final class RateServer {
    *       exactly is refused: after the digits, the next character must actually end the value.
    * </ul>
    */
-  private static String field(String body, String name) {
+  private static String valueOf(String body, String name) {
     int at = body.indexOf('"' + name + '"');
     if (at < 0) {
       throw new IllegalArgumentException("missing field");
@@ -302,13 +333,51 @@ public final class RateServer {
     if (colon < 0) {
       throw new IllegalArgumentException("field has no value");
     }
-    String rest = body.substring(colon + 1).trim();
+    return body.substring(colon + 1).trim();
+  }
+
+  /**
+   * A field the body must give as a JSON string, which is what {@code qid} is.
+   *
+   * <p>Split out of one lenient {@code field} method by issue #107, together with {@link
+   * #intField}. Reading both shapes through one method meant {@code {"rating":"4"} } — a JSON
+   * string where a number belongs — parsed as 4 and stored. The page sends neither form, so this
+   * was looseness rather than a defect; but the parser is hand-rolled and writes the one table that
+   * cannot be regenerated, so a body no correct client produces is now refused outright.
+   */
+  private static String stringField(String body, String name) {
+    String rest = valueOf(body, name);
+    if (!rest.startsWith("\"")) {
+      throw new IllegalArgumentException("field is not a string");
+    }
+    int close = rest.indexOf('"', 1);
+    if (close < 0) {
+      throw new IllegalArgumentException("unterminated string");
+    }
+    return rest.substring(1, close);
+  }
+
+  /**
+   * A field the body must give as a JSON integer, which is what {@code rating} is.
+   *
+   * <p>Refuses three shapes that all used to arrive as a number (the first two by issue #107):
+   *
+   * <ul>
+   *   <li>the quoted form, {@code {"rating":"4"} } — see {@link #stringField};
+   *   <li>a leading zero, {@code {"rating":04} }, which is not a number JSON has at all: a real
+   *       parser refuses it, and so does this one rather than guessing that 4 was meant;
+   *   <li>anything the digit scan cannot represent exactly, {@code {"rating":4.7} } — after the
+   *       digits the next character must actually end the value.
+   * </ul>
+   *
+   * <p>{@code Integer.parseInt} has the last word, and its {@code NumberFormatException} is an
+   * {@link IllegalArgumentException}, so an out-of-range or otherwise malformed run of digits lands
+   * on the same 400 as everything else here.
+   */
+  private static int intField(String body, String name) {
+    String rest = valueOf(body, name);
     if (rest.startsWith("\"")) {
-      int close = rest.indexOf('"', 1);
-      if (close < 0) {
-        throw new IllegalArgumentException("unterminated string");
-      }
-      return rest.substring(1, close);
+      throw new IllegalArgumentException("field is a string, not a number");
     }
     int end = 0;
     while (end < rest.length()
@@ -321,7 +390,12 @@ public final class RateServer {
     if (end < rest.length() && !endsAValue(rest.charAt(end))) {
       throw new IllegalArgumentException("not a whole number");
     }
-    return rest.substring(0, end);
+    String digits = rest.substring(0, end);
+    String magnitude = digits.startsWith("-") ? digits.substring(1) : digits;
+    if (magnitude.length() > 1 && magnitude.charAt(0) == '0') {
+      throw new IllegalArgumentException("a leading zero is not a JSON number");
+    }
+    return Integer.parseInt(digits);
   }
 
   /** What may legitimately follow a number in the one-object bodies this endpoint accepts. */
