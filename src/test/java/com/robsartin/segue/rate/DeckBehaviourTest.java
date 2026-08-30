@@ -519,7 +519,10 @@ class DeckBehaviourTest {
     // saying the hazard it guards no longer exists — which is a fact worth being told, not a
     // flake. Counted by value rather than by size, because the re-rating is in this list too.
     assertThat(order.stream().filter(rating -> rating == 1).count())
-        .as("the abandoned rating must actually have been retried, or there is nothing to order")
+        .as(
+            "the abandoned rating must actually have been retried, or there is nothing to order —"
+                + " a failure here is that fact and not a flake, and ADR 46's 2026-08-30 amendment"
+                + " says what it would mean")
         .isGreaterThan(1);
 
     // The finding. Every attempt at the abandoned rating reached the server before the re-rating

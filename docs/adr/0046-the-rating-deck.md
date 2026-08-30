@@ -321,25 +321,46 @@ restores the number they had just abandoned.
 
 **It cannot happen, and the measurement says why rather than merely that.** Measured on loopback
 against a stub that closes the connection without answering — Chrome 151.0.7922.174, macOS 26.6.2
-— in the two failure shapes the deck actually has:
+— across three stall lengths spanning a five-hundred-fold range. The message is timed from inside
+the page, by a `MutationObserver` on `#problem`, rather than by polling it from outside:
 
-- **The connection dies at once.** Three attempts reached the server at +2, +3 and +4 ms after the
-  keypress; the page's failure message appeared at +6 ms; nothing further arrived in the five
+- **The connection dies at once.** Three attempts reached the server at +1.49, +2.77 and +3.46 ms
+  after the keypress; the failure message appeared at +9.42 ms; nothing further arrived in the five
   seconds after it.
-- **Each attempt stalls 300 ms before dying.** Three attempts at +2, +306 and +610 ms; the message
-  by +930 ms; again nothing in the five seconds after it.
+- **Each attempt stalls 300 ms before dying.** Three attempts at +1.51, +307.14 and +613.13 ms; the
+  message at +919.93 ms; again nothing in the five seconds after it.
+- **Each attempt stalls 1500 ms before dying.** Three attempts at +1.53, +1507.80 and +3013.80 ms;
+  the message at +4518.84 ms; again nothing in the five seconds after it.
+
+**The reading is in what does not vary.** The attempt count is fixed at three across that whole
+range, and the message always lands one full stall-period after the last attempt. Count-independent
+and duration-independent together are the signature of retries being exhausted inside the one
+`fetch`; a coincidence of timing would not survive a five-hundred-fold stretch.
 
 Every retry is therefore already spent **before the owner is told anything at all**. The window
 the issue asked to size is not narrow — it is on the wrong side of the message that opens it. Two
-independent reasons, and they are structural rather than lucky:
+reasons hold it there, both structural rather than lucky. They are **not independently sufficient**,
+and that distinction is the most useful thing in this amendment:
 
 - **Chrome's retries happen inside the one `fetch`.** It does not reject until it has stopped
   retrying, and `deck.html` writes the failure message from that rejection. The message is
   downstream of the last attempt by construction.
 - **The page could not issue the re-rating early even if it were told early.** `rate()` nulls
   `current` before its first await and only `show()` restores it, and `busy` is held until the
-  `finally`; both are released after the failed fetch has settled. A keypress arriving before then
-  is dropped by the page's own guard.
+  `finally`. More than that: the `finally`, the `problem(...)` call and `show()`'s own `busy = true;
+  current = null` run in one synchronous continuation with no yield between them, so there is no
+  observable moment at which the message is up and the page is rateable. The re-rating cannot be
+  issued until a whole further card round-trip has completed.
+
+**Neither reason survives alone, and the change that would break the pair is a plausible one.** The
+first governs Chrome; the second governs this page. Read the first as sufficient and a client-side
+timeout on the rating `fetch` looks safe — it is not. A timeout abandons the request without
+cancelling Chrome's retries and releases `busy` and `current` with attempts still to come, which
+reopens the window exactly. That is not hypothetical: it is the defective page the test below was
+verified red against. **A `fetch` timeout is therefore a constraint on this page, not a free
+improvement**, and it is worth naming because the deck as it stands hangs indefinitely if the server
+accepts a POST and neither answers nor closes — which is the obvious reason someone would reach for
+one. The test enforces this whether or not anyone reads this paragraph.
 
 **Decision: change nothing about the write, and pin the ordering with a test.** `DeckBehaviourTest
 .aRetriedRatingCannotOverwriteAReRating` drives the real page against a stub that stalls and then
@@ -350,6 +371,11 @@ or an ordering assertion over a sequence with nothing to reorder would pass by h
 to do. It was verified red against a defective page (a client-side timeout that abandons the fetch
 without cancelling it, releasing `busy` and `current` with retries still to come); against that
 page the server saw the abandoned rating, then the re-rating, then the abandoned rating again.
+
+**The committed test is not the probe that produced the figures above.** Those came from throwaway
+probes stalling 300 ms and 1500 ms; the test stalls `SLOW_MILLIS`, 400 ms, because it asserts an
+ordering rather than a duration and a shorter stall keeps the suite quick. Nothing in the repository
+regenerates the numbers recorded here: they are a dated measurement, not a derived value.
 
 **The three alternatives the issue listed alongside "leave it", and why each lost.**
 
@@ -379,7 +405,7 @@ reads it and presses `s` instead of re-rating leaves a rating in the table they 
 there is still no verb anywhere in segue that takes one out. That is this section's own claim,
 reached by a different road.
 
-**What the measurement does not cover, so that nothing more is read into it.** Two failure shapes,
+**What the measurement does not cover, so that nothing more is read into it.** Three stall lengths,
 one browser, one operating system, and loopback — which is the only place this endpoint exists,
 since `RateServer` binds `127.0.0.1` and the `Origin` allowlist keeps it there. It is not a claim
 about every way an HTTP request can be delayed. Nothing above this amendment is withdrawn.
