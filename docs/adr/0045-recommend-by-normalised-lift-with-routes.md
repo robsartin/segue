@@ -474,9 +474,9 @@ smallest. What changes is the number, and what is added is the half of the trade
 stated.
 
 `Recommendations.MIN_CANDIDATE_DEGREE` is the authority and it is now five. `--min-degree` remains
-the dial, exactly as this ADR made it, and `RecommendCli`'s refusal below two is untouched. Both
-`recommend` and `rate` read the constant by reference, so the two tools still agree at their
-defaults.
+the dial, exactly as this ADR made it, and both refusals below two are untouched — `RecommendCli`
+and `RateCli` each hold their own `LOWEST_USEFUL_FLOOR`. Both `recommend` and `rate` read the
+constant by reference, so the two tools still agree at their defaults.
 
 ### Why five, measured
 
@@ -491,8 +491,9 @@ deal at a lower floor, and one 177-card pass at floor 5 produced **72 cards belo
 against **8 of 973 — 0.8%** across every rating that preceded it. [ADR 50](0050-suppress-a-candidate-you-have-rejected.md)
 carries that table and the pass's full distribution; it is repeated here in one line because it is
 the reason this decision goes the way it does. **A floor of twelve was costing the taste layer the
-only signal it had no other way of getting: disagreement.** Everything above the old floor was
-adjacent to what the owner had already chosen, so it was agreed with.
+only signal it had no other way of getting: disagreement.** Above the old floor, disagreement was
+rare rather than absent — the 8 of 973 is the measurement, and no claim is made here about the other
+965 beyond their being at or above neutral.
 
 ADR 50 also records the consequence in its own terms: floor 12 sees 16 of the 72 off-list suppressed
 entities and floor 5 sees all 72. Moving the default makes the default run the second of those.
@@ -512,7 +513,7 @@ would not publish now.
 | entries that left / entered | — | 18 / 18 |
 | median degree of the top 25 | 27 | **6** |
 | median degree of the entries that left / entered | — | 26 / 5 |
-| top-25 entries sitting exactly on the floor | 0 | **11** |
+| top-25 entries sitting exactly on the floor | 1 | **11** |
 | top-25 entries whose distinct intermediates equal their degree | 1 | **12** |
 | median distinct intermediates in the top 25 | 8 | 5 |
 
@@ -526,11 +527,14 @@ whether the top 25 moves. It moves almost entirely.
 
 ### The cost, which this ADR records nowhere above
 
-**A lower floor admits entities whose thin connectivity reflects what segue has fetched, so the
-ranking now depends more visibly on ingest history than on the world.** That is issue #117's point,
-and taking this decision converts it from a defect deferred into a documented property of the tool.
+**A lower floor admits entities whose thin connectivity may reflect what segue has fetched rather
+than the world, so more of the ranking is exposed to ingest state.** Fetch state is the *candidate*
+explanation for that and is not established as the actual one — the owner's retraction on issue #117
+withdrew the stronger version, and the correlation below is all that supports the weaker. That is
+issue #117's point, and taking this decision converts it from a defect deferred into a documented
+property of the tool.
 
-The measurement above says how much more visibly: **11 of the 25 sit exactly on the floor**, and
+The measurement above says how much more exposed: **11 of the 25 sit exactly on the floor**, and
 **12 of the 25 have as many distinct intermediates as they have edges at all** — every edge they
 have is evidence being counted, which is another way of saying the graph knows nothing else about
 them. One expansion of any of those moves it, which is the anti-pattern below with more purchase on
@@ -600,6 +604,11 @@ lost, and the two structural results among them are worth more than any of the s
   are identical — a degree-1 node shares its parent's reacher set exactly. **A quantity that is
   constant within a tie block cannot break that tie in principle**, not merely in this data.
 
+**These six are not everything that was proposed.** Issue #117's third option — record expansion
+state per node and account for it in the score — was never measured, and it is the only shape
+offered on either issue that addresses the demotion directly rather than by changing what is
+divided. It is deferred rather than rejected; see the section below.
+
 The raw candidate lists behind all six name entities from the owner's graph and are retained outside
 this repository, as ADR 51 requires and as the issue-#115 amendment above does for the same reason.
 
@@ -609,15 +618,24 @@ this repository, as ADR 51 requires and as the issue-#115 amendment above does f
 deferred.** Expansion adds nodes at degree 1, and the floor excludes them at five as it did at
 twelve. The measurements above are the argument for keeping it that way: **every degree-1 candidate
 has exactly one intermediate — all 5,874 of them, by the `intermediates ≤ degree` bound at *d* = 1 —
-so its single edge is its whole evidence and its score is entirely a property of its parent.** Every
-degree-1 node hanging off the same intermediate scores identically. Admitting them injects tie blocks
-into the head of the ranking, and since one expansion can add hundreds of such nodes at once, what
-would surface is ordered by *which entity was expanded last*.
+so its single edge is its whole evidence, and the only part of its score that is about the node
+itself is the weight of that one edge.** Everything else in it — which known entities reach the
+intermediate, what those hops are worth, the intermediate's own degree — is carried by the parent.
+
+**That is not a claim that such nodes score alike, and this amendment does not make one.**
+`CandidateSweep` multiplies the reacher's weight by the candidate's own hop, and
+`RecommendationWeights` gives that hop four tiers and a direction multiplier, so two degree-1 nodes
+on one intermediate whose edges differ in tier or direction get different scores. What was
+*measured* is the tie blocks, not their inevitability: the no-floor run above put 11 of its top 15
+rows behind only 5 distinct scores, and the three-way and five-way ties inside them were broken by
+QID. Admitting degree-1 nodes puts blocks of that shape into the head of the ranking, and since one
+expansion can add hundreds of such nodes at once, part of what would surface is ordered by *which
+entity was expanded last*.
 
 So issue #118's floor question is answered here and its title complaint is not. Any remedy for the
 title has to give a newly discovered node something of its own to be scored on, which means fetching
 a second edge for it rather than re-weighting the first, or abandoning per-candidate normalisation
-altogether. Neither is decided here.
+altogether. Neither is decided here; **issue #134 carries it.**
 
 ### The mechanism above is qualified, not overturned
 
@@ -639,6 +657,27 @@ median in-graph degree of those nodes is 2 against a median 34 Wikidata statemen
 nodes. The typical candidate is barely fetched relative to what is knowable about it, and the floor
 is therefore acting on both quantities at once. That is the whole of the cost recorded above,
 expressed as a correlation instead of as a list.
+
+### What this amendment leaves open, and where each piece is recorded
+
+Issues #117 and #118 close on this decision, so the three questions they do not answer are filed
+separately rather than closed with them. **None is rejected here; each is undecided.**
+
+- **[#133](https://github.com/robsartin/segue/issues/133) — record expansion state and account for
+  it.** Issue #117's third option, and the only one of its three that is neither taken nor measured.
+  Every remedy above normalises by *how big the candidate is*; this one would distinguish "thin
+  because unfetched" from "thin in the world", which is the conflation the whole cost section is
+  about. #117's own comment calls it untested and the only remaining shape that addresses the
+  demotion directly.
+- **[#134](https://github.com/robsartin/segue/issues/134) — a newly discovered node still cannot
+  become a candidate.** Issue #118's title, which the section above answers with a deliberate "not
+  here". The remedies named there — fetch a second edge, or abandon per-candidate normalisation —
+  are undecided, and so is a third the section does not consider: surface such nodes somewhere other
+  than the ranked list.
+- **[#135](https://github.com/robsartin/segue/issues/135) — the floor drifts as the graph grows.**
+  This amendment chose five by running two floors on today's graph, which is the same method ADR 45
+  used to choose twelve on a smaller one. Nothing says what would make five wrong later, and 11 of
+  the top 25 sit exactly on it, so the head of the list is what moves first.
 
 ### Consequences of this amendment
 
