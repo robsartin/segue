@@ -192,7 +192,7 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   `AffinityView` has no note field, `note_affinity` does not echo the words it was
   given, and `./gradlew listRatings` is the only reader. Three ArchUnit rules hold
   it (`onlyTheRatingsToolReadsANote`, `theRecommenderReadsRatingsAndNeverNotes`,
-  `onlyTheRecommenderReadsEveryRating`) plus `NoteNeverLeavesThroughAToolTest`,
+  `theRatingDeckNeverReadsANote`) plus `NoteNeverLeavesThroughAToolTest`,
   which discovers every `@McpTool` method by classpath scan rather than naming
   them. **Adding a taste dimension now means deciding which side of that line it
   falls on before adding it.**

@@ -56,8 +56,10 @@ public final class RateServer {
    * {@code Origin} of a sandboxed iframe or a {@code data:} navigation — exactly the shape an
    * attacker controls to manufacture an origin of their choosing, which makes it the opposite of an
    * allowlist entry. An absent header (no entry in the request's header map at all) is handled
-   * separately below and is fine: curl and a real MCP-style client send none, and a browser fetch()
-   * call always sends one, so that branch never protects a browser request.
+   * separately below and is fine: curl and a real MCP-style client send none, and the cross-origin
+   * fetch() POST this check exists to stop always sends one, so that branch never protects the
+   * request that matters. Not every browser request carries the header — a same-origin GET sends
+   * none — which is why the claim is about this POST rather than about fetch() in general (ADR 46).
    */
   private static final Set<String> ALLOWED_ORIGIN_HOSTS = Set.of("127.0.0.1", "localhost", "[::1]");
 

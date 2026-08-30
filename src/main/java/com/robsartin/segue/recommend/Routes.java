@@ -20,10 +20,17 @@ import java.util.function.ToIntFunction;
  * <p><b>This is the half of the feature that makes it segue's rather than anybody's.</b> A score
  * ranks; only a route explains, and the whole premise of the project is that "you like this
  * because" is citable. So the explanation is not derived from the scoring evidence, which knows the
- * arithmetic but has thrown away the edges: it is fetched from the real traversal, ranked by the
- * shared {@link PathRanking}, and rendered by {@code PathResult} — the same three things {@code
- * find_paths} does, in the same order. There is one notion of a good route in this project, and a
- * recommendation cannot quietly acquire a second.
+ * arithmetic but has thrown away the edges: it is fetched from the real traversal and ranked by the
+ * shared {@link PathRanking} — the same first two steps {@code find_paths} takes, in the same
+ * order. There is one notion of a good route in this project, and a recommendation cannot quietly
+ * acquire a second.
+ *
+ * <p><b>The third step is where the two diverge.</b> {@code SegueService.findPaths} hands its
+ * ranked routes to {@code ViewMapper.toPathViews}, because the MCP boundary answers in structured
+ * {@code PathView} records. These stay {@link PathResult}s, and rendering happens further out, in
+ * whichever dev-side reader wants prose — {@code RecommendationReport} and {@code Deck.routeLines},
+ * which are the two call sites of {@code PathResult.render()} in {@code main}. Shared traversal and
+ * shared ranking; different exits.
  *
  * <p><b>Only for the candidates somebody will read.</b> A sweep of the real graph produces around a
  * thousand candidates; building a ranked explanation for each would be a thousand traversals thrown
