@@ -91,9 +91,10 @@ never see `GraphStore` or `AssertionLog`. That shape is intact.
 
 **What #78 states as an established property is a design rule with one implementor.** In `src/main`
 there is exactly one `SourceAdapter` (`WikidataSourceAdapter`) and one `EntityResolver`
-(`WikidataEntityResolver`), both in `wikidata`. The fixture adapter in `src/test` exercises the
-interfaces but is not a second source with a vocabulary and an identity space of its own. #91 is
-where the rule gets tested, and it is filed with a named suspect rather than a general worry:
+(`WikidataEntityResolver`), both in `wikidata`. The seven test doubles in `src/test` — two adapters
+and five resolvers — exercise the interfaces, but none is a second source with a vocabulary and an
+identity space of its own. #91 is where the rule gets tested, and it is filed with a named suspect
+rather than a general worry:
 
 **[ADR 42](0042-store-p31-and-rederive-kind-at-projection.md) already recorded the seam that would
 have to move.** Its consequences say that `ingest` and `export` both depend on `wikidata` for the
@@ -108,9 +109,12 @@ that deciding what a stated class *means* is a Wikidata-local concern.
 
 #78 states that the vocabulary "is eleven properties, and every one models creative collaboration".
 `EdgeTypes` is the authority on what is registered and this ADR does not reproduce it, but the
-claim was already untrue when the issue was written, in two ways worth recording because a wrong
+claim was already untrue when the issue was written, in three ways worth recording because a wrong
 premise invites a wrong fix:
 
+- **There were never eleven.** On 2026-08-27 `EdgeTypes` held fourteen registrations, twelve of them
+  Wikidata-backed, and had held those fourteen since 2026-08-25 — two days before the issue was
+  filed. #78's own later comment counts them correctly, as *"segue's fourteen edge types"*.
 - **ADR 38 had registered `RECEIVED_AWARD` (P166) on 2026-08-25**, under a title naming it *the
   first non-collaboration edge*. A prize is a body's judgement, not a co-credit.
 - **`INFLUENCED_BY` (P737) has been registered since slice 0** — it states an intellectual or
@@ -137,8 +141,10 @@ argument would have been stronger with a name, it is made weaker on purpose and 
 
 ### Places you go: out of scope for this source, and the reason is not thinness
 
-Measured in #89 against ten real examples the owner supplied, all in one city. (#89's body asked
-for twenty; ten were measured, and the finding below does not depend on which.)
+Measured in #89 against ten real examples the owner supplied, matched against the restaurants
+Wikidata holds in one city. Not all ten are single places in that city: one is a national chain, and
+one carries a QID with no `P131` tying it to the city. (#89's body asked for twenty; ten were
+measured, and the finding below does not depend on which.)
 
 - **Wikidata holds ten restaurants in that city in total** — ten that exist under the class-and-
   location query, not ten that were found. Six of the ten real examples supplied do not exist at
@@ -283,10 +289,14 @@ is restated here.
   fixed pair. ADR 31's issue-#88 amendment is the record, and it warns against re-opening the
   question with a measure not run against the 21 must-keep nodes.
 
-- **Widen the vocabulary per domain — location, employment, genre — in one move.** #78's step 3 in
-  its unmeasured form. Rejected on numbers that already existed: `P106` occupation at 35,977 and
-  `P136` genre at 16,552 were ADR 38's measured rejections and ADR 47 re-confirmed them. And for
-  places it would not have worked at any hub size, because the entities carry nothing to map.
+- **Widen the vocabulary per domain — location, employment, genre — in one move.** The shape #78's
+  *"What does not survive"* section implies, which lists location, aboutness and employment together
+  as what a general interest graph needs. **Not #78's step 3**, which asked for *"properties in
+  small measured increments, the way #32/#38 added `RECEIVED_AWARD` alone"* — the discipline this
+  ADR adopts rather than rejects. Rejected on numbers that already existed: `P106` occupation at
+  35,977 and `P136` genre at 16,552 were ADR 38's measured rejections and ADR 47 re-confirmed them.
+  And for places it would not have worked at any hub size, because the entities carry nothing to
+  map.
   Adding a property to make a domain *appear* to work is precisely what #89 was filed to prevent.
 
 - **Admit QID-less local entities, so the graph holds things Wikidata does not know.** #92's second
