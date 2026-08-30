@@ -111,6 +111,15 @@ tasks.test {
         "segue.database",
         layout.buildDirectory.file("test-data/segue-test.db").get().asFile.absolutePath,
     )
+    // DeveloperGuideEnumerationsTest re-derives the guide's enumerations from the tree and
+    // compares them to docs/developer-guide.md (issue #145). Gradle's up-to-date check knows
+    // about compiled classes, not about that file — without this line, falsifying the guide and
+    // running `./gradlew check` reports BUILD SUCCESSFUL because `test` is skipped entirely.
+    // Measured, not assumed: that is exactly what happened before this was added.
+    inputs
+        .file("docs/developer-guide.md")
+        .withPropertyName("developerGuide")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
     useJUnitPlatform {
         // Excluded from the normal gate: it needs the network and can fail for reasons
         // that have nothing to do with this code. Run it deliberately, via ./gradlew liveTest.
