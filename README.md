@@ -145,7 +145,7 @@ visibility, is the actual boundary (issue #37).
 ```
 
 No infrastructure to stand up: the graph engines are in-process and the store is one SQLite file.
-`./gradlew liveTest` runs the tagged tests that call the real Wikidata API; they are excluded from
+`./gradlew liveTest` runs the tagged tests that call the real Wikidata and MusicBrainz APIs; they are excluded from
 `check` on purpose.
 
 The suite is layered — domain record invariants with no store, a contract test run against both

@@ -6,6 +6,8 @@ import com.robsartin.segue.mcp.EntityTools;
 import com.robsartin.segue.mcp.GraphTools;
 import com.robsartin.segue.mcp.SegueService;
 import com.robsartin.segue.mcp.TasteTools;
+import com.robsartin.segue.musicbrainz.MusicBrainzClient;
+import com.robsartin.segue.musicbrainz.MusicBrainzSourceAdapter;
 import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.EntityResolver;
@@ -97,13 +99,37 @@ public class SegueConfiguration {
     return wikidata;
   }
 
+  /**
+   * Both sources, in the order they are asked (ADR 25's "plus a bean method", now exercised).
+   *
+   * <p><b>The order is load-bearing and is not alphabetical.</b> {@code SegueService} builds one
+   * {@code ExpandContext} and bounds the concatenation of what the adapters return rather than
+   * bounding each one, so a tight {@code maxNewEdges} is spent by whichever adapter comes first —
+   * {@code CorroborationAcrossSourcesTest} pins that from both ends. Wikidata stays first because
+   * it was first; changing which source wins a small budget is a decision with its own evidence to
+   * gather, and it is not this one.
+   *
+   * <p><b>{@code MusicBrainzSourceAdapter} is handed its identity bridge from here, and that is the
+   * whole point of the seam.</b> The bridge crosses MBID to QID through Wikidata's P434, and it
+   * lives in this package because {@code musicbrainz} may not import {@code wikidata} and {@code
+   * wikidata} may not import {@code musicbrainz} — both directions are ArchUnit rules. So the one
+   * class that knows about both is the one whose job is knowing about everything.
+   */
   @Bean
   SourceAdapters sourceAdapters(WikidataEntityResolver resolver, Clock clock) {
     // Two endpoints, two clients: the resolver's Action API client for the claims stated on an
     // entity, and a second aimed at the Query Service for the ones stated about it (ADR 36).
     // Both are plain Java constructed here, so the adapter needs no framework knowledge (ADR 25).
+    //
+    // One Query Service client, shared: the reverse-lookup pass and the MBID bridge ask the same
+    // host the same way, and a second instance would open a second connection pool to it for no
+    // reason. WikidataClient holds no per-caller state.
+    WikidataClient queryService = WikidataClient.queryService();
     return new SourceAdapters(
-        List.of(new WikidataSourceAdapter(resolver, WikidataClient.queryService(), clock)));
+        List.of(
+            new WikidataSourceAdapter(resolver, queryService, clock),
+            new MusicBrainzSourceAdapter(
+                new MusicBrainzClient(), new WikidataMusicBrainzIdentity(queryService), clock)));
   }
 
   @Bean

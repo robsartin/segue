@@ -7,7 +7,10 @@ import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -25,6 +28,7 @@ public final class StubWikidataServer implements AutoCloseable {
   private final Deque<Integer> statuses = new ArrayDeque<>();
   private final Deque<Map.Entry<String, String>> headers = new ArrayDeque<>();
   private final AtomicInteger requests = new AtomicInteger();
+  private final List<String> queries = Collections.synchronizedList(new ArrayList<>());
   private volatile String lastUserAgent;
   private volatile String lastQuery;
 
@@ -40,6 +44,7 @@ public final class StubWikidataServer implements AutoCloseable {
           requests.incrementAndGet();
           lastUserAgent = exchange.getRequestHeaders().getFirst("User-Agent");
           lastQuery = exchange.getRequestURI().getRawQuery();
+          queries.add(lastQuery);
           int status = statuses.isEmpty() ? 200 : statuses.poll();
           byte[] body = (bodies.isEmpty() ? "{}" : bodies.poll()).getBytes(StandardCharsets.UTF_8);
           exchange.getResponseHeaders().add("Content-Type", "application/json");
@@ -89,6 +94,15 @@ public final class StubWikidataServer implements AutoCloseable {
    */
   public String lastQuery() {
     return lastQuery;
+  }
+
+  /**
+   * Every request's raw query string, in the order they arrived. {@link #lastQuery()} answers for a
+   * caller that makes one request; this is for one that may split its work across several, where
+   * the sizes and contents of each are the thing under test.
+   */
+  public List<String> queries() {
+    return List.copyOf(queries);
   }
 
   @Override
