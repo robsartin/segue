@@ -1382,7 +1382,7 @@ same for the next one.
 ## What to explore next
 
 ```bash
-# the measured default: lift, floor 12, twenty-five candidates, three routes each
+# the measured defaults: lift, `Recommendations.MIN_CANDIDATE_DEGREE`, twenty-five candidates, three routes each
 ./gradlew recommend --args="--known $HOME/known.csv --out $HOME/next.txt"
 
 # turn the dial, and read the two lists side by side
@@ -1452,18 +1452,21 @@ the point the known-list check already was. Three things about that are easy to 
   and so already excluded as known; a boundary at 3 would newly suppress the other **111**, entities
   that had only been shrugged at.
 
-**Measured effect, on a copy of the real database (ADR 50 has the full figures):** at the default
-floor of 12 the candidate pool went 1,027 → 1,011 and 7 of the top 25 left, every one of them
-suppressed — including ranks 1 and 2. At floor 5, where those ratings were actually collected, the
-pool went 1,676 → 1,604 and 16 of the top 25 left, again every one suppressed. **The effect is
-purely subtractive**: no score changes and the survivors keep their relative order exactly, so the
-list simply loses its rejected members and backfills from below.
+**Measured effect, on a copy of the real database (ADR 50 has the full figures):** at a floor of
+12 — the default when ADR 50 was written — the candidate pool went 1,027 → 1,011 and 7 of the top 25
+left, every one of them suppressed, including ranks 1 and 2. At floor 5, where those ratings were
+actually collected, the pool went 1,676 → 1,604 and 16 of the top 25 left, again every one
+suppressed. **The effect is purely subtractive**: no score changes and the survivors keep their
+relative order exactly, so the list simply loses its rejected members and backfills from below.
 
-**The limitation worth knowing** is recorded in ADR 50 and belongs with issues #117 and #118: the
-default floor sees only 16 of the 72 off-list suppressed entities, and the floor itself measures
-what segue has *fetched* rather than how obscure something is. Suppressing an entity that was only
-ever offered because it had been under-fetched is a judgement made on incomplete information, and
-nothing re-opens the question when ingest improves.
+**The limitation ADR 50 records was a limitation of the floor, and issues #117 and #118 moved it.**
+ADR 50 states that floor 12 sees only 16 of the 72 off-list suppressed entities while floor 5 sees
+all 72, so most of the owner's rejections were invisible to a default-floor run. The default is now
+`Recommendations.MIN_CANDIDATE_DEGREE`, five (ADR 45's 2026-08-29 amendment), so the default run is
+the second of those two cases. What does *not* go away is the reason the floor is awkward at all:
+in-graph degree partly measures what segue has *fetched* rather than how obscure something is, so
+suppressing an entity that was only ever offered because it had been under-fetched is still a
+judgement made on incomplete information, and nothing re-opens the question when ingest improves.
 
 ### The score, in one formula
 
@@ -1601,11 +1604,12 @@ known set, so different entities fill the same slots. `RateCli`'s `--min-degree`
 `Recommendations.MIN_CANDIDATE_DEGREE` `recommend`'s does — by reference, not by a second copy of
 the number `RateRun` used to hold (issue #119) — so at those defaults the deck's candidates and
 `./gradlew recommend`'s agree, which is what ADR 46's issue-#101 review made true and this keeps
-true. Move it the same way `recommend --min-degree` does, to rate the floor-5 candidate list
-against the floor-12 one instead of only reading about the difference:
+true. Move it the same way `recommend --min-degree` does, to rate one floor's candidate list against
+another's instead of only reading about the difference — the method ADR 45 used and issues #117 and
+#118 re-used to move the default down to five:
 
 ```bash
-./gradlew rate --args="--known $HOME/known.csv --min-degree 5"
+./gradlew rate --args="--known $HOME/known.csv --min-degree 12"
 ```
 
 `--db` defaults to `SEGUE_DB` if it is set and

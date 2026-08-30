@@ -19,16 +19,24 @@ public final class Recommendations {
    * <p><b>A floor is not optional under a normalised score, and that was measured.</b> Dividing by
    * the candidate's own degree is what turns fame into surprise, and it does so by rewarding a
    * small denominator — so without a floor the top of the ranking is whatever is smallest, and the
-   * experiment that produced this design put a degree-2 node first. Twelve is the value that
-   * experiment settled on, and re-measuring it on the 123,752-node graph agreed: at a floor of 50
-   * the list drifts back towards the famous names the normalisation exists to escape, and below
-   * about twelve it fills with entities whose entire presence in the graph is a list of influences.
+   * experiment that produced this design put a degree-2 node first. That experiment's upper bound
+   * still holds too: at a floor of 50 the list drifts back towards the famous names the
+   * normalisation exists to escape.
    *
-   * <p>Twelve is not a natural constant. It is a default on a personal-scale music-heavy graph,
-   * which is why {@code --min-degree} exists: a domain whose entities are thinner needs a lower
-   * one, and the honest way to choose is to run both and read the two lists.
+   * <p><b>Five, and no longer the twelve ADR 45 shipped, because in-graph degree is partly a
+   * measure of what segue has FETCHED.</b> An entity at this degree is commonly thinly connected
+   * here rather than obscure in the world, so the higher floor excluded recognisable things for a
+   * reason that was about ingest history rather than about them. The move was measured before it
+   * was decided, and the cost of it is real — a lower floor makes the ranking depend more on what
+   * has been expanded. ADR 45's amendment of 2026-08-29 (issues #117, #118) is the authority on the
+   * figures, the cost, and the alternatives that were measured and lost; nothing here restates
+   * them.
+   *
+   * <p><b>It is a default on this graph, not a natural constant</b>, which is why {@code
+   * --min-degree} exists: a domain whose entities are thinner needs a lower one, and the honest way
+   * to choose is to run two floors and read the two lists.
    */
-  public static final int MIN_CANDIDATE_DEGREE = 12;
+  public static final int MIN_CANDIDATE_DEGREE = 5;
 
   /**
    * How much weight one known entity's connections carry. <b>The affinity seam, deliberately

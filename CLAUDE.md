@@ -553,9 +553,14 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   by.** Measured on the real 123,752-node graph before anything was built (issue #82, ADR 45): raw
   counting and Adamic-Adar both returned the most famous entities in the graph, because a candidate
   connected to everything shares its intermediates with everything. **Dividing by the CANDIDATE's own
-  degree** turns popularity into surprise, and it needs a **degree floor** (12, `--min-degree`)
-  because a normalised score otherwise rewards whatever is thinnest — the experiment's cosine variant
-  put a degree-2 node first. `--scorer` keeps raw/adamic-adar/resource-allocation/lift as a dial, and
+  degree** turns popularity into surprise, and it needs a **degree floor**
+  (`Recommendations.MIN_CANDIDATE_DEGREE`, moved by `--min-degree`) because a normalised score
+  otherwise rewards whatever is thinnest — the experiment's cosine variant put a degree-2 node
+  first. **That default is 5, lowered from ADR 45's 12 by issues #117/#118** — see ADR 45's
+  2026-08-29 amendment for the measurement, the cost and the six alternatives that lost.
+  **Expanding a top candidate DEMOTES it**, because expansion raises the degree the score divides
+  by: "expand the top candidates" is an anti-pattern, and the developer guide's "What to explore
+  next" says so at length. `--scorer` keeps raw/adamic-adar/resource-allocation/lift as a dial, and
   running two of them is how you see what the normalisation does. **Plain PageRank is the wrong
   tool** (it measures the fame this is escaping) and personalised PageRank is refused for a different
   reason: it cannot produce the routes, and a score with no receipts is not a segue recommendation.
@@ -641,15 +646,17 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   **`--revise` can still reach a suppressed entity** — `KnownList.revisitable` is known ∪
   suppressed — and that is load-bearing, not a convenience: `AffinityStore` has no delete, so
   re-rating to 3+ is the ONLY way back, and an unreachable suppression is issue #109's trap one
-  layer out. Measured on a copy of the real graph: at the default floor 12 the pool went 1,027 →
+  layer out. Measured on a copy of the real graph: at floor 12 — the default when ADR 50 was written — the pool went 1,027 →
   1,011 and 7 of the top 25 left, every one suppressed (including ranks 1 and 2); at floor 5 — where
   those ratings were actually collected — the pool went 1,676 → 1,604 and 16 of the top 25 left,
   again every one suppressed. **The effect is purely subtractive**: no score changes, survivor order
   is identical, the list backfills from the tail. **The honest limitation, and it belongs with #117
-  and #118**: the default floor sees only 16 of the 72 off-list suppressed entities, and the floor
+  and #118**: floor 12 sees only 16 of the 72 off-list suppressed entities, and the floor
   measures what segue has FETCHED rather than how obscure something is — so suppressing an entity
   that was only ever offered because segue had under-fetched it is a judgement made on incomplete
-  information, and nothing re-opens the question when ingest improves. ADR 50.
+  information, and nothing re-opens the question when ingest improves. ADR 50. **The floor half of
+  that limitation has since moved**: ADR 50 records that floor 5 sees all 72, and 5 is now the
+  default (ADR 45's 2026-08-29 amendment). The under-fetch half has not moved at all.
 
 - **The deck page is tested by running it in a real browser, because reading it as text cannot
   tell a guard from a guard-shaped comment.** Mutation-testing `DeckPageTest` (issue #103) caught

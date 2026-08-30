@@ -41,8 +41,11 @@ import org.junit.jupiter.api.Test;
  * The two-hop walk, and every rule about who is allowed to be a recommendation (ADR 45).
  *
  * <p>The floor here is 4 rather than {@code Recommendations.MIN_CANDIDATE_DEGREE}: an invented
- * graph big enough to give every candidate twelve edges would be a page of padding that says
- * nothing, and {@link #theDegreeFloorIsApplied()} tests the floor itself against a value it names.
+ * graph is padded to whatever floor it must clear, and a fixture that tracked the shipped default
+ * would re-pad every time that default is re-measured. {@link #theDegreeFloorIsApplied()} tests the
+ * floor mechanism against a value it names, and {@link
+ * #theDefaultFloorAdmitsAThinlyConnectedCandidate()} is the one test here that asks what the
+ * shipped default actually admits.
  */
 class CandidateSweepTest {
 
@@ -182,6 +185,27 @@ class CandidateSweepTest {
     assertThat(find(sweep(), A_THIN_BAND)).isEmpty();
     assertThat(find(sweep(Scorer.LIFT, FLOOR - 2, Recommendations.EQUAL_REGARD), A_THIN_BAND))
         .isPresent();
+  }
+
+  @Test
+  @DisplayName("the default floor admits a candidate with five edges (issues #117, #118)")
+  void theDefaultFloorAdmitsAThinlyConnectedCandidate() {
+    // The decision this pins: five, not twelve. A recognisable act sitting at degree five is
+    // thinly connected because segue has not fetched it, not because it is obscure, and the
+    // measured cost of excluding it was the negative signal the taste layer had no other way of
+    // getting. This is the one place the number itself is stated; everything else cites the
+    // constant.
+    node(graph, SHARED_ARTIST, NodeKind.PERSON, "the artist they both cite");
+    node(graph, ANCESTOR, NodeKind.GROUP, "who that artist cites");
+    edge(graph, KNOWN_ONE, SHARED_ARTIST, EdgeTypes.INFLUENCED_BY.code());
+    edge(graph, KNOWN_TWO, SHARED_ARTIST, EdgeTypes.INFLUENCED_BY.code());
+    edge(graph, SHARED_ARTIST, ANCESTOR, EdgeTypes.INFLUENCED_BY.code());
+    padDegreeTo(graph, ANCESTOR, 5);
+
+    Sweep sweep =
+        sweep(Scorer.LIFT, Recommendations.MIN_CANDIDATE_DEGREE, Recommendations.EQUAL_REGARD);
+
+    assertThat(find(sweep, ANCESTOR)).isPresent();
   }
 
   @Test

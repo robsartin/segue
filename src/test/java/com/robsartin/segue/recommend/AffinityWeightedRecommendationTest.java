@@ -8,6 +8,7 @@ import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.EdgeTypes;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.domain.Recommendations;
 import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import java.io.IOException;
@@ -58,8 +59,10 @@ class AffinityWeightedRecommendationTest {
   private static final String BELOVED = "Q900301";
   private static final String CROWDED = "Q900302";
 
-  /** ADR 45's own floor is 12, so both candidates are padded to exactly it. */
-  private static final int DEGREE = 12;
+  /**
+   * The shipped floor, by reference and never as a second copy: both candidates sit exactly on it.
+   */
+  private static final int DEGREE = Recommendations.MIN_CANDIDATE_DEGREE;
 
   private static final Instant RATED_AT = Instant.parse("2026-08-27T09:00:00Z");
 

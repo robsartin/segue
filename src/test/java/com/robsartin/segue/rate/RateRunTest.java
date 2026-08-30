@@ -27,7 +27,8 @@ import org.junit.jupiter.api.Test;
  * RateRun.MIN_CANDIDATE_DEGREE} that issue #119 had already deleted — a copy of a copy of a number
  * the authority's own javadoc calls a MEASURED default. Re-measure it and this fixture would have
  * gone on padding to twelve, flooring at twelve and passing, testing a number the shipped tools no
- * longer use, with nothing failing (issue #107; the measurement in #117/#118 makes that live).
+ * longer use, with nothing failing (issue #107). That re-measurement then happened: issues #117 and
+ * #118 lowered the default, and this fixture moved with it because it reads the authority.
  *
  * <p><b>Every assertion below that checks for "no rating in a note" checks by looking for one of
  * this fixture's own qids</b>, never by matching a rating-shaped regex. A rating never appears
@@ -247,9 +248,10 @@ class RateRunTest {
       node(graph, ANCESTOR, NodeKind.GROUP, "who that artist cites");
       edge(graph, KNOWN_ONE, SHARED_ARTIST, EdgeTypes.INFLUENCED_BY.code());
       edge(graph, SHARED_ARTIST, ANCESTOR, EdgeTypes.INFLUENCED_BY.code());
-      // Below the recommender's default floor of 12, at or above a lowered one of 5 — the
-      // floor-5 candidate list issue #118 measured and issue #119 exists to let this deck rate.
-      int loweredFloor = 5;
+      // Derived from the authority rather than stated: below the recommender's default floor, at
+      // exactly a lowered one. Re-measuring the default (as issues #117 and #118 did) moves both
+      // ends of this fixture together, so what the test pins is the DIAL and never a number.
+      int loweredFloor = MIN_CANDIDATE_DEGREE - 2;
       padDegreeTo(graph, ANCESTOR, loweredFloor);
 
       List<Card> atTheDefaultFloor =
