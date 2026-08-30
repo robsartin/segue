@@ -60,7 +60,7 @@ second time — the Graphviz install CI already carries, for the hover test
 [ADR 41](0041-graph-exporter-views-and-formats.md) describes: the one check
 standing between this page and a silent regression must not be able to report success by never
 having run. **The guard was itself positively controlled** — pointed at a non-existent browser, the
-suite fails with the property set and reports nine skipped tests without it.
+suite fails with the property set and reports ten skipped tests without it.
 
 `DeckPageTest` keeps only what a running page cannot answer: that the page reaches no external
 host, that the ratings are real `<button>` elements, that the region a screen reader is told to
@@ -101,8 +101,12 @@ prove. **No production code was changed.**
 
 ## Consequences
 
-- `./gradlew check` stays green on a machine with no browser. It reports nine skipped tests, which
+- `./gradlew check` stays green on a machine with no browser. It reports ten skipped tests, which
   is visible, and CI cannot reach that state.
+- **The suite costs about fifteen seconds of `check`** — measured at 15.3s for the ten tests, a
+  fresh browser per test. That is the price of per-test isolation: a stub server and a profile that
+  no previous test can have left in a state. Sharing one browser across the class would recover
+  most of it and is the first thing to try if the build time starts to matter.
 - The suite now depends on a browser being present in CI. That is a real new failure mode, and it
   is the one deliberately chosen over a check that quietly stops running.
 - **Chrome retries a POST whose connection dies before any response arrives.** Found by this suite,
@@ -114,5 +118,25 @@ prove. **No production code was changed.**
   `current` first, and the one window where `current` is set while `busy` is still true contains no
   `await`, so no keystroke can be handled inside it. It is defence in depth, and a test asserting
   it would be asserting nothing.
+- **The tests are wall-clock by design, and a maintainer chasing an intermittent failure needs to
+  know exactly where.** The page's guards are about *timing* — a key held down, a keypress arriving
+  while a POST is in flight — so there is no version of this suite with no clock in it. What the
+  clock may never do is decide an assertion. Every wait that a result depends on is a **condition**:
+  `HeadlessChrome.until` polls the page for up to 15s, and `DeckBehaviourTest.untilSent` waits up to
+  15s for a POST to reach the stub. The residual, in full:
+  - **Timing as stimulus, never as verdict.** A stalled response is held 400ms and the competing
+    keypress is sent at 80ms — 320ms of slack — and a held key is repeated at a 33ms cadence. Slip
+    any of these on a slow runner and the test goes **red**, loudly, not green.
+  - **A 600ms `settle()` remains in four tests**, and in each one the assertions it precedes are
+    already anchored by a `chrome.until` on something visible — the failure message appearing, the
+    deck moving. It is belt over braces, not the thing being trusted.
+  - **The two tests that assert something was *not* sent have no residual at all**, and that is
+    deliberate. Gated on a sleep they were the one shape that fails *silently*: a leaked POST a
+    slow runner had not yet delivered is indistinguishable from a POST the guard suppressed, so the
+    build would go green asserting a guard that is not there — this issue's own defect, in the test
+    closing it. Each now drives a later action that must post and waits for **that** to land, so a
+    leak is either already in the list ahead of it or has swallowed the sentinel and failed the
+    wait. Verified by making the leaked POST arrive three seconds late at the stub: the sleep-gated
+    version passes with the guard deleted, this one fails.
 - The driver is test-only and lives beside the test that uses it. It is not a general browser
   harness and should not grow into one without a decision.

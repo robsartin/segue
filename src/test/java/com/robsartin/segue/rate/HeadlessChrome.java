@@ -122,7 +122,18 @@ final class HeadlessChrome implements AutoCloseable {
   private HeadlessChrome(Process process, Path userData) {
     this.process = process;
     this.userData = userData;
-    this.socket = connect(devToolsPort());
+    WebSocket connected;
+    try {
+      connected = connect(devToolsPort());
+    } catch (RuntimeException | Error handshakeFailed) {
+      // Chrome is already running by the time we get here, and close() is only ever reached
+      // through a constructed object — so without this, a browser that never wrote its port, or
+      // never listed a page target, is left running with its profile directory behind it, once
+      // per failing test.
+      kill();
+      throw handshakeFailed;
+    }
+    this.socket = connected;
   }
 
   /**
@@ -250,16 +261,33 @@ final class HeadlessChrome implements AutoCloseable {
     until("document.readyState === 'complete'", "the page to load");
   }
 
-  /** Evaluates an expression in the page and returns its value. */
+  /**
+   * Evaluates an expression in the page and returns its value, failing if the expression threw.
+   *
+   * <p>The {@code exceptionDetails} check is not housekeeping. Without it a JavaScript error comes
+   * back as an empty value, so {@link #text(String)} yields {@code ""} and every negative-space
+   * assertion — {@code isZero}, {@code doesNotContain}, {@code isEmpty} — passes on a question that
+   * was never actually asked. That is precisely the silent no-op this whole harness exists to
+   * close, and it may not live inside the harness itself.
+   */
   Object eval(String expression) {
-    JsonNode result =
+    JsonNode answer =
         send(
-                "Runtime.evaluate",
-                Map.of(
-                    "expression", expression,
-                    "returnByValue", true,
-                    "awaitPromise", true))
-            .path("result");
+            "Runtime.evaluate",
+            Map.of(
+                "expression", expression,
+                "returnByValue", true,
+                "awaitPromise", true));
+    if (answer.has("exceptionDetails")) {
+      JsonNode thrown = answer.path("exceptionDetails");
+      String said =
+          thrown
+              .path("exception")
+              .path("description")
+              .asString(thrown.path("text").asString("a JavaScript error with no description"));
+      throw new IllegalStateException("evaluating `" + expression + "` in the page threw: " + said);
+    }
+    JsonNode result = answer.path("result");
     return switch (result.path("type").asString("undefined")) {
       case "string" -> result.path("value").asString();
       case "boolean" -> result.path("value").asBoolean();
@@ -348,6 +376,16 @@ final class HeadlessChrome implements AutoCloseable {
   @Override
   public void close() {
     socket.abort();
+    kill();
+  }
+
+  /**
+   * Ends the browser and removes its throwaway profile.
+   *
+   * <p>Separate from {@link #close()} because the constructor needs it before there is a socket to
+   * abort.
+   */
+  private void kill() {
     process.destroy();
     try {
       process.waitFor(10, TimeUnit.SECONDS);

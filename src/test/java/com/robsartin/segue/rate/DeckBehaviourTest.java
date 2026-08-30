@@ -1,6 +1,7 @@
 package com.robsartin.segue.rate;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.sun.net.httpserver.HttpExchange;
@@ -14,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterEach;
@@ -194,6 +196,43 @@ class DeckBehaviourTest {
     HeadlessChrome.sleep(600);
   }
 
+  /**
+   * Waits until a rating of this value has actually reached the stub, and fails saying so if none
+   * ever does.
+   *
+   * <p>This is what makes an <em>absence</em> assertion mean something. {@code assertThat(posts)
+   * .isEmpty()} after a fixed sleep says only "nothing had arrived yet": a leaked POST that a slow
+   * runner had not yet delivered reads exactly like a POST the guard correctly suppressed, and the
+   * build goes green asserting a guard that is not there — the silent success issue #103 exists to
+   * close, reintroduced in the test closing it.
+   *
+   * <p>So the tests that assert nothing was sent drive a <em>later</em> action that must send, and
+   * wait here for that one to land. The page's own {@code busy} guard serialises them: a leaked
+   * rating holds {@code busy} until its response is in, so the sentinel cannot even be issued until
+   * the leaked POST is already recorded here, ahead of it in the list. A leak is therefore
+   * impossible to mistake for lateness — either it is sitting in {@code posts} when the sentinel
+   * lands, or it swallowed the sentinel and this wait fails outright. Both are red.
+   *
+   * <p>Callers pair this with a {@code chrome.until} on the card the sentinel deals, because the
+   * stub records a POST before it answers it: this returns while the page is still waiting on the
+   * response, and what is on screen has not caught up yet. That second wait is a condition too, not
+   * a sleep.
+   */
+  private void untilSent(int rating) {
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
+    while (System.nanoTime() < deadline) {
+      if (sent(rating) > 0) {
+        return;
+      }
+      HeadlessChrome.sleep(20);
+    }
+    throw new AssertionError(
+        "no rating of "
+            + rating
+            + " ever reached the server, so nothing anchors what did not: "
+            + posts);
+  }
+
   @Test
   @DisplayName("a refused rating does not advance the deck, and says so")
   void aRefusedRatingDoesNotAdvance() {
@@ -257,16 +296,38 @@ class DeckBehaviourTest {
     // delivers them. A finger resting on '4' used to write about fifteen ratings of 4 to
     // whatever cards went past, none of which can be withdrawn.
     chrome.press("4", false, 0);
+
+    // The repeats begin only once the first press has been fully dealt with and the next card is
+    // up. Not politeness — necessity. Fired during the first round trip they would be dropped by
+    // `busy`, which has nothing to do with the guard under test, so on a runner slow enough for
+    // one round trip to outlast the whole hold, a deleted `event.repeat` guard would survive.
+    // Delivered here, every repeat reaches a page that is idle and holding a card, and a page
+    // without the guard must post.
+    chrome.until(
+        "document.querySelector('#card h1').textContent === " + quoted(LABELS.get(1)),
+        "the card the first press dealt, before the key is held");
     for (int i = 0; i < 10; i++) {
       HeadlessChrome.sleep(33);
       chrome.press("4", true, 0);
     }
-    settle();
 
-    assertThat(posts).as("one press is one rating, however long it is held").hasSize(1);
-    assertThat(posts.get(0)).contains("\"rating\":4");
-    assertThat(ratedThisSession()).isOne();
-    assertThat(cardOnScreen()).isEqualTo(LABELS.get(1));
+    // The sentinel: a real press that must post. Once its POST is in, any repeat that leaked is
+    // already in the list ahead of it — see untilSent. Nothing here is gated on wall-clock.
+    chrome.press("5");
+    untilSent(5);
+    chrome.until(
+        "document.querySelector('#card h1').textContent === " + quoted(LABELS.get(2)),
+        "the sentinel's own rating to land and the deck to move");
+
+    assertThat(posts).as("one press is one rating, however long it is held").hasSize(2);
+    assertThat(posts.get(0)).as("the held key wrote its one rating").contains("\"rating\":4");
+    assertThat(posts.get(1))
+        .as("and the very next thing the server saw was the sentinel, not a repeat")
+        .contains("\"rating\":5");
+    assertThat(ratedThisSession()).isEqualTo(2);
+    assertThat(cardOnScreen())
+        .as("the hold advanced the deck once, the sentinel once more")
+        .isEqualTo(LABELS.get(2));
   }
 
   @Test
@@ -281,11 +342,24 @@ class DeckBehaviourTest {
     chrome.press("4", false, alt);
     chrome.press("s", false, meta);
     chrome.press(" ", false, ctrl);
-    settle();
 
-    assertThat(posts).as("Ctrl/Cmd/Alt + a digit belongs to the browser").isEmpty();
-    assertThat(cardOnScreen()).as("Cmd+S must not skip a card").isEqualTo(LABELS.get(0));
-    assertThat(ratedThisSession()).isZero();
+    // The sentinel: an unmodified '5', which must rate the card still on screen and advance. It
+    // rates a 5 precisely so a leaked 4 is distinguishable from it in the list. Waiting for it
+    // server-side is what turns "nothing has arrived" into "nothing was sent" — see untilSent.
+    chrome.press("5");
+    untilSent(5);
+    chrome.until(
+        "document.querySelector('#card h1').textContent !== " + quoted(LABELS.get(0)),
+        "the sentinel's own rating to land and the deck to move");
+
+    assertThat(posts).as("Ctrl/Cmd/Alt + a digit belongs to the browser").hasSize(1);
+    assertThat(posts.get(0))
+        .as("and the one thing the server saw was the sentinel")
+        .contains("\"rating\":5");
+    assertThat(cardOnScreen())
+        .as("Cmd+S must not skip a card: the sentinel rated the FIRST card, so this is the second")
+        .isEqualTo(LABELS.get(1));
+    assertThat(ratedThisSession()).as("the sentinel is the only rating this session wrote").isOne();
   }
 
   @Test
@@ -379,5 +453,22 @@ class DeckBehaviourTest {
     assertThat(chrome.eval("navigator.userAgent").toString())
         .as("a positive control: the page really is running in a browser")
         .containsIgnoringCase("chrome");
+  }
+
+  @Test
+  @DisplayName(
+      "an expression that throws in the page fails, rather than reading as an empty answer")
+  void aJavaScriptErrorIsNotAnEmptyAnswer() {
+    // The second positive control, and it is aimed at the harness rather than the page. An
+    // expression that throws comes back from DevTools with a value of nothing at all, so without
+    // the exceptionDetails check this returns "" — and every isZero, isEmpty and doesNotContain
+    // in this file would go green on a question the browser never answered. That is the same
+    // silent success as a POST that was merely late, one layer further down.
+    assertThatThrownBy(
+            () -> chrome.eval("document.getElementById('no-element-has-this-id').textContent"))
+        .as("a JavaScript error must reach the test, and must say what it was")
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("threw")
+        .hasMessageContaining("no-element-has-this-id");
   }
 }
