@@ -242,13 +242,14 @@ ADRs describe.
 
 ```mermaid
 graph TD
-  app["app<br/>SegueApplication, SegueConfiguration"]
+  app["app<br/>SegueApplication, SegueConfiguration, WikidataMusicBrainzIdentity"]
   mcp["mcp<br/>EntityTools, GraphTools, TasteTools, SegueService"]
   ingest["ingest<br/>IngestService, GraphProjector"]
   tinker["tinker<br/>TinkerGraphStore"]
   jena["jena<br/>JenaGraphStore"]
   sqlite["sqlite<br/>SqliteAssertionLog, SqliteAffinityStore"]
   wikidata["wikidata<br/>resolver, adapter, ClaimMapper, ReverseClaims"]
+  musicbrainz["musicbrainz<br/>MusicBrainzClient, adapter, MusicBrainzIdentity"]
   port["port<br/>GraphStore, AssertionLog, AffinityStore, SourceAdapter, EntityResolver"]
   domain["domain<br/>records + EdgeTypes"]
   support["support<br/>UuidV7, QidList, ClassLabels"]
@@ -265,6 +266,8 @@ graph TD
   app --> tinker
   app --> sqlite
   app --> wikidata
+  app --> musicbrainz
+  app --> domain
   mcp --> ingest
   mcp --> port
   mcp --> domain
@@ -281,6 +284,8 @@ graph TD
   sqlite --> domain
   wikidata --> port
   wikidata --> domain
+  musicbrainz --> port
+  musicbrainz --> domain
   port --> domain
   seed --> port
   seed --> domain
@@ -317,17 +322,23 @@ graph TD
 ```
 
 **What the diagram shows.** Dependencies point downward and never back up. `domain` sits at the
-bottom and depends on nothing else in the project. `port` depends only on `domain`. The four
-adapters (`tinker`, `jena`, `sqlite`, `wikidata`) each depend on `port` and `domain` and on no
-sibling adapter. `ingest` depends on `port` and `domain`, plus one dotted edge to `wikidata`:
+bottom and depends on nothing else in the project. `port` depends only on `domain`. The five
+adapters (`tinker`, `jena`, `sqlite`, `wikidata`, `musicbrainz`) each depend on `port` and `domain`
+and on no sibling adapter — five is the count since
+[ADR 54](adr/0054-musicbrainz-as-the-second-source.md), and `musicbrainz` is the one that had to
+declare its identity seam rather than import the adapter that could satisfy it. `ingest` depends on
+`port` and `domain`, plus one dotted edge to `wikidata`:
 `GraphProjector` re-derives each node's kind from the `P31` its claim stored, through
 `KindMapper.rederive`, which is what makes a mapper improvement reach nodes the graph already holds
 ([ADR 42](adr/0042-store-p31-and-rederive-kind.md)). `mcp` depends on `ingest`, `port`, `domain`
 and `support`, plus its own dotted edge to `wikidata` (explained below). `app` depends on almost
 everything, because wiring is its job. `support` depends on nothing, and four packages use it:
 `mcp` (`UuidV7`), `export` and `rate` (`ClassLabels`), and `export`, `recommend` and `rate`
-(`QidList`). Two things a reader might expect and will not find: `app` does not import `jena` at
-all — the reference engine is reachable only from tests — and nothing imports `domain` from `app`.
+(`QidList`). One thing a reader might expect and will not find: `app` does not import `jena` at
+all — the reference engine is reachable only from tests. **This paragraph used to name a second,
+that `app` imports nothing from `domain`; that stopped being true in ADR 54**, because
+`WikidataMusicBrainzIdentity` validates a seed QID with `Qid.looksLikeAQid` before putting it in a
+SPARQL query, so the bridge in `app` holds one `domain` type.
 
 `seed`, `export`, `ratings`, `retract`, `recommend` and `rate` are the six dev-side tools. None is
 reachable from the application — nothing imports any of them, and each is entered through its own
@@ -423,10 +434,12 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 
 These are true of the code today and nothing will stop you breaking them:
 
-- **Adapters depend on `port` and `domain` only.** The sibling and upward halves are enforced; the
-  downward restriction is not. An adapter could import `support`, or a fifth adapter package, and
-  the build would stay green. [ADR 32](adr/0032-layering-and-archunit.md) records this gap
-  explicitly.
+- **Adapters depend on `port` and `domain` only.** The upward half is enforced and the sibling half
+  now covers 16 of the 20 ordered pairs five adapters make; the downward restriction is not enforced
+  at all. An adapter could import `support` and the build would stay green, and so would the four
+  sibling pairs issue #140 still leaves open — `tinker`/`jena` → `sqlite`/`wikidata`.
+  [ADR 32](adr/0032-layering-and-archunit.md) records the downward gap explicitly, and
+  [ADR 54](adr/0054-musicbrainz-as-the-second-source.md) the sibling arithmetic.
 - **`ingest` depends on `port` and `domain` only.** No rule says so. Only `noPackageCycles` would
   notice, and only if the new dependency closed a cycle.
 - **`mcp` does not reach into an adapter.** It does, once: `SegueService` imports

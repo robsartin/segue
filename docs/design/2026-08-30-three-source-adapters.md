@@ -345,16 +345,16 @@ data to hold.
    the route it yields — "these two are both in this city" — is the coincidence ADR 36's issue-#71
    amendment calls a route that means nothing.
 4. **And the hub rule could not demote it — given the kind the adapter would assert.**
-   `PathRanking.isHub` has two halves and I read both (`isBusyConcept` and `isRecognitionInstitution`).
-   `isBusyConcept` requires `node.kind() == NodeKind.CONCEPT`; `isRecognitionInstitution` reads
-   `node.instanceOf()`, which is empty for a source stating no Wikidata classes. So an OSM place
-   asserted as `PLACE` — the honest kind, and what `KindMapper`'s `Q515` entry gives a Wikidata city — trips
-   **neither half**, and a city hub would rank as a genuine explanation. **This step depends on that
-   design choice**: an adapter that filed cities as `CONCEPT` would trip `isBusyConcept` at a degree
-   of ten (`isBusyConcept` compares `>=` against `PathRanking.HUB_DEGREE`), at the cost of calling a city a thing it
-   could not place. The recommendation does not rest on this step — step 3 carries it alone — but
-   ADR 31's issue-#88 amendment refused to generalise the hub rule, and this is the case that
-   refusal leaves open.
+   `PathRanking.isHub` has two halves and I read both (`isBusyConcept` and
+   `isRecognitionInstitution`). `isBusyConcept` requires `node.kind() == NodeKind.CONCEPT`;
+   `isRecognitionInstitution` reads `node.instanceOf()`, which is empty for a source stating no
+   Wikidata classes. So an OSM place asserted as `PLACE` — the honest kind, and what `KindMapper`'s
+   `Q515` entry gives a Wikidata city — trips **neither half**, and a city hub would rank as a
+   genuine explanation. **This step depends on that design choice**: an adapter that filed cities as
+   `CONCEPT` would trip `isBusyConcept` at a degree of ten (it compares `>=` against
+   `PathRanking.HUB_DEGREE`), at the cost of calling a city a thing it could not place. The
+   recommendation does not rest on this step — step 3 carries it alone — but ADR 31's issue-#88
+   amendment refused to generalise the hub rule, and this is the case that refusal leaves open.
 
 Recording this conclusion is worth more than the adapter would have been, and it is the same kind of
 answer #89 exists to make sayable.
@@ -486,8 +486,8 @@ in this note:** cheap to fix, and invisible if missed.
 literal naming `tinker`, `jena`, `sqlite` or `wikidata`. **13 of the 35 rules name an adapter
 package (or an adapter class) as a literal** — a count taken on 2026-08-30 against
 `ArchitectureTest` as it stood *before* this issue changed it. (#91 left it holding 36 rules; ADR 54
-enumerates the eight it changed, and `ArchitectureTest` is the authority on the file today.) The number alone is a trap, so here is the list —
-Task 2 must inherit the list, not the number.
+enumerates the eight it changed, and `ArchitectureTest` is the authority on the file today.) The
+number alone is a trap, so here is the list — Task 2 must inherit the list, not the number.
 
 **Tier 1 — must change, or a real fence does not extend to the new adapter (3):**
 
@@ -515,9 +515,10 @@ was the same risk the tier-1 reasoning cited for adding the new package to `sqli
 
 **The arithmetic is the argument for replacing rather than patching.** Four adapters make twelve
 ordered pairs; these four rules cover **eight**. The four uncovered are `tinker → sqlite`,
-`tinker → wikidata`, `jena → sqlite`, `jena → wikidata` — so `tinker → wikidata` was unforbidden
-when this note was written, before any second source existed, and it still is: #91 added a fifth
-adapter and left those four pairs to #140. Five adapters make twenty ordered pairs, and patching the
+`tinker → wikidata`, `jena → sqlite`, `jena → wikidata` — so `tinker → wikidata` was
+unforbidden when this note was written, before any second source existed, and it still is: #91
+added a fifth adapter and left those four pairs to #140. Five adapters make twenty ordered
+pairs, and patching the
 object lists one at a time means five rules holding twenty package literals between them, with the
 next adapter needing five edits and a sixth rule.
 
@@ -565,8 +566,9 @@ all six `tinker`/`jena` → {`sqlite`, `wikidata`, `musicbrainz`} pairs uncovere
 creates. Those two must be picked up either way.
 
 **Tier 3 — a pre-existing shape the new adapter widens (3):** `theRatingsToolOpensNothingElse`,
-`theRecommenderOpensNothingElse` and `theRetractionToolOpensNothingElse` each ban `java.net..` to keep an offline tool offline, and each omits `..wikidata..` from
-its package list. Because ArchUnit sees direct dependencies only, any adapter's HTTP client already
+`theRecommenderOpensNothingElse` and `theRetractionToolOpensNothingElse` each ban `java.net..` to
+keep an offline tool offline, and each omits `..wikidata..` from its package list. Because
+ArchUnit sees direct dependencies only, any adapter's HTTP client already
 slips through them; a second one widens a hole rather than opening it. Worth a line in the Task 2
 report, not a blocker.
 
@@ -744,8 +746,8 @@ This collides on the very first MusicBrainz membership edge. The Group probe's n
 `member of band` relations are all dated — the fullest is
 `"begin": "1960-08-12", "end": "1962-08-16", "ended": true`. Wikidata's forward pass reads P580/P582
 into the same fields (`ClaimMapper`'s P580/P582 handling), while its reverse pass always writes
-null (`ReverseClaims`, whose own comment says so). So the same membership can arrive dated from one source and
-undated from another, in either order, and the graph keeps whichever landed first.
+null (`ReverseClaims`, whose own comment says so). So the same membership can arrive dated from
+one source and undated from another, in either order, and the graph keeps whichever landed first.
 
 **A second, sharper edge on the same probe: MusicBrainz dates are variable-precision and
 `validFrom` is a `LocalDate`.** Of those nine relations, **1 of 9 `begin` values and 4 of 9 `end`
