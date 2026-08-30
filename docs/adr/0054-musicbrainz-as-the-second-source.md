@@ -84,14 +84,19 @@ Adding a source was not one interface plus a bean. It was that, plus:
   changed — `adaptersDoNotDependUpward`, `sqliteDoesNotDependOnOtherAdapters`,
   `wikidataDoesNotDependOnOtherAdapters`, `theExporterNeverSpeaksToANetwork` and
   `theWorldFactLayerNeverTouchesAffinity`. Two were widened and renamed for what they now forbid —
-  `tinkerDoesNotDependOnJena` and `jenaDoesNotDependOnTinker`. One is new,
+  `tinkerDoesNotDependOnJena` and `jenaDoesNotDependOnTinker`, which is why neither name exists at
+  `HEAD`; find them as `tinkerDoesNotDependOnJenaOrMusicbrainz` and
+  `jenaDoesNotDependOnTinkerOrMusicbrainz`. One is new,
   `musicbrainzDoesNotDependOnOtherAdapters`. `ArchitectureTest` is the authority on each rule's
   contents; that list is which rules, not what they say.
 - **An identity bridge that fits in neither adapter package.** See the next section.
 - **A whole HTTP client.** `WikidataClient` owns the User-Agent, the retry loop and the
   `Retry-After` handling and lives in `wikidata`, which ADR 32 forbids reaching for.
-  `MusicBrainzClient` had to be written, and it is not a copy: MusicBrainz requires a **proactive**
-  ~1 request/second throttle where Wikidata needs reactive backoff.
+  `MusicBrainzClient` had to be written. Its own javadoc says it is modelled on `WikidataClient` —
+  same User-Agent shape, same retry policy, same one-failure-type contract — so the cost is not
+  novelty but that the code could not be shared at all. It does differ where the source forces it:
+  MusicBrainz requires a **proactive** ~1 request/second throttle where Wikidata needs reactive
+  backoff.
 - **A bound two sources now share.** `SegueService.expandEntity` builds one `ExpandContext`, hands
   that same one to every adapter, ORs the two result flags across them, and bounds the
   *concatenation*. So `maxNewEdges` is spent by whichever adapter `SourceAdapters.all()` names
@@ -255,8 +260,12 @@ covers the bridge alone; the gap between them is uncovered.
   loss is narrower than it first looks — `WikidataSourceAdapter.supports` returns true for every kind
   so it always runs alongside, and it sets `sourceUnavailable` when its own reverse pass fails — so a
   general Query Service outage does surface, unattributed. The residual is the narrow case.
-- **Five issues were filed along the way, and four of them were found by checking rather than by
-  failing:**
+- **Five issues were filed along the way, and every one was found by somebody checking something
+  rather than by anything failing** — #139 and #140 by checking which fences a new adapter package
+  would inherit, #141 by checking whether a fixture QID resolves, #142 by checking what MusicBrainz
+  actually uses to relate one act to another, #143 by checking a javadoc's stated reason against the
+  committed fixture. **Three of the five predate this branch**, and only #142 and #143 came out of
+  building the adapter:
   - **#139** — `theExporterNeverSpeaksToANetwork` passes `..wikidata.WikidataClient` to a package
     predicate, which matches no class, so that third of the rule is inert while its javadoc describes
     a ban it does not impose. Pre-existing; not #91's; the new argument added to that rule is a
@@ -266,8 +275,9 @@ covers the bridge alone; the gap between them is uncovered.
     of 20 at five adapters; the four still open are #140's, none created by #91.
   - **#141** — `CLAUDE.md` states that the `Q9000xx` fixture QIDs are placeholders and not real
     Wikidata ids. **Every one checked resolves to a real Wikidata entity**, so code is being written
-    on a guarantee that does not hold. Not an ADR 51 breach — no name appears and nothing is framed
-    as anyone's taste — and not repaired here.
+    on a guarantee that does not hold. **Pre-existing** — the sentence is at the merge-base — and not
+    #91's. Not an ADR 51 breach either: no name appears and nothing is framed as anyone's taste. Not
+    repaired here.
   - **#142** — `subgroup` is the only MusicBrainz relation that could yield a group-in-group edge,
     and choosing between `MEMBER_OF` (P463) and `PART_OF` (P361) for it is a clause 3 decision. Left
     unmapped deliberately, and filed so that the whitelist's silence is a record rather than an

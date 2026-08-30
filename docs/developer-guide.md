@@ -391,14 +391,14 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `domainHasNoThirdPartyDependencies` | anything in `domain` depending outside `domain`/`java`/`javax` | [ADR 18](adr/0018-graph-engine-gremlin.md) |
 | `portDependsOnlyOnDomain` | `port` depending on anything but `domain` and itself | [ADR 18](adr/0018-graph-engine-gremlin.md) |
 | `domainValueTypesAreRecordsOrEnums` | a `domain` class that is not a record, enum, package-private, or a private-constructor registry | [ADR 11](adr/0011-java-conventions.md) |
-| `tinkerDoesNotDependOnJena`, `jenaDoesNotDependOnTinker`, `sqliteDoesNotDependOnOtherAdapters`, `wikidataDoesNotDependOnOtherAdapters` | adapters collaborating with each other | [ADR 32](adr/0032-layering-and-archunit.md) |
+| `tinkerDoesNotDependOnJenaOrMusicbrainz`, `jenaDoesNotDependOnTinkerOrMusicbrainz`, `sqliteDoesNotDependOnOtherAdapters`, `wikidataDoesNotDependOnOtherAdapters`, `musicbrainzDoesNotDependOnOtherAdapters` | adapters collaborating with each other. **Five pairwise rules, not one over a list**, so each names its objects literally and they cover 16 of the 20 ordered pairs five adapters make; the first two are named for the objects they actually hold rather than for all the others. The four still open are `tinker`/`jena` → `sqlite`/`wikidata`, filed as issue #140 | [ADR 32](adr/0032-layering-and-archunit.md), [ADR 54](adr/0054-musicbrainz-as-the-second-source.md) |
 | `adaptersDoNotDependUpward` | any adapter depending on `ingest`, `mcp` or `app` | [ADR 32](adr/0032-layering-and-archunit.md) |
 | `noPackageCycles` | any dependency cycle between slices of `com.robsartin.segue` | [ADR 32](adr/0032-layering-and-archunit.md) |
 | `springOnlyInAppAndMcp` | `org.springframework.*` anywhere outside `app` and `mcp` | [ADR 25](adr/0025-source-adapter-spi.md), [ADR 32](adr/0032-layering-and-archunit.md) |
 | `onlyIngestAppliesClaimsToTheGraph` | calling `GraphStore.record`, `GraphStore.upsertNode` or `AssertionLog.append` from outside `ingest` | [ADR 19](adr/0019-assertion-log-source-of-truth.md) |
 | `seedNeverOpensAStore` | `seed` depending on `sqlite`, `tinker`, `jena`, `ingest`, `mcp`, `app`, `retract` or `rate` — it resolves names and must not open the database even to read it | [ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md) |
 | `theExporterOnlyReads` | `export` calling `GraphStore.record`/`upsertNode` or `AssertionLog.append`, or depending on `IngestService`, or on either of the two dev tools that write (`retract`, `rate`) at all | [ADR 41](adr/0041-graph-exporter-views-and-formats.md) |
-| `theExporterNeverSpeaksToANetwork` | `export` depending on `java.net`, `javax.net` or `WikidataClient` — an export is a pure function of the database file | [ADR 41](adr/0041-graph-exporter-views-and-formats.md) |
+| `theExporterNeverSpeaksToANetwork` | `export` depending on `java.net`, `javax.net` or the whole `musicbrainz` package — an export is a pure function of the database file. It also lists `..wikidata.WikidataClient`, which is a class name passed to a package predicate and therefore **matches nothing**; that is issue #139, and the `musicbrainz` argument is deliberately a package identifier so that it bites | [ADR 41](adr/0041-graph-exporter-views-and-formats.md) |
 | `theRatingsToolOnlyReads` | `ratings` calling the three world-fact writes **or either taste-layer write, `AffinityStore.put` and `updateRating`** — the only rule anywhere guarding the rating write | [ADR 43](adr/0043-listing-your-own-ratings.md) |
 | `theRatingsToolOpensNothingElse` | `ratings` depending on `tinker`, `jena`, `ingest`, `mcp`, `app`, `seed`, `export`, `retract`, `rate`, `java.net` or `javax.net` | [ADR 43](adr/0043-listing-your-own-ratings.md) |
 | `onlyTheRatingsToolReadsEveryRating` | calling `AffinityStore.readAll` from outside `ratings` — the bulk read exists for the owner's dev tool and for nothing on the MCP surface | [ADR 16](adr/0016-privacy-and-data-handling.md), [ADR 39](adr/0039-affinity-capture-and-read.md), [ADR 43](adr/0043-listing-your-own-ratings.md) |
@@ -899,12 +899,12 @@ The suite is layered on purpose, and each layer catches something the layer belo
 | Domain unit tests | `domain/*Test` | Record invariants, the ranking comparator, edge folding |
 | **Contract test, run against both engines** | `port/GraphStoreContract`, extended by `TinkerGraphStoreContractTest` and `JenaGraphStoreContractTest` | One engine drifting from the other. This was a standalone bake-off program; making it a contract test turned the cross-engine comparison into a merge gate |
 | Shared fixture | `fixture/Fixture` | Nothing by itself — but it deliberately contains two different edge types between one pair, edges from two sources, overlapping band tenures, and a tempting low-confidence shortcut, so the multigraph, corroboration, time-travel and ranking tests all have something real to be wrong about |
-| Stubbed HTTP | `wikidata/StubWikidataServer` on the JDK's own `HttpServer` | Deterministic, offline coverage of parsing, retries, `Retry-After`, and both ingest passes |
-| Offline end-to-end | `ingest/WikidataIngestEndToEndTest`, `mcp/SharedAwardRouteTest` | Wikidata response → log → graph → replay, with no network |
+| Stubbed HTTP | `wikidata/StubWikidataServer` and `musicbrainz/StubMusicBrainzServer`, each on the JDK's own `HttpServer` | Deterministic, offline coverage of parsing, retries, `Retry-After`, and both ingest passes. One per adapter, duplicated rather than shared: ADR 32 keeps adapters siblings down to the test helpers |
+| Offline end-to-end | `ingest/WikidataIngestEndToEndTest`, `mcp/SharedAwardRouteTest`, `musicbrainz/CorroborationAcrossSourcesTest` | A source response → log → graph → replay, with no network — and, since [ADR 54](adr/0054-musicbrainz-as-the-second-source.md), two sources through one `expandEntity` landing on one edge with `corroboration() == 2` |
 | Spring context | `mcp/ToolSurfaceTest`, `app/*Test` | That the starter's own annotation scanner actually finds the tool beans, and that the transports are configured as intended |
 | **Real subprocess** | `app/StdioPurityTest` | Output written by a *dependency* or by the framework's own startup. See below |
 | Architecture | `arch/ArchitectureTest` | An invariant an ADR states being quietly abandoned |
-| **Live, tagged and excluded** | `@Tag("live")` on `WikidataLiveSmokeTest`, `PersonSeededRouteLiveTest`, `SharedAwardRouteLiveTest` | The upstream API changing, and a wrong identifier baked into a fixture |
+| **Live, tagged and excluded** | `@Tag("live")` on `WikidataLiveSmokeTest`, `PersonSeededRouteLiveTest`, `SharedAwardRouteLiveTest`, `MusicBrainzLiveSmokeTest`, `WikidataMusicBrainzIdentityLiveTest` — five classes, and `liveTest` includes any `live` tag, so a new one joins with no build change | Either upstream API changing, a wrong identifier baked into a fixture, and a P434 bridge that agrees with a stub but not with Wikidata |
 
 Three of those deserve more than a table row.
 
@@ -946,7 +946,7 @@ target and the coverage thresholds all live in `build.gradle.kts`; read them the
 ./gradlew check           # the full CI gate
 ./gradlew test            # tests only
 ./gradlew spotlessApply   # fix formatting
-./gradlew liveTest        # tagged live tests against the real Wikidata API
+./gradlew liveTest        # tagged live tests against the real Wikidata and MusicBrainz APIs
 ./gradlew resolveNames    # bulk name to QID, the seeding tool (ADR 40); needs network
 ./gradlew exportGraph     # a bounded view of the graph to DOT or GraphML (ADR 41); read-only
 ```
@@ -1128,8 +1128,10 @@ allowed: the bounded views need a projection, and the exporter replays the log i
 in-memory `TinkerGraphStore` exactly as the application does at boot. Nothing durable changes.
 
 It never fetches. `ArchitectureTest.theExporterNeverSpeaksToANetwork` forbids `export` from
-depending on `java.net`, `javax.net` or the project's HTTP client, so an export is a pure function
-of one database file. That rule arrived with the tooltips below, because that is the change that
+depending on `java.net`, `javax.net` or the whole `musicbrainz` package, so an export is a pure
+function of one database file. It also names `..wikidata.WikidataClient`, which is a class name in a
+package predicate and matches nothing — issue #139, and the reason the `musicbrainz` argument is a
+package identifier instead. That rule arrived with the tooltips below, because that is the change that
 creates the temptation: the name of a Wikidata class is one HTTP call away, and one call per node is
 132 round trips for a depth-1 neighbourhood.
 

@@ -59,10 +59,10 @@ Three facts about the wiring matter to everything below and were checked in the 
 assumed:
 
 - `SegueService` holds **one** `EntityResolver` and **a list of** `SourceAdapter`s
-  (`mcp/SegueService.java:75–78`). The expand path is pluggable; the resolve path is not.
+  (its `resolver` and `adapters` fields). The expand path is pluggable; the resolve path is not.
 - `NodeRecord` is `(qid, kind, label, instanceOf)` and carries **no external identifier**, so an
   adapter handed a seed has to obtain its own source-local id from the QID itself.
-- `app/SegueConfiguration.java:100–107` builds the adapter list in one `@Bean` method, which is
+- `SegueConfiguration.sourceAdapters` builds the adapter list in one `@Bean` method, which is
   exactly the "plus a `@Bean` method" ADR 25 promised.
 
 ---
@@ -345,13 +345,13 @@ data to hold.
    the route it yields — "these two are both in this city" — is the coincidence ADR 36's issue-#71
    amendment calls a route that means nothing.
 4. **And the hub rule could not demote it — given the kind the adapter would assert.**
-   `PathRanking.isHub` has two halves and I read both (`domain/PathRanking.java:176–197`).
+   `PathRanking.isHub` has two halves and I read both (`isBusyConcept` and `isRecognitionInstitution`).
    `isBusyConcept` requires `node.kind() == NodeKind.CONCEPT`; `isRecognitionInstitution` reads
    `node.instanceOf()`, which is empty for a source stating no Wikidata classes. So an OSM place
-   asserted as `PLACE` — the honest kind, and what `KindMapper:91` gives a Wikidata city — trips
+   asserted as `PLACE` — the honest kind, and what `KindMapper`'s `Q515` entry gives a Wikidata city — trips
    **neither half**, and a city hub would rank as a genuine explanation. **This step depends on that
    design choice**: an adapter that filed cities as `CONCEPT` would trip `isBusyConcept` at a degree
-   of ten (`>= HUB_DEGREE`, `PathRanking:66` and `:177`), at the cost of calling a city a thing it
+   of ten (`isBusyConcept` compares `>=` against `PathRanking.HUB_DEGREE`), at the cost of calling a city a thing it
    could not place. The recommendation does not rest on this step — step 3 carries it alone — but
    ADR 31's issue-#88 amendment refused to generalise the hub rule, and this is the case that
    refusal leaves open.
@@ -451,7 +451,7 @@ is that the SPI is fine.
 
 ### The single-`EntityResolver` asymmetry: unused capacity, not a blocker — with a fuse
 
-`SegueService` holds one `EntityResolver` (`mcp/SegueService.java:75`) and calls it in three places:
+`SegueService` holds one `EntityResolver` field and calls it in three places:
 `search` for the `search_entities` tool, `fetch` for `add_entity`, and `fetch` as the fallback for a
 neighbour no adapter described. `SourceAdapters` is a list; the resolver is not.
 
@@ -484,36 +484,40 @@ in this note:** cheap to fix, and invisible if missed.
 
 **And it is not one rule.** I extracted every rule body in `ArchitectureTest` and checked each for a
 literal naming `tinker`, `jena`, `sqlite` or `wikidata`. **13 of the 35 rules name an adapter
-package (or an adapter class) as a literal.** The number alone is a trap, so here is the list —
+package (or an adapter class) as a literal** — a count taken on 2026-08-30 against
+`ArchitectureTest` as it stood *before* this issue changed it. (#91 left it holding 36 rules; ADR 54
+enumerates the eight it changed, and `ArchitectureTest` is the authority on the file today.) The number alone is a trap, so here is the list —
 Task 2 must inherit the list, not the number.
 
 **Tier 1 — must change, or a real fence does not extend to the new adapter (3):**
 
-| rule | lines | what breaks without the edit |
-|---|---|---|
-| `theWorldFactLayerNeverTouchesAffinity` | 975–983 | **ADR 33's privacy fence.** Subject list; the new adapter could reach the affinity types. |
-| `adaptersDoNotDependUpward` | 110–117 | Subject list; the new adapter could depend on `ingest`, `mcp`, `app`, `seed`. |
-| `theExporterNeverSpeaksToANetwork` | 409–418 | Bans `java.net..` and `javax.net..`, so `export → MusicBrainzClient` is caught by neither — ArchUnit sees **direct** dependencies only. See the defect note below before copying this rule's third argument. |
+| rule | what breaks without the edit |
+|---|---|
+| `theWorldFactLayerNeverTouchesAffinity` | **ADR 33's privacy fence.** Subject list; the new adapter could reach the affinity types. |
+| `adaptersDoNotDependUpward` | Subject list; the new adapter could depend on `ingest`, `mcp`, `app`, `seed`. |
+| `theExporterNeverSpeaksToANetwork` | Bans `java.net..` and `javax.net..`, so `export → MusicBrainzClient` is caught by neither — ArchUnit sees **direct** dependencies only. See the defect note below before copying this rule's third argument. |
 
 **Tier 2 — the four ADR 32 sibling rules, which should be replaced rather than extended (4).**
-`tinkerDoesNotDependOnJena` (88–95), `jenaDoesNotDependOnTinker` (99–106),
-`sqliteDoesNotDependOnOtherAdapters` (282–289) and `wikidataDoesNotDependOnOtherAdapters`
-(1005–1012) carry the identical `.because("ADR 32: adapters are siblings, not collaborators")` — at
-`:95`, `:106`, `:289` and `:1012`, four hits and no more.
+`tinkerDoesNotDependOnJena`, `jenaDoesNotDependOnTinker`, `sqliteDoesNotDependOnOtherAdapters` and
+`wikidataDoesNotDependOnOtherAdapters` carry the identical
+`.because("ADR 32: adapters are siblings, not collaborators")` — a `grep` on that exact string
+returns those four and no more. (#91 renamed the first two to
+`tinkerDoesNotDependOnJenaOrMusicbrainz` and `jenaDoesNotDependOnTinkerOrMusicbrainz`.)
 
 **Correcting this note's first draft, which called the first two "not holes".** They are holes, and
 the reasoning that put them in the wrong tier was that a new `musicbrainzDoesNotDependOnOtherAdapters`
 would cover them. It cannot: such a rule has **musicbrainz as its subject**, so it says nothing
-about `tinker → musicbrainz` or `jena → musicbrainz`. `tinker`'s only object is `jena` (`:94`) and
-`jena`'s only object is `tinker` (`:105`), so both directions stay uncaught — and `noPackageCycles`
+about `tinker → musicbrainz` or `jena → musicbrainz`. `tinker`'s only object is `jena` and
+`jena`'s only object is `tinker`, so both directions stay uncaught — and `noPackageCycles`
 cannot rescue them, because the sibling rule forbids the return edge and no cycle ever forms. That
 was the same risk the tier-1 reasoning cited for adding the new package to `sqlite`'s and
 `wikidata`'s object lists, applied inconsistently.
 
 **The arithmetic is the argument for replacing rather than patching.** Four adapters make twelve
 ordered pairs; these four rules cover **eight**. The four uncovered are `tinker → sqlite`,
-`tinker → wikidata`, `jena → sqlite`, `jena → wikidata` — so `tinker → wikidata` is unforbidden
-today, before any second source exists. Five adapters make twenty ordered pairs, and patching the
+`tinker → wikidata`, `jena → sqlite`, `jena → wikidata` — so `tinker → wikidata` was unforbidden
+when this note was written, before any second source existed, and it still is: #91 added a fifth
+adapter and left those four pairs to #140. Five adapters make twenty ordered pairs, and patching the
 object lists one at a time means five rules holding twenty package literals between them, with the
 next adapter needing five edits and a sixth rule.
 
@@ -530,7 +534,7 @@ see which adapter package the *origin* is in — which is the whole of "a differ
 The naive `resideInAnyPackage(ADAPTERS) → resideInAnyPackage(ADAPTERS)` form fails for a second
 reason as well: it would flag every intra-`tinker` dependency.
 
-**The working form is the slices API this file already imports** (`:27`, used by
+**The working form is the slices API this file already imports** (`SlicesRuleDefinition`, used by
 `noPackageCycles`):
 
 ```java
@@ -560,41 +564,40 @@ at N=5 exist today with no second source involved. The four-rule replacement is 
 all six `tinker`/`jena` → {`sqlite`, `wikidata`, `musicbrainz`} pairs uncovered, two of which #91
 creates. Those two must be picked up either way.
 
-**Tier 3 — a pre-existing shape the new adapter widens (3):** `theRatingsToolOpensNothingElse`
-(464–485), `theRecommenderOpensNothingElse` (807–827) and `theRetractionToolOpensNothingElse`
-(884–906) each ban `java.net..` to keep an offline tool offline, and each omits `..wikidata..` from
+**Tier 3 — a pre-existing shape the new adapter widens (3):** `theRatingsToolOpensNothingElse`,
+`theRecommenderOpensNothingElse` and `theRetractionToolOpensNothingElse` each ban `java.net..` to keep an offline tool offline, and each omits `..wikidata..` from
 its package list. Because ArchUnit sees direct dependencies only, any adapter's HTTP client already
 slips through them; a second one widens a hole rather than opening it. Worth a line in the Task 2
 report, not a blocker.
 
 **Tier 4 — checked and NOT holes (3), so Task 2 does not churn them:** `seedNeverOpensAStore`
-(129–146) bans *stores* and already omits `..wikidata..` deliberately; `onlyTheRatingsToolReadsANote`
-(538–547) uses `resideOutsideOfPackages`, so a new package is inside its subject automatically;
-`theRatingDeckOpensNothingElse` (773–790) bans no network at all.
+bans *stores* and already omits `..wikidata..` deliberately; `onlyTheRatingsToolReadsANote` uses
+`resideOutsideOfPackages`, so a new package is inside its subject automatically;
+`theRatingDeckOpensNothingElse` bans no network at all.
 
 Separately, and not among the thirteen because it names no package:
-`affinityNeverTouchesTheWorldFactLayer` (957–964) is written against **types**
+`affinityNeverTouchesTheWorldFactLayer` is written against **types**
 (`AFFINITY_TYPES` / `WORLD_FACT_TYPES`), so it **needs no edit when a fifth adapter arrives.** It
 does not thereby *cover* the new adapter — its subject is the affinity types, and the adapter-facing
-counterpart is tier 1's `theWorldFactLayerNeverTouchesAffinity` (975–983), which does need the edit.
+counterpart is tier 1's `theWorldFactLayerNeverTouchesAffinity`, which does need the edit.
 Nor is it evidence that a predicate could express tier 2's rule: those two sets are fixed and
 disjoint, which is the easy case. What it *is* good evidence for is the narrower point that one
 named constant beats literals scattered across rules.
 
 ### An open defect in `theExporterNeverSpeaksToANetwork`, found while checking this
 
-**The rule's third argument is inert.** `:415` passes `"..wikidata.WikidataClient"` to
+**The rule's third argument is inert.** It passes `"..wikidata.WikidataClient"` to
 `resideInAnyPackage`, which matches **package** identifiers. `WikidataClient` resides in package
 `com.robsartin.segue.wikidata`, so that pattern matches no class in this repository and
-`export → WikidataClient` is not forbidden today. The rule's own javadoc (`:403–405`) reads as
+`export → WikidataClient` is not forbidden today. The rule's own javadoc reads as
 though the project's HTTP client is handled, and it is not. No live violation exists — `export`
 imports `KindMapper` and `RecognitionInstitutions` from `wikidata`, not the client — so this is an
 inert fence rather than a breach.
 
 **This is a pre-existing defect, filed as [issue #139](https://github.com/robsartin/segue/issues/139);
 it is recorded here and NOT fixed in this task**, which is a design note and changes no code. A
-sweep of the whole file for the same mistake found that **`:415` is the only rule passing a class
-name to a package predicate**; that answer belongs to #139 and is cited here rather than repeated.
+sweep of the whole file for the same mistake found that **it is the only rule passing a class name
+to a package predicate**; that answer belongs to #139 and is cited here rather than repeated.
 
 **The warning Task 2 must not miss:** do not mirror the pattern as
 `"..musicbrainz.MusicBrainzClient"`, which would ship an equally inert fence and read as protection.
@@ -685,12 +688,13 @@ states classes of its own, this is the seam that has to move."* ADR 53 records `
 referenced from `seed`, `ingest`, `ratings`, `mcp`, `support` and `export`.
 
 I opened all eight main-source files outside `wikidata/` that name it. **Three import it and call
-it** — `ingest/GraphProjector.java:73`, `export/LogProjection.java:75`, `seed/WikidataFacts.java:82`.
+it** — `GraphProjector.rederived`, `LogProjection`'s `NodeAssertion` case, and `WikidataFacts`,
+which call `KindMapper.rederive`, `KindMapper.rederive` and `KindMapper.fromInstanceOf`.
 The other five mention it in javadoc only, and they do **not** all import nothing from `wikidata`
 — I checked the import block of each rather than generalising from the `KindMapper` result.
 `support/ClassLabels`, `export/DotWriter`, `ratings/Labels` and `domain/Retractions` import nothing
 from `wikidata`, so ADR 18's purity rule is intact exactly as ADR 53 says. **`mcp/SegueService` does
-import two** — `RecognitionInstitutions` (`:22`) and `WikidataUnavailableException` (`:23`) — and
+import two** — `RecognitionInstitutions` and `WikidataUnavailableException` — and
 the second of those is the whole of GAP 2 above.
 
 **And the seam does not have to move for MusicBrainz.** `KindMapper.rederive` returns a claim with
@@ -734,13 +738,13 @@ one line in the Task 2 brief** so the adapter author does not learn it from a st
 `AssertionRecord`'s javadoc says sources are *allowed* to disagree about validity, "which is why the
 dates live on the assertion rather than on the derived edge". `EdgeRecord` nonetheless has one
 `validFrom` and one `validTo`, and `TinkerGraphStore` sets each only when the edge does not already
-carry it (`:103–108`) — **first writer wins, with no report.**
+carry it, in its edge write — **first writer wins, with no report.**
 
 This collides on the very first MusicBrainz membership edge. The Group probe's nine
 `member of band` relations are all dated — the fullest is
 `"begin": "1960-08-12", "end": "1962-08-16", "ended": true`. Wikidata's forward pass reads P580/P582
-into the same fields (`ClaimMapper:153–154`), while its reverse pass always writes null
-(`ReverseClaims:201`, which says so). So the same membership can arrive dated from one source and
+into the same fields (`ClaimMapper`'s P580/P582 handling), while its reverse pass always writes
+null (`ReverseClaims`, whose own comment says so). So the same membership can arrive dated from one source and
 undated from another, in either order, and the graph keeps whichever landed first.
 
 **A second, sharper edge on the same probe: MusicBrainz dates are variable-precision and

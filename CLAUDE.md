@@ -83,7 +83,8 @@ sqlite/   SqliteAssertionLog — the append-only log persisted to one file (ADR 
           — and SqliteAffinityStore, the taste layer's own table in that same
           file (ADR 33, ADR 39).
 wikidata/ The first source: resolution and expansion. Plain Java, no Spring.
-musicbrainz/ The second source (ADR 54): client, adapter, and MusicBrainzIdentity —
+musicbrainz/
+          The second source (ADR 54): client, adapter, and MusicBrainzIdentity —
           the MBID→QID seam it declares and may NOT implement, since an adapter may
           not import another adapter. Expansion only, no EntityResolver. Plain Java.
 seed/     The bulk seeding tool (ADR 40): a name list to name→QID, run as
@@ -305,7 +306,8 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   expansion that added nothing: a silent zero, not a reason. **That is still true with a second
   adapter wired** (ADR 54), and for a sharper reason: `MusicBrainzSourceAdapter.supports` answers
   only for PERSON and GROUP, so no adapter in `src/main` offers to expand a CONCEPT anyway. This
-  bullet used to say Wikidata's was the only implementation; it is not, since #91. **It bounds one call**: ten calls still add ten times the ceiling, and that is a separate
+  bullet used to say Wikidata's was the only implementation; it is not, since #91.
+  **It bounds one call**: ten calls still add ten times the ceiling, and that is a separate
   issue rather than a reason to lower the number. 25 is a judgement informed by a distribution —
   measured on the real graph, 99.9% of CONCEPTs sit below it — not a measurement of the right
   ceiling. **That distribution is ACCUMULATED DEGREE, not expansion yield**, and the two diverge at
