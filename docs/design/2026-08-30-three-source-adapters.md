@@ -484,9 +484,10 @@ today, before any second source exists. Five adapters make twenty ordered pairs,
 object lists one at a time means five rules holding twenty package literals between them, with the
 next adapter needing five edits and a sixth rule.
 
-**Recommended, and filed as its own issue: one rule over a single adapter list**, replacing all
-four — no class in an adapter package may depend on a class in a *different* adapter package.
-Twenty of twenty pairs, one list, and the next adapter is a one-line change instead of five.
+**Recommended, and filed as [issue #140](https://github.com/robsartin/segue/issues/140): one rule
+over a single adapter list**, replacing all four — no class in an adapter package may depend on a
+class in a *different* adapter package. Twenty of twenty pairs, one list, and the next adapter is a
+one-line change instead of five.
 
 **The mechanism, checked against the project's own `archunit-1.5.0` jar with `javap` rather than
 recalled.** A `DescribedPredicate` cannot express this rule, and an earlier draft of this note said
@@ -512,14 +513,14 @@ worked around. `Creator.assignedFrom(SliceAssignment)`, `SliceIdentifier.ignore(
 present — would work too, and is more code for the same answer.)
 
 **Scope: this is a pre-existing defect, so it is NOT part of #91.** Four of the six uncovered pairs
-at N=5 exist today with no second source involved. The coordinator has filed the four-rule
-replacement as its own issue, and **Task 2 does only what #91 needs**:
+at N=5 exist today with no second source involved. The four-rule replacement is filed as
+[#140](https://github.com/robsartin/segue/issues/140), and **Task 2 does only what #91 needs**:
 
 | pairs | who owns them |
 |---|---|
 | `tinker → musicbrainz`, `jena → musicbrainz` | **#91** — created by adding the source |
 | `sqlite → musicbrainz`, `wikidata → musicbrainz`, `musicbrainz → {t,j,s,w}` | **#91** — created by adding the source |
-| `tinker → {sqlite, wikidata}`, `jena → {sqlite, wikidata}` | the filed issue — uncovered today |
+| `tinker → {sqlite, wikidata}`, `jena → {sqlite, wikidata}` | **#140** — uncovered today |
 
 **The fallback warning stands if the replacement is deferred.** Widening only `sqlite`'s and
 `wikidata`'s object lists and adding a `musicbrainz` subject rule reaches **14 of 20** — it leaves
@@ -746,7 +747,8 @@ brief. Everything else is named here so that it is not rediscovered as a surpris
 
 **Two things this note found are explicitly NOT #91's** — both pre-existing, both filed: the inert
 `WikidataClient` ban ([#139](https://github.com/robsartin/segue/issues/139)) and the four-rule
-sibling replacement. Task 2 covers only the pairs adding a source creates; GAP 1 has the split.
+sibling replacement ([#140](https://github.com/robsartin/segue/issues/140)). Task 2 covers only the
+pairs adding a source creates; GAP 1 has the split.
 
 And the finding that reaches furthest is the one no adapter delivers: **ADR 25's interfaces survive
 contact with a second source; its consequences do not.** Adding a source is not "one or both
