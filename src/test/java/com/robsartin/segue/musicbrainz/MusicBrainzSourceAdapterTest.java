@@ -429,9 +429,8 @@ class MusicBrainzSourceAdapterTest {
 
     ExpandResult result = adapter.expand(quintet(), new ExpandContext(1));
 
-    // The bridge is asked about the citable neighbour and never about the other one.
-    // containsExactly
-    // rather than a size: the whole point is WHICH mbid was asked about.
+    // The bridge is asked about the citable neighbour and never about the other one. Asserted with
+    // containsExactly rather than a size: the whole point is WHICH mbid was asked about.
     assertThat(identity.asked).containsExactly(STUB_MEMBER_MBID);
     assertThat(result.assertions()).hasSize(1);
     assertThat(result.assertions().getFirst().fromQid()).isEqualTo(STUB_MEMBER_QID);

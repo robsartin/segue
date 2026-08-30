@@ -332,43 +332,69 @@ public final class MusicBrainzClient {
   }
 
   /**
-   * How many whole milliseconds to sleep to cover {@code delay}, rounded up.
+   * How this client waits. Injected, so that what a wait was asked for can be observed without
+   * anything having to wait for it.
    *
-   * <p><b>Up, because {@code Duration.toMillis()} truncates.</b> {@code sleep} used to pass it
-   * straight to {@code Thread.sleep}, so a 999.5ms remainder became a 999ms wait and the request
-   * left half a millisecond inside {@link #MIN_REQUEST_INTERVAL}. The concurrency test's first run
-   * measured exactly that — a gap of 0.999339625s where a second was owed — on the one path in it
-   * that had no concurrency at all.
-   *
-   * <p><b>A pure static so that rounding has a test</b>, for the reason {@link #throttleDelay} and
-   * {@link #retryDelay} are pure statics. Fix round 1's reviewer put {@code
-   * Thread.sleep(delay.toMillis())} back into an otherwise-identical tree and the whole suite
-   * stayed green: the concurrency test's floor allows 100ms and could not see a 0.5ms shortfall,
-   * and no other test reaches {@code sleep} at all.
+   * <p>Its own interface rather than a {@code Consumer<Duration>}: {@link Thread#sleep(Duration)}
+   * throws {@link InterruptedException}, and the one place that matters is the {@code catch} in
+   * {@link #sleep(Duration, Sleeper)} — a functional type that could not declare it would push that
+   * handling out to every caller.
    */
-  static long waitMillis(Duration delay) {
-    // Ceiling, without leaving Duration: adding a nanosecond under a millisecond carries any
-    // non-zero remainder into the next whole millisecond and leaves an exact one alone.
-    return delay.plusNanos(999_999L).toMillis();
+  @FunctionalInterface
+  interface Sleeper {
+    void sleep(Duration delay) throws InterruptedException;
+  }
+
+  private static void sleep(Duration delay) {
+    sleep(delay, Thread::sleep);
   }
 
   /**
-   * Waits out {@code delay}, or returns at once if there is nothing to wait for.
+   * Waits out {@code delay} through {@code sleeper}, or returns at once when there is nothing to
+   * wait for.
    *
-   * <p><b>What is verified, and what is not.</b> {@link #waitMillis} rounds up and {@code
-   * waitMillisRoundsUpRatherThanTruncating} asserts that directly, including the 999.5ms case that
-   * produced the measured shortfall. What no test in this repository can see is this method ceasing
-   * to call it — a sub-millisecond error is three orders of magnitude below the only end-to-end
-   * floor available, and an assertion tight enough to catch it would flake on scheduling jitter
-   * long before it caught anything. That gap is stated here rather than left to be inferred;
-   * closing it would need a clock seam around the sleep itself.
+   * <p><b>The sleeper is a parameter so that the wait this client asks for has a test.</b> The
+   * original defect was {@code Thread.sleep(delay.toMillis())}: {@code toMillis()} truncates, so
+   * 999.5ms owed became a 999ms wait and a request left half a millisecond inside {@link
+   * #MIN_REQUEST_INTERVAL} — measured, as a 0.999339625s gap, on the concurrency test's first run.
+   * Nothing could see it afterwards, which is not the same as nothing reaching it. Five tests reach
+   * this method, counted by making the delegation throw and reading the names back off the JUnit
+   * XML: four sleep the exact 200ms retry backoff, where a truncation changes nothing at all, and
+   * the fifth is the concurrency test, which was measured asking for 0.99997s and allows 100ms of
+   * slack — roughly two hundred times the shortfall. Reaching this method and being able to see a
+   * sub-millisecond error inside it are different things, and only the second would have caught the
+   * defect. A recorder passed in here shows what was asked for without waiting for it, which is the
+   * injected collaborator CLAUDE.md's TDD rule names beside a pure function.
+   *
+   * <p><b>A {@link Duration} all the way down, not a millisecond count.</b> {@code
+   * Thread.sleep(Duration)} does no millisecond conversion: in JDK 25 it is {@code
+   * sleepNanos(nanos)} with no rounding in it, read out of the installed {@code src.zip} rather
+   * than assumed. A {@code waitMillis} helper that rounded up to whole milliseconds stood here for
+   * one review round and was replaced: it was harmless, because rounding up can only overrun and
+   * that is the direction {@link #lastRequestAt} depends on, but it put back the very granularity
+   * the original bug came from and bought nothing this parameter does not.
+   *
+   * <p><b>What is verified, and what is not.</b> This method has three branches and each one has a
+   * test: the guard clause by {@code aWaitOfNothingNeverReachesTheSleeper}, the dispatch by {@code
+   * aWaitIsAskedForInFullRatherThanTruncated}, which reads the full 999.5ms back off a recorder,
+   * and the {@code catch} by {@code anInterruptedWaitSurfacesAsUnavailableAndRestoresTheFlag},
+   * which asserts both the wrapping and the restored flag. That is the whole method.
+   *
+   * <p>What nothing guards is the one line above it — {@link #sleep(Duration)}'s choice of {@code
+   * Thread::sleep}. Rewritten as {@code d -> Thread.sleep(d.toMillis())} it leaves every test in
+   * this repository green — measured across all 95 suites, not supposed, and stated as "every"
+   * rather than a count so that adding a test cannot quietly falsify it. It is a smaller residual
+   * than the one this seam replaced, which was a whole method body rather than a delegation, and
+   * the three branches listed above went from untestable to tested in the same move. It is still a
+   * line, and it is the same shape of unrecorded rounding as the defect this class was fixed for,
+   * so it is written here rather than left for the next reader to discover.
    */
-  private static void sleep(Duration delay) {
+  static void sleep(Duration delay, Sleeper sleeper) {
     if (delay.isZero() || delay.isNegative()) {
       return;
     }
     try {
-      Thread.sleep(waitMillis(delay));
+      sleeper.sleep(delay);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new MusicBrainzUnavailableException("interrupted while waiting", e);
