@@ -17,10 +17,13 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -50,10 +53,14 @@ class MusicBrainzSourceAdapterTest {
   private static final String SECOND_MEMBER_QID = "Q900003";
   private static final String THIRD_MEMBER_QID = "Q900004";
 
-  /** An MBID and QID that appear in no fixture, for relations written by hand in this test. */
+  /** MBIDs and QIDs that appear in no fixture, for relations written by hand in this test. */
   private static final String STUB_MEMBER_MBID = "11111111-1111-1111-1111-111111111111";
 
+  private static final String OTHER_STUB_MEMBER_MBID = "22222222-2222-2222-2222-222222222222";
+
   private static final String STUB_MEMBER_QID = "Q900010";
+
+  private static final String OTHER_STUB_MEMBER_QID = "Q900011";
 
   private static final Instant ASSERTED_AT = Instant.parse("2026-08-30T12:00:00Z");
   private static final Clock CLOCK = Clock.fixed(ASSERTED_AT, ZoneOffset.UTC);
@@ -252,6 +259,127 @@ class MusicBrainzSourceAdapterTest {
     assertThat(result.assertions().getFirst().validTo()).isNull();
   }
 
+  @Test
+  @DisplayName("should identify itself as musicbrainz when asked for its id")
+  void shouldIdentifyItselfAsMusicbrainzWhenAskedForItsId() {
+    // Asserted on its own, not only through provenance().sourceId(): id() is what
+    // EdgeRecord.corroboration() counts distinct values of and what GAP 4's per-source attribution
+    // would key on, so a change to the literal alone must not pass unnoticed.
+    assertThat(adapter(Map.of()).id()).isEqualTo("musicbrainz");
+  }
+
+  @Test
+  @DisplayName("should ask the bridge about no more MBIDs than the bound allows")
+  void shouldAskTheBridgeAboutNoMoreMbidsThanTheBoundAllows(@TempDir Path dir) throws IOException {
+    // The obligation the design note wanted recorded on expand (GAP 5): this source's cost is one
+    // bridge lookup per neighbour, against a service that asks for ~1 request a second, so the
+    // bound has to be spent BEFORE the bridge rather than after. Applying maxNewEdges to the
+    // finished assertions instead would leave every other test in this class green while the
+    // adapter asked the bridge about all 22 neighbours, which is the whole cost it is meant to
+    // bound. Only a recorded call can see the difference.
+    RecordingIdentity identity =
+        new RecordingIdentity(
+            StubIdentity.of(
+                mapping(
+                    QUINTET_MBID, QUINTET_QID,
+                    FIRST_MEMBER_MBID, FIRST_MEMBER_QID,
+                    SECOND_MEMBER_MBID, SECOND_MEMBER_QID)));
+    MusicBrainzSourceAdapter adapter =
+        new MusicBrainzSourceAdapter(
+            MusicBrainzClient.readingFrom(fixture("artist-with-relations.json")), identity, CLOCK);
+
+    adapter.expand(quintet(), new ExpandContext(2));
+
+    assertThat(identity.asked).hasSizeLessThanOrEqualTo(2);
+    assertThat(identity.asked).containsExactly(FIRST_MEMBER_MBID, SECOND_MEMBER_MBID);
+  }
+
+  @Test
+  @DisplayName("should produce no assertion when the bridge returns something that is not a QID")
+  void shouldProduceNoAssertionWhenTheBridgeReturnsSomethingThatIsNotAQid() {
+    // GAP 9: AssertionRecord requires its endpoints non-null and nothing more, so a bad value is
+    // logged happily and blows up later at the node that names it. The bridge reads its QIDs out
+    // of MusicBrainz's user-entered url-rels, so this is arriving external data rather than a
+    // programming error — the same case ClaimMapper:138-144 refuses for Wikidata.
+    MusicBrainzSourceAdapter adapter =
+        adapter(mapping(QUINTET_MBID, QUINTET_QID, FIRST_MEMBER_MBID, "https://example.invalid/x"));
+
+    ExpandResult result = adapter.expand(quintet(), new ExpandContext(200));
+
+    assertThat(result.assertions()).isEmpty();
+    assertThat(result.sourceUnavailable()).isFalse();
+  }
+
+  @Test
+  @DisplayName(
+      "should drop a relation whose direction MusicBrainz did not state or this does not know")
+  void shouldDropARelationWhoseDirectionMusicBrainzDidNotStateOrThisDoesNotKnow(@TempDir Path dir)
+      throws IOException {
+    // The class javadoc says direction is read on every relation. A relation with no direction, or
+    // one this adapter does not recognise, cannot be oriented at all — so it is dropped rather
+    // than defaulted to either end, which would assert a membership backwards half the time.
+    Path written =
+        writeRelations(
+            dir,
+            """
+            {"type": "member of band",
+             "artist": {"id": "%s", "name": "A Stub Musician"}}
+            """
+                .formatted(STUB_MEMBER_MBID),
+            """
+            {"type": "member of band", "direction": "sideways",
+             "artist": {"id": "%s", "name": "Another Stub Musician"}}
+            """
+                .formatted(OTHER_STUB_MEMBER_MBID));
+    MusicBrainzSourceAdapter adapter =
+        adapterReading(
+            written,
+            mapping(
+                QUINTET_MBID, QUINTET_QID,
+                STUB_MEMBER_MBID, STUB_MEMBER_QID,
+                OTHER_STUB_MEMBER_MBID, OTHER_STUB_MEMBER_QID));
+
+    ExpandResult result = adapter.expand(quintet(), new ExpandContext(200));
+
+    assertThat(result.assertions()).isEmpty();
+    assertThat(result.truncated()).isFalse();
+  }
+
+  @Test
+  @DisplayName("should not report truncation when the relations exactly fill the bound")
+  void shouldNotReportTruncationWhenTheRelationsExactlyFillTheBound(@TempDir Path dir)
+      throws IOException {
+    // truncated is OBSERVED — the bounded list compared against the full one — not inferred from
+    // the result being as large as the bound. Sitting exactly at the bound is the case that
+    // separates the two: inferring it would report a complete answer as cut short, and issue #65's
+    // rule is that the flag belongs to the result that actually hit the bound.
+    Path written =
+        writeRelations(
+            dir,
+            """
+            {"type": "member of band", "direction": "backward",
+             "artist": {"id": "%s", "name": "A Stub Musician"}}
+            """
+                .formatted(STUB_MEMBER_MBID),
+            """
+            {"type": "member of band", "direction": "backward",
+             "artist": {"id": "%s", "name": "Another Stub Musician"}}
+            """
+                .formatted(OTHER_STUB_MEMBER_MBID));
+    MusicBrainzSourceAdapter adapter =
+        adapterReading(
+            written,
+            mapping(
+                QUINTET_MBID, QUINTET_QID,
+                STUB_MEMBER_MBID, STUB_MEMBER_QID,
+                OTHER_STUB_MEMBER_MBID, OTHER_STUB_MEMBER_QID));
+
+    ExpandResult result = adapter.expand(quintet(), new ExpandContext(2));
+
+    assertThat(result.assertions()).hasSize(2);
+    assertThat(result.truncated()).isFalse();
+  }
+
   private static NodeRecord quintet() {
     return new NodeRecord(QUINTET_QID, NodeKind.GROUP, "An Invented Ensemble", List.of());
   }
@@ -293,6 +421,32 @@ class MusicBrainzSourceAdapterTest {
       mapping.put(pairs[i], pairs[i + 1]);
     }
     return Map.copyOf(mapping);
+  }
+
+  /**
+   * A {@link MusicBrainzIdentity} that records the batch it was handed. Wrapping {@link
+   * StubIdentity} rather than replacing it keeps the resolution behaviour in one place; the only
+   * thing added is the observation.
+   */
+  private static final class RecordingIdentity implements MusicBrainzIdentity {
+
+    private final MusicBrainzIdentity delegate;
+    private final List<String> asked = new ArrayList<>();
+
+    private RecordingIdentity(MusicBrainzIdentity delegate) {
+      this.delegate = delegate;
+    }
+
+    @Override
+    public Optional<String> mbidFor(String qid) {
+      return delegate.mbidFor(qid);
+    }
+
+    @Override
+    public Map<String, String> qidsFor(Collection<String> mbids) {
+      asked.addAll(mbids);
+      return delegate.qidsFor(mbids);
+    }
   }
 
   private static Path fixture(String name) {

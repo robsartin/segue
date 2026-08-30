@@ -711,8 +711,10 @@ into the same fields (`ClaimMapper:153–154`), while its reverse pass always wr
 undated from another, in either order, and the graph keeps whichever landed first.
 
 **A second, sharper edge on the same probe: MusicBrainz dates are variable-precision and
-`validFrom` is a `LocalDate`.** Of those nine relations, **1 of 9 `begin` values and 5 of 9 `end`
-values carry a day**; the rest are `1960` or `1962-08`. There is a settled precedent for this and
+`validFrom` is a `LocalDate`.** Of those nine relations, **1 of 9 `begin` values and 4 of 9 `end`
+values carry a day**; the rest are `1960` or `1962-08`. (The `end` figure read 5 of 9 until #91's
+Task 4 review re-probed the same entity and counted 4 — `1962-08-16` plus `1970-04-10` three times.
+The `begin` figure is unchanged, and it is the one the adapter's javadoc cites, so no code moved.) There is a settled precedent for this and
 the adapter must follow it rather than re-decide: `ClaimMapper.qualifierDate` returns null below day
 precision, with a comment saying a year- or month-precision date read as a `LocalDate` "would feed
 false day-level precision into `validAt()` time-travel queries". **The MusicBrainz adapter should

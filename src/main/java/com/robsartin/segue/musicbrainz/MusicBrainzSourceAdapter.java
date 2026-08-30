@@ -6,6 +6,7 @@ import com.robsartin.segue.domain.EdgeTypes;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.Provenance;
+import com.robsartin.segue.domain.Qid;
 import com.robsartin.segue.port.ExpandContext;
 import com.robsartin.segue.port.ExpandResult;
 import com.robsartin.segue.port.SourceAdapter;
@@ -32,16 +33,21 @@ import java.util.regex.Pattern;
  * docs/design/2026-08-30-three-source-adapters.md}. So one call answers the question both of
  * Wikidata's passes exist to answer.
  *
- * <p><b>Direction is read, never normalised away, and never inferred from the seed's kind.</b>
- * MusicBrainz reports direction relative to the entity asked about: {@code forward} means the seed
- * is the relation's subject, {@code backward} that it is the object. For {@code member of band} the
- * subject is the member and the object is the band, and P463 ({@link EdgeTypes#MEMBER_OF}) means
- * the same thing — so a {@code backward} relation becomes {@code target MEMBER_OF seed} and a
- * {@code forward} one {@code seed MEMBER_OF target}. The committed fixture's 22 {@code member of
- * band} relations are all {@code backward}, which is what asking a group about its roster yields;
- * that is not a property of groups, because a group which is itself a member of a larger act
- * carries a {@code forward} one too. Hence the field is read on every relation rather than derived
- * once from the seed — assuming one orientation would silently invert memberships.
+ * <p><b>Direction is read, never normalised away.</b> MusicBrainz reports direction relative to the
+ * entity asked about: {@code forward} means the seed is the relation's subject, {@code backward}
+ * that it is the object. For {@code member of band} the subject is the member and the object is the
+ * band, and P463 ({@link EdgeTypes#MEMBER_OF}) means the same thing — so a {@code backward}
+ * relation becomes {@code target MEMBER_OF seed} and a {@code forward} one {@code seed MEMBER_OF
+ * target}.
+ *
+ * <p><b>The reason to read the field is that one relation is reachable from both of its ends, with
+ * opposite values.</b> The committed fixture is a group's roster and every {@code member of band}
+ * row in it is {@code backward}; asking the same question of one of those members returns the same
+ * relation {@code forward}. That is the two probes the design note measured — a Group returning 9
+ * {@code backward} and a Person 13 {@code forward}, one call each. Reading the field is what makes
+ * both ends of a pair produce the identical edge, and it is why this source needs no reverse pass;
+ * assuming a single orientation would make one membership point one way when expanded from the band
+ * and the other way when expanded from the member.
  *
  * <p><b>The whitelist is written here rather than derived from {@link EdgeTypes}, and that is the
  * difference from Wikidata.</b> {@code ClaimMapper}'s filter IS the vocabulary, keyed by Wikidata
@@ -53,6 +59,12 @@ import java.util.regex.Pattern;
  * family relations another returned are third-party personal data ADR 16 says not to collect).
  * <b>Skipping is normal operation here, not an error</b>, which is why nothing is flagged when it
  * happens.
+ *
+ * <p><b>{@code subgroup} is absent too, and for a plainer reason: nothing justifies a mapping
+ * yet.</b> It is how MusicBrainz relates one act to another it is part of — {@code member of band}
+ * is not used for that — so it is the relation a group-in-group edge would come from. P361 is
+ * registered as {@code PART_OF}, but whether {@code subgroup} means that is a judgement nobody here
+ * has made, and ADR 38 admits one property at a time. Worth its own issue; not decided by omission.
  *
  * <p><b>{@code collaboration} is deliberately absent.</b> MusicBrainz states it as a first-class
  * artist relation, and {@code EdgeTypes.COLLABORATED_WITH} exists — but it is registered {@code
@@ -184,6 +196,15 @@ public final class MusicBrainzSourceAdapter implements SourceAdapter {
       if (targetQid == null) {
         // ADR 22 clause 2 declining to reach this neighbour, measured at 49% of artist-relation
         // neighbours and mostly tributes, pseudonyms and billing variants. Not a shortfall.
+        continue;
+      }
+      if (!Qid.looksLikeAQid(targetQid)) {
+        // GAP 9: AssertionRecord validates neither endpoint, so a non-QID would be logged happily
+        // and then reach TinkerGraphStore.requireVertex and throw mid-batch, after the log entry
+        // is already written. ClaimMapper:138-144 refuses the same thing for the same stated
+        // reason. This is not a defensive check against a programming error: the bridge behind
+        // MusicBrainzIdentity reads its QIDs out of MusicBrainz's url-rels, which are
+        // user-entered, so a malformed one is arriving external data.
         continue;
       }
       assertions.add(toAssertion(seed.qid(), mbid.get(), relation, targetQid, assertedAt));
