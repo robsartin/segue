@@ -317,10 +317,11 @@ data to hold.
    `node.instanceOf()`, which is empty for a source stating no Wikidata classes. So an OSM place
    asserted as `PLACE` — the honest kind, and what `KindMapper:91` gives a Wikidata city — trips
    **neither half**, and a city hub would rank as a genuine explanation. **This step depends on that
-   design choice**: an adapter that filed cities as `CONCEPT` would trip `isBusyConcept` once the
-   degree passed ten, at the cost of calling a city a thing it could not place. The recommendation
-   does not rest on this step — step 3 carries it alone — but ADR 31's issue-#88 amendment refused
-   to generalise the hub rule, and this is the case that refusal leaves open.
+   design choice**: an adapter that filed cities as `CONCEPT` would trip `isBusyConcept` at a degree
+   of ten (`>= HUB_DEGREE`, `PathRanking:66` and `:177`), at the cost of calling a city a thing it
+   could not place. The recommendation does not rest on this step — step 3 carries it alone — but
+   ADR 31's issue-#88 amendment refused to generalise the hub rule, and this is the case that
+   refusal leaves open.
 
 Recording this conclusion is worth more than the adapter would have been, and it is the same kind of
 answer #89 exists to make sayable.
@@ -483,16 +484,47 @@ today, before any second source exists. Five adapters make twenty ordered pairs,
 object lists one at a time means five rules holding twenty package literals between them, with the
 next adapter needing five edits and a sixth rule.
 
-**Recommendation: one bidirectional rule over a single `ADAPTER_PACKAGES` constant** — no class in
-an adapter package may depend on a class in a *different* adapter package — replacing all four.
-Twenty of twenty pairs, one list, and the next adapter is a one-line change instead of five. It
-needs a `DescribedPredicate`, because the naive `resideInAnyPackage(ADAPTERS) → resideInAnyPackage(
-ADAPTERS)` form would fail on every intra-package dependency. **That is not a foreign shape here:**
-`AFFINITY_TYPES` and `WORLD_FACT_TYPES` (915–952) are already hand-written predicates in this file,
-with a javadoc explaining that the predicate "does the work the package name would have done".
-The alternative — widen `tinker`'s and `jena`'s object lists too, and add a fifth pairwise rule —
-also reaches twenty of twenty and is the smaller diff; it is rejected because the defect corrected
-two paragraphs above is precisely the omission that shape invites, and it invites it again at N=6.
+**Recommended, and filed as its own issue: one rule over a single adapter list**, replacing all
+four — no class in an adapter package may depend on a class in a *different* adapter package.
+Twenty of twenty pairs, one list, and the next adapter is a one-line change instead of five.
+
+**The mechanism, checked against the project's own `archunit-1.5.0` jar with `javap` rather than
+recalled.** A `DescribedPredicate` cannot express this rule, and an earlier draft of this note said
+it could. `ClassesShould.dependOnClassesThat` has exactly one predicate overload and it takes a
+`DescribedPredicate<? super JavaClass>` over the **target** class, so no object-side predicate can
+see which adapter package the *origin* is in — which is the whole of "a different adapter package".
+The naive `resideInAnyPackage(ADAPTERS) → resideInAnyPackage(ADAPTERS)` form fails for a second
+reason as well: it would flag every intra-`tinker` dependency.
+
+**The working form is the slices API this file already imports** (`:27`, used by
+`noPackageCycles`):
+
+```java
+SlicesRuleDefinition.slices().assignedFrom(assignment).should().notDependOnEachOther()
+```
+
+with a `SliceAssignment` whose `getIdentifierOf` returns `SliceIdentifier.of(<adapter package>)` for
+a class in one of the adapter packages and `SliceIdentifier.ignore()` for everything else. Slices
+are only ever compared *across* slices, so the intra-package problem dissolves rather than being
+worked around. `Creator.assignedFrom(SliceAssignment)`, `SliceIdentifier.ignore()` and
+`SlicesShould.notDependOnEachOther()` were all confirmed present in 1.5.0. About ten lines.
+(An `ArchCondition<JavaClass>` walking `JavaClass.getDirectDependenciesFromSelf()` — also confirmed
+present — would work too, and is more code for the same answer.)
+
+**Scope: this is a pre-existing defect, so it is NOT part of #91.** Four of the six uncovered pairs
+at N=5 exist today with no second source involved. The coordinator has filed the four-rule
+replacement as its own issue, and **Task 2 does only what #91 needs**:
+
+| pairs | who owns them |
+|---|---|
+| `tinker → musicbrainz`, `jena → musicbrainz` | **#91** — created by adding the source |
+| `sqlite → musicbrainz`, `wikidata → musicbrainz`, `musicbrainz → {t,j,s,w}` | **#91** — created by adding the source |
+| `tinker → {sqlite, wikidata}`, `jena → {sqlite, wikidata}` | the filed issue — uncovered today |
+
+**The fallback warning stands if the replacement is deferred.** Widening only `sqlite`'s and
+`wikidata`'s object lists and adding a `musicbrainz` subject rule reaches **14 of 20** — it leaves
+all six `tinker`/`jena` → {`sqlite`, `wikidata`, `musicbrainz`} pairs uncovered, two of which #91
+creates. Those two must be picked up either way.
 
 **Tier 3 — a pre-existing shape the new adapter widens (3):** `theRatingsToolOpensNothingElse`
 (464–485), `theRecommenderOpensNothingElse` (807–827) and `theRetractionToolOpensNothingElse`
@@ -508,8 +540,12 @@ report, not a blocker.
 
 Separately, and not among the thirteen because it names no package:
 `affinityNeverTouchesTheWorldFactLayer` (957–964) is written against **types**
-(`AFFINITY_TYPES` / `WORLD_FACT_TYPES`) and therefore covers a new adapter with no edit at all —
-which is the shape tier 2 above recommends borrowing.
+(`AFFINITY_TYPES` / `WORLD_FACT_TYPES`), so it **needs no edit when a fifth adapter arrives.** It
+does not thereby *cover* the new adapter — its subject is the affinity types, and the adapter-facing
+counterpart is tier 1's `theWorldFactLayerNeverTouchesAffinity` (975–983), which does need the edit.
+Nor is it evidence that a predicate could express tier 2's rule: those two sets are fixed and
+disjoint, which is the easy case. What it *is* good evidence for is the narrower point that one
+named constant beats literals scattered across rules.
 
 ### An open defect in `theExporterNeverSpeaksToANetwork`, found while checking this
 
@@ -521,8 +557,10 @@ though the project's HTTP client is handled, and it is not. No live violation ex
 imports `KindMapper` and `RecognitionInstitutions` from `wikidata`, not the client — so this is an
 inert fence rather than a breach.
 
-**This is a pre-existing defect, filed separately by the reviewer; it is recorded here and NOT fixed
-in this task**, which is a design note and changes no code.
+**This is a pre-existing defect, filed as [issue #139](https://github.com/robsartin/segue/issues/139);
+it is recorded here and NOT fixed in this task**, which is a design note and changes no code. A
+sweep of the whole file for the same mistake found that **`:415` is the only rule passing a class
+name to a package predicate**; that answer belongs to #139 and is cited here rather than repeated.
 
 **The warning Task 2 must not miss:** do not mirror the pattern as
 `"..musicbrainz.MusicBrainzClient"`, which would ship an equally inert fence and read as protection.
@@ -530,8 +568,9 @@ A class-level ban needs `haveFullyQualifiedName` or an `assignableTo` predicate,
 `resideInAnyPackage`.
 
 ADR 25's consequence *"Adding a source is implementing one or both interfaces plus a `@Bean`
-method"* needs an amendment saying "and extending three architecture rules, replacing the four
-sibling rules with one written over a single adapter list, and repairing an inert fence".
+method"* needs an amendment saying "and extending the architecture rules that name adapter packages
+— which, on the day this was checked, meant three rules plus two sibling object lists plus a new
+sibling rule, and surfaced two pre-existing defects in the fences themselves".
 
 ### GAP 2 — `mcp` names a `wikidata` exception type to honour its own stated invariant
 
@@ -705,9 +744,14 @@ privacy fence, non-negotiable and cheap), **GAP 3** (the shared budget, which is
 **GAP 4** (per-source attribution of the two flags), and the **GAP 7 trap** written into the Task 2
 brief. Everything else is named here so that it is not rediscovered as a surprise.
 
+**Two things this note found are explicitly NOT #91's** — both pre-existing, both filed: the inert
+`WikidataClient` ban ([#139](https://github.com/robsartin/segue/issues/139)) and the four-rule
+sibling replacement. Task 2 covers only the pairs adding a source creates; GAP 1 has the split.
+
 And the finding that reaches furthest is the one no adapter delivers: **ADR 25's interfaces survive
 contact with a second source; its consequences do not.** Adding a source is not "one or both
-interfaces plus a `@Bean` method". It is that, plus **three architecture rules extended, four
-sibling rules replaced by one written over a single adapter list, and an inert fence repaired**
-(GAP 1 has the tiers; one of the three is ADR 33's privacy fence), plus an HTTP client with its own
-rate policy, plus a decision about a bound that two sources now share.
+interfaces plus a `@Bean` method". It is that, plus **three architecture rules extended, two sibling
+object lists widened and a new sibling rule written** — one of the three being ADR 33's privacy
+fence — plus an HTTP client with its own rate policy, plus a decision about a bound that two sources
+now share. **And the act of checking that list is what surfaced two defects that had nothing to do
+with a second source**, which may be the most useful thing #91 has produced so far.
