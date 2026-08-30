@@ -31,6 +31,14 @@ class DotWriterTest {
     return new GraphView("a made-up view", nodes, edges);
   }
 
+  /** The fill one node was given, so a test can compare two renders rather than two whole files. */
+  private static String fillOf(String dot, String qid) {
+    Matcher matcher =
+        Pattern.compile("\"" + qid + "\" \\[[^\\]]*fillcolor=\"(#[0-9A-Fa-f]{6})\"").matcher(dot);
+    assertThat(matcher.find()).as("a fill for %s", qid).isTrue();
+    return matcher.group(1);
+  }
+
   @Test
   @DisplayName("emits a directed graph carrying the view's own description")
   void emitsADigraph() throws IOException {
@@ -162,8 +170,8 @@ class DotWriterTest {
   }
 
   @Test
-  @DisplayName("the first class with a shade wins, as the first recognised class chooses the kind")
-  void takesTheFirstShadedClass() throws IOException {
+  @DisplayName("a class with no shade is skipped, not allowed to shadow one that has a shade")
+  void skipsAClassThatHasNoShade() throws IOException {
     String dot =
         render(
             view(
@@ -173,6 +181,32 @@ class DotWriterTest {
                 List.of()));
 
     assertThat(dot).contains("fillcolor=\"#BFB633\"");
+  }
+
+  @Test
+  @DisplayName("two shaded classes settle by a fixed rank, so either order gives the same shade")
+  void shadesTheSameWhicheverOrderTheClassesArriveIn() throws IOException {
+    String statedInOneOrder =
+        render(
+            view(
+                List.of(
+                    new ViewNode(
+                        "Q901", NodeKind.WORK, "Kettle Song", List.of("Q134556", "Q105543609"))),
+                List.of()));
+    String statedInTheOther =
+        render(
+            view(
+                List.of(
+                    new ViewNode(
+                        "Q901", NodeKind.WORK, "Kettle Song", List.of("Q105543609", "Q134556"))),
+                List.of()));
+
+    assertThat(fillOf(statedInOneOrder, "Q901"))
+        .as("the same entity, the same two classes, the other order")
+        .isEqualTo(fillOf(statedInTheOther, "Q901"));
+    assertThat(fillOf(statedInOneOrder, "Q901"))
+        .as("single outranks musical work/composition")
+        .isEqualTo("#BFB633");
   }
 
   @Test

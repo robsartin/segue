@@ -355,6 +355,38 @@ people will reach for, and the note has to spend two extra clauses saying so. Th
 to keep an attribute that reads as a working feature to anyone who greps for it — which is what
 this issue cost.
 
+**Amendment (2026-08-29, issue #98): the WORK shade is chosen by a fixed rank, and the #63
+amendment above was wrong to say the first stated class wins.**
+
+That sentence — "the first class with a shade wins, matching `KindMapper`'s
+first-recognised-class rule" — described a rule that has since been deleted and a behaviour that
+was never safe. Issue #87 replaced `KindMapper`'s first-match with a ranking precisely because
+`P31` order is noise: an entity's statements arrive oldest-first from the entity JSON, or in
+whatever order SPARQL bound the rows in `ReverseClaims`, and neither is a claim about which class
+matters most. Reading that order one layer out left the exporter as the last place in the codebase
+that still did, so a WORK stating two shaded classes could be drawn one shade on one run and
+another on the next. Nothing reported it, because both fills are legal.
+
+- **A ranking over the four shaded classes, most decisive first, in `DotWriter`.** The ranking and
+  the shade table are one declaration, so they cannot drift apart, and it is the code that says
+  what the order is.
+
+- **Not `KindMapper.PRECEDENCE`, and not a reference to it.** That list ranks the six *kinds*;
+  all four shaded classes are the same kind. WORK wins there as one block, which settles nothing
+  about the four ways of being a WORK — so this is a ranking that layer does not have rather than
+  one it could lend. Agreeing with the kind derivation means agreeing with how it works, not
+  reusing its list.
+
+- **The order is argued weakly, and deliberately so.** Musical work/composition ranks last as the
+  broadest of the four and the one that tells a reader least; the other three fall in the order of
+  the measured shares that chose the four in the first place. They rarely co-occur, so this is a
+  tie-break rather than a rule. Shape already carries the kind alone, so a shade a reader cannot
+  place costs them nothing — but two exports of the same graph disagreeing costs them trust in the
+  picture, and that is the half worth fixing.
+
+Not free: a fifth shaded class now has to be ranked as well as coloured, and a reordering of those
+lines is a behaviour change that reads like a formatting change. The comment on the list says so.
+
 ## Alternatives considered
 
 - **Put it in `seed`, since that is where the other dev tool lives** — one package for

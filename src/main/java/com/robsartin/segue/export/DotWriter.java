@@ -5,8 +5,8 @@ import com.robsartin.segue.support.ClassLabels;
 import java.io.IOException;
 import java.io.Writer;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -259,25 +259,55 @@ public final class DotWriter implements ViewWriter {
     if (node.kind() != NodeKind.WORK) {
       return fill(node.kind());
     }
-    // The FIRST class with a shade wins, matching KindMapper: the first recognised class is the
-    // one that chose the kind, so it is the one the picture should agree with.
-    return node.instanceOf().stream()
-        .map(DotWriter::shade)
-        .filter(Objects::nonNull)
+    return SHADES.stream()
+        .filter(shade -> node.instanceOf().contains(shade.classQid()))
         .findFirst()
+        .map(Shade::fill)
         .orElseGet(() -> fill(NodeKind.WORK));
   }
 
-  /** The shade for one class, or null when this class is not one of the four. */
-  private static String shade(String classQid) {
-    return switch (classQid) {
-      case "Q482994" -> "#F8F3C6"; // album
-      case "Q105543609" -> "#D9CF3B"; // musical work/composition
-      case "Q134556" -> "#BFB633"; // single
-      case "Q11424" -> "#A69E2B"; // film
-      default -> null;
-    };
-  }
+  /** One shade of the WORK yellow and the class that earns it. */
+  private record Shade(String classQid, String fill) {}
+
+  /**
+   * The four shaded classes, <b>most decisive first — the order of this list is the rule</b>, and
+   * the shade each one gets. A WORK stating two of them takes the shade of whichever ranks higher
+   * here, never of whichever arrived first.
+   *
+   * <p>Reordering these lines changes what the picture draws. That is deliberate: it is the same
+   * shape {@code KindMapper.PRECEDENCE} takes, for the same reason (issue #87). {@code
+   * ReverseClaims} collects an entity's classes into a set keyed on whatever order SPARQL bound the
+   * rows, and the entity JSON lists statements oldest first; neither is a claim about which class
+   * matters most, so neither may decide. Before issue #98 the first stated class with a shade won,
+   * which meant two exports of the same entity could legitimately disagree.
+   *
+   * <p><b>Not {@code PRECEDENCE} itself, and not a reference to it: that list ranks the six kinds,
+   * and all four of these classes are the same kind.</b> WORK wins there as one block, which
+   * settles nothing about the four ways of being a WORK. This is the ranking that layer does not
+   * have, so it is written here rather than borrowed.
+   *
+   * <p>The order is argued, weakly, because this is decoration:
+   *
+   * <ul>
+   *   <li><b>Musical work/composition last.</b> It is the broadest of the four and the one that
+   *       tells a reader least — of the works that a real graph's whitelist could not place, it
+   *       alone was 667 of 1,058 ({@code KindMapper}). An entity stating it <em>and</em> album or
+   *       single is a record the reader can see; the composition is the abstraction behind it.
+   *   <li><b>The other three by measured share</b> — album 31%, single 14%, film 10% of a real
+   *       54,448-node graph's WORK, the same measurement that chose the four in the first place
+   *       (ADR 41). They rarely co-occur, so this is a tie-break rather than a rule.
+   * </ul>
+   *
+   * <p>Being sure of the order matters less than the order being fixed. Shape carries the kind
+   * alone, and a shade a reader cannot place costs them nothing; two runs disagreeing about the
+   * same entity cost them trust in the picture.
+   */
+  private static final List<Shade> SHADES =
+      List.of(
+          new Shade("Q482994", "#F8F3C6"), // album
+          new Shade("Q134556", "#BFB633"), // single
+          new Shade("Q11424", "#A69E2B"), // film
+          new Shade("Q105543609", "#D9CF3B")); // musical work/composition
 
   /** Backslash first, or the escaping escapes its own escapes. */
   private static String escape(String value) {
