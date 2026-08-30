@@ -219,7 +219,11 @@ covers the bridge alone; the gap between them is uncovered.
   neighbour, and **superseded by what shipped**. Its whole justification was that a SPARQL P434
   query "would be an adapter depending on another adapter"; declaring `MusicBrainzIdentity` in
   `musicbrainz` and implementing it in `app` removed that objection, and the batched query is one
-  round trip for a whole expansion where `url-rels` is one per neighbour. **On the one advantage it
+  round trip per 100 neighbours where `url-rels` is one per neighbour. **Per 100, not per
+  expansion**: the request URI measures 180 + 43n bytes, so a whole expansion under the shipped
+  `max-new-edges: 200` would put 8,780 bytes on a request line whose classic limit is 8,192.
+  `WikidataMusicBrainzIdentity.MAX_MBIDS_PER_QUERY` is the authority on the bound and on what
+  exceeding it would have cost. **On the one advantage it
   is often credited with, take the weaker claim, because the stronger one was checked and is false.**
   A `url-rels` bridge would *not* have flagged `sourceUnavailable` correctly as `expand` is written:
   its single `try` wraps only the `client.artistRelations` call, `identity.mbidFor` is called before

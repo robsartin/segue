@@ -139,7 +139,9 @@ a SPARQL `P434` bridge "would be an adapter depending on another adapter". Task 
 objection by declaring `MusicBrainzIdentity` in `musicbrainz` and putting the implementation
 outside both packages, which ADR 32 permits in exactly one place: "`app` is the only package
 permitted to depend on everything." `app/WikidataMusicBrainzIdentity` crosses `P434` in one batched
-query, and both directions of the fence — `musicbrainz → wikidata` and `wikidata → musicbrainz` —
+query per 100 neighbours — chunked, because the request URI measures 180 + 43n bytes and a whole
+expansion under the shipped `max-new-edges: 200` would overrun the 8,192-byte request line; the
+class is the authority on that bound — and both directions of the fence — `musicbrainz → wikidata` and `wikidata → musicbrainz` —
 are ArchUnit rules that were watched red. This note's own text already rated that route faster
 (one round trip for a whole expansion against one per neighbour), so the supersession costs nothing
 this section priced.

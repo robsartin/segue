@@ -12,6 +12,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -35,6 +38,28 @@ class WikidataMusicBrainzIdentityTest {
 
   private static final String QUINTET_QID = "Q900001";
   private static final String MEMBER_QID = "Q900002";
+
+  /**
+   * {@code application.yaml}'s shipped {@code segue.expand.max-new-edges}. {@code
+   * MusicBrainzSourceAdapter} spends that bound on relations <i>before</i> it resolves any
+   * neighbour, so one expansion under the shipped configuration can hand {@code qidsFor} this many
+   * MBIDs in a single call. It is restated here as the size the batching has to survive; {@code
+   * application.yaml} remains the authority on the setting.
+   */
+  private static final int SHIPPED_MAX_NEW_EDGES = 200;
+
+  /**
+   * The classic ceiling on an HTTP request line, which is what a {@code GET} spends its query on.
+   */
+  private static final int REQUEST_LINE_LIMIT = 8192;
+
+  /**
+   * The endpoint {@code WikidataClient.queryService()} aims at, with its {@code ?}. The stub below
+   * is on {@code 127.0.0.1} with a shorter URL, so a request that fits against the stub can still
+   * be over the limit in production; what is load-bearing here is this string's length, not the
+   * string — {@code WikidataClient} owns the URL itself.
+   */
+  private static final String PRODUCTION_QUERY_URI = "https://query.wikidata.org/sparql?";
 
   private static String bindings(String... rows) {
     return "{\"results\":{\"bindings\":[" + String.join(",", rows) + "]}}";
@@ -60,6 +85,23 @@ class WikidataMusicBrainzIdentityTest {
     return URLDecoder.decode(stub.lastQuery(), StandardCharsets.UTF_8);
   }
 
+  private static String everyDecodedQuery(StubWikidataServer stub) {
+    return stub.queries().stream()
+        .map(raw -> URLDecoder.decode(raw, StandardCharsets.UTF_8))
+        .collect(Collectors.joining("\n"));
+  }
+
+  /**
+   * {@code count} distinct MBIDs of the shape MusicBrainz sends and {@code
+   * WikidataMusicBrainzIdentity} accepts — 36 characters, hyphenated hex — so the bytes these put
+   * on the wire are the bytes a real neighbourhood of this size would.
+   */
+  private static List<String> mbids(int count) {
+    return IntStream.range(0, count)
+        .mapToObj(i -> new UUID(0x0123456789abcdefL, i).toString())
+        .toList();
+  }
+
   @Test
   @DisplayName("should map every MBID the query service answers for when it knows them all")
   void shouldMapEveryMbidTheQueryServiceAnswersForWhenItKnowsThemAll() {
@@ -71,9 +113,73 @@ class WikidataMusicBrainzIdentityTest {
 
       assertThat(resolved)
           .containsOnly(entry(QUINTET_MBID, QUINTET_QID), entry(MEMBER_MBID, MEMBER_QID));
-      // One round trip for the whole batch, which is the reason qidsFor takes a collection.
+      // One round trip for a batch this size, which is the reason qidsFor takes a collection.
+      // A batch large enough to need more than one is the request-line test below.
       assertThat(stub.requestCount()).isEqualTo(1);
       assertThat(decodedQuery(stub)).contains("wdt:P434").contains(QUINTET_MBID, MEMBER_MBID);
+    }
+  }
+
+  @Test
+  @DisplayName("should split the batch when one query would outgrow the request-line limit")
+  void shouldSplitTheBatchWhenOneQueryWouldOutgrowTheRequestLineLimit() {
+    try (StubWikidataServer stub = new StubWikidataServer()) {
+      List<String> mbids = mbids(SHIPPED_MAX_NEW_EDGES);
+
+      identity(stub).qidsFor(mbids);
+
+      // Measured through WikidataClient's own encoding on 2026-08-30: the request URI is
+      // 180 + 43n bytes, so 200 MBIDs in one VALUES clause is 8,780 — over the limit, and a 414
+      // is not transient, so the whole neighbourhood would be dropped with no flag raised.
+      assertThat(stub.queries()).isNotEmpty();
+      for (String query : stub.queries()) {
+        assertThat(PRODUCTION_QUERY_URI.length() + query.length())
+            .as("request-line bytes for one batched query")
+            .isLessThanOrEqualTo(REQUEST_LINE_LIMIT);
+      }
+      // Splitting must not lose anybody: every MBID handed in is asked about in some request.
+      assertThat(everyDecodedQuery(stub)).contains(mbids.toArray(String[]::new));
+    }
+  }
+
+  @Test
+  @DisplayName("should resolve MBIDs from every chunk when the batch is split")
+  void shouldResolveMbidsFromEveryChunkWhenTheBatchIsSplit() {
+    try (StubWikidataServer stub = new StubWikidataServer()) {
+      List<String> mbids = mbids(SHIPPED_MAX_NEW_EDGES);
+      String inTheFirstChunk = mbids.get(0);
+      String inTheLastChunk = mbids.get(mbids.size() - 1);
+      // One body per request, in order. That there are exactly two is the shipped bound against
+      // the batch size WikidataMusicBrainzIdentity chose; changing either changes this test.
+      stub.enqueueBody(bindings(itemRow(QUINTET_QID, inTheFirstChunk)));
+      stub.enqueueBody(bindings(itemRow(MEMBER_QID, inTheLastChunk)));
+
+      Map<String, String> resolved = identity(stub).qidsFor(mbids);
+
+      assertThat(stub.requestCount()).isEqualTo(2);
+      assertThat(resolved)
+          .containsOnly(entry(inTheFirstChunk, QUINTET_QID), entry(inTheLastChunk, MEMBER_QID));
+    }
+  }
+
+  @Test
+  @DisplayName("should resolve nothing rather than part of the batch when one chunk fails")
+  void shouldResolveNothingRatherThanPartOfTheBatchWhenOneChunkFails() {
+    try (StubWikidataServer stub = new StubWikidataServer()) {
+      List<String> mbids = mbids(SHIPPED_MAX_NEW_EDGES);
+      stub.enqueueBody(bindings(itemRow(QUINTET_QID, mbids.get(0))));
+      stub.enqueueStatus(200);
+      // 404 rather than 503 for the same reason as the test below: what is under test is the
+      // shape of the answer, not how long WikidataClient waits before giving it.
+      stub.enqueueStatus(404);
+
+      Map<String, String> resolved = identity(stub).qidsFor(mbids);
+
+      // Not the first chunk's answer. A half-filled map is indistinguishable from Wikidata
+      // knowing no QID for the missing half, which is the normal drop path (ADR 22 clause 2) and
+      // is reported to nobody — so a chunk failure would become silent data loss for an
+      // arbitrary subset. One request's failure fails the call, as it did when there was one.
+      assertThat(resolved).isEmpty();
     }
   }
 

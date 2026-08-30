@@ -6,11 +6,10 @@ import com.robsartin.segue.wikidata.WikidataClient;
 import com.robsartin.segue.wikidata.WikidataUnavailableException;
 import java.util.Collection;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -45,10 +44,12 @@ import tools.jackson.databind.JsonNode;
  * needs a failure channel on the seam, which is a change to an interface Task 3 settled; it is
  * written down instead.
  *
- * <p><b>Both queries are one round trip.</b> {@link #qidsFor} batches its whole neighbourhood into
- * a {@code VALUES} clause — the measured neighbourhood was 387 across 40 seeds (#91's 2026-08-29
- * comment), and a call per neighbour against a service that answers in tenths of a second is the
- * shape the seam was made batched to avoid.
+ * <p><b>The seed query is one round trip; the neighbourhood is as few as its size allows.</b>
+ * {@link #qidsFor} puts a whole neighbourhood into {@code VALUES} clauses — the measured
+ * neighbourhood was 387 across 40 seeds (#91's 2026-08-29 comment), and a call per neighbour
+ * against a service that answers in tenths of a second is the shape the seam was made batched to
+ * avoid. What it may not do is put all of them in <i>one</i> clause: see {@link
+ * #MAX_MBIDS_PER_QUERY}.
  */
 public final class WikidataMusicBrainzIdentity implements MusicBrainzIdentity {
 
@@ -81,6 +82,32 @@ public final class WikidataMusicBrainzIdentity implements MusicBrainzIdentity {
       }
       ORDER BY ?mbid ?item
       """;
+
+  /**
+   * The most MBIDs one {@code VALUES} clause may carry, because a {@code GET} spends its query on
+   * the request line.
+   *
+   * <p><b>Measured, not estimated.</b> Driven through {@link WikidataClient}'s own encoding on
+   * 2026-08-30 with {@link #BATCH_TEMPLATE} and MBIDs of the shape MusicBrainz sends, the request
+   * URI comes to {@code 180 + 43n} bytes: 50 MBIDs is 2,330, 100 is 4,480, 200 is 8,780. The
+   * classic ceiling on a request line is 8,192 bytes, which 186 MBIDs is the last batch to fit
+   * under — and {@code application.yaml} ships {@code segue.expand.max-new-edges: 200}, a bound
+   * {@code MusicBrainzSourceAdapter} spends on relations <i>before</i> it resolves any neighbour.
+   * So the shipped configuration could hand this method 200 MBIDs and exceed the limit in one go.
+   *
+   * <p><b>What that would have cost is silence.</b> A 414 is not transient, so {@link
+   * WikidataClient} does not retry it: it throws at once, {@link #ask} swallows it, the map comes
+   * back empty, and every neighbour of that seed is dropped while {@code sourceUnavailable} stays
+   * false — the "this artist has no members" reading the class note above exists to keep this
+   * bridge from producing.
+   *
+   * <p><b>100 rather than 186.</b> 4,480 bytes is a batch whose safety does not depend on having
+   * got the arithmetic exactly right, or on the template never gaining a line; the cost of the
+   * headroom is one extra round trip per 100 neighbours against a service that answers in tenths of
+   * a second. Each chunk is its own {@link WikidataClient#get}, so the retry policy, the honoured
+   * {@code Retry-After} and its ceiling apply per request exactly as they did when there was one.
+   */
+  private static final int MAX_MBIDS_PER_QUERY = 100;
 
   private static final String SEED_TEMPLATE =
       """
@@ -120,23 +147,35 @@ public final class WikidataMusicBrainzIdentity implements MusicBrainzIdentity {
   @Override
   public Map<String, String> qidsFor(Collection<String> mbids) {
     Objects.requireNonNull(mbids, "mbids");
-    Set<String> asked =
-        mbids.stream()
-            .filter(m -> m != null && MBID.matcher(m).matches())
-            .collect(Collectors.toCollection(LinkedHashSet::new));
+    List<String> asked =
+        mbids.stream().filter(m -> m != null && MBID.matcher(m).matches()).distinct().toList();
     if (asked.isEmpty()) {
       // Nothing whitelisted, or nothing that could be an MBID. A VALUES clause with no members is
       // a round trip whose only possible answer is the empty map.
       return Map.of();
     }
 
-    String values = asked.stream().map(m -> "\"" + m + "\"").collect(Collectors.joining(" "));
-    JsonNode response = ask(BATCH_TEMPLATE.formatted(values, MBID_PROPERTY));
-    if (response == null) {
-      return Map.of();
-    }
-
     Map<String, String> resolved = new LinkedHashMap<>();
+    for (int from = 0; from < asked.size(); from += MAX_MBIDS_PER_QUERY) {
+      List<String> chunk = asked.subList(from, Math.min(from + MAX_MBIDS_PER_QUERY, asked.size()));
+      String values = chunk.stream().map(m -> "\"" + m + "\"").collect(Collectors.joining(" "));
+      JsonNode response = ask(BATCH_TEMPLATE.formatted(values, MBID_PROPERTY));
+      if (response == null) {
+        // One chunk's failure fails the whole call, which is what a single request already did.
+        // Returning what the earlier chunks resolved would be worse than useless: a half-filled
+        // map is indistinguishable from Wikidata knowing no QID for the rest, and that is the
+        // normal drop path (ADR 22 clause 2) which reports nothing to anybody. Half an answer
+        // would make a Query Service outage into silent, unflagged data loss for whichever
+        // neighbours happened to land in the failing chunk.
+        return Map.of();
+      }
+      collect(response, resolved);
+    }
+    return Map.copyOf(resolved);
+  }
+
+  /** Reads one response's bindings into {@code resolved}, dropping what cannot be a mapping. */
+  private static void collect(JsonNode response, Map<String, String> resolved) {
     for (JsonNode row : response.path("results").path("bindings")) {
       String mbid = row.at("/mbid/value").asText(null);
       String item = row.at("/item/value").asText(null);
@@ -154,7 +193,6 @@ public final class WikidataMusicBrainzIdentity implements MusicBrainzIdentity {
       // neighbours drop this way. Nothing is put here to record the absence.
       resolved.putIfAbsent(mbid, qid);
     }
-    return Map.copyOf(resolved);
   }
 
   /** The response, or null when Wikidata did not answer. See the class note on degrading. */
