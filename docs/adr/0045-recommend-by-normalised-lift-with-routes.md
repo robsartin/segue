@@ -491,9 +491,13 @@ deal at a lower floor, and one 177-card pass at floor 5 produced **72 cards belo
 against **8 of 973 — 0.8%** across every rating that preceded it. [ADR 50](0050-suppress-a-candidate-you-have-rejected.md)
 carries that table and the pass's full distribution; it is repeated here in one line because it is
 the reason this decision goes the way it does. **A floor of twelve was costing the taste layer the
-only signal it had no other way of getting: disagreement.** Above the old floor, disagreement was
-rare rather than absent — the 8 of 973 is the measurement, and no claim is made here about the other
-965 beyond their being at or above neutral.
+only signal it had no other way of getting: disagreement.** Two things about that denominator, so
+that it is not read as more than it is. The 973 is every stored rating rather than a floor-12
+candidate list, and [ADR 48](0048-a-high-rating-counts-as-something-you-have.md) counts **167** of
+them on entities the known-list does not name — the nearest thing to a candidate population in that
+history — of which exactly **2** are below neutral. So the comparison the decision rests on is 72
+negatives in one lower-floor deck against 8, or against 2 on the narrower denominator. Nothing is
+claimed here about why any particular rating above the old floor was not a negative.
 
 ADR 50 also records the consequence in its own terms: floor 12 sees 16 of the 72 off-list suppressed
 entities and floor 5 sees all 72. Moving the default makes the default run the second of those.
