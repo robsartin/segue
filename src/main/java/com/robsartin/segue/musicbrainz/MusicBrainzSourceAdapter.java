@@ -86,11 +86,24 @@ import java.util.regex.Pattern;
  * all, so the n kept here are simply the n MusicBrainz listed first. {@link ExpandResult#truncated}
  * reports both the same way (GAP 6).
  *
- * <p><b>No {@code neighbors}, on purpose.</b> {@link ExpandResult} treats them as an optimisation
- * an adapter may supply and is explicit that one which does not know is not obliged to guess — an
- * absent neighbour falls back to the caller's own fetch. {@link ArtistRelation} carries the
- * neighbour's name but not its MusicBrainz artist type, so the {@link NodeKind} a {@code
- * NodeAssertion} requires is not available here without inventing one.
+ * <p><b>No {@code neighbors} yet — and NOT because the data is missing.</b> {@link ExpandResult}
+ * treats them as an optimisation an adapter may supply and is explicit that one which does not know
+ * is not obliged to guess, so an absent neighbour falls back to the caller's own fetch. This
+ * adapter takes that fallback, and the earlier claim here that it had to — that the response
+ * carries a name but not the neighbour's type — was false. Every relation in the committed fixture
+ * carries {@code artist.type}: 22 {@code Person} and 2 {@code Group}, which map one-to-one onto
+ * {@link #DESCRIBED}. {@code MusicBrainzClient.parseRelations} reads {@code artist.id} and {@code
+ * artist.name} off that same node and simply does not read {@code artist.type}, and {@link
+ * ArtistRelation} has no field for it. With the QID from {@link MusicBrainzIdentity#qidsFor} and
+ * the label from {@link ArtistRelation#targetName}, a {@code NodeAssertion} is constructible at
+ * zero extra network cost — and each one saved is one {@code EntityResolver.fetch} that {@code
+ * SegueService} would otherwise spend per newly discovered neighbour.
+ *
+ * <p>It is <a href="https://github.com/robsartin/segue/issues/143">issue #143</a> rather than a
+ * line added here, because it is not free of consequence: the {@code NodeAssertion} would carry an
+ * empty {@code instanceOf} (see the next paragraph), and {@code NodeAssertion.toNode()} is what
+ * {@code IngestService.apply} calls — so the interaction with GAP 7 wants deciding on its own
+ * evidence, not as a side effect of wiring a second source.
  *
  * <p><b>No stated classes, so {@code instanceOf} stays empty.</b> MusicBrainz classifies an artist
  * as {@code Person} or {@code Group} without stating Wikidata classes, which is exactly the case
@@ -202,9 +215,11 @@ public final class MusicBrainzSourceAdapter implements SourceAdapter {
         // GAP 9: AssertionRecord validates neither endpoint, so a non-QID would be logged happily
         // and then reach TinkerGraphStore.requireVertex and throw mid-batch, after the log entry
         // is already written. ClaimMapper:138-144 refuses the same thing for the same stated
-        // reason. This is not a defensive check against a programming error: the bridge behind
-        // MusicBrainzIdentity reads its QIDs out of MusicBrainz's url-rels, which are
-        // user-entered, so a malformed one is arriving external data.
+        // reason. This is not a defensive check against a programming error: MusicBrainzIdentity
+        // is an interface this package neither implements nor constrains, and whatever supplies
+        // it is reading QIDs out of somebody's database — Wikidata's P434 in the shipped wiring,
+        // an external-id whose values are contributor-entered. Malformed input arrives from
+        // outside either way, which is why the guard does not depend on which bridge is wired.
         continue;
       }
       assertions.add(toAssertion(seed.qid(), mbid.get(), relation, targetQid, assertedAt));

@@ -86,14 +86,15 @@ class ArchitectureTest {
   /**
    * ADR 32: adapters never depend on each other.
    *
-   * <p>Named for what it actually covers rather than for the invariant it serves. Four adapter
-   * packages made twelve ordered pairs and these sibling rules covered eight; a fifth makes twenty
-   * and this file covers fourteen. The six it does not — {@code tinker} and {@code jena} reaching
-   * {@code sqlite} or {@code wikidata}, and the two directions of {@code sqlite}/{@code wikidata}
-   * that no subject rule names — are uncovered today, before any second source existed, and are <a
+   * <p>Named for what it actually covers rather than for the invariant it serves: this rule's
+   * object list is {@code {jena, musicbrainz}}, so a name reading {@code OtherAdapters} would say
+   * it holds ground it does not hold.
+   *
+   * <p>What these five sibling rules leave open, enumerated rather than counted: {@code tinker →
+   * sqlite}, {@code tinker → wikidata}, {@code jena → sqlite} and {@code jena → wikidata}. All four
+   * are uncovered today, before any second source existed, and all four are <a
    * href="https://github.com/robsartin/segue/issues/140">issue #140</a>: one slices rule over a
-   * single adapter list, replacing all five of these. A name reading {@code OtherAdapters} here
-   * would say this rule holds ground it does not hold.
+   * single adapter list, replacing all five of these.
    */
   @ArchTest
   static final ArchRule tinkerDoesNotDependOnJenaOrMusicbrainz =

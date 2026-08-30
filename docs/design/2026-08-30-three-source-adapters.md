@@ -133,6 +133,38 @@ expansion instead of one per neighbour — and would be an adapter depending on 
 **The design takes the slower, architecturally clean route**, and the cost is stated plainly in the
 gap list below.
 
+**Correction, 2026-08-30 (#91, Task 5): that is not what shipped, and this paragraph's reason for it
+had lapsed by the time the code was written.** The recommendation above rests on one objection —
+a SPARQL `P434` bridge "would be an adapter depending on another adapter". Task 3 removed that
+objection by declaring `MusicBrainzIdentity` in `musicbrainz` and putting the implementation
+outside both packages, which ADR 32 permits in exactly one place: "`app` is the only package
+permitted to depend on everything." `app/WikidataMusicBrainzIdentity` crosses `P434` in one batched
+query, and both directions of the fence — `musicbrainz → wikidata` and `wikidata → musicbrainz` —
+are ArchUnit rules that were watched red. This note's own text already rated that route faster
+(one round trip for a whole expansion against one per neighbour), so the supersession costs nothing
+this section priced.
+
+**What it does cost is a failure channel, and neither this note nor Task 5's first report connected
+it.** A `url-rels` bridge would have failed with `MusicBrainzUnavailableException` — the adapter's
+*own* failure type, the one `expand` already turns into `sourceUnavailable`. A Wikidata-backed one
+fails with `WikidataUnavailableException`, which the seam cannot declare, so the bridge swallows it
+and an outage reads downstream as "MusicBrainz holds nothing for this seed".
+
+**But the `url-rels` advantage was available rather than realised, and saying otherwise would
+overstate it.** As `MusicBrainzSourceAdapter.expand` is actually written, the `catch` at `:175`
+wraps only the `client.artistRelations` call at `:174`; `identity.mbidFor` (`:165`) and
+`identity.qidsFor` (`:187`) both sit outside it. So a `url-rels` bridge throwing from either would
+have escaped `expand` entirely and reached `SegueService:215`, which has no `try` — a broken SPI
+contract rather than a correct flag — until that `try` was widened to cover both calls. One line,
+not a property the route came with.
+
+**In the shipped wiring the visible loss is narrower than it first appears.** Both uses of the
+Query Service share one `WikidataClient`, `WikidataSourceAdapter.supports` returns `true` for every
+kind so it always runs alongside, and it sets `sourceUnavailable` when its own reverse pass fails
+(`:120–124`), which `SegueService:216` ORs into the result. A Query Service outage therefore does
+surface — just unattributed to a source, which is GAP 4. The residual is the narrow case where the
+`P434` query alone fails.
+
 The ~49% of artist-relation neighbours with no QID (measured in #91's 2026-08-29 comment) is not a
 loss to route around. Its character — tributes, pseudonyms, billing variants — is why ADR 22 stays.
 

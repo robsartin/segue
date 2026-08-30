@@ -13,13 +13,16 @@ import java.util.Optional;
  * must obtain the MBID through some seam, and an adapter that discovers a neighbour by MBID must
  * resolve it back to a QID before it can become a {@code NodeRecord} at all (ADR 22 clause 2:
  * source-local identifiers, MBIDs named explicitly among them, resolve to a QID in the ingest layer
- * and never appear in the domain). The bridge itself lives inside MusicBrainz's own {@code
- * url-rels} — see {@code docs/design/2026-08-30-three-source-adapters.md}'s "Identity, and the
- * bridge to a QID" section — but a bridge implemented against that data still has to be
- * <i>supplied</i> to this package without this package importing {@code wikidata}, or the second
- * adapter is welded to the first (ADR 25; ADR 32's adapters-are-siblings fences). So {@code
- * musicbrainz} declares the interface it needs and something outside supplies the implementation:
- * Task 5 wires a Wikidata-backed one in. This type is the seam, not the bridge.
+ * and never appear in the domain). Two routes can carry that mapping — MusicBrainz's own {@code
+ * url-rels}, and Wikidata's {@code P434} — and this package deliberately names neither: either one
+ * has to be <i>supplied</i> from outside without this package importing another adapter, or the
+ * second adapter is welded to the first (ADR 25; ADR 32's adapters-are-siblings fences). So {@code
+ * musicbrainz} declares the interface it needs and something outside supplies the implementation.
+ * What shipped is Wikidata-backed, through {@code P434}, in {@code app} — see {@code
+ * docs/design/2026-08-30-three-source-adapters.md}'s "Identity, and the bridge to a QID" section
+ * and its 2026-08-30 correction, which records why that superseded the {@code url-rels} route the
+ * note originally recommended, and what it cost. This type is the seam, not the bridge, and nothing
+ * here is entitled to assume which one is behind it.
  *
  * <p>{@link #qidsFor} is batched rather than one call per neighbour: the alternative is a round
  * trip per neighbour, and the measured neighbourhood was 387 across 40 seeds (#91's 2026-08-29

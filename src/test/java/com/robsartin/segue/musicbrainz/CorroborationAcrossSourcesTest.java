@@ -14,6 +14,7 @@ import com.robsartin.segue.mcp.SegueService;
 import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.EntityResolver;
+import com.robsartin.segue.port.ExpandContext;
 import com.robsartin.segue.port.GraphStore;
 import com.robsartin.segue.port.SourceAdapter;
 import com.robsartin.segue.port.SourceAdapters;
@@ -141,7 +142,18 @@ class CorroborationAcrossSourcesTest {
       // A different member from MusicBrainz's, so which adapter won is visible in the result.
       queryService.enqueueBody(memberOfBacklink(OTHER_MEMBER_QID));
 
-      expandWith(1, wikidata(actionApi, queryService), musicBrainz(MEMBER_QID));
+      SourceAdapter musicBrainz = musicBrainz(MEMBER_QID);
+      // The control, and without it this test proves nothing: "the log holds only wikidata's
+      // claim" is equally true when MusicBrainz had nothing to say, so the test would stay green
+      // if the fixture or the stub mapping quietly stopped producing an assertion. Asking the same
+      // adapter the same question at the same bound is what makes the survivor a race result.
+      assertThat(
+              musicBrainz
+                  .expand(graph.node(QUINTET_QID).orElseThrow(), new ExpandContext(1))
+                  .assertions())
+          .hasSize(1);
+
+      expandWith(1, wikidata(actionApi, queryService), musicBrainz);
 
       assertThat(edgeAssertionsInTheLog())
           .extracting(a -> a.provenance().sourceId())
