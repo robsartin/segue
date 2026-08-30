@@ -41,8 +41,11 @@ import org.junit.jupiter.api.Test;
  * The two-hop walk, and every rule about who is allowed to be a recommendation (ADR 45).
  *
  * <p>The floor here is 4 rather than {@code Recommendations.MIN_CANDIDATE_DEGREE}: an invented
- * graph big enough to give every candidate twelve edges would be a page of padding that says
- * nothing, and {@link #theDegreeFloorIsApplied()} tests the floor itself against a value it names.
+ * graph is padded to whatever floor it must clear, and a fixture that tracked the shipped default
+ * would re-pad every time that default is re-measured. {@link #theDegreeFloorIsApplied()} tests the
+ * floor mechanism against a value it names, and {@link
+ * #theDefaultFloorAdmitsAThinlyConnectedCandidate()} is the one test here that asks what the
+ * shipped default actually admits.
  */
 class CandidateSweepTest {
 
@@ -182,6 +185,29 @@ class CandidateSweepTest {
     assertThat(find(sweep(), A_THIN_BAND)).isEmpty();
     assertThat(find(sweep(Scorer.LIFT, FLOOR - 2, Recommendations.EQUAL_REGARD), A_THIN_BAND))
         .isPresent();
+  }
+
+  @Test
+  @DisplayName("the default floor admits a thinly connected candidate (issues #117, #118)")
+  void theDefaultFloorAdmitsAThinlyConnectedCandidate() {
+    // The decision this pins: the shipped default admits a candidate this thin. The degree below
+    // is the FIXTURE's, deliberately not a second copy of the constant — it asserts an upper bound
+    // on the default, which is the direction issues #117 and #118 moved it, and it is why the
+    // assertion is presence rather than equality. An entity sitting here is commonly thinly
+    // connected because segue has not fetched it rather than because it is obscure, and the
+    // measured cost of excluding it was the negative signal the taste layer had no other way of
+    // getting (ADR 45's 2026-08-29 amendment).
+    node(graph, SHARED_ARTIST, NodeKind.PERSON, "the artist they both cite");
+    node(graph, ANCESTOR, NodeKind.GROUP, "who that artist cites");
+    edge(graph, KNOWN_ONE, SHARED_ARTIST, EdgeTypes.INFLUENCED_BY.code());
+    edge(graph, KNOWN_TWO, SHARED_ARTIST, EdgeTypes.INFLUENCED_BY.code());
+    edge(graph, SHARED_ARTIST, ANCESTOR, EdgeTypes.INFLUENCED_BY.code());
+    padDegreeTo(graph, ANCESTOR, 5);
+
+    Sweep sweep =
+        sweep(Scorer.LIFT, Recommendations.MIN_CANDIDATE_DEGREE, Recommendations.EQUAL_REGARD);
+
+    assertThat(find(sweep, ANCESTOR)).isPresent();
   }
 
   @Test

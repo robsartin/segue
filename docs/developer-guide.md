@@ -568,6 +568,11 @@ problem and needs a second call.
 The measured effect of adding the second pass, and everything else about the decision, is in
 [ADR 36: reverse lookup via SPARQL](adr/0036-reverse-lookup-via-sparql.md).
 
+**Before running expansions to improve a recommendation list, read
+[Expanding a top candidate demotes it](#expanding-a-top-candidate-demotes-it--expand-the-top-candidates-is-an-anti-pattern).**
+Expanding a candidate raises the degree its own score is divided by, so the strategy that reads as
+obvious is self-defeating.
+
 ### The full call, end to end
 
 ```mermaid
@@ -1382,7 +1387,7 @@ same for the next one.
 ## What to explore next
 
 ```bash
-# the measured default: lift, floor 12, twenty-five candidates, three routes each
+# the measured defaults: lift, `Recommendations.MIN_CANDIDATE_DEGREE`, twenty-five candidates, three routes each
 ./gradlew recommend --args="--known $HOME/known.csv --out $HOME/next.txt"
 
 # turn the dial, and read the two lists side by side
@@ -1452,18 +1457,22 @@ the point the known-list check already was. Three things about that are easy to 
   and so already excluded as known; a boundary at 3 would newly suppress the other **111**, entities
   that had only been shrugged at.
 
-**Measured effect, on a copy of the real database (ADR 50 has the full figures):** at the default
-floor of 12 the candidate pool went 1,027 → 1,011 and 7 of the top 25 left, every one of them
-suppressed — including ranks 1 and 2. At floor 5, where those ratings were actually collected, the
-pool went 1,676 → 1,604 and 16 of the top 25 left, again every one suppressed. **The effect is
-purely subtractive**: no score changes and the survivors keep their relative order exactly, so the
-list simply loses its rejected members and backfills from below.
+**Measured effect, on a copy of the real database (ADR 50 has the full figures):** at a floor of
+12 — the default when ADR 50 was written — the candidate pool went 1,027 → 1,011 and 7 of the top 25
+left, every one of them suppressed, including ranks 1 and 2. At floor 5, where those ratings were
+actually collected, the pool went 1,676 → 1,604 and 16 of the top 25 left, again every one
+suppressed. **The effect is purely subtractive**: no score changes and the survivors keep their
+relative order exactly, so the list simply loses its rejected members and backfills from below.
 
-**The limitation worth knowing** is recorded in ADR 50 and belongs with issues #117 and #118: the
-default floor sees only 16 of the 72 off-list suppressed entities, and the floor itself measures
-what segue has *fetched* rather than how obscure something is. Suppressing an entity that was only
-ever offered because it had been under-fetched is a judgement made on incomplete information, and
-nothing re-opens the question when ingest improves.
+**The limitation ADR 50 records was a limitation of the floor, and issues #117 and #118 moved it.**
+ADR 50 states that floor 12 sees only 16 of the 72 off-list suppressed entities while floor 5 sees
+all 72, so most of the owner's rejections were invisible to a default-floor run. The default has
+since come down to the second of those two floors (`Recommendations.MIN_CANDIDATE_DEGREE`, moved by
+ADR 45's 2026-08-29 amendment), so a default run is now the case that sees all 72. What does *not*
+go away is the reason the floor is awkward at all: in-graph degree partly measures what segue has
+*fetched* rather than how obscure something is, so
+suppressing an entity that was only ever offered because it had been under-fetched is still a
+judgement made on incomplete information, and nothing re-opens the question when ingest improves.
 
 ### The score, in one formula
 
@@ -1482,6 +1491,42 @@ it, which is the thing this feature exists to escape.
 Dividing by the candidate's degree rewards a small denominator, so a **degree floor is not
 optional** — `--min-degree`, defaulting to `Recommendations.MIN_CANDIDATE_DEGREE`. Without one the
 answer is whatever is thinnest.
+
+### Expanding a top candidate demotes it — "expand the top candidates" is an anti-pattern
+
+**Read this before running a batch of expansions, not after.** `lift` divides by the candidate's
+own degree, and `expand_entity` raises exactly that number. So expanding a candidate lowers its own
+score, and expanding the ones at the top of the list is the most reliable way to remove them from
+it. Measured on the real graph (issue #117): after a batch of expansions that included it, **the
+entity at rank 1 dropped out of the top 25 entirely**, and an entity that had *not* been expanded
+took its place.
+
+Nothing is broken. Two readings of that are both defensible, and
+[ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md)'s 2026-08-29 amendment records the
+decision between them along with the figures — the short version is that both readings are still
+live: the demotion may be the measurement improving, and it may be the ranking tracking ingest
+history rather than the world.
+
+Three practical consequences:
+
+- **A candidate's disappearance after an expansion is not the recommender changing its mind about
+  it.** It usually means the expansion worked.
+- **Expanding candidates does not grow the candidate pool either.** A node discovered by expansion
+  arrives with one edge, and the floor excludes it — deliberately, because a degree-1 candidate has
+  exactly one intermediate, so the only part of its score that is about the node itself is the
+  weight of that one edge. Lowering the floor did not change that and was not meant to; issue #134
+  holds the question of whether it should.
+- **There is no expansion this guide can tell you will move a candidate UP.** Expanding the
+  *intermediate* is the obvious next guess and the mechanism does not support it: each evidence term
+  is `weight / discount(degree of the intermediate)` (`Scorer`), so raising that intermediate's
+  degree makes every term already running through it *smaller*, and a `CONCEPT` intermediate taken
+  to `PathRanking.HUB_DEGREE` stops being evidence at all — 143 intermediates were excluded as hubs
+  in both runs behind ADR 45's 2026-08-29 amendment. Expanding a *known* entity does add
+  intermediates, and so terms, but its new edges also land on other nodes and raise their degrees,
+  candidates included. Neither was measured, so read that as mechanism rather than as advice.
+  Expanding a candidate is worth doing when the aim is to *know more about it* — just re-run
+  `recommend` afterwards expecting the list to move, rather than reading the new list as a verdict
+  on the old one.
 
 ### Edge type carries more of the signal than the arithmetic does
 
@@ -1601,11 +1646,12 @@ known set, so different entities fill the same slots. `RateCli`'s `--min-degree`
 `Recommendations.MIN_CANDIDATE_DEGREE` `recommend`'s does — by reference, not by a second copy of
 the number `RateRun` used to hold (issue #119) — so at those defaults the deck's candidates and
 `./gradlew recommend`'s agree, which is what ADR 46's issue-#101 review made true and this keeps
-true. Move it the same way `recommend --min-degree` does, to rate the floor-5 candidate list
-against the floor-12 one instead of only reading about the difference:
+true. Move it the same way `recommend --min-degree` does, to rate one floor's candidate list against
+another's instead of only reading about the difference — the method ADR 45 used and issues #117 and
+#118 re-used to move the default down:
 
 ```bash
-./gradlew rate --args="--known $HOME/known.csv --min-degree 5"
+./gradlew rate --args="--known $HOME/known.csv --min-degree 12"
 ```
 
 `--db` defaults to `SEGUE_DB` if it is set and

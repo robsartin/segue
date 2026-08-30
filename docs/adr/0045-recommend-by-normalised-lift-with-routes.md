@@ -464,3 +464,234 @@ exchange for a false impression that the content had gone.
 
 **What the rule changes going forward.** The same comparison would be published with the scores and
 the aggregate and without the names, or with invented ones beside a note that they are invented.
+
+**Amendment (2026-08-29, issues #117 and #118): the degree floor defaults to five, not twelve, and
+this ADR argued only the floor's benefit — the cost is recorded here beside it.**
+
+Nothing above is withdrawn, no decision above is edited, and the floor's *reason* is unchanged: a
+normalised score divides by the candidate's own degree, so without a floor the answer is whatever is
+smallest. What changes is the number, and what is added is the half of the trade this document never
+stated.
+
+`Recommendations.MIN_CANDIDATE_DEGREE` is the authority and it is now five. `--min-degree` remains
+the dial, exactly as this ADR made it, and both refusals below two are untouched — `RecommendCli`
+and `RateCli` each hold their own `LOWEST_USEFUL_FLOOR`. Both `recommend` and `rate` read the
+constant by reference, so the two tools still agree at their defaults.
+
+### Why five, measured
+
+**The section above says twelve "survived re-measurement", and the re-measurement it survived asked
+only whether the list looked famous.** Issue #118 asked a different question — whether the entities
+the floor *excludes* are obscure or merely unfetched — and ran the same known-list at three floors,
+which needed no code because the flag already existed. The floor-5 list was not the thin noise this
+ADR predicted; it was recognisable acts sitting at low degree because segue had not expanded them.
+
+The decisive evidence is not a ranking at all, it is a rating distribution. Issue #119 let the deck
+deal at a lower floor, and one 177-card pass at floor 5 produced **72 cards below neutral — 41%**,
+against **8 of 973 — 0.8%** across every rating that preceded it. [ADR 50](0050-suppress-a-candidate-you-have-rejected.md)
+carries that table and the pass's full distribution; it is repeated here in one line because it is
+the reason this decision goes the way it does. **A floor of twelve was costing the taste layer the
+only signal it had no other way of getting: disagreement.** Two things about that denominator, so
+that it is not read as more than it is. The 973 is every stored rating rather than a floor-12
+candidate list, and [ADR 48](0048-a-high-rating-counts-as-something-you-have.md) counts **167** of
+them on entities the known-list does not name — the nearest thing to a candidate population in that
+history — of which exactly **2** are below neutral. So the comparison the decision rests on is 72
+negatives in one lower-floor deck against 8, or against 2 on the narrower denominator. Nothing is
+claimed here about why any particular rating above the old floor was not a negative.
+
+ADR 50 also records the consequence in its own terms: floor 12 sees 16 of the 72 off-list suppressed
+entities and floor 5 sees all 72. Moving the default makes the default run the second of those.
+
+### What it did to the ranking, measured on the real graph
+
+Re-run before and after on a copy of the live database, same known-list, same taste layer
+(318,116 assertions replayed, 1,150 ratings, 967 known, 143 hub intermediates excluded in both
+runs). Aggregates only, per [ADR 51](0051-what-an-adr-may-quote.md) — a ranked list of names is the
+recommender's output over the owner's known-list, and this document has already published one it
+would not publish now.
+
+| | floor 12 | floor 5 |
+|---|---:|---:|
+| candidate pool | 1,011 | 1,604 |
+| top 25 unchanged | — | **7 of 25** |
+| entries that left / entered | — | 18 / 18 |
+| median degree of the top 25 | 27 | **6** |
+| median degree of the entries that left / entered | — | 26 / 5 |
+| top-25 entries sitting exactly on the floor | 1 | **11** |
+| top-25 entries whose distinct intermediates equal their degree | 1 | **12** |
+| median distinct intermediates in the top 25 | 8 | 5 |
+
+**This is not a small move and should not be reported as one.** Eighteen of twenty-five entries are
+different and the median degree of the list falls from 27 to 6. The seven survivors are **exactly
+the old list's top seven, in their old relative order** — ranks 8 to 25 all left — which is what a
+floor change must look like: lowering it only *adds* candidates, so no score changes and an existing
+entry can only be pushed down. Every survivor's score and degree is identical in the two runs, which
+was checked rather than assumed. The acceptance criterion on both issues was to re-run and record
+whether the top 25 moves. It moves almost entirely.
+
+### The cost, which this ADR records nowhere above
+
+**A lower floor admits entities whose thin connectivity may reflect what segue has fetched rather
+than the world, so more of the ranking is exposed to ingest state.** Fetch state is the *candidate*
+explanation for that and is not established as the actual one — the owner's retraction on issue #117
+withdrew the stronger version, and the correlation below is all that supports the weaker. That is
+issue #117's point, and taking this decision converts it from a defect deferred into a documented
+property of the tool.
+
+The measurement above says how much more exposed: **11 of the 25 sit exactly on the floor**, and
+**12 of the 25 have as many distinct intermediates as they have edges at all** — every edge they
+have is evidence being counted, which is another way of saying the graph knows nothing else about
+them. One expansion of any of those moves it, which is the anti-pattern below with more purchase on
+the default list than it had at twelve.
+
+Two things follow that a reader should not be spared. A run's ranking is now less reproducible
+across ingest states than it was, on top of being already irreproducible across rating states (the
+issue-#106 amendment's point). And a rejection recorded against a candidate that was only ever
+offered because it had been under-fetched is a judgement made on incomplete information — ADR 50
+states this, and lowering the floor makes more of the ratings that kind.
+
+### Six alternatives, each measured against this data, each rejected
+
+Seven shapes have now been measured; one — the floor at five — is the decision above. The other six
+lost, and the two structural results among them are worth more than any of the six.
+
+- **A denominator that is ingest-independent: Wikidata statement count instead of in-graph degree**
+  (issue #117's second option). Simulated over 250 candidates by recovering each numerator from the
+  published score and re-dividing. The median degree of the top 15 is **3 either way**, top-15
+  overlap is 3/15, and the alternative's top 15 has a median statement count *below* the pool
+  median. **The bias is relabelled, not removed:** dividing by degree surfaces the under-fetched,
+  dividing by statements surfaces the genuinely obscure. Rejected on being worse by the standard
+  that matters — whether the owner recognises the result.
+
+- **A floor of 2.** Pool 3,399 against floor 5's 1,604; median degree of the top 15 is 3 and the
+  minimum is 2. This is the configuration every later measurement uses as its example of the
+  thinnest thing winning. Rejected: it is the failure mode this ADR predicted, arriving two floors
+  lower than predicted.
+
+- **Additive smoothing — divide by `degree + K`** — so that the floor could come down while
+  smoothing did the anti-inflation job. Measured at K ∈ {1, 3, 5, 10, 12} across four floors, the
+  whole pool ranked rather than a head. At floor 2 the median degree of the top 15 is 3 (K = 1, 3,
+  5) or 4 (K = 10, 12) and the minimum is 2 at **every** K — the same number that rejected the
+  statement-count denominator. No K reproduces floor 5's useful property: 12 of that list's 15 sit
+  in the degree 5-11 band, and smoothing at floor 2 never puts more than 2 there, because raising K
+  jumps past the band rather than lifting into it.
+
+  **The first structural result, and it generalises past smoothing.** `degree/(degree + K)` is
+  monotonically increasing in degree, so smoothing is the floor's own preference applied softly
+  instead of as a cut. Raising K at a fixed floor walks the list toward the next floor up — at
+  floor 5 the top 15 overlaps the floor-5 baseline 15/15 at K = 0 and the floor-**12** baseline
+  10/15 by K = 12. **Any denominator monotone in degree is a dial on one axis**, and cannot
+  separate anti-inflation from worth-showing however it is tuned.
+
+- **Removing the floor altogether**, which smoothing at K ≤ 4 makes arithmetically possible. It does
+  admit degree-1 nodes to the top 15, and the result is unusable: at K = 1, **11 of the 15 rows
+  carry 5 distinct scores behind 5 intermediates** — a three-way and a five-way tie broken by QID.
+  Rejected on the mechanism, not the taste: see "what this does not fix" below.
+
+- **A corroboration threshold — a minimum count of distinct intermediates — as a second tier**, so
+  that degree could do anti-inflation while corroboration did worth-showing (issue #118's third
+  option, in its strongest form). Falsified, and by the cleanest of the six.
+
+  **The second structural result.** An intermediate is by definition adjacent to the candidate, so
+  `intermediates ≤ neighbours ≤ degree` — **0 violations in 9,273 candidates**, with
+  `intermediates == neighbours` in 73.4% of them and degree against distinct-neighbour count at
+  r = +0.998. **A corroboration threshold of *k* therefore entails a degree floor of *k*.** It is
+  the same axis with different numbers printed on it: `≥2` reproduces the floor-2 top 15 15/15,
+  including order; `≥5` reproduces floor 5's median degree (6) and minimum (5) at 10/15 overlap;
+  `≥7` reproduces floor 12's median (28) at 10/15. Spearman with degree is +0.79 pool-wide. Its one
+  real difference is one-sided — being a strict subset, it can only remove — and the swap it makes
+  inside floor 5's band is a different judgement rather than a better one.
+
+- **Distinct known entities reaching the candidate**, the honest steelman of the previous item and
+  the one quantity here that is genuinely *not* bounded by degree. It fails hardest. At every
+  threshold up to 20 the top 15 is degree-1 tie blocks, and the reacher counts *inside* each block
+  are identical — a degree-1 node shares its parent's reacher set exactly. **A quantity that is
+  constant within a tie block cannot break that tie in principle**, not merely in this data.
+
+**These six are not everything that was proposed.** Issue #117's third option — record expansion
+state per node and account for it in the score — was never measured, and it is the only shape
+offered on either issue that addresses the demotion directly rather than by changing what is
+divided. It is deferred rather than rejected; see the section below.
+
+The raw candidate lists behind all six name entities from the owner's graph and are retained outside
+this repository, as ADR 51 requires and as the issue-#115 amendment above does for the same reason.
+
+### What this does NOT fix, and it is #118's title
+
+**A newly discovered node still cannot become a candidate, and that is deliberate rather than
+deferred.** Expansion adds nodes at degree 1, and the floor excludes them at five as it did at
+twelve. The measurements above are the argument for keeping it that way: **every degree-1 candidate
+has exactly one intermediate — all 5,874 of them, by the `intermediates ≤ degree` bound at *d* = 1 —
+so its single edge is its whole evidence, and the only part of its score that is about the node
+itself is the weight of that one edge.** Everything else in it — which known entities reach the
+intermediate, what those hops are worth, the intermediate's own degree — is carried by the parent.
+
+**That is not a claim that such nodes score alike, and this amendment does not make one.**
+`CandidateSweep` multiplies the reacher's weight by the candidate's own hop, and
+`RecommendationWeights` gives that hop four tiers and a direction multiplier, so two degree-1 nodes
+on one intermediate whose edges differ in tier or direction get different scores. What was
+*measured* is the tie blocks, not their inevitability: the no-floor run above put 11 of its top 15
+rows behind only 5 distinct scores, and the three-way and five-way ties inside them were broken by
+QID. Admitting degree-1 nodes puts blocks of that shape into the head of the ranking, and since one
+expansion can add hundreds of such nodes at once, part of what would surface is ordered by *which
+entity was expanded last*.
+
+So issue #118's floor question is answered here and its title complaint is not. Any remedy for the
+title has to give a newly discovered node something of its own to be scored on, which means fetching
+a second edge for it rather than re-weighting the first, or abandoning per-candidate normalisation
+altogether. Neither is decided here; **issue #134 carries it.**
+
+### The mechanism above is qualified, not overturned
+
+This ADR's argument for lift is that dividing by the candidate's own degree escapes fame. That
+argument survives, but more weakly than the text above claims, and the qualification belongs on the
+record because it is what a future change would reason from.
+
+Measured on a seeded random sample of 400 nodes at degree ≥ 2 — the population the floor acts on —
+using Wikidata's own `wikibase:statements` and `wikibase:sitelinks`: **in-graph degree against
+notability is pearson +0.26 / spearman +0.30 for statements, and +0.27 / +0.28 for sitelinks**, with
+the two external measures agreeing with each other at +0.87 as the check that the query worked. An
+earlier figure on this question was withdrawn on the issues as a selection artefact — it had been
+sampled from lift-ranked top-25 lists, which is selection on the very quantity being measured — and
+nothing here rests on it.
+
+So dividing by degree **does** partially divide by fame. It also divides by something else, and that
+something else is the larger part: **roughly 92% of degree's variance is not notability**, and the
+median in-graph degree of those nodes is 2 against a median 34 Wikidata statements about the same
+nodes. The typical candidate is barely fetched relative to what is knowable about it, and the floor
+is therefore acting on both quantities at once. That is the whole of the cost recorded above,
+expressed as a correlation instead of as a list.
+
+### What this amendment leaves open, and where each piece is recorded
+
+Issues #117 and #118 close on this decision, so the three questions they do not answer are filed
+separately rather than closed with them. **None is rejected here; each is undecided.**
+
+- **[#133](https://github.com/robsartin/segue/issues/133) — record expansion state and account for
+  it.** Issue #117's third option, and the only one of its three that is neither taken nor measured.
+  Every remedy above normalises by *how big the candidate is*; this one would distinguish "thin
+  because unfetched" from "thin in the world", which is the conflation the whole cost section is
+  about. #117's own comment calls it untested and the only remaining shape that addresses the
+  demotion directly.
+- **[#134](https://github.com/robsartin/segue/issues/134) — a newly discovered node still cannot
+  become a candidate.** Issue #118's title, which the section above answers with a deliberate "not
+  here". The remedies named there — fetch a second edge, or abandon per-candidate normalisation —
+  are undecided, and so is a third the section does not consider: surface such nodes somewhere other
+  than the ranked list.
+- **[#135](https://github.com/robsartin/segue/issues/135) — the floor drifts as the graph grows.**
+  This amendment chose five by running two floors on today's graph, which is the same method ADR 45
+  used to choose twelve on a smaller one. Nothing says what would make five wrong later, and 11 of
+  the top 25 sit exactly on it, so the head of the list is what moves first.
+
+### Consequences of this amendment
+
+- **The default list is a different population**, not a longer one: the deck and `recommend` both
+  deal recognisable-but-thinly-fetched entities where they dealt well-connected ones.
+- **`--min-degree 12` reproduces the old behaviour exactly**, and is the way to read the two lists
+  side by side — the method this ADR recommends for exactly this question.
+- **The anti-pattern in the developer guide matters more now.** Expanding a top candidate raises its
+  own denominator and demotes it; at a floor of five, eleven of the top twenty-five are one
+  expansion away from moving.
+- **Nothing about the scorer changed.** The floor filters candidates and nothing else: every entry
+  common to the two runs above carries an identical score and degree, and the same independence was
+  checked pool-wide, across 3,399 candidates, while measuring the alternatives.
