@@ -22,7 +22,7 @@ than a seventh MCP tool.
 ./gradlew check           # format, tests, coverage, arch rules — the full CI gate
 ./gradlew test            # tests only
 ./gradlew spotlessApply   # fix formatting
-./gradlew liveTest        # tagged live tests against the real Wikidata API; excluded from check
+./gradlew liveTest        # tagged live tests against the real Wikidata and MusicBrainz APIs; excluded from check
 ./gradlew resolveNames --args="--list $HOME/names.csv"   # bulk name→QID (ADR 40); needs network
 ./gradlew exportGraph --args="--view neighbourhood --qid Q42 --out $HOME/one.graphml"  # ADR 41; read-only; the --out extension picks the format
 ./gradlew listRatings --args="--sort recent --out $HOME/ratings.txt"   # ADR 43; read-only; the OUTPUT IS PERSONAL DATA
@@ -83,6 +83,9 @@ sqlite/   SqliteAssertionLog — the append-only log persisted to one file (ADR 
           — and SqliteAffinityStore, the taste layer's own table in that same
           file (ADR 33, ADR 39).
 wikidata/ The first source: resolution and expansion. Plain Java, no Spring.
+musicbrainz/ The second source (ADR 54): client, adapter, and MusicBrainzIdentity —
+          the MBID→QID seam it declares and may NOT implement, since an adapter may
+          not import another adapter. Expansion only, no EntityResolver. Plain Java.
 seed/     The bulk seeding tool (ADR 40): a name list to name→QID, run as
           `./gradlew resolveNames`. Dev-side, plain Java, resolves and reports —
           it never opens a store and is deliberately NOT an MCP tool.
@@ -143,8 +146,10 @@ mcp/      The six MCP tools (EntityTools, GraphTools, TasteTools), SegueService
           (the facade they call), CorrelationId. Spring-only package (ADR 32) —
           annotated with the starter's @McpTool, but plain enough to unit test.
 app/      SegueApplication, SegueConfiguration (all wiring lives here),
-          SegueProperties, application.yaml. The other Spring-only package;
-          owns the stdio/HTTP transport profiles.
+          SegueProperties, application.yaml, and WikidataMusicBrainzIdentity — the
+          P434 bridge implementing musicbrainz's seam, here because ADR 32 lets only
+          app see two adapters at once. The other Spring-only package; owns the
+          stdio/HTTP transport profiles.
 ```
 
 Tests mirror this, plus `fixture/` (the Nick Cave neighbourhood, test-only) and
@@ -295,10 +300,12 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   `LIMIT`, so a bounded CONCEPT expansion never fetches past it rather than fetching 500 and
   discarding; a bitten ceiling arrives as `partial` naming the effective bound, through the same
   OBSERVED `truncated` comparison `findPaths` uses (issue #65). **The refusal is deliberately NOT at
-  `SourceAdapter.supports`** — `WikidataSourceAdapter.supports` returns `true` unconditionally and
-  is the only implementation in `src/main`, so declining CONCEPT there would leave the adapter loop
-  with nothing to run and report a successful expansion that added nothing: a silent zero, not a
-  reason. **It bounds one call**: ten calls still add ten times the ceiling, and that is a separate
+  `SourceAdapter.supports`** — `WikidataSourceAdapter.supports` returns `true` unconditionally, so
+  declining CONCEPT there would leave the adapter loop with nothing to run and report a successful
+  expansion that added nothing: a silent zero, not a reason. **That is still true with a second
+  adapter wired** (ADR 54), and for a sharper reason: `MusicBrainzSourceAdapter.supports` answers
+  only for PERSON and GROUP, so no adapter in `src/main` offers to expand a CONCEPT anyway. This
+  bullet used to say Wikidata's was the only implementation; it is not, since #91. **It bounds one call**: ten calls still add ten times the ceiling, and that is a separate
   issue rather than a reason to lower the number. 25 is a judgement informed by a distribution —
   measured on the real graph, 99.9% of CONCEPTs sit below it — not a measurement of the right
   ceiling. **That distribution is ACCUMULATED DEGREE, not expansion yield**, and the two diverge at

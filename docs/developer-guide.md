@@ -368,10 +368,11 @@ view, and ADR 44 a fourth rather than a mode of one of them.
 | `jena` | The RDF reference adapter, kept working as a cross-check. | `port`, `domain` |
 | `sqlite` | `SqliteAssertionLog` and `SqliteAffinityStore` — two tables in one file, two connections. | `port`, `domain` |
 | `wikidata` | The first source: resolution, expansion, and the two mapping passes. Plain Java, no Spring. | `port`, `domain` |
+| `musicbrainz` | The second source ([ADR 54](adr/0054-musicbrainz-as-the-second-source.md)): `MusicBrainzClient` over `ws/2`, `MusicBrainzSourceAdapter`, and `MusicBrainzIdentity` — the MBID-to-QID seam it declares and may not implement, because an adapter may not import another adapter. Expansion only; no `EntityResolver`. Plain Java, no Spring. | `port`, `domain` |
 | `ingest` | `IngestService` (the only write path) and `GraphProjector` (boot replay). | `port`, `domain`, `wikidata` (`KindMapper` only, [ADR 42](adr/0042-store-p31-and-rederive-kind.md)) |
 | `support` | Cross-cutting plain-Java helpers with no project dependencies — `UuidV7` (request correlation), `QidList` (the QID-file reader `export`, `recommend` and `rate` share), and `ClassLabels` (the offline `P31` label table `export` and `rate` share; it moved here from `export` when `rate` needed it). | nothing |
 | `mcp` | The tool classes, `SegueService`, the view records, `CorrelationId`. Spring-aware. | `ingest`, `port`, `domain`, `support` |
-| `app` | Entry point, all bean wiring, `application.yaml`, transport profiles. Spring-aware. | everything it wires |
+| `app` | Entry point, all bean wiring, `application.yaml`, transport profiles, and `WikidataMusicBrainzIdentity` — the P434 bridge that implements `musicbrainz`'s identity seam, placed here because it is the only package ADR 32 lets see two adapters at once. Spring-aware. | everything it wires |
 | `seed` | The bulk seeding tool ([ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)): a name list to `name → QID`, run as `./gradlew resolveNames`. Plain Java, never opens a store. | `port`, `domain`, `wikidata` |
 | `export` | The graph exporter ([ADR 41](adr/0041-graph-exporter-views-and-formats.md)): `ViewSelector` and the two writers, run as `./gradlew exportGraph`. Plain Java, read-only. | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `support` |
 | `ratings` | The taste-layer reader ([ADR 43](adr/0043-listing-your-own-ratings.md)): every rating with its label, note and `updated_at`, run as `./gradlew listRatings`. Plain Java, read-only, offline. | `port`, `domain`, `sqlite` |
@@ -851,10 +852,19 @@ public final class SimilaritySourceAdapter implements SourceAdapter {
 
 What you have to do, and in what order:
 
-1. **New package under `com.robsartin.segue`.** Adapters are siblings; it must not import `tinker`,
-   `jena`, `sqlite` or `wikidata`, and it must not import `ingest`, `mcp` or `app`. ArchUnit's
-   `adaptersDoNotDependUpward` covers the second half; extend the sibling rules to name your package
-   for the first.
+1. **New package under `com.robsartin.segue`, and then go and find the fences it did not
+   inherit.** Adapters are siblings; it must not import `tinker`, `jena`, `sqlite`, `wikidata` or
+   `musicbrainz`, and it must not import `ingest`, `mcp` or `app`. **Extending the sibling rules is
+   not the whole of it, and this step used to say it was.** Several rules in `ArchitectureTest` name
+   adapter packages as literal strings, so a package they have never heard of is simply outside
+   their subject or their object list — no compile error, no red test, nothing said. Adding
+   MusicBrainz took eight rule changes for that reason, one of them
+   `theWorldFactLayerNeverTouchesAffinity`, which is [ADR 33](adr/0033-taste-layer-separation.md)'s
+   privacy fence in a public repository. Read every rule that names an adapter package as a literal
+   and decide, one at a time, whether yours belongs in it —
+   [ADR 54](adr/0054-musicbrainz-as-the-second-source.md) records what that cost last time, and
+   `ArchitectureTest` is the authority on what the rules currently say. **Then watch each rule you
+   write or widen go red** against a scratch class that violates it, before relying on it.
 2. **Plain Java, no Spring.** `springOnlyInAppAndMcp` fails the build otherwise, and the point is
    that the adapter is testable with no application context.
 3. **Emit `AssertionRecord`, never `EdgeRecord`, and never touch a store.** `IngestService` is the
@@ -872,7 +882,13 @@ What you have to do, and in what order:
    duplicate-edge bug. See [ADR 38](adr/0038-award-received-as-the-first-non-collaboration-edge.md)
    for the standard a new property is held to, and the questions it deliberately leaves open.
 
-Nothing in the graph layer changes. That is the design rule the split exists to keep.
+Nothing in the graph layer changes. That is the design rule the split exists to keep, and since
+[ADR 54](adr/0054-musicbrainz-as-the-second-source.md) it is a measurement rather than an intention:
+a second production source landed with no change to `domain`, `port`, `tinker`, `jena` or `ingest`,
+and none to `mcp/SegueService` either. **What that ADR also records is everything the rule does not
+cover** — the architecture fences above, an HTTP client of your own, an identity bridge that may not
+live in your package, and a `maxNewEdges` that `SegueService` now shares between adapters and spends
+in the order `SegueConfiguration.sourceAdapters` lists them.
 
 ## The testing strategy
 
