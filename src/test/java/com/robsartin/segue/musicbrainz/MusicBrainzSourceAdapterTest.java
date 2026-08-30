@@ -35,9 +35,17 @@ class MusicBrainzSourceAdapterTest {
    * The same committed fixture {@code MusicBrainzClientTest} reads, and the same entity: Quintette
    * du Hot Club de France, mbid {@code ee55e4e8-…}, a French jazz ensemble that stopped existing in
    * 1948. Its choice is argued in {@code MusicBrainzClientTest}'s javadoc and is a reproducible API
-   * probe, never a statement about anyone's taste (ADR 51). Every QID below is invented — the
-   * {@code Q9000xx} range this repository's tests use — because a real QID would tie an invented
-   * mapping to a real entity.
+   * probe, never a statement about anyone's taste (ADR 51).
+   *
+   * <p><b>The QIDs below are arbitrary, not invented.</b> They come from the {@code Q9000xx} range
+   * this repository's tests use by convention, and that range is not free: every {@code Q9000xx}
+   * anyone has checked resolves to a real Wikidata entity, so the mappings asserted here do tie a
+   * real MBID to an unrelated real QID. Nothing may be read out of any of them — they are
+   * well-formed ids picked for the convention, and no assertion below depends on what one denotes.
+   * {@code CLAUDE.md} states repo-wide that the range holds placeholders which are not real
+   * Wikidata ids; that sentence is false, predates this branch, and belongs to <a
+   * href="https://github.com/robsartin/segue/issues/141">issue #141</a> rather than being half
+   * repaired here.
    */
   private static final String QUINTET_MBID = "ee55e4e8-807d-49b1-8470-d1c0898ed7cb";
 
