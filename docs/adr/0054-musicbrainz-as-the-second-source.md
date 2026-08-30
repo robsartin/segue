@@ -289,11 +289,33 @@ covers the bridge alone; the gap between them is uncovered.
 - **What this does not settle.** The two unbuilt adapters are unbuilt, and Open Library's obstacle is
   #92's question rather than the SPI's. **ADR 22 clause 3 is untouched**, deliberately: MusicBrainz
   was chosen partly for not forcing it, so this ADR is no evidence at all about whether the
-  vocabulary rule survives a source that does. GAP 3 and GAP 4 are established and not fixed. And
-  the design note owes ADR 53 a dated amendment — ADR 53 concludes that reaching restaurants
-  "requires a different source, which is #91's territory", and the OSM argument above says a
-  different source does not fix it, because the obstacle is the identity spine and the vocabulary.
-  That amendment is named here and not written here.
+  vocabulary rule survives a source that does. GAP 3 and GAP 4 are established and not fixed.
+- **ADR 53 owes a dated amendment, and it has four things to cover rather than one.** ADR 1 makes
+  that ADR immutable, so nothing in it is edited; this list exists so whoever writes the amendment
+  does not have to rediscover it. Each was checked at the merge-base and at this branch's head.
+  - **Its implementor enumeration is falsified in two of its three counts.** It reads *"In
+    `src/main` there is exactly one `SourceAdapter` (`WikidataSourceAdapter`) and one
+    `EntityResolver` (`WikidataEntityResolver`) … The seven test doubles in `src/test` — two
+    adapters and five resolvers"*. `src/main` now holds **two** `SourceAdapter`s, and `src/test`
+    holds **eight** doubles — two adapters and **six** resolvers, the sixth being
+    `CorroborationAcrossSourcesTest`'s `AlwaysResolves`. The two counts that still hold are the one
+    `EntityResolver` in `src/main` and the two adapters in `src/test`.
+  - **"The only source that exists" is stated twice and is no longer true** — once where the ADR
+    explains why it needed writing, and once in its "what remains open" entry for #91. What the
+    clause was *supporting* in both places is untouched: no second source reaches restaurants, and
+    this ADR is the reason why.
+  - **Its restaurants conclusion is contested rather than falsified, and the difference matters.**
+    ADR 53 says reaching that domain *"requires a different source, which is #91's territory"*. The
+    OSM alternative above argues a different source does **not** fix it, because the obstacle is the
+    identity spine and the vocabulary rather than the source. That is an argument against a
+    conclusion, not a count that moved, and an amendment should say so in those terms.
+  - **Its prediction about ADR 42's seam did not happen**, which is the weakest of the four and is
+    included because it is a claim about this very issue: *"ADR 42's seam is the first thing it will
+    press on."* `KindMapper` did not move and needed no change — MusicBrainz states no Wikidata
+    classes, so `KindMapper.rederive` returns a no-classes claim untouched, and `musicbrainz` names
+    that class in javadoc while importing nothing from `wikidata`. The first thing #91 actually
+    pressed on was the architecture fences. The prediction was reasonable and the seam is still the
+    one a class-stating source would move; it simply was not this source.
 - **Nothing in `./gradlew check` needs the network**, and nothing in it reads `~/.segue/segue.db`.
   The two new live tests are `@Tag("live")` and excluded; the probe above was run as a scratch
   `liveTest` and left nothing behind.
