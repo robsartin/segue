@@ -30,12 +30,23 @@ import java.util.Optional;
  */
 public interface MusicBrainzIdentity {
 
-  /** The MBID for a seed QID, or empty if this source has no bridge for it. */
+  /**
+   * The MBID for a seed QID, or empty if this source has no bridge for it.
+   *
+   * <p><b>An implementation is not taken at its word.</b> {@code MusicBrainzSourceAdapter} checks
+   * the shape of whatever comes back and reads anything that is not an MBID as the empty answer —
+   * see its class note for what that guard protects and why it may not depend on knowing which
+   * implementation is behind this seam (issue #147). Returning a malformed value is therefore a way
+   * to lose an expansion silently, not a way to break one.
+   */
   Optional<String> mbidFor(String qid);
 
   /**
    * The QID for each MBID in {@code mbids} that this source can bridge. An MBID absent from the
    * result carries no QID — silently dropped, not reported as an error.
+   *
+   * <p>The values are not taken at their word either: a value that is not a QID is dropped by the
+   * adapter's GAP 9 guard, for the reason that guard states.
    *
    * <p><b>That dropping is ADR 22 clause 2 working as designed, not a gap.</b> Measured over
    * artist-relation neighbours, 49% (190 of 387) carry no QID at all, and a 30-entity sample of

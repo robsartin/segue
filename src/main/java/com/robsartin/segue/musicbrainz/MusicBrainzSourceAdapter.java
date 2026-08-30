@@ -113,6 +113,34 @@ import java.util.regex.Pattern;
  *
  * <p><b>Failures degrade rather than propagate</b>, as {@link SourceAdapter#expand} requires: an
  * unreachable MusicBrainz yields a flagged empty result, not a thrown error.
+ *
+ * <p><b>Every string this adapter puts in a {@link Provenance} is guarded, and this is where each
+ * one is guarded</b> (<a href="https://github.com/robsartin/segue/issues/147">issue #147</a>).
+ * {@code Provenance}'s compact constructor throws on a tab or a newline in {@code sourceId} or
+ * {@code sourceRef}, and that {@code IllegalArgumentException} would escape {@link #expand} —
+ * {@code SegueService.expandEntity} has no {@code try} around {@code adapter.expand} — so one
+ * malformed character would abort a whole expansion, across every adapter, instead of costing this
+ * one its result. Its four components, all of them:
+ *
+ * <ul>
+ *   <li>{@code sourceId} is {@link #SOURCE_ID}, a literal in this file.
+ *   <li>{@code assertedAt} is an {@code Instant} from the injected {@link Clock} and {@code
+ *       confidence} is the literal {@code 0.80}; neither is a string and neither can carry a
+ *       separator.
+ *   <li>{@code sourceRef} is built from three strings and every one of them arrives from outside:
+ *       the seed's MBID, the relation type, and the neighbour's MBID. The relation type is guarded
+ *       by {@link #BY_RELATION_TYPE} — only a key of that map reaches {@link #toAssertion}, and its
+ *       keys are literals here. Both MBIDs are guarded by {@link #MBID}: the seed's in {@link
+ *       #expand}, before anything is fetched, and the neighbour's in {@link #isMappable}, before
+ *       the bound is spent.
+ * </ul>
+ *
+ * <p><b>None of that rests on which bridge is wired, and that is the point of saying it here.</b>
+ * The {@code targetQid} guard in {@link #expand} argues that {@link MusicBrainzIdentity} is an
+ * interface this package neither implements nor constrains, so malformed input arrives from outside
+ * whatever is behind the seam. Both MBIDs were exposed to exactly that argument and neither was
+ * checked; what kept them safe was {@code WikidataMusicBrainzIdentity} validating UUIDs in both
+ * directions — the one dependency that argument disclaims.
  */
 public final class MusicBrainzSourceAdapter implements SourceAdapter {
 
@@ -145,6 +173,23 @@ public final class MusicBrainzSourceAdapter implements SourceAdapter {
    */
   private static final Pattern DAY_PRECISION = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
 
+  /**
+   * What a MusicBrainz identifier looks like. MBIDs are UUIDs: all 24 {@code artist.id} values in
+   * each committed fixture are UUID-shaped, and {@code WikidataMusicBrainzIdentity} already refuses
+   * anything else in both directions of the shipped bridge. So this rejects nothing MusicBrainz has
+   * been seen to send. It is a shape check and not an existence check, exactly like {@link
+   * Qid#looksLikeAQid}: whether MusicBrainz holds that artist is answered by fetching it.
+   *
+   * <p><b>Spelled here rather than shared with that class</b>, which holds the identical pattern.
+   * {@code app} depends on {@code musicbrainz} and not the other way round (ADR 32), so there is no
+   * direction in which the two could share one constant without one of them importing upward.
+   * {@link Qid}'s own javadoc records the same duplication for the packages that spell the QID
+   * regex themselves, with the same reason: this is validating arriving external input at the point
+   * it arrives, not enforcing a domain type's invariant.
+   */
+  private static final Pattern MBID =
+      Pattern.compile("[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}");
+
   private final MusicBrainzClient client;
   private final MusicBrainzIdentity identity;
   private final Clock clock;
@@ -175,16 +220,23 @@ public final class MusicBrainzSourceAdapter implements SourceAdapter {
     Objects.requireNonNull(seed, "seed");
     Objects.requireNonNull(ctx, "ctx");
 
-    Optional<String> mbid = identity.mbidFor(seed.qid());
-    if (mbid.isEmpty()) {
-      // MusicBrainz has no record bridged to this QID. Not a failure and not a shortfall: there
-      // is nothing to fetch, so flagging either boolean would report a problem that is not one.
+    Optional<String> bridged = identity.mbidFor(seed.qid());
+    if (bridged.isEmpty() || !looksLikeAnMbid(bridged.get())) {
+      // Two cases, one answer. Either MusicBrainz has no record bridged to this QID, or the bridge
+      // answered with something that is not an MBID — which cannot name a MusicBrainz record and,
+      // if it carried a tab or a newline, would take the whole expansion down from inside
+      // Provenance's constructor (issue #147). Refusing it here also spends no request on a URL
+      // that could not have resolved, against a source that asks for one a second.
+      //
+      // Neither is a failure and neither is a shortfall: there is nothing to fetch, so flagging
+      // either boolean would report a problem that is not one.
       return ExpandResult.of(List.of());
     }
+    String seedMbid = bridged.get();
 
     List<ArtistRelation> relations;
     try {
-      relations = client.artistRelations(mbid.get());
+      relations = client.artistRelations(seedMbid);
     } catch (MusicBrainzUnavailableException e) {
       // Swallowed rather than thrown, exactly as WikidataSourceAdapter swallows its own: the
       // eventual caller is a language model, and sourceUnavailable is what lets the tool layer
@@ -221,23 +273,39 @@ public final class MusicBrainzSourceAdapter implements SourceAdapter {
         // it is reading QIDs out of somebody's database — Wikidata's P434 in the shipped wiring,
         // an external-id whose values are contributor-entered. Malformed input arrives from
         // outside either way, which is why the guard does not depend on which bridge is wired.
+        //
+        // It is one of three such guards rather than the only one, which is what issue #147 was:
+        // the class note enumerates what reaches Provenance and says where each part is checked.
         continue;
       }
-      assertions.add(toAssertion(seed.qid(), mbid.get(), relation, targetQid, assertedAt));
+      assertions.add(toAssertion(seed.qid(), seedMbid, relation, targetQid, assertedAt));
     }
     return new ExpandResult(List.copyOf(assertions), false, truncated);
   }
 
   /**
-   * Whether this relation can become an edge from what MusicBrainz sent — a whitelisted type AND a
-   * direction that says which way it runs. Both are asked here, before {@code maxNewEdges} is
-   * applied, so that a relation which could never become an edge cannot spend a slot a real one
-   * could have had.
+   * Whether this relation can become an edge from what MusicBrainz sent — a whitelisted type, a
+   * direction that says which way it runs, and a target MBID that can be cited. All three are asked
+   * here, before {@code maxNewEdges} is applied, so that a relation which could never become an
+   * edge cannot spend a slot a real one could have had.
+   *
+   * <p>The MBID is the third of those and the newest (issue #147). {@code
+   * MusicBrainzClient.parseRelations} already drops a relation whose {@code artist.id} is absent or
+   * blank, which is not the same question: a present, non-blank id that is not an MBID goes into
+   * {@code sourceRef}, and a tab or a newline in it throws out of {@link Provenance}'s constructor
+   * and past {@link #expand}. Asking it here rather than at the assertion also keeps the bound
+   * honest, and costs the bridge nothing — an unciteable neighbour is never even asked about.
    */
   private static boolean isMappable(ArtistRelation relation) {
     return relation.type() != null
         && BY_RELATION_TYPE.containsKey(relation.type())
-        && (FORWARD.equals(relation.direction()) || BACKWARD.equals(relation.direction()));
+        && (FORWARD.equals(relation.direction()) || BACKWARD.equals(relation.direction()))
+        && looksLikeAnMbid(relation.targetMbid());
+  }
+
+  /** Whether this string is an MBID, for the two callers that check rather than refuse. */
+  private static boolean looksLikeAnMbid(String mbid) {
+    return mbid != null && MBID.matcher(mbid).matches();
   }
 
   private static AssertionRecord toAssertion(
