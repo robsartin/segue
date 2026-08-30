@@ -100,8 +100,15 @@ public final class MusicBrainzClient {
 
   /**
    * Package-private: a real-HTTP client with an injectable clock, so a test can drive {@link
-   * #throttle()}'s wiring to {@link #fetch} deterministically rather than only its pure {@link
+   * #reserve}'s wiring to {@link #fetch} deterministically rather than only its pure {@link
    * #throttleDelay} calculation.
+   *
+   * <p><b>A fixed clock no longer means a fixed wait.</b> {@code throttle()} recomputed a remainder
+   * from the last request each time, so a {@code Clock.fixed} produced the same one-second wait on
+   * every attempt. {@link #reserve} claims a slot rather than measuring backwards, so under a fixed
+   * clock each claim sits a second further into the future than the last and the waits grow — 0s,
+   * 1s, 2s, 3s. Nothing in the repository injects a non-system clock today, so nothing depends on
+   * either behaviour; a test that wants an even pace wants an advancing clock, not a fixed one.
    */
   MusicBrainzClient(URI baseUri, Clock clock) {
     this(Objects.requireNonNull(baseUri, "baseUri"), null, Objects.requireNonNull(clock, "clock"));
@@ -324,16 +331,44 @@ public final class MusicBrainzClient {
     return a.compareTo(b) <= 0 ? a : b;
   }
 
+  /**
+   * How many whole milliseconds to sleep to cover {@code delay}, rounded up.
+   *
+   * <p><b>Up, because {@code Duration.toMillis()} truncates.</b> {@code sleep} used to pass it
+   * straight to {@code Thread.sleep}, so a 999.5ms remainder became a 999ms wait and the request
+   * left half a millisecond inside {@link #MIN_REQUEST_INTERVAL}. The concurrency test's first run
+   * measured exactly that — a gap of 0.999339625s where a second was owed — on the one path in it
+   * that had no concurrency at all.
+   *
+   * <p><b>A pure static so that rounding has a test</b>, for the reason {@link #throttleDelay} and
+   * {@link #retryDelay} are pure statics. Fix round 1's reviewer put {@code
+   * Thread.sleep(delay.toMillis())} back into an otherwise-identical tree and the whole suite
+   * stayed green: the concurrency test's floor allows 100ms and could not see a 0.5ms shortfall,
+   * and no other test reaches {@code sleep} at all.
+   */
+  static long waitMillis(Duration delay) {
+    // Ceiling, without leaving Duration: adding a nanosecond under a millisecond carries any
+    // non-zero remainder into the next whole millisecond and leaves an exact one alone.
+    return delay.plusNanos(999_999L).toMillis();
+  }
+
+  /**
+   * Waits out {@code delay}, or returns at once if there is nothing to wait for.
+   *
+   * <p><b>What is verified, and what is not.</b> {@link #waitMillis} rounds up and {@code
+   * waitMillisRoundsUpRatherThanTruncating} asserts that directly, including the 999.5ms case that
+   * produced the measured shortfall. What no test in this repository can see is this method ceasing
+   * to call it — a sub-millisecond error is three orders of magnitude below the only end-to-end
+   * floor available, and an assertion tight enough to catch it would flake on scheduling jitter
+   * long before it caught anything. That gap is stated here rather than left to be inferred;
+   * closing it would need a clock seam around the sleep itself.
+   */
   private static void sleep(Duration delay) {
     if (delay.isZero() || delay.isNegative()) {
       return;
     }
     try {
-      // Thread.sleep(Duration), not Thread.sleep(delay.toMillis()): toMillis() truncates, so a
-      // 999.5ms remainder became a 999ms wait and the request left half a millisecond inside the
-      // interval. The first run of the concurrency test measured exactly that — a 0.999339625s gap
-      // where 1s was owed — on the one path that had no concurrency in it at all.
-      Thread.sleep(delay);
+      Thread.sleep(waitMillis(delay));
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new MusicBrainzUnavailableException("interrupted while waiting", e);

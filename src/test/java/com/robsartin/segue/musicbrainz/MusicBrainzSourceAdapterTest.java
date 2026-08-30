@@ -384,9 +384,58 @@ class MusicBrainzSourceAdapterTest {
     assertThat(result.assertions()).hasSize(1);
     assertThat(result.assertions().getFirst().fromQid()).isEqualTo(STUB_MEMBER_QID);
     assertThat(result.sourceUnavailable()).isFalse();
-    // A relation that could never be cited is dropped before the bound is applied, for the reason
-    // isMappable already drops an undirected one: it must not spend a slot a real relation could
-    // have had. So one of two relations survives and nothing was cut short.
+    // Two relations under a bound of 200, so this says only that nothing was cut short — it is not
+    // evidence about WHERE the guard sits. The test below is, and this one deliberately does not
+    // claim it.
+    assertThat(result.truncated()).isFalse();
+  }
+
+  @Test
+  @DisplayName("should spend neither the bound nor a bridge lookup on an uncitable relation")
+  void shouldSpendNeitherTheBoundNorABridgeLookupOnAnUncitableRelation(@TempDir Path dir)
+      throws IOException {
+    // Where the neighbour-MBID guard sits is argued twice in the adapter's javadoc — "before the
+    // bound is spent", and "costs the bridge nothing — an unciteable neighbour is never even asked
+    // about" — and until this test nothing held it to either claim. Fix round 1's reviewer proved
+    // that by moving the guard out of isMappable into the loop after limit(maxNewEdges) and after
+    // the bridge lookup: every other test in this file stayed green.
+    //
+    // A bound of 1 with the uncitable relation stated FIRST is what separates the two placements.
+    // In isMappable it never enters the bounded list, so the bound buys the citable relation and
+    // the bridge is asked about that one. After the bound it wins the only slot, the bridge is
+    // asked about a string that cannot be an MBID, truncated goes true and no assertion survives.
+    Path written =
+        writeRelations(
+            dir,
+            """
+            {"type": "member of band", "direction": "backward",
+             "artist": {"id": "%s", "name": "A Stub Musician"}}
+            """
+                .formatted(NEWLINE_MBID_AS_JSON),
+            """
+            {"type": "member of band", "direction": "backward",
+             "artist": {"id": "%s", "name": "Another Stub Musician"}}
+            """
+                .formatted(STUB_MEMBER_MBID));
+    RecordingIdentity identity =
+        new RecordingIdentity(
+            StubIdentity.of(
+                mapping(
+                    QUINTET_MBID, QUINTET_QID,
+                    NEWLINE_MBID, OTHER_STUB_MEMBER_QID,
+                    STUB_MEMBER_MBID, STUB_MEMBER_QID)));
+    MusicBrainzSourceAdapter adapter =
+        new MusicBrainzSourceAdapter(MusicBrainzClient.readingFrom(written), identity, CLOCK);
+
+    ExpandResult result = adapter.expand(quintet(), new ExpandContext(1));
+
+    // The bridge is asked about the citable neighbour and never about the other one.
+    // containsExactly
+    // rather than a size: the whole point is WHICH mbid was asked about.
+    assertThat(identity.asked).containsExactly(STUB_MEMBER_MBID);
+    assertThat(result.assertions()).hasSize(1);
+    assertThat(result.assertions().getFirst().fromQid()).isEqualTo(STUB_MEMBER_QID);
+    // The bound bought a real relation, so one of the two mappable relations is all there was.
     assertThat(result.truncated()).isFalse();
   }
 

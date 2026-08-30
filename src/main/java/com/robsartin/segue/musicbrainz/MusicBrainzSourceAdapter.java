@@ -181,11 +181,14 @@ public final class MusicBrainzSourceAdapter implements SourceAdapter {
    * Qid#looksLikeAQid}: whether MusicBrainz holds that artist is answered by fetching it.
    *
    * <p><b>Spelled here rather than shared with that class</b>, which holds the identical pattern.
-   * {@code app} depends on {@code musicbrainz} and not the other way round (ADR 32), so there is no
-   * direction in which the two could share one constant without one of them importing upward.
-   * {@link Qid}'s own javadoc records the same duplication for the packages that spell the QID
-   * regex themselves, with the same reason: this is validating arriving external input at the point
-   * it arrives, not enforcing a domain type's invariant.
+   * Neither could import the other's copy: {@code app} depends on {@code musicbrainz} and not the
+   * other way round (ADR 32). The third place both can already see is {@code domain}, where {@link
+   * Qid} lives — and that is the one package an MBID may not be defined in. ADR 22 clause 2 says
+   * source-local identifiers, naming MBIDs explicitly, resolve to a QID in the ingest layer and
+   * never appear in the domain; a shared MBID constant there would be exactly the appearance it
+   * forbids. What is left is the duplication {@link Qid}'s own javadoc already records for the
+   * packages that spell the QID regex themselves, kept for its reason: this validates arriving
+   * external input at the point it arrives, rather than enforcing a domain type's invariant.
    */
   private static final Pattern MBID =
       Pattern.compile("[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}");

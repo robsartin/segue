@@ -135,6 +135,28 @@ class MusicBrainzClientTest {
   }
 
   @Test
+  @DisplayName("waitMillis rounds a sub-millisecond remainder up rather than truncating it")
+  void waitMillisRoundsUpRatherThanTruncating() {
+    // The defect this guards is not the concurrency one and was found by it. sleep() passed
+    // delay.toMillis(), which truncates, so 999.5ms of owed wait became a 999ms sleep and the
+    // request left half a millisecond inside MIN_REQUEST_INTERVAL — measured, as a 0.999339625s
+    // gap, on the first run of the concurrency test below.
+    //
+    // Asserted here rather than through sleep() because the shortfall is 0.5ms: the only
+    // end-to-end floor this suite has is 0.9s, roughly 1800 times too coarse to see it, and
+    // tightening it far enough would flake on scheduling jitter long before it caught anything.
+    assertThat(MusicBrainzClient.waitMillis(Duration.ofMillis(999).plusNanos(500_000)))
+        .isEqualTo(1000);
+    // The smallest remainder there is still buys a whole millisecond — rounding up, not to nearest.
+    assertThat(MusicBrainzClient.waitMillis(Duration.ofNanos(1))).isEqualTo(1);
+    // And an exact number of milliseconds is not inflated by that rounding. Both of the durations
+    // this client actually sleeps are exact: the backoff base and the request interval.
+    assertThat(MusicBrainzClient.waitMillis(Duration.ofMillis(200))).isEqualTo(200);
+    assertThat(MusicBrainzClient.waitMillis(MusicBrainzClient.MIN_REQUEST_INTERVAL))
+        .isEqualTo(1000);
+  }
+
+  @Test
   @DisplayName("a 429 carrying Retry-After waits for as long as the header asks")
   void honoursRetryAfter() {
     // Mirrors WikidataClientTest — retryDelay is a package-private pure static, byte-identical in
@@ -244,7 +266,7 @@ class MusicBrainzClientTest {
     // real network and no timeout to wait out.
     //
     // With the fix, four attempts against a dead port are spaced by ~MIN_REQUEST_INTERVAL each
-    // (the backoff sleep between attempts is topped up to a full second by throttle()), so total
+    // (the backoff sleep between attempts is topped up to a full second by reserve()), so total
     // wall time is close to 3 seconds. The bug this guards would finish in the backoff time alone
     // — 200+400+800ms, about 1.4 seconds — so 2.5s is a lower bound that separates the two
     // clearly without being tight enough to flake on CI scheduling jitter.
