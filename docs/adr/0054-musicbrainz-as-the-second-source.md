@@ -264,32 +264,54 @@ covers the bridge alone; the gap between them is uncovered.
   loss is narrower than it first looks — `WikidataSourceAdapter.supports` returns true for every kind
   so it always runs alongside, and it sets `sourceUnavailable` when its own reverse pass fails — so a
   general Query Service outage does surface, unattributed. The residual is the narrow case.
-- **Five issues were filed along the way, and every one was found by somebody checking something
-  rather than by anything failing** — #139 and #140 by checking which fences a new adapter package
-  would inherit, #141 by checking whether a fixture QID resolves, #142 by checking what MusicBrainz
-  actually uses to relate one act to another, #143 by checking a javadoc's stated reason against the
-  committed fixture. **Three of the five predate this branch**, and only #142 and #143 came out of
-  building the adapter:
+- **Seven issues were filed on this branch, and not one of them was found by anything failing.**
+  `check` was green throughout; each came out of somebody checking a claim against the tree — #139
+  and #140 by checking which fences a new adapter package would inherit, #141 by checking whether a
+  fixture QID resolves, #142 by checking what MusicBrainz actually uses to relate one act to
+  another, #143 by checking a javadoc's stated reason against the committed fixture, #144 by
+  checking this ADR's own OpenStreetMap argument against what ADR 53 already said, #145 by checking
+  the developer guide's rule table against `ArchitectureTest`. That is the enumeration; what each
+  says, and whether the condition it describes was already there at the merge-base, follows.
   - **#139** — `theExporterNeverSpeaksToANetwork` passes `..wikidata.WikidataClient` to a package
     predicate, which matches no class, so that third of the rule is inert while its javadoc describes
-    a ban it does not impose. Pre-existing; not #91's; the new argument added to that rule is a
-    package identifier and does bite.
+    a ban it does not impose. **Condition present at the merge-base**; not #91's; the new argument
+    added to that rule is a package identifier and does bite.
   - **#140** — the pairwise sibling rules covered 8 of 12 ordered adapter pairs before this branch,
-    leaving `tinker → wikidata` among others unforbidden today. Pre-existing. This branch reaches 16
-    of 20 at five adapters; the four still open are #140's, none created by #91.
+    leaving `tinker → wikidata` among others unforbidden today. **Condition present at the
+    merge-base.** This branch reaches 16 of 20 at five adapters; the four still open are #140's, none
+    created by #91.
   - **#141** — `CLAUDE.md` states that the `Q9000xx` fixture QIDs are placeholders and not real
     Wikidata ids. **Every one checked resolves to a real Wikidata entity**, so code is being written
-    on a guarantee that does not hold. **Pre-existing** — the sentence is at the merge-base — and not
-    #91's. Not an ADR 51 breach either: no name appears and nothing is framed as anyone's taste. Not
-    repaired here.
+    on a guarantee that does not hold. **Condition present at the merge-base** — the sentence is
+    there — and not #91's. Not an ADR 51 breach either: no name appears and nothing is framed as
+    anyone's taste. Not repaired here; one javadoc on this branch that had derived a safety argument
+    from it was rewritten to say what is true instead.
   - **#142** — `subgroup` is the only MusicBrainz relation that could yield a group-in-group edge,
     and choosing between `MEMBER_OF` (P463) and `PART_OF` (P361) for it is a clause 3 decision. Left
     unmapped deliberately, and filed so that the whitelist's silence is a record rather than an
-    absence.
+    absence. **Raised by this branch**, which wrote the whitelist.
   - **#143** — the MusicBrainz response already carries each neighbour's artist type, and the adapter
     returns no `neighbors()`, so `SegueService` falls back to one `EntityResolver.fetch` per new
     neighbour. An avoidable Wikidata round trip per neighbour, found by opening the committed fixture
-    instead of accepting a javadoc's stated reason.
+    instead of accepting a javadoc's stated reason. **Raised by this branch**, which wrote the
+    adapter.
+  - **#144** — ADR 53 sends a reader who wants to reach restaurants to #91, and the OpenStreetMap
+    alternative above argues that a different source does not fix it, because the obstacle is the
+    identity spine and the vocabulary. **Half and half**: ADR 53's sentence is at the merge-base, the
+    disagreement is this ADR's doing. It is the amendment decision the ADR 53 bullet below describes,
+    filed rather than made here, because ADR 1 makes ADR 53 immutable.
+  - **#145** — `docs/developer-guide.md` enumerates every rule in `ArchitectureTest` by hand and
+    nothing checks the enumeration. **Half and half**: the table was **exact** at the merge-base, at
+    35 names, and this branch renamed two rules and added one, whereupon it went stale silently while
+    the build stayed green. The same issue records two more enumerations in that guide which this
+    branch falsified the same way.
+
+  **"Predates" is true of some of the defects and of none of the issues, and collapsing those two is
+  what this roll-up got wrong before.** All seven were filed during this branch, on 2026-08-30, the
+  earliest of them 43 minutes after its first commit — so no issue predates the branch. What
+  predates it is the condition each one describes: three wholly (#139, #140, #141), two in part
+  (#144's ADR 53 sentence, #145's unenforced table), and two not at all (#142 and #143, which are
+  about the adapter this branch wrote).
 - **What this does not settle.** The two unbuilt adapters are unbuilt, and Open Library's obstacle is
   #92's question rather than the SPI's. **ADR 22 clause 3 is untouched**, deliberately: MusicBrainz
   was chosen partly for not forcing it, so this ADR is no evidence at all about whether the
