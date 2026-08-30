@@ -9,12 +9,24 @@ Designing three exposes the gaps before any of them is committed to. The same ar
 [ADR 38](../adr/0038-award-received-as-the-first-non-collaboration-edge.md) (one property at a
 time).
 
-**Privacy.** This repository is public and the owner's ratings and interests are personal data
-([ADR 33](../adr/0033-taste-layer-separation.md),
-[ADR 51](../adr/0051-what-an-adr-may-quote.md)). Nothing here names an entity as his. Every entity
-below is a probe chosen for this note to make a world fact about a public API checkable, and every
-figure is either a count over public data or a property of code in this repository. Where an
-argument would have been sharper with a name from the known-list, it is made weaker on purpose.
+**Privacy — what was checked, and what that check does not cover.** This repository is public and
+the owner's ratings and interests are personal data ([ADR 33](../adr/0033-taste-layer-separation.md),
+[ADR 51](../adr/0051-what-an-adr-may-quote.md)). ADR 51 is explicit that it "is held by review, and
+by nothing else", so this paragraph states what was done rather than offering an assurance — a
+blanket all-clear is exactly what makes a reviewer stop looking.
+
+Checked: every entity named below was chosen by me as a probe against a public API, none was taken
+from the known-list or from any tool run over it, and every figure is a count over public data or a
+property of code in this repository. The Open Library section is deliberately **anonymised** — no
+title, no author name, no OLID, no QID — because the argument there is about a record *schema* and
+a real name would carry none of it; the first draft of that section named a title inside an
+"owner's book collection" framing, which is the disclosure ADR 51 forbids and which
+[ADR 47](../adr/0047-main-subject-as-the-route-through-what-a-book-is-about.md)'s own amendment
+already identifies as a breach in its own text.
+
+Not covered by that check: I cannot verify a negative about entities I have never seen, since the
+known-list is not in this repository and ADR 51 forbids committing one. A reviewer who knows the
+list is the only reader who can confirm that no probe here coincides with it.
 
 **Sources of fact.** The SPI is `port/SourceAdapter.java`, `port/EntityResolver.java`,
 `port/ExpandResult.java`, `port/ExpandContext.java` and `port/SourceAdapters.java`; its two
@@ -45,7 +57,7 @@ assumed:
   (`mcp/SegueService.java:75–78`). The expand path is pluggable; the resolve path is not.
 - `NodeRecord` is `(qid, kind, label, instanceOf)` and carries **no external identifier**, so an
   adapter handed a seed has to obtain its own source-local id from the QID itself.
-- `app/SegueConfiguration.java:101–106` builds the adapter list in one `@Bean` method, which is
+- `app/SegueConfiguration.java:100–107` builds the adapter list in one `@Bean` method, which is
   exactly the "plus a `@Bean` method" ADR 25 promised.
 
 ---
@@ -75,12 +87,18 @@ MusicBrainz states a relation once, on the pair, with an explicit `direction` fi
 
 | probe | entity type | relations returned |
 |---|---|---|
-| `artist/b10bbbfc-…?inc=artist-rels` | Group | 109, of which 9 `member of band` **backward** |
-| `artist/ba550d0e-…?inc=artist-rels` | Person | 39, of which 13 `member of band` **forward** |
+| `artist/b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d?inc=artist-rels` | Group | 109, of which 9 `member of band` **backward** |
+| `artist/ba550d0e-adac-4864-b88b-407cab5e76af?inc=artist-rels` | Person | 39, of which 13 `member of band` **forward** |
 
 The same relation type, the same database, opposite `direction` values, one call each. **So a
-MusicBrainz adapter needs no reverse pass at all** — and that is a genuinely different ingest shape
+MusicBrainz adapter needs no reverse pass for `artist-rels`** — a genuinely different ingest shape
 from the only one the SPI has ever carried.
+
+**How far that generalises is not established here.** Two artists, one `inc` parameter. The
+mechanism is documented behaviour rather than a coincidence of these two records — MusicBrainz
+stores one relation on the pair and reports it with a `direction` field — but I have not probed
+`release-rels`, `recording-rels` or `work-rels`, and this note does not claim they behave the same
+way. The v1 adapter should read `artist-rels` only, which is what was measured.
 
 Each relation object also carries `begin`, `end` and `ended`, so membership validity arrives on the
 relation itself rather than as a statement qualifier. `AssertionRecord` has `validFrom`/`validTo`
@@ -159,6 +177,12 @@ the property whitelist is derived from `EdgeTypes` and the vocabulary does the f
    ADR 32 forbids reaching for the Wikidata one. Adding a source includes writing a whole HTTP
    client. That is not an SPI gap, but it is a cost ADR 25's consequences do not mention.
 
+**Caveat on the scope of these probes.** Two artists (one Group, one Person), and three endpoints:
+`artist/<mbid>?inc=artist-rels`, `artist/<mbid>?inc=url-rels` and
+`url?resource=<wikidata url>&inc=artist-rels`. No release, recording or work relations; no `browse`
+or `search` endpoint; no test of how the bridge behaves for an artist MusicBrainz holds but Wikidata
+does not (#91's 2026-08-29 comment measured that ratio at scale and is the authority on it).
+
 **What it does NOT need:** the `EntityResolver` half. Its seed arrives from the graph already
 carrying a QID, and it can fill `ExpandResult.neighbors()` itself from the artist-rels response
 plus one url-rels call each. Under ADR 25's own rule — *a source implements whichever it can
@@ -170,16 +194,21 @@ honour* — MusicBrainz should implement `SourceAdapter` only.
 
 ### What it is authoritative for
 
-Books as works and editions, their authors, and free-text subjects. Of the owner's stated domains it
-reaches the book collection —
-[ADR 47](../adr/0047-main-subject-as-the-route-through-what-a-book-is-about.md)'s *What this cannot
-reach* section is the authority on what Wikidata misses there, and it records that *Effective Java*
-has no Wikidata item at all. A probe of Open Library's search returns two work records for that
-title. **This is the domain where a second source adds coverage rather than depth.**
+Books as works and editions, their authors, and free-text subjects. It holds books that have no
+Wikidata item at all — ADR 47's *What this cannot reach* section is the authority on which books
+segue's own vocabulary misses and why, and this note does not repeat its rows. I confirmed the
+general shape by searching Open Library for a programming title with no Wikidata item and getting
+two work records back. **This is the domain where a second source would add coverage rather than
+depth.**
+
+Everything in this section is deliberately anonymous. The argument is about what fields an Open
+Library record does and does not have, which no title or author name makes any sharper — see the
+privacy note above.
 
 ### Where its relations live — on the work, and as strings
 
-Probed `works/OL6223299W.json` and `works/OL27448W.json`. A work record states:
+Probed two `works/OL…W.json` documents — the programming title above, and a novel chosen only
+because its record is the richer of the two. A work record states:
 
 - **`authors`** — a list of `/authors/OL…A` keys. A real link to a real record. Maps to P50,
   registered as `AUTHORED`.
@@ -194,14 +223,17 @@ them being a **string rather than an entity**.
 
 ### Identity, and the bridge to a QID — this is where it breaks
 
-- **Authors carry the bridge directly.** `authors/OL1607920A.json` has
-  `remote_ids: {wikidata: "Q92992", viaf: …, isni: …}`. No round trip, no Wikidata dependency, no
-  URL parsing. Better than MusicBrainz's.
-- **It is sparsely populated, and Open Library duplicates people.** The search response returns two
-  work records for the same title carrying two *different* author keys for the same person, and
-  fetching the second (`authors/OL9595897A.json`) shows no `remote_ids` key at all. The bridge exists per record, not per person.
-- **Works carry no bridge whatsoever.** Neither probed work record has `remote_ids`. There is no
-  field for one.
+- **Author records carry the bridge directly.** An `authors/OL…A.json` document has a
+  `remote_ids` object whose keys include `wikidata`, alongside `viaf` and `isni`. The QID is a
+  field value: no round trip, no Wikidata dependency, no URL parsing. **Better than MusicBrainz's**,
+  which costs a call.
+- **It is sparsely populated, and Open Library duplicates people.** The search response returned
+  two work records for one title naming two *different* author keys for one person. Fetching both
+  author records: one carries `remote_ids` with a `wikidata` key; the other has no `remote_ids`
+  field at all. **The bridge exists per record, not per person**, so whether an author resolves
+  depends on which duplicate a work happens to point at.
+- **Work records carry no bridge whatsoever.** Neither probed work record has `remote_ids`, and
+  the schema has no field for one.
 
 **That last point is fatal in the direction the domain matters.** The books Open Library reaches
 that Wikidata does not are, by definition, books with no QID — and ADR 22 clause 1 makes the QID the
@@ -218,14 +250,16 @@ as deliberately deferred to #92 and which this note does not reopen.
 
 Both of the relations Open Library actually states have a registered Wikidata property already:
 authorship is P50 and aboutness is P921, and `EdgeTypes` is the authority that both are registered.
-`series` would need P179 ("part of the series"), which exists in Wikidata and is not registered here — so admitting it
-would be a normal ADR 38-style one-at-a-time admission, not a vocabulary invention. **Nothing Open
+`series` would need P179 ("part of the series"), which exists in Wikidata and is not registered
+here — so admitting it would be a normal ADR 38-style one-at-a-time admission, not a vocabulary
+invention. **Nothing Open
 Library states requires inventing a code.**
 
 The vocabulary pressure it does create is one level down and is about *values*, not codes: an
-`ABOUT` edge needs a QID on the far end, and Open Library gives a string. Resolving
-`"Java (Computer program language)"` to a QID is a Wikidata search per subject — an adapter calling
-another adapter's source again, and this time without a clean in-source bridge to use instead.
+`ABOUT` edge needs a QID on the far end, and Open Library gives a string. Resolving a subject
+heading such as `"Object-oriented programming (Computer science)"` to a QID is a Wikidata search per
+subject — an adapter calling another adapter's source again, and this time with no clean in-source
+bridge to use instead.
 
 **Caveat on the scope of this probe.** I read one search response and two work records plus two
 author records. Open Library also has editions, a subjects API and a bulk dump, and an adapter
@@ -250,85 +284,121 @@ having no `remote_ids` field, which is a schema fact, not a sampling one.
 ### What it is authoritative for
 
 Physical features and premises, at a coverage no other open source matches. Of the owner's stated
-domains it reaches restaurants — the domain ADR 53 records as **out of scope for Wikidata, and not
-because Wikidata's entities are thin but because nothing they carry maps to a registered relation.**
+domains it reaches restaurants — the domain
+[ADR 53](../adr/0053-all-the-owners-interests-bounded-per-domain.md) records as out of scope for
+Wikidata, and **not because Wikidata's entities are thin but because nothing they carry maps to a
+registered relation.**
 
-### Where its relations live — mostly nowhere
+### The recommendation, and why it does not rest on a census
 
-Probed via Overpass: every `amenity=restaurant` node in a dense 0.02° × 0.04° urban box, chosen in
-a city unconnected to anything in this project. **308 nodes, 110 distinct tag keys.** The census:
+**An OSM adapter should not be built**, and the argument is structural. Each of the four steps below
+was checked against code or against an ADR in this repository; none of them needs a sample of OSM
+data to hold.
 
-| tag | nodes carrying it |
+1. **`EdgeTypes` registers no location property.** I read all fifteen registrations in
+   `EdgeTypes` — which is the authority — one at a time. None is a location property, which
+   confirms ADR 53's statement from the code rather than from the ADR.
+2. **So OSM needs a new registration to produce any route at all**, and the only candidate that
+   would connect two premises is a location edge to the area containing them.
+3. **[ADR 38](../adr/0038-award-received-as-the-first-non-collaboration-edge.md)'s own criterion
+   rejects it.** ADR 38 admitted P166 at a measured hub size of 127 and rejected P106 at 35,977 and
+   P136 at 16,552. Every premises in a city hanging off one city node is that shape or worse, and
+   the route it yields — "these two are both in this city" — is the coincidence ADR 36's issue-#71
+   amendment calls a route that means nothing.
+4. **And the hub rule could not demote it.** `PathRanking.isHub` has two halves and I read both
+   (`domain/PathRanking.java:176–197`). `isBusyConcept` requires `node.kind() == NodeKind.CONCEPT`;
+   a city maps to `PLACE`. `isRecognitionInstitution` reads `node.instanceOf()`; an OSM-sourced node
+   states no Wikidata classes, so that list is empty. **Both halves are unavailable at once for an
+   OSM place**, and a city hub would rank as a genuine explanation. ADR 31's issue-#88 amendment
+   refused to generalise the hub rule; this is the case that refusal leaves open.
+
+Recording this conclusion is worth more than the adapter would have been, and it is the same kind of
+answer #89 exists to make sayable.
+
+### Its own identity — ids that are not stable
+
+OSM identity is an object type plus a numeric id: `node/1234`, `way/1234`, `relation/1234`, unique
+only within its type. Two properties matter to an adapter and neither is a sampling question:
+
+- **The id is not stable across edits.** A premises remapped from a node to a building way gets a
+  new id and the old one is deleted; a way split in two yields ids that did not exist before. OSM
+  documents this and tells consumers not to treat an id as a permanent reference to a feature.
+- **The id identifies a mapped object, not a business.** A restaurant that changes hands may keep
+  its node and change its `name`, or be deleted and re-added.
+
+So even setting ADR 22 aside, an OSM id is a poor spine: segue's log is append-only and a QID that
+silently stopped meaning the same thing would be unfixable by replay. **This is an argument against
+OSM as an identity source independent of the one against it as a relation source**, and the two do
+not rescue each other.
+
+### Where its relations live — attributes, not relations
+
+Measured with one Overpass query over the bounding box **`53.470,-2.260,53.490,-2.220`** (a 0.020°
+by 0.040° box over a dense city centre, chosen in a city unconnected to anything in this project),
+`amenity=restaurant`, all three object types. **308 nodes, 5 ways, 0 relations; 110 distinct tag
+keys over the nodes.** The census:
+
+| tag | nodes carrying it (of 308) |
 |---|---|
 | `name` | 305 |
-| `cuisine` | 229 |
 | `addr:street` | 261 |
+| `cuisine` | 229 |
 | `website` | 102 |
 | `brand` / `brand:wikidata` | 47 / 47 |
 | `operator` | 5 |
-| **`wikidata`** | **0** |
-| **`wikipedia`** | **0** |
+| `wikidata` | 0 |
+| `wikipedia` | 0 |
 
-These are **attributes, not relations.** A cuisine is a string (`chinese`, `italian`, `pizza`). An
-address is three strings. The single tag that points at another entity for more than a handful of
-these nodes is `brand:wikidata` — and that QID is the *chain's*, shared by all 47.
+**This is supporting colour for the structural argument above, not a substitute for it.** One box in
+one city cannot establish that OSM restaurants carry no `wikidata` tag in general, and notable
+restaurants elsewhere certainly do. What it does show is the *shape*: the tags that are common are
+strings — a cuisine is `chinese`, `italian`, `pizza`; an address is three strings — and the only tag
+pointing at another entity for more than a handful of features is `brand:wikidata`, whose QID is the
+**chain's**, shared by all 47.
 
-OSM does have relations as a first-class data type, but for restaurant nodes they are boundaries and
-routes, which say a premises is inside an administrative area. That is geometry, not a stated link.
+**On OSM's own `relation` objects.** OSM does have relations as a first-class data type. The query
+above asked for `relation["amenity"="restaurant"]` in the same box and returned **none**, so within
+this sample a restaurant is never a relation member by virtue of being a restaurant. I have **not**
+checked whether these premises appear as members of boundary or site relations that carry no
+`amenity` tag, and the earlier draft of this note asserted that they do; **that assertion was
+unverified and is withdrawn.** It does not affect the recommendation, which rests on the four
+structural steps and not on this.
 
-### Identity, and the bridge to a QID — there is none
+### Identity, and the bridge to a QID
 
-**Zero of 308 carry a `wikidata` tag.** Not "few". Zero. The 47 `brand:wikidata` values identify
-the brand, so ingesting them would collapse 47 distinct premises onto a handful of chain QIDs and
-assert that a restaurant *is* its chain.
+The `brand:wikidata` tag is a real QID, and it is the wrong entity: ingesting it would collapse
+distinct premises onto a handful of chain QIDs and assert that a restaurant *is* its chain. No tag
+in the census points at a QID for the premises itself.
 
-Under ADR 22 clause 1, **an OSM restaurant is unrepresentable**, and this is the same wall #89 hit
-from the Wikidata side, reached from the other direction with a much larger sample. ADR 53 concluded
-that reaching this domain "requires a different source, which is #91's territory". **The measurement
-above says a different source does not fix it either, because the obstacle is the identity spine
-rather than the source.** That is a finding this note owes back to ADR 53, and it belongs in an
-amendment rather than in an edit.
+Under ADR 22 clause 1 an entity is its QID, so an OSM feature with no `wikidata` tag and no stable
+id of its own has nothing to be. ADR 53 concluded that reaching this domain "requires a different
+source, which is #91's territory". **The four structural steps above say a different source does not
+fix it, because the obstacle is the identity spine and the vocabulary rather than the source.** That
+is a finding this note owes back to ADR 53, and ADR 1 makes it an amendment rather than an edit.
 
-### Does it force ADR 22 clause 3? Yes, softly — and ADR 38 then vetoes what it forces
+### Does it force ADR 22 clause 3? Softly — and it is a registration, not an invention
 
-Establishing rather than asserting. To produce a route at all, an OSM restaurant needs one of:
+Establishing rather than asserting. Every relation an OSM restaurant could carry has a real Wikidata
+property to borrow, each id verified against the Action API rather than recalled:
 
-- **location** — Wikidata has P131 (located in the administrative territorial entity). Exists,
-  borrowable, **not registered**. I checked every registration in `EdgeTypes` — which is the
-  authority — and none is a location property, confirming ADR 53's statement.
-- **brand or operator** — Wikidata has P1716 (brand) and P137 (operator). Exist, borrowable, not
-  registered.
-- **cuisine** — Wikidata has P2012 (cuisine). Exists, is borrowable, and the far end is a string in
-  OSM, so it inherits Open Library's value problem.
+- **location** — P131, "located in the administrative territorial entity". Exists, not registered.
+- **brand / operator** — P1716 "brand", P137 "operator". Exist, not registered.
+- **cuisine** — P2012 "cuisine". Exists, not registered, and its far end is a string in OSM, so it
+  inherits Open Library's value problem on top of everything else.
 
-So clause 3 survives in the letter: **every relation OSM would need can be borrowed from an existing
-Wikidata property rather than invented.** What OSM forces is not a vocabulary invention but a
-*registration*, under ADR 38's one-at-a-time discipline.
-
-**And ADR 38's own criterion rejects the one that would matter.** Its measured argument admitted
-P166 at a hub size of 127 and rejected P106 at 35,977 and P136 at 16,552. A `LOCATED_IN` edge to a
-city is that shape or worse — every premises in the city on one node — and the resulting route,
-"these two restaurants are both in this city", is exactly the coincidence ADR 36's issue-#71
-amendment called a route that means nothing.
-
-**Worse: the hub rule could not demote it.** `PathRanking.isHub` has two halves, and I read both.
-`isBusyConcept` requires `node.kind() == NodeKind.CONCEPT`; a city maps to `PLACE`.
-`isRecognitionInstitution` reads `node.instanceOf()`; an OSM-sourced node states no Wikidata
-classes, so that list is empty. **Both halves of the hub rule are unavailable for an OSM place**,
-and a city hub would rank as a genuine explanation. ADR 31's issue-#88 amendment refused to
-generalise the hub rule; this is the case that refusal leaves open.
+**So clause 3 survives in the letter:** nothing OSM states would have to be invented. What OSM forces
+is a *registration* under ADR 38's one-at-a-time discipline — and step 3 above is ADR 38 declining.
 
 ### What it needs from the SPI that the SPI does not offer
 
 1. **The same string-valued-claim shape Open Library needs**, for `cuisine`.
-2. **A hub judgement that does not depend on Wikidata-shaped data** — see the gap list. This is not
-   in the SPI at all; it is in `domain`, which is where it is most awkward.
+2. **A hub judgement that does not depend on Wikidata-shaped data.** Not in the SPI at all; it is in
+   `domain`, which is where it is most awkward. See GAP 8.
 3. **Nothing else.** OSM's problem is upstream of the SPI in both directions: identity refuses its
-   entities and the vocabulary refuses its relations. **An OSM adapter should not be built.**
-   Recording that conclusion is worth more than the adapter would have been, and it is the same
-   answer #89 exists to have made sayable.
+   entities and the vocabulary refuses its relations. The SPI is not what fails here.
 
 ---
+
 
 ## What three sources say about the SPI
 
@@ -364,16 +434,50 @@ tempted to emit one"* and so the world graph *"stays free of personal data so it
 shared without one"*. Its javadoc says this matters more than usual **because this repository is
 public**.
 
-A `musicbrainz` package is not on that list. The same is true of `adaptersDoNotDependUpward`
-(`:113`), which is what stops an adapter reaching into `ingest`, `mcp`, `app` or `seed`, and of the
-two sibling rules. **Four rules name adapter packages by literal string, and a fourth adapter
-inherits none of them.** The guarantee ADR 33 describes as holding "by construction rather than by
-care" would quietly revert to care.
+A `musicbrainz` package is not on that list, so the guarantee ADR 33 describes as holding "by
+construction rather than by care" would quietly revert to care. **This is the most important finding
+in this note:** cheap to fix, and invisible if missed.
 
-**This is the most important finding in this note.** It is cheap to fix and invisible if missed.
-Task 2's definition of done must include adding the new package to all four, and ADR 25's
-consequence *"Adding a source is implementing one or both interfaces plus a `@Bean` method"* needs
-an amendment saying "and extending the architecture rules that name adapter packages".
+**And it is not one rule.** I extracted every rule body in `ArchitectureTest` and checked each for a
+literal naming `tinker`, `jena`, `sqlite` or `wikidata`. **13 of the 35 rules name an adapter
+package (or an adapter class) as a literal.** The number alone is a trap, so here is the list —
+Task 2 must inherit the list, not the number.
+
+**Must change, or a real fence does not extend to the new adapter (5):**
+
+| rule | lines | what breaks without the edit |
+|---|---|---|
+| `theWorldFactLayerNeverTouchesAffinity` | 975–983 | **ADR 33's privacy fence.** Subject list; the new adapter could reach the affinity types. |
+| `adaptersDoNotDependUpward` | 110–117 | Subject list; the new adapter could depend on `ingest`, `mcp`, `app`, `seed`. |
+| `sqliteDoesNotDependOnOtherAdapters` | 282–289 | Object list; `sqlite` could depend on the new adapter. |
+| `wikidataDoesNotDependOnOtherAdapters` | 1005–1012 | Object list; `wikidata` could depend on the new adapter. |
+| `theExporterNeverSpeaksToANetwork` | 409–418 | Objects are `java.net..`, `javax.net..` and the literal class `..wikidata.WikidataClient`. ArchUnit checks **direct** dependencies, so `export → MusicBrainzClient` is caught by none of the three. |
+
+**Plus one rule to add**, because there is no `musicbrainzDoesNotDependOnOtherAdapters`. Four rules
+carry the identical `.because("ADR 32: adapters are siblings, not collaborators")` — at `:95`,
+`:106`, `:289` and `:1012` — and every one of them is pairwise between named packages. A fifth
+adapter is a sibling of nobody until someone writes it down.
+
+**A pre-existing shape the new adapter widens (3):** `theRatingsToolOpensNothingElse` (464–485),
+`theRecommenderOpensNothingElse` (807–827) and `theRetractionToolOpensNothingElse` (884–906) each
+ban `java.net..` to keep an offline tool offline, and each omits `..wikidata..` from its package
+list. Because ArchUnit sees direct dependencies only, any adapter's HTTP client already slips
+through them; a second one widens a hole rather than opening it. Worth a line in the Task 2 report,
+not a blocker.
+
+**Checked and NOT holes (5), so Task 2 does not churn them:** `tinkerDoesNotDependOnJena` (88–95)
+and `jenaDoesNotDependOnTinker` (99–106) are pairwise between two specific adapters and are
+subsumed by the new sibling rule; `seedNeverOpensAStore` (129–146) bans *stores* and already omits
+`..wikidata..` deliberately; `onlyTheRatingsToolReadsANote` (538–547) uses
+`resideOutsideOfPackages`, so a new package is inside its subject automatically;
+`theRatingDeckOpensNothingElse` (773–790) bans no network at all. Separately,
+`affinityNeverTouchesTheWorldFactLayer` (957–963) is written against **types** rather than packages
+(`AFFINITY_TYPES` / `WORLD_FACT_TYPES`) and therefore covers a new adapter with no edit — which is
+the shape the others would have had if ADR 33's boundary had been a package.
+
+ADR 25's consequence *"Adding a source is implementing one or both interfaces plus a `@Bean`
+method"* needs an amendment saying "and extending the five architecture rules that name adapter
+packages, and adding a sixth".
 
 ### GAP 2 — `mcp` names a `wikidata` exception type to honour its own stated invariant
 
@@ -447,9 +551,12 @@ referenced from `seed`, `ingest`, `ratings`, `mcp`, `support` and `export`.
 
 I opened all eight main-source files outside `wikidata/` that name it. **Three import it and call
 it** — `ingest/GraphProjector.java:73`, `export/LogProjection.java:75`, `seed/WikidataFacts.java:82`.
-The other five — `support/ClassLabels`, `export/DotWriter`, `ratings/Labels`, `mcp/SegueService`,
-`domain/Retractions` — mention it in javadoc only and import nothing from `wikidata`. ADR 18's
-purity rule is intact, as ADR 53 says.
+The other five mention it in javadoc only, and they do **not** all import nothing from `wikidata`
+— I checked the import block of each rather than generalising from the `KindMapper` result.
+`support/ClassLabels`, `export/DotWriter`, `ratings/Labels` and `domain/Retractions` import nothing
+from `wikidata`, so ADR 18's purity rule is intact exactly as ADR 53 says. **`mcp/SegueService` does
+import two** — `RecognitionInstitutions` (`:22`) and `WikidataUnavailableException` (`:23`) — and
+the second of those is the whole of GAP 2 above.
 
 **And the seam does not have to move for MusicBrainz.** `KindMapper.rederive` returns a claim with
 no stated classes **untouched**, with a javadoc explaining that a source classifying without stating
@@ -494,11 +601,21 @@ dates live on the assertion rather than on the derived edge". `EdgeRecord` nonet
 `validFrom` and one `validTo`, and `TinkerGraphStore` sets each only when the edge does not already
 carry it (`:103–108`) — **first writer wins, with no report.**
 
-This collides on the very first MusicBrainz membership edge. The Group probe returned
-`begin: "1960", end: "1960", ended: true` on a relation; Wikidata's forward pass reads P580/P582
+This collides on the very first MusicBrainz membership edge. The Group probe's nine
+`member of band` relations are all dated — the fullest is
+`"begin": "1960-08-12", "end": "1962-08-16", "ended": true`. Wikidata's forward pass reads P580/P582
 into the same fields (`ClaimMapper:153–154`), while its reverse pass always writes null
 (`ReverseClaims:201`, which says so). So the same membership can arrive dated from one source and
 undated from another, in either order, and the graph keeps whichever landed first.
+
+**A second, sharper edge on the same probe: MusicBrainz dates are variable-precision and
+`validFrom` is a `LocalDate`.** Of those nine relations, **1 of 9 `begin` values and 5 of 9 `end`
+values carry a day**; the rest are `1960` or `1962-08`. There is a settled precedent for this and
+the adapter must follow it rather than re-decide: `ClaimMapper.qualifierDate` returns null below day
+precision, with a comment saying a year- or month-precision date read as a `LocalDate` "would feed
+false day-level precision into `validAt()` time-travel queries". **The MusicBrainz adapter should
+drop any date that is not `YYYY-MM-DD`**, which on this probe means keeping one `validFrom` of
+nine.
 
 **Not blocking, and genuinely good news for #91's acceptance criteria**: `EdgeRecord.corroboration()`
 counts distinct `sourceId`s and the two sources will collapse onto one edge exactly as ADR 23
@@ -536,5 +653,6 @@ brief. Everything else is named here so that it is not rediscovered as a surpris
 
 And the finding that reaches furthest is the one no adapter delivers: **ADR 25's interfaces survive
 contact with a second source; its consequences do not.** Adding a source is not "one or both
-interfaces plus a `@Bean` method". It is that, plus four architecture rules, plus an HTTP client
+interfaces plus a `@Bean` method". It is that, plus **five architecture rules extended and a sixth
+written** (GAP 1 has the list, and one of the five is ADR 33's privacy fence), plus an HTTP client
 with its own rate policy, plus a decision about a bound that two sources now share.
