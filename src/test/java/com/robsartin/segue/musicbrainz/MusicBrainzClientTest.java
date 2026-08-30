@@ -11,7 +11,13 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -31,6 +37,27 @@ class MusicBrainzClientTest {
    * this comment, the fixtures, the commit — never a statement about taste (ADR 51).
    */
   private static final String HOT_CLUB_QUINTET = "ee55e4e8-807d-49b1-8470-d1c0898ed7cb";
+
+  /**
+   * How much under {@link MusicBrainzClient#MIN_REQUEST_INTERVAL} an observed gap may fall before
+   * {@link #concurrentCallersDoNotLeaveTogether} calls it a violation, for two reasons that are
+   * both about the last fraction of a millisecond and neither about concurrency.
+   *
+   * <p>The first is the measurement. The invariant is about when a request <i>leaves</i>; what a
+   * stub server can observe is when one <i>arrives</i>, and the send latency between the two varies
+   * per request — the run that established this number saw two arrivals 0.99966s apart, 0.00034s
+   * short, on a client whose slots were exactly a second apart. The second is real and is written
+   * down in {@code MusicBrainzClient.reserve}'s javadoc: slots are issued a second apart and no
+   * request leaves before its own, but a thread descheduled past its slot sends late and can land
+   * nearer the caller behind it. Serialising every send behind one lock is the only thing that
+   * would close that, at the cost of the non-blocking path the compare-and-set leaves open.
+   *
+   * <p><b>It is nowhere near wide enough to admit the defect.</b> The same burst against the
+   * check-then-act version measured gaps of {@code [1.002961S, 0.001552083S]} — the second and
+   * third callers left 1.6 <i>milliseconds</i> apart. This allowance is 100ms, so the floor it
+   * leaves is 0.9s: over five hundred times the gap the defect produced.
+   */
+  private static final Duration SLOT_OVERRUN_ALLOWANCE = Duration.ofMillis(100);
 
   @Test
   @DisplayName("should return every artist relation when the response states several")
@@ -105,6 +132,28 @@ class MusicBrainzClientTest {
     Instant now = Instant.parse("2026-08-30T00:00:01.500Z");
 
     assertThat(MusicBrainzClient.throttleDelay(last, now)).isEqualTo(Duration.ZERO);
+  }
+
+  @Test
+  @DisplayName("waitMillis rounds a sub-millisecond remainder up rather than truncating it")
+  void waitMillisRoundsUpRatherThanTruncating() {
+    // The defect this guards is not the concurrency one and was found by it. sleep() passed
+    // delay.toMillis(), which truncates, so 999.5ms of owed wait became a 999ms sleep and the
+    // request left half a millisecond inside MIN_REQUEST_INTERVAL — measured, as a 0.999339625s
+    // gap, on the first run of the concurrency test below.
+    //
+    // Asserted here rather than through sleep() because the shortfall is 0.5ms: the only
+    // end-to-end floor this suite has is 0.9s, roughly 1800 times too coarse to see it, and
+    // tightening it far enough would flake on scheduling jitter long before it caught anything.
+    assertThat(MusicBrainzClient.waitMillis(Duration.ofMillis(999).plusNanos(500_000)))
+        .isEqualTo(1000);
+    // The smallest remainder there is still buys a whole millisecond — rounding up, not to nearest.
+    assertThat(MusicBrainzClient.waitMillis(Duration.ofNanos(1))).isEqualTo(1);
+    // And an exact number of milliseconds is not inflated by that rounding. Both of the durations
+    // this client actually sleeps are exact: the backoff base and the request interval.
+    assertThat(MusicBrainzClient.waitMillis(Duration.ofMillis(200))).isEqualTo(200);
+    assertThat(MusicBrainzClient.waitMillis(MusicBrainzClient.MIN_REQUEST_INTERVAL))
+        .isEqualTo(1000);
   }
 
   @Test
@@ -217,7 +266,7 @@ class MusicBrainzClientTest {
     // real network and no timeout to wait out.
     //
     // With the fix, four attempts against a dead port are spaced by ~MIN_REQUEST_INTERVAL each
-    // (the backoff sleep between attempts is topped up to a full second by throttle()), so total
+    // (the backoff sleep between attempts is topped up to a full second by reserve()), so total
     // wall time is close to 3 seconds. The bug this guards would finish in the backoff time alone
     // — 200+400+800ms, about 1.4 seconds — so 2.5s is a lower bound that separates the two
     // clearly without being tight enough to flake on CI scheduling jitter.
@@ -231,6 +280,68 @@ class MusicBrainzClientTest {
     Duration elapsed = Duration.ofNanos(System.nanoTime() - startNanos);
 
     assertThat(elapsed).isGreaterThan(Duration.ofMillis(2500));
+  }
+
+  @Test
+  @DisplayName("three callers sharing one client still leave a minimum request interval apart")
+  void concurrentCallersDoNotLeaveTogether() throws InterruptedException {
+    // Issue #146. One MusicBrainzClient is built in SegueConfiguration.sourceAdapters(...) and
+    // held by a singleton chain to GraphTools over the servlet transport, so concurrent tool calls
+    // share this object. throttle() read lastRequestAt and then slept the remainder, which is
+    // check-then-act: three callers read the same value, wait the same remainder and fire
+    // together. MusicBrainz's ~1 rps is a condition of anonymous ws/2 access, not a performance
+    // guideline, so this is the invariant the class exists for.
+    //
+    // The assertion is on the SPACING between arrivals, not on total elapsed time, because
+    // Thread.sleep only ever runs long: a slow machine can only push a correct implementation's
+    // gaps further above MIN_REQUEST_INTERVAL, never below it, so it cannot turn this test green
+    // for the broken code. Three callers rather than two for the same reason from the other side —
+    // the broken code fails every gap at once, so scheduling jitter would have to fake a full
+    // second twice over to hide it.
+    try (StubMusicBrainzServer stub = new StubMusicBrainzServer()) {
+      MusicBrainzClient client = new MusicBrainzClient(stub.baseUri());
+      int callers = 3;
+      CountDownLatch release = new CountDownLatch(1);
+      CountDownLatch finished = new CountDownLatch(callers);
+      List<Exception> failures = new CopyOnWriteArrayList<>();
+      ExecutorService pool = Executors.newFixedThreadPool(callers);
+      try {
+        for (int i = 0; i < callers; i++) {
+          pool.execute(
+              () -> {
+                try {
+                  release.await();
+                  client.artistRelations(HOT_CLUB_QUINTET);
+                } catch (InterruptedException e) {
+                  Thread.currentThread().interrupt();
+                  failures.add(e);
+                } catch (RuntimeException e) {
+                  failures.add(e);
+                } finally {
+                  finished.countDown();
+                }
+              });
+        }
+        release.countDown();
+        assertThat(finished.await(60, TimeUnit.SECONDS)).as("every caller finished").isTrue();
+      } finally {
+        pool.shutdownNow();
+      }
+      assertThat(failures).isEmpty();
+
+      List<Duration> arrivals = stub.arrivals();
+      assertThat(arrivals).hasSize(callers);
+      List<Duration> gaps = new ArrayList<>();
+      for (int i = 1; i < arrivals.size(); i++) {
+        gaps.add(arrivals.get(i).minus(arrivals.get(i - 1)));
+      }
+      // allSatisfy rather than a loop of assertions: a loop stops at the first gap that fails and
+      // would report one number, where the defect's signature is every gap at once.
+      Duration floor = MusicBrainzClient.MIN_REQUEST_INTERVAL.minus(SLOT_OVERRUN_ALLOWANCE);
+      assertThat(gaps)
+          .as("gaps between consecutive requests, in arrival order")
+          .allSatisfy(gap -> assertThat(gap).isGreaterThanOrEqualTo(floor));
+    }
   }
 
   /** A single valid, minimal {@code artist-rels} response body, for the stub-server tests. */

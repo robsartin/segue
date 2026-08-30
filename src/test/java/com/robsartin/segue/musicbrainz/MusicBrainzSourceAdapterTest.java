@@ -66,6 +66,15 @@ class MusicBrainzSourceAdapterTest {
 
   private static final String OTHER_STUB_MEMBER_MBID = "22222222-2222-2222-2222-222222222222";
 
+  /**
+   * An MBID with a newline in it, and the same value as it appears inside a JSON string. Legal JSON
+   * — {@code \\n} is an escape every parser reads — and illegal in a {@code Provenance} sourceRef,
+   * which is the whole of issue #147.
+   */
+  private static final String NEWLINE_MBID = "33333333-3333-3333-3333-333333333333\nx";
+
+  private static final String NEWLINE_MBID_AS_JSON = "33333333-3333-3333-3333-333333333333\\nx";
+
   private static final String STUB_MEMBER_QID = "Q900010";
 
   private static final String OTHER_STUB_MEMBER_QID = "Q900011";
@@ -318,6 +327,116 @@ class MusicBrainzSourceAdapterTest {
 
     assertThat(result.assertions()).isEmpty();
     assertThat(result.sourceUnavailable()).isFalse();
+  }
+
+  @Test
+  @DisplayName("should return an empty result when the bridge answers with an MBID carrying a tab")
+  void shouldReturnAnEmptyResultWhenTheBridgeAnswersWithAnMbidCarryingATab() {
+    // Issue #147. The GAP 9 guard below validates targetQid and argues that it must not depend on
+    // which bridge is wired — and seedMbid, from the same interface, went straight into sourceRef,
+    // where Provenance's compact constructor throws on a tab or a newline. That
+    // IllegalArgumentException escapes expand(), and SegueService.expandEntity has no try around
+    // adapter.expand, so one malformed string aborted the whole expansion across every adapter
+    // instead of costing this one its result.
+    MusicBrainzSourceAdapter adapter =
+        adapter(
+            mapping(QUINTET_MBID + "\tinjected", QUINTET_QID, FIRST_MEMBER_MBID, FIRST_MEMBER_QID));
+
+    ExpandResult result = adapter.expand(quintet(), new ExpandContext(200));
+
+    // The same answer "MusicBrainz has no record bridged to this QID" gets: there is nothing this
+    // adapter could cite, so there is nothing to fetch — and nothing to flag either.
+    assertThat(result.assertions()).isEmpty();
+    assertThat(result.sourceUnavailable()).isFalse();
+    assertThat(result.truncated()).isFalse();
+  }
+
+  @Test
+  @DisplayName("should skip only the relation whose own MBID carries a newline")
+  void shouldSkipOnlyTheRelationWhoseOwnMbidCarriesANewline(@TempDir Path dir) throws IOException {
+    // The second half of #147: relation.targetMbid() reaches sourceRef from a MusicBrainz response
+    // — contributor-entered data — and was as unguarded as seedMbid. A newline is legal in JSON and
+    // illegal in a Provenance sourceRef, so one bad row took the other 21 with it.
+    Path written =
+        writeRelations(
+            dir,
+            """
+            {"type": "member of band", "direction": "backward",
+             "artist": {"id": "%s", "name": "A Stub Musician"}}
+            """
+                .formatted(NEWLINE_MBID_AS_JSON),
+            """
+            {"type": "member of band", "direction": "backward",
+             "artist": {"id": "%s", "name": "Another Stub Musician"}}
+            """
+                .formatted(STUB_MEMBER_MBID));
+    MusicBrainzSourceAdapter adapter =
+        adapterReading(
+            written,
+            mapping(
+                QUINTET_MBID, QUINTET_QID,
+                NEWLINE_MBID, OTHER_STUB_MEMBER_QID,
+                STUB_MEMBER_MBID, STUB_MEMBER_QID));
+
+    ExpandResult result = adapter.expand(quintet(), new ExpandContext(200));
+
+    // Degrading, not aborting: the well-formed relation still becomes an edge.
+    assertThat(result.assertions()).hasSize(1);
+    assertThat(result.assertions().getFirst().fromQid()).isEqualTo(STUB_MEMBER_QID);
+    assertThat(result.sourceUnavailable()).isFalse();
+    // Two relations under a bound of 200, so this says only that nothing was cut short — it is not
+    // evidence about WHERE the guard sits. The test below is, and this one deliberately does not
+    // claim it.
+    assertThat(result.truncated()).isFalse();
+  }
+
+  @Test
+  @DisplayName("should spend neither the bound nor a bridge lookup on an uncitable relation")
+  void shouldSpendNeitherTheBoundNorABridgeLookupOnAnUncitableRelation(@TempDir Path dir)
+      throws IOException {
+    // Where the neighbour-MBID guard sits is argued twice in the adapter's javadoc — "before the
+    // bound is spent", and "costs the bridge nothing — an unciteable neighbour is never even asked
+    // about" — and until this test nothing held it to either claim. Fix round 1's reviewer proved
+    // that by moving the guard out of isMappable into the loop after limit(maxNewEdges) and after
+    // the bridge lookup: every other test in this file stayed green.
+    //
+    // A bound of 1 with the uncitable relation stated FIRST is what separates the two placements.
+    // In isMappable it never enters the bounded list, so the bound buys the citable relation and
+    // the bridge is asked about that one. After the bound it wins the only slot, the bridge is
+    // asked about a string that cannot be an MBID, truncated goes true and no assertion survives.
+    Path written =
+        writeRelations(
+            dir,
+            """
+            {"type": "member of band", "direction": "backward",
+             "artist": {"id": "%s", "name": "A Stub Musician"}}
+            """
+                .formatted(NEWLINE_MBID_AS_JSON),
+            """
+            {"type": "member of band", "direction": "backward",
+             "artist": {"id": "%s", "name": "Another Stub Musician"}}
+            """
+                .formatted(STUB_MEMBER_MBID));
+    RecordingIdentity identity =
+        new RecordingIdentity(
+            StubIdentity.of(
+                mapping(
+                    QUINTET_MBID, QUINTET_QID,
+                    NEWLINE_MBID, OTHER_STUB_MEMBER_QID,
+                    STUB_MEMBER_MBID, STUB_MEMBER_QID)));
+    MusicBrainzSourceAdapter adapter =
+        new MusicBrainzSourceAdapter(MusicBrainzClient.readingFrom(written), identity, CLOCK);
+
+    ExpandResult result = adapter.expand(quintet(), new ExpandContext(1));
+
+    // The bridge is asked about the citable neighbour and never about the other one.
+    // containsExactly
+    // rather than a size: the whole point is WHICH mbid was asked about.
+    assertThat(identity.asked).containsExactly(STUB_MEMBER_MBID);
+    assertThat(result.assertions()).hasSize(1);
+    assertThat(result.assertions().getFirst().fromQid()).isEqualTo(STUB_MEMBER_QID);
+    // The bound bought a real relation, so one of the two mappable relations is all there was.
+    assertThat(result.truncated()).isFalse();
   }
 
   @Test

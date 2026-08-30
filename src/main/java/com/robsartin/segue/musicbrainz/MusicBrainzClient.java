@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -75,7 +76,19 @@ public final class MusicBrainzClient {
   private final ObjectMapper mapper = new ObjectMapper();
   private final Path fixture;
   private final Clock clock;
-  private volatile Instant lastRequestAt;
+
+  /**
+   * The instant the most recently claimed request is due to leave, or null before any has been
+   * claimed. Written only by {@link #reserve}, and only through a compare-and-set.
+   *
+   * <p><b>A claim, not an observation, and that is what makes it usable.</b> A caller sleeps until
+   * its claimed instant and {@link #sleep} only ever overruns, so the instant recorded here is a
+   * lower bound on when that request actually left — which is the direction the ~1 rps limit cares
+   * about. Recording an observation instead would mean a second caller could not know a first had
+   * already committed to a slot until that first request was on the wire, which is the race {@link
+   * #reserve} exists to close.
+   */
+  private final AtomicReference<Instant> lastRequestAt = new AtomicReference<>();
 
   public MusicBrainzClient() {
     this(DEFAULT_BASE, null, Clock.systemUTC());
@@ -87,8 +100,15 @@ public final class MusicBrainzClient {
 
   /**
    * Package-private: a real-HTTP client with an injectable clock, so a test can drive {@link
-   * #throttle()}'s wiring to {@link #fetch} deterministically rather than only its pure {@link
+   * #reserve}'s wiring to {@link #fetch} deterministically rather than only its pure {@link
    * #throttleDelay} calculation.
+   *
+   * <p><b>A fixed clock no longer means a fixed wait.</b> {@code throttle()} recomputed a remainder
+   * from the last request each time, so a {@code Clock.fixed} produced the same one-second wait on
+   * every attempt. {@link #reserve} claims a slot rather than measuring backwards, so under a fixed
+   * clock each claim sits a second further into the future than the last and the waits grow — 0s,
+   * 1s, 2s, 3s. Nothing in the repository injects a non-system clock today, so nothing depends on
+   * either behaviour; a test that wants an even pace wants an advancing clock, not a fixed one.
    */
   MusicBrainzClient(URI baseUri, Clock clock) {
     this(Objects.requireNonNull(baseUri, "baseUri"), null, Objects.requireNonNull(clock, "clock"));
@@ -185,13 +205,12 @@ public final class MusicBrainzClient {
     RuntimeException last = null;
     String retryAfter = null;
     for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      throttle();
-      // Recorded here, before the send is even attempted, not after a response comes back:
+      // Claimed here, before the send is even attempted, not after a response comes back:
       // an attempt that never gets a response — a connection refused, a timeout — still spent
-      // MusicBrainz's ~1-request-per-second budget and must still count against it. Recording
+      // MusicBrainz's ~1-request-per-second budget and must still count against it. Claiming
       // this only on success let a run of connection failures retry in a tight loop with no
       // throttle wait between them at all (issue found in fix round 1 of #91's Task 2 review).
-      lastRequestAt = clock.instant();
+      sleep(reserve());
       retryAfter = null;
       try {
         HttpResponse<String> response =
@@ -233,21 +252,52 @@ public final class MusicBrainzClient {
   }
 
   /**
-   * Blocks, if needed, so that no two requests leave this client less than {@link
-   * #MIN_REQUEST_INTERVAL} apart. A no-op on the very first call.
+   * Claims this caller a departure slot at least {@link #MIN_REQUEST_INTERVAL} after the slot
+   * claimed before it, and returns how long it must wait to reach that slot. Zero for the first
+   * caller.
+   *
+   * <p><b>One atomic claim, where there used to be a read and then a sleep</b> (<a
+   * href="https://github.com/robsartin/segue/issues/146">issue #146</a>). Reading {@code
+   * lastRequestAt}, computing a remainder from it and only then sleeping is check-then-act: three
+   * callers read the same instant, wait the same remainder and leave together. Measured, not argued
+   * — three concurrent callers against a stub server arrived 1.002s and <b>0.0016s</b> apart before
+   * this method existed. One {@code MusicBrainzClient} is built in {@code
+   * SegueConfiguration.sourceAdapters(...)} and held by a singleton chain to {@code GraphTools}
+   * over the servlet transport, so concurrent tool calls share this object, and MusicBrainz's ~1
+   * rps is a condition of anonymous {@code ws/2} access rather than a performance guideline.
+   *
+   * <p><b>Compare-and-set rather than {@code synchronized} on the whole wait</b>, which would also
+   * be correct: a lock held across a one-second sleep serialises callers on the sleep itself, so a
+   * caller that later wanted a non-blocking path — to answer "how long until I could send?" without
+   * committing a thread — would have to unpick the lock first. The claim here is separable from the
+   * waiting for it, which is what leaves that door open.
+   *
+   * <p><b>What this does and does not promise.</b> Slots are issued at least {@code
+   * MIN_REQUEST_INTERVAL} apart — {@code sendAt} is by construction {@code previous +
+   * MIN_REQUEST_INTERVAL} or later — and {@link #sleep} only ever overruns, so no request leaves
+   * before its slot. What it cannot promise is that a request leaves close to its slot: a thread
+   * descheduled well past its own slot sends late, and could land near the next caller's. That is
+   * inherent to every caller sending for itself, and it errs towards sending less often than the
+   * limit allows rather than more.
    */
-  private void throttle() {
-    Instant previous = lastRequestAt;
-    if (previous == null) {
-      return;
+  private Duration reserve() {
+    while (true) {
+      Instant previous = lastRequestAt.get();
+      Instant now = clock.instant();
+      Duration delay = previous == null ? Duration.ZERO : throttleDelay(previous, now);
+      Instant sendAt = now.plus(delay);
+      if (lastRequestAt.compareAndSet(previous, sendAt)) {
+        return delay;
+      }
+      // Another caller claimed the slot this one had computed against. Re-read and compute again;
+      // the winner has already moved lastRequestAt forward, so this loop cannot spin indefinitely.
     }
-    sleep(throttleDelay(previous, clock.instant()));
   }
 
   /**
-   * How long to wait before the next request leaves, given when the last one left. A pure function
-   * for the same reason {@link #retryDelay} is: the rule is what is worth asserting, and asserting
-   * it through {@link #throttle} would mean a test that really waits a second.
+   * How long to wait before the next request leaves, given when the one before it left. A pure
+   * function for the same reason {@link #retryDelay} is: the rule is what is worth asserting, and
+   * asserting it through {@link #reserve} would mean a test that really waits a second.
    */
   static Duration throttleDelay(Instant lastRequestAt, Instant now) {
     Duration elapsed = Duration.between(lastRequestAt, now);
@@ -281,12 +331,44 @@ public final class MusicBrainzClient {
     return a.compareTo(b) <= 0 ? a : b;
   }
 
+  /**
+   * How many whole milliseconds to sleep to cover {@code delay}, rounded up.
+   *
+   * <p><b>Up, because {@code Duration.toMillis()} truncates.</b> {@code sleep} used to pass it
+   * straight to {@code Thread.sleep}, so a 999.5ms remainder became a 999ms wait and the request
+   * left half a millisecond inside {@link #MIN_REQUEST_INTERVAL}. The concurrency test's first run
+   * measured exactly that — a gap of 0.999339625s where a second was owed — on the one path in it
+   * that had no concurrency at all.
+   *
+   * <p><b>A pure static so that rounding has a test</b>, for the reason {@link #throttleDelay} and
+   * {@link #retryDelay} are pure statics. Fix round 1's reviewer put {@code
+   * Thread.sleep(delay.toMillis())} back into an otherwise-identical tree and the whole suite
+   * stayed green: the concurrency test's floor allows 100ms and could not see a 0.5ms shortfall,
+   * and no other test reaches {@code sleep} at all.
+   */
+  static long waitMillis(Duration delay) {
+    // Ceiling, without leaving Duration: adding a nanosecond under a millisecond carries any
+    // non-zero remainder into the next whole millisecond and leaves an exact one alone.
+    return delay.plusNanos(999_999L).toMillis();
+  }
+
+  /**
+   * Waits out {@code delay}, or returns at once if there is nothing to wait for.
+   *
+   * <p><b>What is verified, and what is not.</b> {@link #waitMillis} rounds up and {@code
+   * waitMillisRoundsUpRatherThanTruncating} asserts that directly, including the 999.5ms case that
+   * produced the measured shortfall. What no test in this repository can see is this method ceasing
+   * to call it — a sub-millisecond error is three orders of magnitude below the only end-to-end
+   * floor available, and an assertion tight enough to catch it would flake on scheduling jitter
+   * long before it caught anything. That gap is stated here rather than left to be inferred;
+   * closing it would need a clock seam around the sleep itself.
+   */
   private static void sleep(Duration delay) {
     if (delay.isZero() || delay.isNegative()) {
       return;
     }
     try {
-      Thread.sleep(delay.toMillis());
+      Thread.sleep(waitMillis(delay));
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new MusicBrainzUnavailableException("interrupted while waiting", e);
