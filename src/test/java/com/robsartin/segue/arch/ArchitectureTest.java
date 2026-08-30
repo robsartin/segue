@@ -15,6 +15,7 @@ import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.GraphStore;
 import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.Dependency;
 import com.tngtech.archunit.core.domain.JavaAccess;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaCodeUnitAccess;
@@ -24,7 +25,13 @@ import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.conditions.ArchConditions;
+import com.tngtech.archunit.library.dependencies.SliceAssignment;
+import com.tngtech.archunit.library.dependencies.SliceIdentifier;
 import com.tngtech.archunit.library.dependencies.SlicesRuleDefinition;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -84,46 +91,86 @@ class ArchitectureTest {
                   + " static registry, not a value type");
 
   /**
-   * ADR 32: adapters never depend on each other.
+   * ADR 32's adapters, in one place. Adding a source adds one entry here and nothing else.
    *
-   * <p>Named for what it actually covers rather than for the invariant it serves: this rule's
-   * object list is {@code {jena, musicbrainz}}, so a name reading {@code OtherAdapters} would say
-   * it holds ground it does not hold.
+   * <p>Read by {@link #adaptersDoNotDependOnEachOther}, by {@link #adaptersDoNotDependUpward}, and
+   * by {@code DeveloperGuideEnumerationsTest}, which holds the guide's adapter sentence to it.
+   */
+  static final List<String> ADAPTER_PACKAGES =
+      List.of("jena", "musicbrainz", "sqlite", "tinker", "wikidata");
+
+  /** {@code ..jena..}-style patterns over {@link #ADAPTER_PACKAGES}, for the package predicates. */
+  private static String[] adapterPackagePatterns() {
+    return ADAPTER_PACKAGES.stream().map(p -> ".." + p + "..").toArray(String[]::new);
+  }
+
+  /** One slice per adapter package; everything else is ignored, so it is never compared. */
+  private static final SliceAssignment ADAPTERS =
+      new SliceAssignment() {
+        @Override
+        public SliceIdentifier getIdentifierOf(JavaClass javaClass) {
+          String inPackage = javaClass.getPackageName();
+          for (String adapter : ADAPTER_PACKAGES) {
+            String root = "com.robsartin.segue." + adapter;
+            if (inPackage.equals(root) || inPackage.startsWith(root + ".")) {
+              return SliceIdentifier.of(adapter);
+            }
+          }
+          return SliceIdentifier.ignore();
+        }
+
+        @Override
+        public String getDescription() {
+          return "adapter packages " + ADAPTER_PACKAGES;
+        }
+      };
+
+  /**
+   * ADR 32: adapters are siblings, not collaborators — in both directions, over one list.
    *
-   * <p>What these five sibling rules leave open, enumerated rather than counted: {@code tinker →
-   * sqlite}, {@code tinker → wikidata}, {@code jena → sqlite} and {@code jena → wikidata}. All four
-   * are uncovered today, before any second source existed, and all four are <a
-   * href="https://github.com/robsartin/segue/issues/140">issue #140</a>: one slices rule over a
-   * single adapter list, replacing all five of these.
+   * <p><b>This replaced five pairwise rules that covered 16 of the 20 ordered pairs five adapters
+   * make.</b> {@code tinker → sqlite}, {@code tinker → wikidata}, {@code jena → sqlite} and {@code
+   * jena → wikidata} were unforbidden, and had been since before a second source existed (<a
+   * href="https://github.com/robsartin/segue/issues/140">issue #140</a>). Each of the five rules
+   * was individually correct; the gap was only visible by enumerating the ordered pairs rather than
+   * the rules. {@link #noPackageCycles} could not catch it either — the sibling rules forbade the
+   * return edge, so no cycle could ever form, and the rule that looked like a backstop was
+   * structurally unable to be one.
+   *
+   * <p><b>A {@code DescribedPredicate} cannot express this.</b> {@code dependOnClassesThat} takes a
+   * predicate over the target class only, so nothing on the object side can see which package the
+   * origin is in and say "a <em>different</em> adapter". The naive {@code
+   * resideInAnyPackage(adapters) → resideInAnyPackage(adapters)} is worse than useless: it fails on
+   * every dependency inside one adapter. Slices are only compared across slices, so the
+   * intra-package problem dissolves.
+   *
+   * <p>What the five deleted rules said, kept because it is the argument and not the mechanism:
+   * MusicBrainz identifies an artist by MBID, {@code NodeRecord} identifies one by QID (ADR 22
+   * clause 1), and Wikidata holds the mapping in P434 — so one import of {@code WikidataClient} and
+   * one SPARQL query would bridge them in an afternoon. It would also mean the third source's cost
+   * depends on which of the first two it happens to need, and the question ADR 54 exists to answer
+   * could never be asked again. {@code musicbrainz} declares {@code MusicBrainzIdentity} and
+   * something outside supplies it; {@code app} is the only package ADR 32 lets see two adapters at
+   * once.
    */
   @ArchTest
-  static final ArchRule tinkerDoesNotDependOnJenaOrMusicbrainz =
-      noClasses()
-          .that()
-          .resideInAPackage("..tinker..")
+  static final ArchRule adaptersDoNotDependOnEachOther =
+      SlicesRuleDefinition.slices()
+          .assignedFrom(ADAPTERS)
           .should()
-          .dependOnClassesThat()
-          .resideInAnyPackage("..jena..", "..musicbrainz..")
-          .because("ADR 32: adapters are siblings, not collaborators");
-
-  /** ADR 32: adapters never depend on each other. Named as narrowly as its sibling above. */
-  @ArchTest
-  static final ArchRule jenaDoesNotDependOnTinkerOrMusicbrainz =
-      noClasses()
-          .that()
-          .resideInAPackage("..jena..")
-          .should()
-          .dependOnClassesThat()
-          .resideInAnyPackage("..tinker..", "..musicbrainz..")
-          .because("ADR 32: adapters are siblings, not collaborators");
+          .notDependOnEachOther()
+          .because(
+              "ADR 32 and ADR 25: adapters are siblings, not collaborators — a second source is"
+                  + " only evidence that adding a source is cheap if it was added without the"
+                  + " first, and an import between two adapters would make every later source's"
+                  + " cost depend on which sibling it needed");
 
   /** ADR 32: adapters depend downward only — never on ingest, mcp or app. */
   @ArchTest
   static final ArchRule adaptersDoNotDependUpward =
       noClasses()
           .that()
-          .resideInAnyPackage(
-              "..tinker..", "..jena..", "..sqlite..", "..wikidata..", "..musicbrainz..")
+          .resideInAnyPackage(adapterPackagePatterns())
           .should()
           .dependOnClassesThat()
           .resideInAnyPackage("..ingest..", "..mcp..", "..app..", "..seed..")
@@ -290,17 +337,6 @@ class ArchitectureTest {
           .resideInAPackage("java.util.logging..")
           .because("ADR 30: SLF4J is the only logging API");
 
-  /** ADR 32: adapters never depend on each other. */
-  @ArchTest
-  static final ArchRule sqliteDoesNotDependOnOtherAdapters =
-      noClasses()
-          .that()
-          .resideInAPackage("..sqlite..")
-          .should()
-          .dependOnClassesThat()
-          .resideInAnyPackage("..tinker..", "..jena..", "..wikidata..", "..musicbrainz..")
-          .because("ADR 32: adapters are siblings, not collaborators");
-
   /**
    * The three writes that put a claim somewhere durable: both halves of {@code IngestService.apply}
    * and the log append that must precede them.
@@ -402,6 +438,60 @@ class ArchitectureTest {
                   + " writes the graph, and cannot reach the one class that is allowed to, nor"
                   + " either of the two dev-side tools that write (ADR 44, ADR 46)");
 
+  /** The JDK's networking APIs — the thing an offline tool must not be able to reach. */
+  private static final DescribedPredicate<JavaClass> ON_A_NETWORK_API =
+      JavaClass.Predicates.resideInAnyPackage("java.net..", "javax.net..");
+
+  /** This project's own classes — the only ones the walk below steps through. */
+  private static final DescribedPredicate<JavaClass> OWN_CODE =
+      JavaClass.Predicates.resideInAPackage("com.robsartin.segue..");
+
+  /**
+   * A class of this project's that reaches a network API, itself or through a chain of this
+   * project's own classes.
+   *
+   * <p>The object side of {@link #theExporterNeverSpeaksToANetwork}, and the reason that rule names
+   * no HTTP client.
+   *
+   * <p><b>The walk steps only through {@code com.robsartin.segue}, and that is not a shortcut.</b>
+   * {@code JavaClass.getTransitiveDependenciesFromSelf} was tried first and is unusable here:
+   * ArchUnit resolves missing dependencies off the classpath, {@code java.lang.Class} declares
+   * {@code getResource} returning a {@code java.net.URL}, and every class extends {@code Object} —
+   * so the closure reaches {@code java.net} from literally everything. Measured, not guessed: that
+   * form reported 830 violations against an unmodified {@code export}. Restricting the hops to this
+   * project's classes asks the question actually worth asking — can the exporter get to a network
+   * through code this repository controls — and leaves the JDK and the libraries to the direct
+   * {@link #ON_A_NETWORK_API} clause.
+   */
+  private static final DescribedPredicate<JavaClass> REACHES_A_NETWORK =
+      new DescribedPredicate<>(
+          "reach java.net or javax.net, directly or through another class in this project") {
+        @Override
+        public boolean test(JavaClass javaClass) {
+          if (!OWN_CODE.test(javaClass)) {
+            return false;
+          }
+          Set<String> seen = new HashSet<>();
+          Deque<JavaClass> pending = new ArrayDeque<>(Set.of(javaClass));
+          while (!pending.isEmpty()) {
+            JavaClass current = pending.poll();
+            if (!seen.add(current.getFullName())) {
+              continue;
+            }
+            for (Dependency dependency : current.getDirectDependenciesFromSelf()) {
+              JavaClass target = dependency.getTargetClass();
+              if (ON_A_NETWORK_API.test(target)) {
+                return true;
+              }
+              if (OWN_CODE.test(target)) {
+                pending.add(target);
+              }
+            }
+          }
+          return false;
+        }
+      };
+
   /**
    * ADR 41: the exporter is offline as well as read-only.
    *
@@ -422,9 +512,23 @@ class ArchitectureTest {
    * anything from it.</b> Wikidata's exemption was bought by two offline tables the exporter
    * genuinely needs; MusicBrainz offers the exporter nothing but a second HTTP client, so the fence
    * can be the package rather than a carve-out — and a package is what {@code resideInAnyPackage}
-   * matches. The third argument below is a class name rather than a package and therefore matches
-   * nothing; that is <a href="https://github.com/robsartin/segue/issues/139">issue #139</a> and is
-   * not a pattern to copy.
+   * matches.
+   *
+   * <p><b>{@link #REACHES_A_NETWORK} is the clause that names no client.</b> This rule used to list
+   * {@code ..wikidata.WikidataClient} among the packages, which is a class name passed to a package
+   * predicate: it matched nothing, and {@code export} could hold a {@code WikidataClient} with the
+   * build green (<a href="https://github.com/robsartin/segue/issues/139">issue #139</a>, measured
+   * that way before this was changed). Naming the class instead would have fixed that one case and
+   * left the next source's client to be remembered by hand — the shape #139 says came within one
+   * step of propagating. So the object side asks what a class DOES: does it reach {@code java.net}
+   * or {@code javax.net}, itself or through a chain of this project's own classes? That covers
+   * {@code WikidataClient} and {@code MusicBrainzClient} today, {@code rate.RateServer}, and any
+   * client a third source brings, with nothing to remember.
+   *
+   * <p>Transitive rather than direct, and the difference is load-bearing: {@code
+   * WikidataEntityResolver} holds a {@code WikidataClient} and touches {@code java.net} nowhere
+   * itself, so a direct-only test would let {@code export} reach the network through one
+   * indirection. Both cases were watched go red before this was trusted.
    */
   @ArchTest
   static final ArchRule theExporterNeverSpeaksToANetwork =
@@ -432,9 +536,10 @@ class ArchitectureTest {
           .that()
           .resideInAPackage("..export..")
           .should()
-          .dependOnClassesThat()
-          .resideInAnyPackage(
-              "java.net..", "javax.net..", "..wikidata.WikidataClient", "..musicbrainz..")
+          .dependOnClassesThat(
+              ON_A_NETWORK_API
+                  .or(JavaClass.Predicates.resideInAnyPackage("..musicbrainz.."))
+                  .or(REACHES_A_NETWORK))
           .because(
               "ADR 41: an export is a pure function of the database file — a class label fetched at"
                   + " export time would make a picture depend on the internet being up");
@@ -1022,45 +1127,6 @@ class ArchitectureTest {
           .because(
               "ADR 25 and ADR 32: adapters must be testable without an application context,"
                   + " and adding a source must not require a framework");
-
-  /**
-   * ADR 32 and ADR 25: {@code musicbrainz} is an adapter like any other — and this rule is the
-   * executable form of issue #91's claim.
-   *
-   * <p>#91 asks whether a second source can be added without reshaping the first, and the honest
-   * answer is only worth having if the second source is not quietly welded to the first. The
-   * temptation is specific and cheap: MusicBrainz identifies an artist by MBID, {@code NodeRecord}
-   * identifies one by QID (ADR 22 clause 1), and Wikidata holds the mapping in P434 — so one import
-   * of {@code WikidataClient} and one SPARQL query would bridge them in an afternoon. It would also
-   * mean the third source's cost depends on which of the first two it happens to need, and the
-   * question #91 exists to answer could never be asked again.
-   *
-   * <p>{@code musicbrainz} declares {@code MusicBrainzIdentity} and something outside supplies it;
-   * this rule is what keeps that arrangement true after the next person reads it.
-   */
-  @ArchTest
-  static final ArchRule musicbrainzDoesNotDependOnOtherAdapters =
-      noClasses()
-          .that()
-          .resideInAPackage("..musicbrainz..")
-          .should()
-          .dependOnClassesThat()
-          .resideInAnyPackage("..tinker..", "..jena..", "..sqlite..", "..wikidata..")
-          .because(
-              "ADR 25 and ADR 32: a second source is only evidence that adding a source is cheap"
-                  + " if it was added without the first — an import from musicbrainz to wikidata"
-                  + " would make every later source's cost depend on which sibling it needed");
-
-  /** ADR 32: wikidata is an adapter like any other. */
-  @ArchTest
-  static final ArchRule wikidataDoesNotDependOnOtherAdapters =
-      noClasses()
-          .that()
-          .resideInAPackage("..wikidata..")
-          .should()
-          .dependOnClassesThat()
-          .resideInAnyPackage("..tinker..", "..jena..", "..sqlite..", "..musicbrainz..")
-          .because("ADR 32: adapters are siblings, not collaborators");
 
   /**
    * One JSON library, one major version. Jackson 3 lives under {@code tools.jackson}; Jackson 2's

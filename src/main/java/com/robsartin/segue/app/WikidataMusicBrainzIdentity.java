@@ -24,11 +24,13 @@ import tools.jackson.databind.JsonNode;
  * <p><b>Why it lives in {@code app}.</b> It has to see both {@link MusicBrainzIdentity} and {@link
  * WikidataClient}, and ADR 32 says in one sentence which package may do that: "{@code app} is the
  * only package permitted to depend on everything, because wiring is its job." Neither adapter
- * package is a candidate — {@code ArchitectureTest.musicbrainzDoesNotDependOnOtherAdapters} and
- * {@code .wikidataDoesNotDependOnOtherAdapters} forbid both directions, and both were watched red
- * against a scratch class placed in each package in turn. So the seam is a real seam: {@code
- * musicbrainz} names what it needs, {@code app} supplies it, and a third source resolving
- * identities some other way is the same shape of work rather than a change to either.
+ * package is a candidate — {@code ArchitectureTest.adaptersDoNotDependOnEachOther} forbids both
+ * directions, and every one of the twenty ordered pairs five adapters make was watched red against
+ * a scratch field placed in each package in turn (issue #140; before it, two of the pairs this
+ * sentence relies on were the only ones covered, by two pairwise rules that no longer exist). So
+ * the seam is a real seam: {@code musicbrainz} names what it needs, {@code app} supplies it, and a
+ * third source resolving identities some other way is the same shape of work rather than a change
+ * to either.
  *
  * <p><b>It degrades, and never throws.</b> {@link MusicBrainzIdentity} declares no failure type,
  * and {@code SegueService.expandEntity} calls {@code adapter.expand} with no {@code try}, so a
