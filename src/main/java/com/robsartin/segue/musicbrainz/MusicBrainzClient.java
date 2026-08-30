@@ -357,10 +357,14 @@ public final class MusicBrainzClient {
    * original defect was {@code Thread.sleep(delay.toMillis())}: {@code toMillis()} truncates, so
    * 999.5ms owed became a 999ms wait and a request left half a millisecond inside {@link
    * #MIN_REQUEST_INTERVAL} — measured, as a 0.999339625s gap, on the concurrency test's first run.
-   * Nothing could see it afterwards. That test allows 100ms of slack, roughly two hundred times the
-   * shortfall, and no other test reaches this method at all. A recorder passed in here shows what
-   * was asked for without waiting for it, which is the injected collaborator CLAUDE.md's TDD rule
-   * names beside a pure function.
+   * Nothing could see it afterwards, which is not the same as nothing reaching it. Five tests reach
+   * this method, counted by making the delegation throw and reading the names back off the JUnit
+   * XML: four sleep the exact 200ms retry backoff, where a truncation changes nothing at all, and
+   * the fifth is the concurrency test, which was measured asking for 0.99997s and allows 100ms of
+   * slack — roughly two hundred times the shortfall. Reaching this method and being able to see a
+   * sub-millisecond error inside it are different things, and only the second would have caught the
+   * defect. A recorder passed in here shows what was asked for without waiting for it, which is the
+   * injected collaborator CLAUDE.md's TDD rule names beside a pure function.
    *
    * <p><b>A {@link Duration} all the way down, not a millisecond count.</b> {@code
    * Thread.sleep(Duration)} does no millisecond conversion: in JDK 25 it is {@code
@@ -369,6 +373,21 @@ public final class MusicBrainzClient {
    * one review round and was replaced: it was harmless, because rounding up can only overrun and
    * that is the direction {@link #lastRequestAt} depends on, but it put back the very granularity
    * the original bug came from and bought nothing this parameter does not.
+   *
+   * <p><b>What is verified, and what is not.</b> This method has three branches and each one has a
+   * test: the guard clause by {@code aWaitOfNothingNeverReachesTheSleeper}, the dispatch by {@code
+   * aWaitIsAskedForInFullRatherThanTruncated}, which reads the full 999.5ms back off a recorder,
+   * and the {@code catch} by {@code anInterruptedWaitSurfacesAsUnavailableAndRestoresTheFlag},
+   * which asserts both the wrapping and the restored flag. That is the whole method.
+   *
+   * <p>What nothing guards is the one line above it — {@link #sleep(Duration)}'s choice of {@code
+   * Thread::sleep}. Rewritten as {@code d -> Thread.sleep(d.toMillis())} it leaves every test in
+   * this repository green — measured across all 95 suites, not supposed, and stated as "every"
+   * rather than a count so that adding a test cannot quietly falsify it. It is a smaller residual
+   * than the one this seam replaced, which was a whole method body rather than a delegation, and
+   * the three branches listed above went from untestable to tested in the same move. It is still a
+   * line, and it is the same shape of unrecorded rounding as the defect this class was fixed for,
+   * so it is written here rather than left for the next reader to discover.
    */
   static void sleep(Duration delay, Sleeper sleeper) {
     if (delay.isZero() || delay.isNegative()) {

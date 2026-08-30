@@ -152,8 +152,14 @@ class MusicBrainzClientTest {
     MusicBrainzClient.sleep(owed, asked::add);
 
     // The whole duration, remainder and all. Thread.sleep(Duration) keeps it: JDK 25's is
-    // sleepNanos(nanos) with no millisecond conversion in it, so any rounding here would be this
-    // client's own, and this assertion is what says there is none.
+    // sleepNanos(nanos) with no millisecond conversion in it, so any rounding would be this
+    // client's own.
+    //
+    // What this says is that there is none in THIS method. It says nothing about which sleeper the
+    // production path picks — sleep(Duration) delegating as `d -> Thread.sleep(d.toMillis())`
+    // leaves the whole suite green, measured. That residual is one line and is recorded in
+    // sleep(Duration, Sleeper)'s javadoc; claiming this assertion covered it would be the same
+    // over-claim as the defect the seam was built for.
     assertThat(asked).containsExactly(owed);
   }
 
@@ -168,6 +174,29 @@ class MusicBrainzClientTest {
     MusicBrainzClient.sleep(Duration.ofMillis(-5), asked::add);
 
     assertThat(asked).isEmpty();
+  }
+
+  @Test
+  @DisplayName("an interrupted wait surfaces as unavailable and leaves the interrupt flag set")
+  void anInterruptedWaitSurfacesAsUnavailableAndRestoresTheFlag() {
+    // The third and last branch of sleep(Duration, Sleeper), and cheap only because the sleeper is
+    // a parameter: interrupting a real Thread.sleep from a test would need a second thread. Both
+    // halves matter. Swallowing InterruptedException without re-setting the flag is the classic way
+    // to make a thread uninterruptible, and MusicBrainzUnavailableException is the one failure type
+    // this client's callers are written against — an InterruptedException escaping artistRelations
+    // would go straight past MusicBrainzSourceAdapter's catch and out of expand().
+    assertThatThrownBy(
+            () ->
+                MusicBrainzClient.sleep(
+                    MusicBrainzClient.MIN_REQUEST_INTERVAL,
+                    delay -> {
+                      throw new InterruptedException("stopped mid-wait");
+                    }))
+        .isInstanceOf(MusicBrainzUnavailableException.class);
+
+    // Thread.interrupted() reads the flag AND clears it, so this asserts the restoration and leaves
+    // no interrupt behind for whatever JUnit runs next on this thread.
+    assertThat(Thread.interrupted()).as("the interrupt flag is left set for the caller").isTrue();
   }
 
   @Test
