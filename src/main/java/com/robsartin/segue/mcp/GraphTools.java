@@ -67,6 +67,11 @@ public class GraphTools {
           result comes back partial and names the ceiling actually applied. Every other kind is \
           bounded only by maxNewEdges.
 
+          Expanding something because it was recommended to you will usually push it DOWN the next \
+          recommendation list, and that is not a fault. The recommender divides by the candidate's \
+          own degree, which this call raises; the entity has not become less interesting, it has \
+          become better measured. Expanding it is still the right way to learn more about it.
+
           CONCEPT is also the kind an entity gets when its Wikidata classes are not recognised, so \
           a capped expansion occasionally means "we could not tell what this is" rather than "this \
           is a broad subject". If the entity is plainly a work, a person or a place, treat the cap \

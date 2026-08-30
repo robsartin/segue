@@ -568,6 +568,11 @@ problem and needs a second call.
 The measured effect of adding the second pass, and everything else about the decision, is in
 [ADR 36: reverse lookup via SPARQL](adr/0036-reverse-lookup-via-sparql.md).
 
+**Before running expansions to improve a recommendation list, read
+[Expanding a top candidate demotes it](#expanding-a-top-candidate-demotes-it--expand-the-top-candidates-is-an-anti-pattern).**
+Expanding a candidate raises the degree its own score is divided by, so the strategy that reads as
+obvious is self-defeating.
+
 ### The full call, end to end
 
 ```mermaid
@@ -1485,6 +1490,34 @@ it, which is the thing this feature exists to escape.
 Dividing by the candidate's degree rewards a small denominator, so a **degree floor is not
 optional** — `--min-degree`, defaulting to `Recommendations.MIN_CANDIDATE_DEGREE`. Without one the
 answer is whatever is thinnest.
+
+### Expanding a top candidate demotes it — "expand the top candidates" is an anti-pattern
+
+**Read this before running a batch of expansions, not after.** `lift` divides by the candidate's
+own degree, and `expand_entity` raises exactly that number. So expanding a candidate lowers its own
+score, and expanding the ones at the top of the list is the most reliable way to remove them from
+it. Measured on the real graph (issue #117): after a batch of expansions that included it, **the
+entity at rank 1 dropped out of the top 25 entirely**, and an entity that had *not* been expanded
+took its place.
+
+Nothing is broken. Two readings of that are both defensible, and
+[ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md)'s 2026-08-29 amendment records the
+decision between them along with the figures — the short version is that the demotion is partly the
+measurement improving and partly the ranking tracking ingest history rather than the world.
+
+Three practical consequences:
+
+- **A candidate's disappearance after an expansion is not the recommender changing its mind about
+  it.** It usually means the expansion worked.
+- **Expanding candidates does not grow the candidate pool either.** A node discovered by expansion
+  arrives with one edge, and the floor excludes it — deliberately, because a degree-1 candidate has
+  exactly one intermediate, so its score is a fact about its parent rather than about itself.
+  Lowering the floor to `Recommendations.MIN_CANDIDATE_DEGREE` did not change that and was not
+  meant to.
+- **Expand the intermediates and the known-list instead**, if the aim is to move the recommendations.
+  Those raise the numerator of candidates rather than their own denominators. Expanding a candidate
+  is worth doing when the aim is to *know more about it* — just re-run `recommend` afterwards
+  expecting the list to move, rather than reading the new list as a verdict on the old one.
 
 ### Edge type carries more of the signal than the arithmetic does
 
