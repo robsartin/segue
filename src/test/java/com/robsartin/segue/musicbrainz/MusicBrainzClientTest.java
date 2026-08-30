@@ -135,25 +135,39 @@ class MusicBrainzClientTest {
   }
 
   @Test
-  @DisplayName("waitMillis rounds a sub-millisecond remainder up rather than truncating it")
-  void waitMillisRoundsUpRatherThanTruncating() {
-    // The defect this guards is not the concurrency one and was found by it. sleep() passed
-    // delay.toMillis(), which truncates, so 999.5ms of owed wait became a 999ms sleep and the
-    // request left half a millisecond inside MIN_REQUEST_INTERVAL — measured, as a 0.999339625s
-    // gap, on the first run of the concurrency test below.
+  @DisplayName("a wait is asked for in full, with its sub-millisecond remainder intact")
+  void aWaitIsAskedForInFullRatherThanTruncated() {
+    // The defect this guards is not the concurrency one; it was found by it. sleep() passed
+    // delay.toMillis() to Thread.sleep, and toMillis() truncates, so 999.5ms of owed wait became a
+    // 999ms sleep and the request left half a millisecond inside MIN_REQUEST_INTERVAL — measured,
+    // as a 0.999339625s gap, on the first run of the concurrency test below.
     //
-    // Asserted here rather than through sleep() because the shortfall is 0.5ms: the only
-    // end-to-end floor this suite has is 0.9s, roughly 1800 times too coarse to see it, and
-    // tightening it far enough would flake on scheduling jitter long before it caught anything.
-    assertThat(MusicBrainzClient.waitMillis(Duration.ofMillis(999).plusNanos(500_000)))
-        .isEqualTo(1000);
-    // The smallest remainder there is still buys a whole millisecond — rounding up, not to nearest.
-    assertThat(MusicBrainzClient.waitMillis(Duration.ofNanos(1))).isEqualTo(1);
-    // And an exact number of milliseconds is not inflated by that rounding. Both of the durations
-    // this client actually sleeps are exact: the backoff base and the request interval.
-    assertThat(MusicBrainzClient.waitMillis(Duration.ofMillis(200))).isEqualTo(200);
-    assertThat(MusicBrainzClient.waitMillis(MusicBrainzClient.MIN_REQUEST_INTERVAL))
-        .isEqualTo(1000);
+    // Driven through an injected sleeper rather than asserted end to end, because the shortfall is
+    // 0.5ms and the concurrency test allows 100ms of slack — roughly two hundred times too much to
+    // see it — while tightening that allowance would flake on scheduling jitter long before it
+    // caught anything. A recorder needs no wall clock and does not wait.
+    List<Duration> asked = new ArrayList<>();
+    Duration owed = Duration.ofMillis(999).plusNanos(500_000);
+
+    MusicBrainzClient.sleep(owed, asked::add);
+
+    // The whole duration, remainder and all. Thread.sleep(Duration) keeps it: JDK 25's is
+    // sleepNanos(nanos) with no millisecond conversion in it, so any rounding here would be this
+    // client's own, and this assertion is what says there is none.
+    assertThat(asked).containsExactly(owed);
+  }
+
+  @Test
+  @DisplayName("a wait of nothing never reaches the sleeper at all")
+  void aWaitOfNothingNeverReachesTheSleeper() {
+    // reserve() returns zero for the first caller of every client, and throttleDelay returns zero
+    // once the interval has passed, so this is the common path rather than an edge case.
+    List<Duration> asked = new ArrayList<>();
+
+    MusicBrainzClient.sleep(Duration.ZERO, asked::add);
+    MusicBrainzClient.sleep(Duration.ofMillis(-5), asked::add);
+
+    assertThat(asked).isEmpty();
   }
 
   @Test
