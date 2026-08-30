@@ -247,10 +247,13 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   with the Query Service down. **Registering a property that is Wikidata's inverse
   of one already in `EdgeTypes` reintroduces this**; mark it `fallbackOnly` or do
   not register it. See ADR 36's issue-#33 amendment.
-- **The vocabulary modelled only collaboration, and that broke literature.** Every
-  Wikidata-backed edge type was people working *together* — co-credits on one work,
-  membership of one group — which models film and music well and single-authored novels
-  not at all. Three SF novelists added and expanded shared no node and `find_paths`
+- **The vocabulary modelled collaboration almost exclusively, and that broke literature.**
+  Nearly every Wikidata-backed edge type was people working *together* — co-credits on one
+  work, membership of one group — which models film and music well and single-authored novels
+  not at all. **Not *every*:** `INFLUENCED_BY` (P737) states an intellectual debt rather than
+  a co-credit and has been registered since slice 0, before ADR 38's award edge. `EdgeTypes`
+  is the authority; ADR 53 corrects the same "every" claim where issue #78 made it.
+  Three SF novelists added and expanded shared no node and `find_paths`
   returned zero routes for every pair (issue #32). **Fixed (ADR 38) by registering exactly
   one property: `RECEIVED_AWARD` (P166), DIRECT because Wikidata states it on the
   recipient.** The three pairs now route through the Hugo, Nebula, Locus, Seiun and Bob
