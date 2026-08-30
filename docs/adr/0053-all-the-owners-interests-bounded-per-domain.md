@@ -352,3 +352,67 @@ is restated here.
 
 - **Nothing in `./gradlew check` changes.** This is a scope decision with no production code of its
   own; the code it describes was merged under ADRs 47, 49 and 31's issue-#88 amendment.
+
+**Amendment (2026-08-30, issue #144): four statements above were falsified within days of this ADR
+being written, one of its conclusions is contested, and the implementor enumeration should never
+have been in an ADR at all.**
+
+Nothing above is edited and no decision is withdrawn — ADR 1 makes this document immutable.
+[ADR 54](0054-musicbrainz-as-the-second-source.md) records the second source that #91 was open for
+above, and building it is what falsified the statements below. Each was re-measured against the tree
+as it stands at this amendment rather than carried over from the branch that first noticed it,
+because two of the counts moved again after that branch merged.
+
+**1. The pointer to #91 as the territory for reaching restaurants.** *"Places you go"* above ends
+*"Reaching this domain requires a different source, which is #91's territory and not a vocabulary
+decision."* #91 is closed, and the source it delivered does not reach the domain, so that sentence
+now sends a reader to a closed issue for a fix it did not contain. ADR 54's OpenStreetMap
+alternative sets out where the obstacles actually sit — `EdgeTypes` registers no location property,
+and an OSM identifier is not stable across edits while this project's log is append-only — and
+neither of those is something a choice of source settles on its own.
+
+**2. "The only source that exists".** Stated twice: once in the Context above, explaining why this
+ADR needed writing, and once in the *"What remains open"* entry for #91, as *"the only source there
+is"*. Two production sources exist now. **What the clause was supporting is untouched in both
+places**: no second source reaches restaurants, and ADR 54 is the reason why.
+
+**3. The SPI implementor enumeration.** *"The SPI is the right extension point"* above reads *"In
+`src/main` there is exactly one `SourceAdapter` (`WikidataSourceAdapter`) and one `EntityResolver`
+(`WikidataEntityResolver`), both in `wikidata`. The seven test doubles in `src/test` — two adapters
+and five resolvers"*. Two of those three counts moved: `src/main` holds **two** `SourceAdapter`s,
+and `src/test` holds **eight** doubles — two adapters and **six** resolvers. Both interfaces declare
+three methods, so neither is a functional interface and no lambda or anonymous implementation can be
+hiding from a reader who counts declarations.
+
+**Two of the counts still hold, and are named here so this amendment does not over-correct a
+sentence that is only partly wrong**: there is still exactly one `EntityResolver` in `src/main`, and
+the test doubles still include exactly two adapters.
+
+**4. The prediction about ADR 42's seam.** *"#91 changes character"* above ends *"ADR 42's seam is
+the first thing it will press on."* It was not. `KindMapper` did not move and needed no change:
+MusicBrainz states no Wikidata classes, and the `musicbrainz` package imports from `domain` and
+`port` only. What a second source pressed on first was the architecture fences, which name adapter
+packages as literal strings, so a new adapter package inherits none of them and nothing goes red to
+say so — ADR 25's own issue-#91 amendment records that failure mode, and issues #139 and #140 record
+two instances of it. The prediction remains right about a source that *does* state classes of its
+own; it was simply not this source.
+
+**Contested rather than falsified, and the difference is the point: the restaurants conclusion
+itself.** This ADR concluded that reaching that domain *requires* a different source. ADR 54 argues
+that a different source does **not** fix it, because the obstacles are the identity spine and the
+vocabulary rather than the source. That is an argument against a conclusion, not a count that moved,
+and recording it beside the four above would misdescribe what happened to it. **It is not withdrawn
+here.** This amendment records what was falsified; the argument against the conclusion lives in
+ADR 54, where it can be read against its own evidence.
+
+**The enumeration should not have been here, and this amendment does not replace it with a better
+one.** [ADR 32](0032-layering-and-archunit.md) reached the same conclusion about its own rule table
+— *"`ArchitectureTest` is the list, not this table"*, and *"Rules have been added without amending
+this ADR before and will be again"* — and a document that declines to be an enumeration cannot go
+stale. The same applies to every count in the paragraph this amendment corrects: **the code is the
+authority on how many implementors each port has, and a count written into a decision record will be
+falsified by the next adapter exactly as it was by this one.** The figures above are dated evidence
+that the original figures moved, not a new roster to keep current. What this ADR decided is
+untouched by any of it — the SPI is still the right extension point, and adding a source still must
+not require touching the graph layer. What that cost in practice is ADR 25's issue-#91 amendment,
+not this one.
