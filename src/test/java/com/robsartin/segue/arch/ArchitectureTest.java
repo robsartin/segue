@@ -83,26 +83,37 @@ class ArchitectureTest {
               "ADR 11 requires records for value types; a class with only private constructors is a"
                   + " static registry, not a value type");
 
-  /** ADR 32: adapters never depend on each other. */
+  /**
+   * ADR 32: adapters never depend on each other.
+   *
+   * <p>Named for what it actually covers rather than for the invariant it serves. Four adapter
+   * packages made twelve ordered pairs and these sibling rules covered eight; a fifth makes twenty
+   * and this file covers fourteen. The six it does not — {@code tinker} and {@code jena} reaching
+   * {@code sqlite} or {@code wikidata}, and the two directions of {@code sqlite}/{@code wikidata}
+   * that no subject rule names — are uncovered today, before any second source existed, and are <a
+   * href="https://github.com/robsartin/segue/issues/140">issue #140</a>: one slices rule over a
+   * single adapter list, replacing all five of these. A name reading {@code OtherAdapters} here
+   * would say this rule holds ground it does not hold.
+   */
   @ArchTest
-  static final ArchRule tinkerDoesNotDependOnJena =
+  static final ArchRule tinkerDoesNotDependOnJenaOrMusicbrainz =
       noClasses()
           .that()
           .resideInAPackage("..tinker..")
           .should()
           .dependOnClassesThat()
-          .resideInAPackage("..jena..")
+          .resideInAnyPackage("..jena..", "..musicbrainz..")
           .because("ADR 32: adapters are siblings, not collaborators");
 
-  /** ADR 32: adapters never depend on each other. */
+  /** ADR 32: adapters never depend on each other. Named as narrowly as its sibling above. */
   @ArchTest
-  static final ArchRule jenaDoesNotDependOnTinker =
+  static final ArchRule jenaDoesNotDependOnTinkerOrMusicbrainz =
       noClasses()
           .that()
           .resideInAPackage("..jena..")
           .should()
           .dependOnClassesThat()
-          .resideInAPackage("..tinker..")
+          .resideInAnyPackage("..tinker..", "..musicbrainz..")
           .because("ADR 32: adapters are siblings, not collaborators");
 
   /** ADR 32: adapters depend downward only — never on ingest, mcp or app. */
@@ -110,7 +121,8 @@ class ArchitectureTest {
   static final ArchRule adaptersDoNotDependUpward =
       noClasses()
           .that()
-          .resideInAnyPackage("..tinker..", "..jena..", "..sqlite..", "..wikidata..")
+          .resideInAnyPackage(
+              "..tinker..", "..jena..", "..sqlite..", "..wikidata..", "..musicbrainz..")
           .should()
           .dependOnClassesThat()
           .resideInAnyPackage("..ingest..", "..mcp..", "..app..", "..seed..")
@@ -285,7 +297,7 @@ class ArchitectureTest {
           .resideInAPackage("..sqlite..")
           .should()
           .dependOnClassesThat()
-          .resideInAnyPackage("..tinker..", "..jena..", "..wikidata..")
+          .resideInAnyPackage("..tinker..", "..jena..", "..wikidata..", "..musicbrainz..")
           .because("ADR 32: adapters are siblings, not collaborators");
 
   /**
@@ -404,6 +416,14 @@ class ArchitectureTest {
    * is to write a fresh one here. {@code wikidata} as a whole is deliberately NOT banned: {@code
    * LogProjection} calls {@code KindMapper.rederive}, which is a static table and no more a network
    * call than this one is.
+   *
+   * <p><b>{@code musicbrainz} as a whole IS banned, because nothing in {@code export} wants
+   * anything from it.</b> Wikidata's exemption was bought by two offline tables the exporter
+   * genuinely needs; MusicBrainz offers the exporter nothing but a second HTTP client, so the fence
+   * can be the package rather than a carve-out — and a package is what {@code resideInAnyPackage}
+   * matches. The third argument below is a class name rather than a package and therefore matches
+   * nothing; that is <a href="https://github.com/robsartin/segue/issues/139">issue #139</a> and is
+   * not a pattern to copy.
    */
   @ArchTest
   static final ArchRule theExporterNeverSpeaksToANetwork =
@@ -412,7 +432,8 @@ class ArchitectureTest {
           .resideInAPackage("..export..")
           .should()
           .dependOnClassesThat()
-          .resideInAnyPackage("java.net..", "javax.net..", "..wikidata.WikidataClient")
+          .resideInAnyPackage(
+              "java.net..", "javax.net..", "..wikidata.WikidataClient", "..musicbrainz..")
           .because(
               "ADR 41: an export is a pure function of the database file — a class label fetched at"
                   + " export time would make a picture depend on the internet being up");
@@ -975,7 +996,8 @@ class ArchitectureTest {
   static final ArchRule theWorldFactLayerNeverTouchesAffinity =
       noClasses()
           .that()
-          .resideInAnyPackage("..ingest..", "..tinker..", "..jena..", "..wikidata..")
+          .resideInAnyPackage(
+              "..ingest..", "..tinker..", "..jena..", "..wikidata..", "..musicbrainz..")
           .should()
           .dependOnClassesThat(AFFINITY_TYPES)
           .because(
@@ -1000,6 +1022,34 @@ class ArchitectureTest {
               "ADR 25 and ADR 32: adapters must be testable without an application context,"
                   + " and adding a source must not require a framework");
 
+  /**
+   * ADR 32 and ADR 25: {@code musicbrainz} is an adapter like any other — and this rule is the
+   * executable form of issue #91's claim.
+   *
+   * <p>#91 asks whether a second source can be added without reshaping the first, and the honest
+   * answer is only worth having if the second source is not quietly welded to the first. The
+   * temptation is specific and cheap: MusicBrainz identifies an artist by MBID, {@code NodeRecord}
+   * identifies one by QID (ADR 22 clause 1), and Wikidata holds the mapping in P434 — so one import
+   * of {@code WikidataClient} and one SPARQL query would bridge them in an afternoon. It would also
+   * mean the third source's cost depends on which of the first two it happens to need, and the
+   * question #91 exists to answer could never be asked again.
+   *
+   * <p>{@code musicbrainz} declares {@code MusicBrainzIdentity} and something outside supplies it;
+   * this rule is what keeps that arrangement true after the next person reads it.
+   */
+  @ArchTest
+  static final ArchRule musicbrainzDoesNotDependOnOtherAdapters =
+      noClasses()
+          .that()
+          .resideInAPackage("..musicbrainz..")
+          .should()
+          .dependOnClassesThat()
+          .resideInAnyPackage("..tinker..", "..jena..", "..sqlite..", "..wikidata..")
+          .because(
+              "ADR 25 and ADR 32: a second source is only evidence that adding a source is cheap"
+                  + " if it was added without the first — an import from musicbrainz to wikidata"
+                  + " would make every later source's cost depend on which sibling it needed");
+
   /** ADR 32: wikidata is an adapter like any other. */
   @ArchTest
   static final ArchRule wikidataDoesNotDependOnOtherAdapters =
@@ -1008,7 +1058,7 @@ class ArchitectureTest {
           .resideInAPackage("..wikidata..")
           .should()
           .dependOnClassesThat()
-          .resideInAnyPackage("..tinker..", "..jena..", "..sqlite..")
+          .resideInAnyPackage("..tinker..", "..jena..", "..sqlite..", "..musicbrainz..")
           .because("ADR 32: adapters are siblings, not collaborators");
 
   /**
