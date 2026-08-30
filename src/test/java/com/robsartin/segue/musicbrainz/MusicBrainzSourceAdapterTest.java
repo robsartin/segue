@@ -301,8 +301,8 @@ class MusicBrainzSourceAdapterTest {
     // logged happily and blows up later at the node that names it. Whatever implements
     // MusicBrainzIdentity is reading QIDs out of somebody's database — Wikidata's P434 in the
     // shipped wiring — so this is arriving external data rather than a programming error, the same
-    // case ClaimMapper:138-144 refuses for Wikidata. The adapter does not know which bridge is
-    // behind the seam, which is exactly why it checks.
+    // case ClaimMapper's non-QID object-id guard refuses for Wikidata. The adapter does not know
+    // which bridge is behind the seam, which is exactly why it checks.
     MusicBrainzSourceAdapter adapter =
         adapter(mapping(QUINTET_MBID, QUINTET_QID, FIRST_MEMBER_MBID, "https://example.invalid/x"));
 

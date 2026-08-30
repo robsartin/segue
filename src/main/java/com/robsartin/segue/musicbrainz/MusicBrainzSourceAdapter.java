@@ -214,8 +214,9 @@ public final class MusicBrainzSourceAdapter implements SourceAdapter {
       if (!Qid.looksLikeAQid(targetQid)) {
         // GAP 9: AssertionRecord validates neither endpoint, so a non-QID would be logged happily
         // and then reach TinkerGraphStore.requireVertex and throw mid-batch, after the log entry
-        // is already written. ClaimMapper:138-144 refuses the same thing for the same stated
-        // reason. This is not a defensive check against a programming error: MusicBrainzIdentity
+        // is already written. ClaimMapper refuses a non-QID object id for the same stated reason,
+        // in the guard that names that exact failure. This is not a defensive check against a
+        // programming error: MusicBrainzIdentity
         // is an interface this package neither implements nor constrains, and whatever supplies
         // it is reading QIDs out of somebody's database — Wikidata's P434 in the shipped wiring,
         // an external-id whose values are contributor-entered. Malformed input arrives from
