@@ -7,10 +7,12 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.WebSocket;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -393,12 +395,51 @@ final class HeadlessChrome implements AutoCloseable {
       Thread.currentThread().interrupt();
     }
     process.destroyForcibly();
+    try {
+      // Deleting the profile while the process is still dying is what makes entries vanish
+      // mid-walk.
+      process.waitFor(10, TimeUnit.SECONDS);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
     deleteTree(userData);
   }
 
-  private static void deleteTree(Path root) {
-    try (var paths = Files.walk(root)) {
-      paths.sorted(Comparator.reverseOrder()).forEach(HeadlessChrome::deleteQuietly);
+  /**
+   * Removes the throwaway profile, tolerating a tree that changes underneath.
+   *
+   * <p>Chrome keeps removing its own profile files as it exits, so entries vanish mid-walk. This
+   * visits rather than streaming because {@link Files#walk} is lazy: a listing that fails partway
+   * through raises {@link java.io.UncheckedIOException}, which is not an {@link IOException} and so
+   * escaped the {@code catch} written to swallow exactly this. Failing here failed a passing test
+   * from {@code @AfterEach}.
+   *
+   * <p>Every failure is continued past rather than caught at the top, so one unreadable corner does
+   * not abandon the rest of the profile.
+   */
+  static void deleteTree(Path root) {
+    try {
+      Files.walkFileTree(
+          root,
+          new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+              deleteQuietly(file);
+              return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFileFailed(Path file, IOException failure) {
+              // Vanished as Chrome exited, or a directory we may not list. Neither is our business.
+              return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult postVisitDirectory(Path dir, IOException failure) {
+              deleteQuietly(dir);
+              return FileVisitResult.CONTINUE;
+            }
+          });
     } catch (IOException ignored) {
       // A leftover profile in the temp directory is not worth failing a test over.
     }
@@ -408,7 +449,7 @@ final class HeadlessChrome implements AutoCloseable {
     try {
       Files.deleteIfExists(path);
     } catch (IOException ignored) {
-      // Same.
+      // Same: it may have gone on its own, or be a directory we could not empty.
     }
   }
 }
