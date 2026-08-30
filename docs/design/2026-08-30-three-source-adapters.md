@@ -17,12 +17,17 @@ blanket all-clear is exactly what makes a reviewer stop looking.
 
 Checked: every entity named below was chosen by me as a probe against a public API, none was taken
 from the known-list or from any tool run over it, and every figure is a count over public data or a
-property of code in this repository. The Open Library section is deliberately **anonymised** — no
-title, no author name, no OLID, no QID — because the argument there is about a record *schema* and
-a real name would carry none of it; the first draft of that section named a title inside an
-"owner's book collection" framing, which is the disclosure ADR 51 forbids and which
-[ADR 47](../adr/0047-main-subject-as-the-route-through-what-a-book-is-about.md)'s own amendment
-already identifies as a breach in its own text.
+property of code in this repository.
+
+**The Open Library section had its identifying framing removed** — the "owner's book collection"
+possessive, the title, the author name, the OLIDs and the QID. That framing is the disclosure ADR 51
+forbids, and [ADR 47](../adr/0047-main-subject-as-the-route-through-what-a-book-is-about.md)'s own
+amendment identifies the same construction in its own text as a breach. **It is not, however,
+anonymous, and this note does not claim it is:** the section still cites ADR 47's *What this cannot
+reach* table and says the probe was a programming title with no Wikidata item, and that table has
+exactly one row of that description — so a reader can recover the title in one hop, through a
+pointer this note supplies. The pointer is kept because ADR 47 is public, deliberately unrepaired,
+and the authority for the claim; what is not kept is any sentence framing the book as the owner's.
 
 Not covered by that check: I cannot verify a negative about entities I have never seen, since the
 known-list is not in this repository and ADR 51 forbids committing one. A reviewer who knows the
@@ -201,9 +206,10 @@ general shape by searching Open Library for a programming title with no Wikidata
 two work records back. **This is the domain where a second source would add coverage rather than
 depth.**
 
-Everything in this section is deliberately anonymous. The argument is about what fields an Open
-Library record does and does not have, which no title or author name makes any sharper — see the
-privacy note above.
+No title, author name, OLID or QID appears in this section, and no sentence frames a book as the
+owner's. The argument is about what fields an Open Library record does and does not have, which no
+name makes any sharper. This is not the same as anonymity — the citation of ADR 47 below is a
+pointer a reader can follow — and the privacy note above says so rather than claiming otherwise.
 
 ### Where its relations live — on the work, and as strings
 
@@ -305,12 +311,16 @@ data to hold.
    P136 at 16,552. Every premises in a city hanging off one city node is that shape or worse, and
    the route it yields — "these two are both in this city" — is the coincidence ADR 36's issue-#71
    amendment calls a route that means nothing.
-4. **And the hub rule could not demote it.** `PathRanking.isHub` has two halves and I read both
-   (`domain/PathRanking.java:176–197`). `isBusyConcept` requires `node.kind() == NodeKind.CONCEPT`;
-   a city maps to `PLACE`. `isRecognitionInstitution` reads `node.instanceOf()`; an OSM-sourced node
-   states no Wikidata classes, so that list is empty. **Both halves are unavailable at once for an
-   OSM place**, and a city hub would rank as a genuine explanation. ADR 31's issue-#88 amendment
-   refused to generalise the hub rule; this is the case that refusal leaves open.
+4. **And the hub rule could not demote it — given the kind the adapter would assert.**
+   `PathRanking.isHub` has two halves and I read both (`domain/PathRanking.java:176–197`).
+   `isBusyConcept` requires `node.kind() == NodeKind.CONCEPT`; `isRecognitionInstitution` reads
+   `node.instanceOf()`, which is empty for a source stating no Wikidata classes. So an OSM place
+   asserted as `PLACE` — the honest kind, and what `KindMapper:91` gives a Wikidata city — trips
+   **neither half**, and a city hub would rank as a genuine explanation. **This step depends on that
+   design choice**: an adapter that filed cities as `CONCEPT` would trip `isBusyConcept` once the
+   degree passed ten, at the cost of calling a city a thing it could not place. The recommendation
+   does not rest on this step — step 3 carries it alone — but ADR 31's issue-#88 amendment refused
+   to generalise the hub rule, and this is the case that refusal leaves open.
 
 Recording this conclusion is worth more than the adapter would have been, and it is the same kind of
 answer #89 exists to make sayable.
@@ -443,41 +453,85 @@ literal naming `tinker`, `jena`, `sqlite` or `wikidata`. **13 of the 35 rules na
 package (or an adapter class) as a literal.** The number alone is a trap, so here is the list —
 Task 2 must inherit the list, not the number.
 
-**Must change, or a real fence does not extend to the new adapter (5):**
+**Tier 1 — must change, or a real fence does not extend to the new adapter (3):**
 
 | rule | lines | what breaks without the edit |
 |---|---|---|
 | `theWorldFactLayerNeverTouchesAffinity` | 975–983 | **ADR 33's privacy fence.** Subject list; the new adapter could reach the affinity types. |
 | `adaptersDoNotDependUpward` | 110–117 | Subject list; the new adapter could depend on `ingest`, `mcp`, `app`, `seed`. |
-| `sqliteDoesNotDependOnOtherAdapters` | 282–289 | Object list; `sqlite` could depend on the new adapter. |
-| `wikidataDoesNotDependOnOtherAdapters` | 1005–1012 | Object list; `wikidata` could depend on the new adapter. |
-| `theExporterNeverSpeaksToANetwork` | 409–418 | Objects are `java.net..`, `javax.net..` and the literal class `..wikidata.WikidataClient`. ArchUnit checks **direct** dependencies, so `export → MusicBrainzClient` is caught by none of the three. |
+| `theExporterNeverSpeaksToANetwork` | 409–418 | Bans `java.net..` and `javax.net..`, so `export → MusicBrainzClient` is caught by neither — ArchUnit sees **direct** dependencies only. See the defect note below before copying this rule's third argument. |
 
-**Plus one rule to add**, because there is no `musicbrainzDoesNotDependOnOtherAdapters`. Four rules
-carry the identical `.because("ADR 32: adapters are siblings, not collaborators")` — at `:95`,
-`:106`, `:289` and `:1012` — and every one of them is pairwise between named packages. A fifth
-adapter is a sibling of nobody until someone writes it down.
+**Tier 2 — the four ADR 32 sibling rules, which should be replaced rather than extended (4).**
+`tinkerDoesNotDependOnJena` (88–95), `jenaDoesNotDependOnTinker` (99–106),
+`sqliteDoesNotDependOnOtherAdapters` (282–289) and `wikidataDoesNotDependOnOtherAdapters`
+(1005–1012) carry the identical `.because("ADR 32: adapters are siblings, not collaborators")` — at
+`:95`, `:106`, `:289` and `:1012`, four hits and no more.
 
-**A pre-existing shape the new adapter widens (3):** `theRatingsToolOpensNothingElse` (464–485),
-`theRecommenderOpensNothingElse` (807–827) and `theRetractionToolOpensNothingElse` (884–906) each
-ban `java.net..` to keep an offline tool offline, and each omits `..wikidata..` from its package
-list. Because ArchUnit sees direct dependencies only, any adapter's HTTP client already slips
-through them; a second one widens a hole rather than opening it. Worth a line in the Task 2 report,
-not a blocker.
+**Correcting this note's first draft, which called the first two "not holes".** They are holes, and
+the reasoning that put them in the wrong tier was that a new `musicbrainzDoesNotDependOnOtherAdapters`
+would cover them. It cannot: such a rule has **musicbrainz as its subject**, so it says nothing
+about `tinker → musicbrainz` or `jena → musicbrainz`. `tinker`'s only object is `jena` (`:94`) and
+`jena`'s only object is `tinker` (`:105`), so both directions stay uncaught — and `noPackageCycles`
+cannot rescue them, because the sibling rule forbids the return edge and no cycle ever forms. That
+was the same risk the tier-1 reasoning cited for adding the new package to `sqlite`'s and
+`wikidata`'s object lists, applied inconsistently.
 
-**Checked and NOT holes (5), so Task 2 does not churn them:** `tinkerDoesNotDependOnJena` (88–95)
-and `jenaDoesNotDependOnTinker` (99–106) are pairwise between two specific adapters and are
-subsumed by the new sibling rule; `seedNeverOpensAStore` (129–146) bans *stores* and already omits
-`..wikidata..` deliberately; `onlyTheRatingsToolReadsANote` (538–547) uses
-`resideOutsideOfPackages`, so a new package is inside its subject automatically;
-`theRatingDeckOpensNothingElse` (773–790) bans no network at all. Separately,
-`affinityNeverTouchesTheWorldFactLayer` (957–963) is written against **types** rather than packages
-(`AFFINITY_TYPES` / `WORLD_FACT_TYPES`) and therefore covers a new adapter with no edit — which is
-the shape the others would have had if ADR 33's boundary had been a package.
+**The arithmetic is the argument for replacing rather than patching.** Four adapters make twelve
+ordered pairs; these four rules cover **eight**. The four uncovered are `tinker → sqlite`,
+`tinker → wikidata`, `jena → sqlite`, `jena → wikidata` — so `tinker → wikidata` is unforbidden
+today, before any second source exists. Five adapters make twenty ordered pairs, and patching the
+object lists one at a time means five rules holding twenty package literals between them, with the
+next adapter needing five edits and a sixth rule.
+
+**Recommendation: one bidirectional rule over a single `ADAPTER_PACKAGES` constant** — no class in
+an adapter package may depend on a class in a *different* adapter package — replacing all four.
+Twenty of twenty pairs, one list, and the next adapter is a one-line change instead of five. It
+needs a `DescribedPredicate`, because the naive `resideInAnyPackage(ADAPTERS) → resideInAnyPackage(
+ADAPTERS)` form would fail on every intra-package dependency. **That is not a foreign shape here:**
+`AFFINITY_TYPES` and `WORLD_FACT_TYPES` (915–952) are already hand-written predicates in this file,
+with a javadoc explaining that the predicate "does the work the package name would have done".
+The alternative — widen `tinker`'s and `jena`'s object lists too, and add a fifth pairwise rule —
+also reaches twenty of twenty and is the smaller diff; it is rejected because the defect corrected
+two paragraphs above is precisely the omission that shape invites, and it invites it again at N=6.
+
+**Tier 3 — a pre-existing shape the new adapter widens (3):** `theRatingsToolOpensNothingElse`
+(464–485), `theRecommenderOpensNothingElse` (807–827) and `theRetractionToolOpensNothingElse`
+(884–906) each ban `java.net..` to keep an offline tool offline, and each omits `..wikidata..` from
+its package list. Because ArchUnit sees direct dependencies only, any adapter's HTTP client already
+slips through them; a second one widens a hole rather than opening it. Worth a line in the Task 2
+report, not a blocker.
+
+**Tier 4 — checked and NOT holes (3), so Task 2 does not churn them:** `seedNeverOpensAStore`
+(129–146) bans *stores* and already omits `..wikidata..` deliberately; `onlyTheRatingsToolReadsANote`
+(538–547) uses `resideOutsideOfPackages`, so a new package is inside its subject automatically;
+`theRatingDeckOpensNothingElse` (773–790) bans no network at all.
+
+Separately, and not among the thirteen because it names no package:
+`affinityNeverTouchesTheWorldFactLayer` (957–964) is written against **types**
+(`AFFINITY_TYPES` / `WORLD_FACT_TYPES`) and therefore covers a new adapter with no edit at all —
+which is the shape tier 2 above recommends borrowing.
+
+### An open defect in `theExporterNeverSpeaksToANetwork`, found while checking this
+
+**The rule's third argument is inert.** `:415` passes `"..wikidata.WikidataClient"` to
+`resideInAnyPackage`, which matches **package** identifiers. `WikidataClient` resides in package
+`com.robsartin.segue.wikidata`, so that pattern matches no class in this repository and
+`export → WikidataClient` is not forbidden today. The rule's own javadoc (`:403–405`) reads as
+though the project's HTTP client is handled, and it is not. No live violation exists — `export`
+imports `KindMapper` and `RecognitionInstitutions` from `wikidata`, not the client — so this is an
+inert fence rather than a breach.
+
+**This is a pre-existing defect, filed separately by the reviewer; it is recorded here and NOT fixed
+in this task**, which is a design note and changes no code.
+
+**The warning Task 2 must not miss:** do not mirror the pattern as
+`"..musicbrainz.MusicBrainzClient"`, which would ship an equally inert fence and read as protection.
+A class-level ban needs `haveFullyQualifiedName` or an `assignableTo` predicate, not
+`resideInAnyPackage`.
 
 ADR 25's consequence *"Adding a source is implementing one or both interfaces plus a `@Bean`
-method"* needs an amendment saying "and extending the five architecture rules that name adapter
-packages, and adding a sixth".
+method"* needs an amendment saying "and extending three architecture rules, replacing the four
+sibling rules with one written over a single adapter list, and repairing an inert fence".
 
 ### GAP 2 — `mcp` names a `wikidata` exception type to honour its own stated invariant
 
@@ -653,6 +707,7 @@ brief. Everything else is named here so that it is not rediscovered as a surpris
 
 And the finding that reaches furthest is the one no adapter delivers: **ADR 25's interfaces survive
 contact with a second source; its consequences do not.** Adding a source is not "one or both
-interfaces plus a `@Bean` method". It is that, plus **five architecture rules extended and a sixth
-written** (GAP 1 has the list, and one of the five is ADR 33's privacy fence), plus an HTTP client
-with its own rate policy, plus a decision about a bound that two sources now share.
+interfaces plus a `@Bean` method". It is that, plus **three architecture rules extended, four
+sibling rules replaced by one written over a single adapter list, and an inert fence repaired**
+(GAP 1 has the tiers; one of the three is ADR 33's privacy fence), plus an HTTP client with its own
+rate policy, plus a decision about a bound that two sources now share.
