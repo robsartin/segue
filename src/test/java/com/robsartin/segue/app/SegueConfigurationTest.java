@@ -6,6 +6,8 @@ import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.port.GraphStore;
+import com.robsartin.segue.port.SourceAdapter;
+import com.robsartin.segue.port.SourceAdapters;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -38,6 +40,20 @@ class SegueConfigurationTest {
   }
 
   @Autowired GraphStore graphStore;
+
+  @Autowired SourceAdapters sourceAdapters;
+
+  @Test
+  @DisplayName("should reach both sources from the expand path when the context is built")
+  void shouldReachBothSourcesFromTheExpandPathWhenTheContextIsBuilt() {
+    // The order is asserted, not just the membership. SegueService bounds the concatenation of
+    // what the adapters return (:224) rather than bounding each one, so the list's order decides
+    // which source spends a tight budget — see CorroborationAcrossSourcesTest, which pins that
+    // behaviour from both ends. Wikidata stays first because it was first.
+    assertThat(sourceAdapters.all())
+        .extracting(SourceAdapter::id)
+        .containsExactly("wikidata", "musicbrainz");
+  }
 
   @Test
   @DisplayName("a claim written before startup is in the graph after it")
