@@ -1,0 +1,610 @@
+{
+  "relations": [
+    {
+      "source-credit": "",
+      "artist": {
+        "disambiguation": "",
+        "country": "FR",
+        "name": "Marcel Bianchi",
+        "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df",
+        "type": "Person",
+        "id": "9afdcb99-d4ba-41b4-b4b2-467a712bd9fa",
+        "sort-name": "Bianchi, Marcel"
+      },
+      "end": null,
+      "attribute-values": {},
+      "target-credit": "",
+      "attributes": [
+        "guitar"
+      ],
+      "direction": "backward",
+      "attribute-credits": {},
+      "type-id": "5be4c609-9afa-4ea0-910b-12ffb71e3821",
+      "ended": false,
+      "target-type": "artist",
+      "begin": null,
+      "attribute-ids": {
+        "guitar": "63021302-86cd-4aee-80df-2270d54f4978"
+      },
+      "type": "member of band"
+    },
+    {
+      "source-credit": "",
+      "artist": {
+        "sort-name": "Briggs, Arthur",
+        "id": "7bad5ad3-0333-4661-9b26-44114adf5595",
+        "type": "Person",
+        "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df",
+        "name": "Arthur Briggs",
+        "disambiguation": "trumpeter",
+        "country": "FR"
+      },
+      "end": null,
+      "attribute-values": {},
+      "target-credit": "",
+      "attributes": [],
+      "direction": "backward",
+      "type-id": "5be4c609-9afa-4ea0-910b-12ffb71e3821",
+      "ended": false,
+      "target-type": "artist",
+      "begin": null,
+      "attribute-ids": {},
+      "type": "member of band"
+    },
+    {
+      "direction": "backward",
+      "attributes": [
+        "original"
+      ],
+      "target-credit": "",
+      "attribute-values": {},
+      "end": null,
+      "artist": {
+        "sort-name": "Chaput, Roger",
+        "id": "63eaba3d-5d77-427f-aa94-d8bb2593b99f",
+        "type": "Person",
+        "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df",
+        "name": "Roger Chaput",
+        "disambiguation": "guitarist",
+        "country": "FR"
+      },
+      "source-credit": "",
+      "type": "member of band",
+      "attribute-ids": {
+        "original": "4fd3b255-a7d7-4424-9a63-40fa543b601c"
+      },
+      "begin": null,
+      "target-type": "artist",
+      "ended": false,
+      "type-id": "5be4c609-9afa-4ea0-910b-12ffb71e3821"
+    },
+    {
+      "type-id": "5be4c609-9afa-4ea0-910b-12ffb71e3821",
+      "ended": false,
+      "target-type": "artist",
+      "attribute-ids": {},
+      "type": "member of band",
+      "begin": null,
+      "target-credit": "",
+      "source-credit": "",
+      "artist": {
+        "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df",
+        "type": "Person",
+        "sort-name": "Cizeron, Maurice",
+        "id": "df36be14-e29b-46b2-838e-59ddf8bbd493",
+        "country": "FR",
+        "disambiguation": "",
+        "name": "Maurice Cizeron"
+      },
+      "end": null,
+      "attribute-values": {},
+      "attributes": [],
+      "direction": "backward"
+    },
+    {
+      "begin": null,
+      "type": "member of band",
+      "attribute-ids": {},
+      "target-type": "artist",
+      "ended": false,
+      "type-id": "5be4c609-9afa-4ea0-910b-12ffb71e3821",
+      "direction": "backward",
+      "attributes": [],
+      "attribute-values": {},
+      "end": null,
+      "artist": {
+        "name": "Pierre “Baro” Ferret",
+        "country": "FR",
+        "disambiguation": "",
+        "sort-name": "Ferret, Pierre",
+        "id": "e5baf949-b9bf-41c3-a677-ca4cc691780c",
+        "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df",
+        "type": "Person"
+      },
+      "source-credit": "",
+      "target-credit": ""
+    },
+    {
+      "target-credit": "",
+      "attribute-values": {},
+      "end": null,
+      "artist": {
+        "country": "FR",
+        "disambiguation": "",
+        "name": "Pierre Fouad",
+        "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df",
+        "type": "Person",
+        "sort-name": "Fouad, Pierre",
+        "id": "e81a6942-4507-4840-9685-897831a6cfb7"
+      },
+      "source-credit": "",
+      "direction": "backward",
+      "attributes": [],
+      "target-type": "artist",
+      "ended": false,
+      "type-id": "5be4c609-9afa-4ea0-910b-12ffb71e3821",
+      "type": "member of band",
+      "attribute-ids": {},
+      "begin": null
+    },
+    {
+      "attribute-ids": {},
+      "type": "member of band",
+      "begin": null,
+      "type-id": "5be4c609-9afa-4ea0-910b-12ffb71e3821",
+      "ended": false,
+      "target-type": "artist",
+      "attributes": [],
+      "direction": "backward",
+      "target-credit": "",
+      "source-credit": "",
+      "artist": {
+        "disambiguation": "",
+        "country": "GB",
+        "name": "Coleridge Goode",
+        "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df",
+        "type": "Person",
+        "id": "b2a88231-fe82-4aa9-bb23-a82f094c6741",
+        "sort-name": "Goode, Coleridge"
+      },
+      "end": null,
+      "attribute-values": {}
+    },
+    {
+      "begin": null,
+      "attribute-ids": {
+        "original": "4fd3b255-a7d7-4424-9a63-40fa543b601c"
+      },
+      "type": "member of band",
+      "type-id": "5be4c609-9afa-4ea0-910b-12ffb71e3821",
+      "ended": false,
+      "target-type": "artist",
+      "attributes": [
+        "original"
+      ],
+      "direction": "backward",
+      "source-credit": "",
+      "artist": {
+        "country": "FR",
+        "disambiguation": "jazz violinist",
+        "name": "Stéphane Grappelli",
+        "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df",
+        "type": "Person",
+        "id": "bfc03211-a3a2-4700-8fa3-00968c02c5d0",
+        "sort-name": "Grappelli, Stéphane"
+      },
+      "end": null,
+      "attribute-values": {},
+      "target-credit": ""
+    },
+    {
+      "target-credit": "",
+      "source-credit": "",
+      "artist": {
+        "name": "Roger Grasset",
+        "disambiguation": "",
+        "country": null,
+        "sort-name": "Grasset, Roger",
+        "id": "217b9697-1c0e-4a82-88fc-85643b4de39b",
+        "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df",
+        "type": "Person"
+      },
+      "end": null,
+      "attribute-values": {},
+      "attributes": [],
+      "direction": "backward",
+      "type-id": "5be4c609-9afa-4ea0-910b-12ffb71e3821",
+      "ended": false,
+      "target-type": "artist",
+      "attribute-ids": {},
+      "type": "member of band",
+      "begin": null
+    },
+    {
+      "end": null,
+      "attribute-values": {},
+      "source-credit": "",
+      "artist": {
+        "id": "60696cbf-f9e8-45f8-a960-e152c751f1b8",
+        "sort-name": "Hodgkiss, Allan",
+        "type": "Person",
+        "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df",
+        "name": "Allan Hodgkiss",
+        "country": "GB",
+        "disambiguation": ""
+      },
+      "target-credit": "",
+      "direction": "backward",
+      "attributes": [],
+      "target-type": "artist",
+      "type-id": "5be4c609-9afa-4ea0-910b-12ffb71e3821",
+      "ended": false,
+      "begin": null,
+      "attribute-ids": {},
+      "type": "member of band"
+    },
+    {
+      "end": null,
+      "attribute-values": {},
+      "source-credit": "",
+      "artist": {
+        "name": "Jack Llewelyn",
+        "disambiguation": "",
+        "country": null,
+        "id": "b9b67591-b29d-4139-8b60-1768909925e8",
+        "sort-name": "Llewelyn, Jack",
+        "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df",
+        "type": "Person"
+      },
+      "target-credit": "",
+      "direction": "backward",
+      "attributes": [],
+      "target-type": "artist",
+      "type-id": "5be4c609-9afa-4ea0-910b-12ffb71e3821",
+      "ended": false,
+      "begin": null,
+      "attribute-ids": {},
+      "type": "member of band"
+    },
+    {
+      "attribute-values": {},
+      "end": null,
+      "artist": {
+        "id": "787e57a7-7bf6-4a21-9b75-a9c51c508398",
+        "sort-name": "Masselier, Alf",
+        "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df",
+        "type": "Person",
+        "name": "Alf Masselier",
+        "country": "FR",
+        "disambiguation": ""
+      },
+      "source-credit": "",
+      "target-credit": "",
+      "direction": "backward",
+      "attributes": [],
+      "target-type": "artist",
+      "ended": false,
+      "type-id": "5be4c609-9afa-4ea0-910b-12ffb71e3821",
+      "begin": null,
+      "type": "member of band",
+      "attribute-ids": {}
+    },
+    {
+      "type-id": "5be4c609-9afa-4ea0-910b-12ffb71e3821",
+      "ended": false,
+      "target-type": "artist",
+      "attribute-ids": {},
+      "type": "member of band",
+      "begin": null,
+      "target-credit": "",
+      "source-credit": "",
+      "artist": {
+        "type": "Person",
+        "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df",
+        "sort-name": "Paraboschi, Roger",
+        "id": "61467b9e-d597-49f8-8de9-f8e4252fda13",
+        "country": "FR",
+        "disambiguation": "",
+        "name": "Roger Paraboschi"
+      },
+      "end": null,
+      "attribute-values": {},
+      "attributes": [],
+      "direction": "backward"
+    },
+    {
+      "attribute-values": {},
+      "end": null,
+      "artist": {
+        "id": "650bf385-6f6d-4992-a3b9-779d144920a4",
+        "sort-name": "Reinhardt, Django",
+        "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df",
+        "type": "Person",
+        "name": "Django Reinhardt",
+        "country": "FR",
+        "disambiguation": "French jazz guitarist and composer"
+      },
+      "source-credit": "",
+      "target-credit": "",
+      "direction": "backward",
+      "attributes": [
+        "original"
+      ],
+      "target-type": "artist",
+      "ended": false,
+      "type-id": "5be4c609-9afa-4ea0-910b-12ffb71e3821",
+      "begin": null,
+      "type": "member of band",
+      "attribute-ids": {
+        "original": "4fd3b255-a7d7-4424-9a63-40fa543b601c"
+      }
+    },
+    {
+      "attributes": [
+        "original"
+      ],
+      "direction": "backward",
+      "source-credit": "",
+      "artist": {
+        "name": "Joseph Reinhardt",
+        "country": "FR",
+        "disambiguation": "",
+        "id": "ae2017b8-a309-4dd1-87ce-5532e3e3f6a6",
+        "sort-name": "Reinhardt, Joseph",
+        "type": "Person",
+        "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+      },
+      "end": null,
+      "attribute-values": {},
+      "target-credit": "",
+      "begin": null,
+      "attribute-ids": {
+        "original": "4fd3b255-a7d7-4424-9a63-40fa543b601c"
+      },
+      "type": "member of band",
+      "type-id": "5be4c609-9afa-4ea0-910b-12ffb71e3821",
+      "ended": false,
+      "target-type": "artist"
+    },
+    {
+      "direction": "backward",
+      "attributes": [],
+      "end": null,
+      "attribute-values": {},
+      "source-credit": "",
+      "artist": {
+        "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df",
+        "type": "Person",
+        "sort-name": "Rostaing, Hubert",
+        "id": "f1ddcc96-1518-414c-b820-258a64abdf84",
+        "disambiguation": "",
+        "country": "FR",
+        "name": "Hubert Rostaing"
+      },
+      "target-credit": "",
+      "begin": null,
+      "attribute-ids": {},
+      "type": "member of band",
+      "target-type": "artist",
+      "type-id": "5be4c609-9afa-4ea0-910b-12ffb71e3821",
+      "ended": false
+    },
+    {
+      "attribute-values": {},
+      "end": null,
+      "artist": {
+        "type": "Person",
+        "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df",
+        "id": "5456ea50-32aa-4162-bcfa-dc65a766e1de",
+        "sort-name": "Simoens, Lucien",
+        "disambiguation": "",
+        "country": "FR",
+        "name": "Lucien Simoens"
+      },
+      "source-credit": "",
+      "target-credit": "",
+      "direction": "backward",
+      "attributes": [],
+      "target-type": "artist",
+      "ended": false,
+      "type-id": "5be4c609-9afa-4ea0-910b-12ffb71e3821",
+      "begin": null,
+      "type": "member of band",
+      "attribute-ids": {}
+    },
+    {
+      "attributes": [],
+      "direction": "backward",
+      "target-credit": "",
+      "source-credit": "",
+      "artist": {
+        "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df",
+        "type": "Person",
+        "id": "ee15538b-1eef-4b88-ab07-ea03c246a41f",
+        "sort-name": "Soudieux, Emmanuel",
+        "disambiguation": "",
+        "country": "FR",
+        "name": "Emmanuel Soudieux"
+      },
+      "end": null,
+      "attribute-values": {},
+      "attribute-ids": {},
+      "type": "member of band",
+      "begin": null,
+      "type-id": "5be4c609-9afa-4ea0-910b-12ffb71e3821",
+      "ended": false,
+      "target-type": "artist"
+    },
+    {
+      "type-id": "5be4c609-9afa-4ea0-910b-12ffb71e3821",
+      "ended": false,
+      "target-type": "artist",
+      "attribute-ids": {},
+      "type": "member of band",
+      "begin": null,
+      "target-credit": "",
+      "source-credit": "",
+      "artist": {
+        "disambiguation": "",
+        "country": null,
+        "name": "Jean Storne",
+        "type": "Person",
+        "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df",
+        "id": "dec0f455-d40b-4b5e-b767-2111e92389c8",
+        "sort-name": "Storne, Jean"
+      },
+      "end": null,
+      "attribute-values": {},
+      "attributes": [],
+      "direction": "backward"
+    },
+    {
+      "direction": "backward",
+      "attributes": [],
+      "target-credit": "",
+      "end": null,
+      "attribute-values": {},
+      "source-credit": "",
+      "artist": {
+        "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df",
+        "type": "Person",
+        "id": "4bad9269-610c-476c-b038-5b16282db7ba",
+        "sort-name": "Villers, Michel de",
+        "country": "FR",
+        "disambiguation": "",
+        "name": "Michel de Villers"
+      },
+      "attribute-ids": {},
+      "type": "member of band",
+      "begin": null,
+      "target-type": "artist",
+      "type-id": "5be4c609-9afa-4ea0-910b-12ffb71e3821",
+      "ended": false
+    },
+    {
+      "type": "member of band",
+      "attribute-ids": {
+        "original": "4fd3b255-a7d7-4424-9a63-40fa543b601c"
+      },
+      "begin": null,
+      "ended": false,
+      "type-id": "5be4c609-9afa-4ea0-910b-12ffb71e3821",
+      "target-type": "artist",
+      "attributes": [
+        "original"
+      ],
+      "direction": "backward",
+      "target-credit": "",
+      "artist": {
+        "country": "FR",
+        "disambiguation": "",
+        "name": "Louis Vola",
+        "type": "Person",
+        "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df",
+        "id": "3eaa8c7c-2b25-42d1-8399-468b91d38806",
+        "sort-name": "Vola, Louis"
+      },
+      "source-credit": "",
+      "attribute-values": {},
+      "end": null
+    },
+    {
+      "type-id": "5be4c609-9afa-4ea0-910b-12ffb71e3821",
+      "ended": false,
+      "target-type": "artist",
+      "attribute-ids": {},
+      "type": "member of band",
+      "begin": null,
+      "target-credit": "",
+      "source-credit": "",
+      "artist": {
+        "sort-name": "Warlop, Michel",
+        "id": "bd00f287-30fa-472c-98c4-eb6b6b697778",
+        "type": "Person",
+        "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df",
+        "name": "Michel Warlop",
+        "disambiguation": "",
+        "country": "FR"
+      },
+      "end": null,
+      "attribute-values": {},
+      "attributes": [],
+      "direction": "backward"
+    },
+    {
+      "direction": "backward",
+      "attributes": [],
+      "end": null,
+      "attribute-values": {},
+      "source-credit": "",
+      "artist": {
+        "name": "Hot Club da Sinti",
+        "country": "DE",
+        "disambiguation": "",
+        "sort-name": "Hot Club da Sinti",
+        "id": "8d1aebb5-1b40-4dee-bfb4-da3820d42aaf",
+        "type-id": "e431f5f6-b5d2-343d-8b36-72607fffb74b",
+        "type": "Group"
+      },
+      "target-credit": "",
+      "begin": null,
+      "attribute-ids": {},
+      "type": "named after artist",
+      "target-type": "artist",
+      "type-id": "1af24726-5b1f-4b07-826e-5351723f504b",
+      "ended": false
+    },
+    {
+      "attributes": [],
+      "direction": "backward",
+      "source-credit": "",
+      "artist": {
+        "name": "The Septet of The Hot Club of Spokane",
+        "country": "US",
+        "disambiguation": "Spokane, WA trad jazz combo",
+        "sort-name": "Septet of the Hot Club of Spokane, The",
+        "id": "0e169060-59aa-4eaa-b5b2-fe703e5631e4",
+        "type": "Group",
+        "type-id": "e431f5f6-b5d2-343d-8b36-72607fffb74b"
+      },
+      "end": null,
+      "attribute-values": {},
+      "target-credit": "",
+      "begin": null,
+      "attribute-ids": {},
+      "type": "named after artist",
+      "type-id": "1af24726-5b1f-4b07-826e-5351723f504b",
+      "ended": false,
+      "target-type": "artist"
+    }
+  ],
+  "type": "Group",
+  "disambiguation": "",
+  "gender-id": null,
+  "type-id": "e431f5f6-b5d2-343d-8b36-72607fffb74b",
+  "ipis": [],
+  "gender": null,
+  "isnis": [],
+  "sort-name": "Quintette du Hot Club de France",
+  "id": "ee55e4e8-807d-49b1-8470-d1c0898ed7cb",
+  "area": {
+    "type-id": null,
+    "type": null,
+    "sort-name": "France",
+    "id": "08310658-51eb-3801-80de-5a0739207115",
+    "disambiguation": "",
+    "name": "France",
+    "iso-3166-1-codes": [
+      "FR"
+    ]
+  },
+  "begin-area": null,
+  "name": "Quintette du Hot Club de France",
+  "end-area": null,
+  "life-span": {
+    "end": "1948",
+    "begin": "1934",
+    "ended": true
+  },
+  "country": "FR"
+}
