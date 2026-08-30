@@ -3,7 +3,9 @@
 Segue is a personal interest graph. You put the things you care about into it — people, bands,
 films, books, places — and it pulls in their real relationships from Wikidata. The payoff is an
 **explanation**: ask it how two things connect and it hands back the route, hop by hop, with the
-source behind every hop. "You like this because X → Y → Z", and every arrow is citable.
+source behind every hop. "You like this because X → Y → Z", and every arrow is citable. Places are
+the uneven one of those five — a country arrives with real relationships and the restaurant down the
+road with none — and [Honest limits](#honest-limits) says why.
 
 You do not use segue directly. You use it through an MCP client — Claude Code, Claude Desktop, or
 anything else that speaks the Model Context Protocol — which launches or connects to the segue
@@ -655,6 +657,12 @@ Those descriptions are illustrations, not the rule: which Wikidata classes land 
 decided by a whitelist in the source (`KindMapper`), and it grows as real data turns up classes it
 did not know.
 
+**`PLACE` is ingested like the other five, and disappoints for a different reason.** Nothing is
+registered that states where a place is, and an ordinary local place is barely described in
+Wikidata at all — see
+[a place is expanded like anything else](#a-place-is-expanded-like-anything-else-and-a-local-one-still-comes-back-empty)
+under Honest limits.
+
 **There is no `MUSICIAN`, `BAND` or `FILM` kind, on purpose.** A role is a *relationship*, not a
 kind: one Nick Cave node is a `PERSON` who `PERFORMED` albums, `AUTHORED` novels and
 `WROTE_SCREENPLAY_FOR` films, all at once, rather than three nodes or one node forced to pick a
@@ -869,7 +877,7 @@ repository, and that is the actual protection — not the repository's visibilit
 
 ## Honest limits
 
-All but one of these were observed directly on the capture run, and the exception says so where it
+All but two of these were observed directly on the capture run, and each exception says so where it
 appears. None of them is a bug you should report.
 
 ### Wikidata does not have everything, and what it does not have cannot be added
@@ -910,6 +918,36 @@ And expanding her finds nothing at all:
 A sparsely-linked entity is a valid node with no neighbourhood. It will appear in no route. Nothing
 went wrong; there is simply nothing recorded about who she worked with. Expect this for
 independent, regional and recent artists.
+
+### A place is expanded like anything else, and a local one still comes back empty
+
+Expanding a place runs exactly what expanding a person runs. The Wikidata adapter supports every
+kind, and the whitelist deciding which claims are ingested is keyed on the Wikidata property alone,
+with no test of kind in it at all — `WikidataSourceAdapter` and `ClaimMapper` are the authority.
+Both passes run: the forward one over the claims stated on the place, and the reverse lookup for
+claims pointing at it. A well-described place states registered properties like membership and
+part-of, so places do collect edges, and a place with two of them can sit in the middle of a route
+like any other node.
+
+What segue never learns is a place's location as such: **the vocabulary registers no location
+property.** `EdgeTypes` is the authority on what it does register, and reading it beats trusting a
+list here, which would go stale the day one is admitted. Nothing is ingested *because* it says where
+something is. A place is in your graph for the relations it shares with everything else, and where
+one of those happens to express containment, that is `PART_OF` doing its ordinary job rather than a
+location property doing a job segue has none for.
+
+**The case that disappoints is the one you are most likely to try**: an ordinary local place, the
+restaurant you actually go to rather than a country.
+[ADR 53](adr/0053-all-the-owners-interests-bounded-per-domain.md) measured the restaurants Wikidata
+holds in one city — a class, sometimes a set of coordinates, a few social handles and a phone
+number: enough to store, and nothing that maps to a registered relation. Those arrive as isolated
+nodes and appear in no route, and that ADR concluded no property admission fixes it.
+[ADR 54](adr/0054-musicbrainz-as-the-second-source.md), which records segue's second source, argues
+that pointing a different source at them would not fix it either: the vocabulary is one obstacle and
+identity is another. You can still rate one — a rating needs no edge.
+
+*(The mechanism above was read from the code and confirmed against live Wikidata rather than on the
+capture run; the restaurant figures are ADR 53's, not re-measured here.)*
 
 ### Expansion is bounded, and the bound is visible
 
