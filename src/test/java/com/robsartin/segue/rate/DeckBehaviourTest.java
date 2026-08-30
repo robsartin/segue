@@ -15,6 +15,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -60,7 +62,15 @@ class DeckBehaviourTest {
      */
     NO_ANSWER,
     /** 204, but slowly — long enough for a second keypress to arrive mid-flight. */
-    SLOW
+    SLOW,
+    /**
+     * Nothing at all, and not straight away: the handler stalls for {@code SLOW_MILLIS} and only
+     * then throws. Chrome's retry of a POST whose connection died is prompt — with an immediate
+     * death all of its attempts land within about four milliseconds of the keypress, too close
+     * together for any ordering against a later request to be observable. Stalling each attempt
+     * spreads them out far enough to see which side of the re-rating they fall on (issue #127).
+     */
+    SLOW_NO_ANSWER
   }
 
   /** Three invented cards and a rate endpoint the test can make fail on demand. */
@@ -77,6 +87,7 @@ class DeckBehaviourTest {
   private static final long SLOW_MILLIS = 400;
 
   private HttpServer server;
+  private ExecutorService handlers;
   private HeadlessChrome chrome;
   private volatile Answer answer = Answer.ACCEPT;
   private final List<String> posts = Collections.synchronizedList(new ArrayList<>());
@@ -105,6 +116,13 @@ class DeckBehaviourTest {
     server.createContext("/api/card", this::card);
     server.createContext("/api/rate", this::rate);
     server.createContext("/", exchange -> send(exchange, 200, "text/html; charset=utf-8", page));
+    // A real executor, because two answers here stall deliberately and the JDK's default one
+    // serves every request on the single thread start() creates. On that default a stalling
+    // handler blocks the whole server, so what `posts` records is the order the server got round
+    // to requests rather than the order they arrived — and the order they arrive is precisely the
+    // question issue #127 asks, since that is the order the affinity table would be written in.
+    handlers = Executors.newCachedThreadPool();
+    server.setExecutor(handlers);
     server.start();
     chrome = HeadlessChrome.launch();
     chrome.open("http://127.0.0.1:" + server.getAddress().getPort() + "/");
@@ -118,6 +136,9 @@ class DeckBehaviourTest {
     }
     if (server != null) {
       server.stop(0);
+    }
+    if (handlers != null) {
+      handlers.shutdownNow();
     }
   }
 
@@ -153,6 +174,10 @@ class DeckBehaviourTest {
       case SLOW -> {
         HeadlessChrome.sleep(SLOW_MILLIS);
         send(exchange, 204, "application/json", new byte[0]);
+      }
+      case SLOW_NO_ANSWER -> {
+        HeadlessChrome.sleep(SLOW_MILLIS);
+        throw new IOException("the handler threw late, so the connection closes with no response");
       }
     }
   }
@@ -441,6 +466,75 @@ class DeckBehaviourTest {
         "the card that was dealt already rated");
 
     assertThat(chrome.text("card")).contains("Currently rated 2");
+  }
+
+  /** The rating one recorded body carries, so a sequence of them can be read in arrival order. */
+  private static int ratingIn(String body) {
+    Matcher value = Pattern.compile("\"rating\":(\\d+)").matcher(body);
+    if (!value.find()) {
+      throw new AssertionError("a body reached /api/rate carrying no rating at all: " + body);
+    }
+    return Integer.parseInt(value.group(1));
+  }
+
+  @Test
+  @DisplayName("a retried rating cannot overwrite the re-rating its own failure message invites")
+  void aRetriedRatingCannotOverwriteAReRating() {
+    // Issue #127. The page tells the owner an unanswered rating "may not have been recorded" and
+    // that nothing has advanced, which invites them to rate the same card again — and Chrome, on
+    // its own account, retries a POST whose connection died before any response arrived. The
+    // question is whether one of those retries can land AFTER the new rating and put the abandoned
+    // value back, which nothing in segue would ever show: the write is last-writer-wins with no
+    // history table and no un-rate (ADR 39, ADR 46).
+    answer = Answer.SLOW_NO_ANSWER;
+
+    chrome.press("1");
+    chrome.until(
+        "document.getElementById('problem').textContent.length > 0", "the failure to show");
+
+    // The owner takes the page at its word and gives the same card a different number — but not
+    // before the page is listening again. Waiting on the page's own two guards rather than on the
+    // message is the point rather than politeness: `busy` and `current` are exactly what hold the
+    // re-rating back until the failed fetch has settled, and a keypress delivered while they are
+    // still set would be dropped by them and prove nothing about ordering.
+    answer = Answer.ACCEPT;
+    chrome.until("!busy && current !== null", "the page to be ready for another rating");
+    chrome.press("4");
+    untilSent(4);
+    chrome.until(
+        "document.querySelector('#card h1').textContent === " + quoted(LABELS.get(1)),
+        "the re-rating to land and the deck to move");
+    // A retry arriving after everything else has finished is the whole hazard, so the assertions
+    // below must not run while one could still be on its way.
+    settle();
+
+    List<Integer> order;
+    synchronized (posts) {
+      order = posts.stream().map(DeckBehaviourTest::ratingIn).toList();
+    }
+
+    // The positive control, and it is the reason this test is not vacuous: an ordering assertion
+    // over a sequence with nothing to reorder passes by having had no work to do. Chrome's retry
+    // is what puts a second 1 in this list, so if a future browser stops retrying, this fails
+    // saying the hazard it guards no longer exists — which is a fact worth being told, not a
+    // flake. Counted by value rather than by size, because the re-rating is in this list too.
+    assertThat(order.stream().filter(rating -> rating == 1).count())
+        .as("the abandoned rating must actually have been retried, or there is nothing to order")
+        .isGreaterThan(1);
+
+    // The finding. Every attempt at the abandoned rating reached the server before the re-rating
+    // did, and not by luck: Chrome's retries all happen inside the one fetch, and `busy` and
+    // `current` both stay held until that fetch settles — so the page cannot even issue the
+    // re-rating until the last retry is already spent.
+    assertThat(order.lastIndexOf(1))
+        .as("every retry of the abandoned rating must reach the server before the re-rating")
+        .isLessThan(order.indexOf(4));
+    assertThat(order)
+        .as("so the value left standing in the affinity table is the one the owner meant")
+        .endsWith(4);
+    assertThat(ratedThisSession())
+        .as("and only the re-rating counts as written: the unanswered one never could be")
+        .isOne();
   }
 
   private static String quoted(String text) {

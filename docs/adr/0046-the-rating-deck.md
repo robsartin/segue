@@ -307,6 +307,83 @@ old shape.**
   `currentRating` field changed that — a page walking `?i=0,1,2…` could read the ratings
   themselves. Read that section as naming both endpoints.
 
+**Amendment (2026-08-30, issue #127): a retried POST cannot overwrite a re-rating, and the reason
+is ordering the page already enforces. The limit that remains is a smaller one, recorded here.**
+
+Issue #103's browser harness saw one unanswered rating reach its stub **three times**: Chrome
+retries a POST whose connection died before any response arrived. That raised a question this
+section is the right home for, because the answer would be invisible if it went the other way —
+the write is last-writer-wins, there is no history table and no un-rate, so a value quietly put
+back leaves no trace anywhere. The feared sequence: the owner rates a card, the connection dies,
+the page says *"may not have been recorded — nothing has advanced"*, they take that invitation and
+rate the same card **differently**, and a late retry of the first POST lands afterwards and
+restores the number they had just abandoned.
+
+**It cannot happen, and the measurement says why rather than merely that.** Measured on loopback
+against a stub that closes the connection without answering — Chrome 151.0.7922.174, macOS 26.6.2
+— in the two failure shapes the deck actually has:
+
+- **The connection dies at once.** Three attempts reached the server at +2, +3 and +4 ms after the
+  keypress; the page's failure message appeared at +6 ms; nothing further arrived in the five
+  seconds after it.
+- **Each attempt stalls 300 ms before dying.** Three attempts at +2, +306 and +610 ms; the message
+  by +930 ms; again nothing in the five seconds after it.
+
+Every retry is therefore already spent **before the owner is told anything at all**. The window
+the issue asked to size is not narrow — it is on the wrong side of the message that opens it. Two
+independent reasons, and they are structural rather than lucky:
+
+- **Chrome's retries happen inside the one `fetch`.** It does not reject until it has stopped
+  retrying, and `deck.html` writes the failure message from that rejection. The message is
+  downstream of the last attempt by construction.
+- **The page could not issue the re-rating early even if it were told early.** `rate()` nulls
+  `current` before its first await and only `show()` restores it, and `busy` is held until the
+  `finally`; both are released after the failed fetch has settled. A keypress arriving before then
+  is dropped by the page's own guard.
+
+**Decision: change nothing about the write, and pin the ordering with a test.** `DeckBehaviourTest
+.aRetriedRatingCannotOverwriteAReRating` drives the real page against a stub that stalls and then
+dies, has the owner re-rate the same card, and asserts that every attempt at the abandoned rating
+reached the server before the re-rating and that the re-rating is the last thing the server saw.
+It carries its own positive control — the abandoned rating must have been retried more than once,
+or an ordering assertion over a sequence with nothing to reorder would pass by having had no work
+to do. It was verified red against a defective page (a client-side timeout that abandons the fetch
+without cancelling it, releasing `busy` and `current` with retries still to come); against that
+page the server saw the abandoned rating, then the re-rating, then the abandoned rating again.
+
+**The three alternatives the issue listed alongside "leave it", and why each lost.**
+
+- **Make the write conditional on the rating the client believed it was replacing.** Refused, and
+  the sharpest reason is that it would not work: a retry is byte-identical to the original POST and
+  carries the same expected-previous value, so no condition can distinguish the two. What it could
+  do is refuse the owner's later, correct value when an earlier attempt had landed in between —
+  manufacturing a refusal in place of an overwrite that does not occur. It would also need a third
+  write method on `AffinityStore`, which `theRatingsToolOnlyReads` and `theRecommenderOnlyReads`
+  would both have to name, for nothing.
+- **Have the page reconcile on load.** Refused because there is nothing to reconcile.
+  `writtenThisSession` is set only after a response that was `ok`, so the page never recorded the
+  unanswered rating and its account of what it wrote is already correct. Asking the server instead
+  would move more of the owner's ratings into the browser to correct a record that is not wrong.
+- **Change the refusal wording so re-rating is not the obvious next move.** Refused, and this is
+  the option the measurement most directly kills: re-rating is the **safe** move — it lands last
+  and it wins. Wording that discouraged it would steer the owner away from the correction that
+  works.
+
+**What is actually left, stated plainly, because it is a real limit and not the one the issue
+named.** The retries do reach the store and each one writes. Through `updateRating` the value is
+identical, so only `updated_at` moves, and ADR 39 deliberately does not retain that drift. The
+consequence is in the wording rather than the data: *"may not have been recorded"* understates the
+common case, where the rating almost certainly **was** recorded, more than once. The sentence
+stays — it is not a falsehood, and the deck deliberately does not advance on it — but an owner who
+reads it and presses `s` instead of re-rating leaves a rating in the table they were unsure of, and
+there is still no verb anywhere in segue that takes one out. That is this section's own claim,
+reached by a different road.
+
+**What the measurement does not cover, so that nothing more is read into it.** Two failure shapes,
+one browser, one operating system, and loopback — which is the only place this endpoint exists,
+since `RateServer` binds `127.0.0.1` and the `Origin` allowlist keeps it there. It is not a claim
+about every way an HTTP request can be delayed. Nothing above this amendment is withdrawn.
+
 ## Alternatives considered
 
 - **A controller in the Spring app** — the server and the port already exist. Refused because it

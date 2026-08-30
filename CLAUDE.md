@@ -688,6 +688,23 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   whose connection dies before any response**, so one unanswered rating reached the stub three
   times — count what the server received by value, not by size.
 
+- **Those retries cannot overwrite a re-rating, and it is ordering rather than luck** (issue #127).
+  Measured on loopback: with the connection dying at once the three attempts land at +2/+3/+4 ms
+  and the page's failure message at +6 ms; with each attempt stalled 300 ms they land at
+  +2/+306/+610 ms and the message by +930 ms. Nothing arrived in the five seconds after the message
+  in either shape. Chrome's retries happen INSIDE the one `fetch` — it does not reject until it has
+  stopped retrying — and `deck.html` writes the message from that rejection, while `busy` and
+  `current` stay held until the same moment. So the re-rating the message invites is always issued
+  after the last retry is spent, and it wins. `DeckBehaviourTest
+  .aRetriedRatingCannotOverwriteAReRating` pins it, with a positive control (the abandoned rating
+  must actually have been retried, or the ordering assertion has nothing to order). **The stub in
+  that file now has a real executor**: the JDK default serves every request on one thread, so a
+  stalling handler makes `posts` record the order the server got round to requests rather than the
+  order they arrived — which is the only order an ordering test can mean. What is left is the
+  wording, not the data: "may not have been recorded" understates a case where the rating almost
+  certainly WAS recorded, more than once, value-identically through `updateRating`. ADR 46's
+  2026-08-30 amendment.
+
 - **The taste layer's classes deliberately have no package of their own.**
   `AffinityRecord` sits in `domain`, `AffinityStore` in `port`,
   `SqliteAffinityStore` in `sqlite`, `TasteTools` in `mcp` — each where its
