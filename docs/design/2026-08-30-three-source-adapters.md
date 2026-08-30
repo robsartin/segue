@@ -151,19 +151,20 @@ fails with `WikidataUnavailableException`, which the seam cannot declare, so the
 and an outage reads downstream as "MusicBrainz holds nothing for this seed".
 
 **But the `url-rels` advantage was available rather than realised, and saying otherwise would
-overstate it.** As `MusicBrainzSourceAdapter.expand` is actually written, the `catch` at `:175`
-wraps only the `client.artistRelations` call at `:174`; `identity.mbidFor` (`:165`) and
-`identity.qidsFor` (`:187`) both sit outside it. So a `url-rels` bridge throwing from either would
-have escaped `expand` entirely and reached `SegueService:215`, which has no `try` — a broken SPI
+overstate it.** As `MusicBrainzSourceAdapter.expand` is actually written, its one `try` wraps only
+the `client.artistRelations` call: `identity.mbidFor` is called before that `try` opens and
+`identity.qidsFor` after its `catch` closes, so neither is covered. A `url-rels` bridge throwing
+from either would have escaped `expand` entirely and reached the bare `for` loop over
+`adapters.all()` in `SegueService.expandEntity`, which has no `try` of its own — a broken SPI
 contract rather than a correct flag — until that `try` was widened to cover both calls. One line,
 not a property the route came with.
 
 **In the shipped wiring the visible loss is narrower than it first appears.** Both uses of the
 Query Service share one `WikidataClient`, `WikidataSourceAdapter.supports` returns `true` for every
-kind so it always runs alongside, and it sets `sourceUnavailable` when its own reverse pass fails
-(`:120–124`), which `SegueService:216` ORs into the result. A Query Service outage therefore does
-surface — just unattributed to a source, which is GAP 4. The residual is the narrow case where the
-`P434` query alone fails.
+kind so it always runs alongside, and it sets `sourceUnavailable` in the `catch` around its own
+reverse-lookup pass, which `SegueService.expandEntity` ORs into the result. A Query Service outage
+therefore does surface — just unattributed to a source, which is GAP 4. The residual is the narrow
+case where the `P434` query alone fails.
 
 The ~49% of artist-relation neighbours with no QID (measured in #91's 2026-08-29 comment) is not a
 loss to route around. Its character — tributes, pseudonyms, billing variants — is why ADR 22 stays.

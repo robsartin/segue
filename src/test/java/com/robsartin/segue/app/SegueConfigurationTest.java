@@ -47,7 +47,7 @@ class SegueConfigurationTest {
   @DisplayName("should reach both sources from the expand path when the context is built")
   void shouldReachBothSourcesFromTheExpandPathWhenTheContextIsBuilt() {
     // The order is asserted, not just the membership. SegueService bounds the concatenation of
-    // what the adapters return (:224) rather than bounding each one, so the list's order decides
+    // what the adapters return rather than bounding each one, so the list's order decides
     // which source spends a tight budget — see CorroborationAcrossSourcesTest, which pins that
     // behaviour from both ends. Wikidata stays first because it was first.
     assertThat(sourceAdapters.all())

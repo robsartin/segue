@@ -254,12 +254,16 @@ class CorroborationAcrossSourcesTest {
    * Neighbour identity, out of the way.
    *
    * <p>It is not out of the way by accident: {@code MusicBrainzSourceAdapter} returns no {@code
-   * neighbors()} on purpose — its relations carry a name but not the artist type a {@code
-   * NodeAssertion} needs — so every neighbour it discovers costs {@code SegueService} one {@code
-   * EntityResolver.fetch}, which in the shipped wiring is a Wikidata Action API call. The first
-   * draft of the reversed-order test below discovered that by failing with an empty log when the
-   * resolver could not be reached. That cost is real and belongs in the issue's report; it is not
-   * what these three tests are measuring, so it is stubbed rather than exercised.
+   * neighbors()}, so every newly discovered neighbour costs {@code SegueService} one {@code
+   * EntityResolver.fetch} — a Wikidata Action API call in the shipped wiring. The first draft of
+   * the reversed-order test below discovered that by failing with an empty log when the resolver
+   * could not be reached.
+   *
+   * <p><b>That cost is avoidable, and an earlier version of this javadoc said it was not.</b> The
+   * artist type is in the response — see {@code MusicBrainzSourceAdapter}'s own note, which
+   * measures it on the committed fixture — so the adapter could supply the neighbours itself. It is
+   * <a href="https://github.com/robsartin/segue/issues/143">issue #143</a>. It is not what these
+   * three tests measure either way, so identity is stubbed rather than exercised.
    */
   private static final class AlwaysResolves implements EntityResolver {
 
