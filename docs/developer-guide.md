@@ -323,10 +323,11 @@ graph TD
 
 **What the diagram shows.** Dependencies point downward and never back up. `domain` sits at the
 bottom and depends on nothing else in the project. `port` depends only on `domain`. The five
-adapters (`tinker`, `jena`, `sqlite`, `wikidata`, `musicbrainz`) each depend on `port` and `domain`
+adapters (`jena`, `musicbrainz`, `sqlite`, `tinker`, `wikidata`) each depend on `port` and `domain`
 and on no sibling adapter — five is the count since
-[ADR 54](adr/0054-musicbrainz-as-the-second-source.md), and `musicbrainz` is the one that had to
-declare its identity seam rather than import the adapter that could satisfy it. `ingest` depends on
+[ADR 54](adr/0054-musicbrainz-as-the-second-source.md), that list is
+`ArchitectureTest.ADAPTER_PACKAGES` and a test holds this sentence to it, and `musicbrainz` is the
+one that had to declare its identity seam rather than import the adapter that could satisfy it. `ingest` depends on
 `port` and `domain`, plus one dotted edge to `wikidata`:
 `GraphProjector` re-derives each node's kind from the `P31` its claim stored, through
 `KindMapper.rederive`, which is what makes a mapper improvement reach nodes the graph already holds
@@ -402,7 +403,7 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `domainHasNoThirdPartyDependencies` | anything in `domain` depending outside `domain`/`java`/`javax` | [ADR 18](adr/0018-graph-engine-gremlin.md) |
 | `portDependsOnlyOnDomain` | `port` depending on anything but `domain` and itself | [ADR 18](adr/0018-graph-engine-gremlin.md) |
 | `domainValueTypesAreRecordsOrEnums` | a `domain` class that is not a record, enum, package-private, or a private-constructor registry | [ADR 11](adr/0011-java-conventions.md) |
-| `tinkerDoesNotDependOnJenaOrMusicbrainz`, `jenaDoesNotDependOnTinkerOrMusicbrainz`, `sqliteDoesNotDependOnOtherAdapters`, `wikidataDoesNotDependOnOtherAdapters`, `musicbrainzDoesNotDependOnOtherAdapters` | adapters collaborating with each other. **Five pairwise rules, not one over a list**, so each names its objects literally and they cover 16 of the 20 ordered pairs five adapters make; the first two are named for the objects they actually hold rather than for all the others. The four still open are `tinker`/`jena` → `sqlite`/`wikidata`, filed as issue #140 | [ADR 32](adr/0032-layering-and-archunit.md), [ADR 54](adr/0054-musicbrainz-as-the-second-source.md) |
+| `adaptersDoNotDependOnEachOther` | any dependency between two adapter packages, in either direction. One slices rule over `ADAPTER_PACKAGES`, so it covers all 20 ordered pairs five adapters make and a sixth adapter is one entry in that list. It replaced five pairwise rules that reached 16 of the 20 — `tinker`/`jena` → `sqlite`/`wikidata` were unforbidden, and `noPackageCycles` could not catch them because the pairwise rules forbade the return edge so no cycle could form (issue #140) | [ADR 32](adr/0032-layering-and-archunit.md), [ADR 54](adr/0054-musicbrainz-as-the-second-source.md) |
 | `adaptersDoNotDependUpward` | any adapter depending on `ingest`, `mcp` or `app` | [ADR 32](adr/0032-layering-and-archunit.md) |
 | `noPackageCycles` | any dependency cycle between slices of `com.robsartin.segue` | [ADR 32](adr/0032-layering-and-archunit.md) |
 | `springOnlyInAppAndMcp` | `org.springframework.*` anywhere outside `app` and `mcp` | [ADR 25](adr/0025-source-adapter-spi.md), [ADR 32](adr/0032-layering-and-archunit.md) |
@@ -434,12 +435,10 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 
 These are true of the code today and nothing will stop you breaking them:
 
-- **Adapters depend on `port` and `domain` only.** The upward half is enforced and the sibling half
-  now covers 16 of the 20 ordered pairs five adapters make; the downward restriction is not enforced
-  at all. An adapter could import `support` and the build would stay green, and so would the four
-  sibling pairs issue #140 still leaves open — `tinker`/`jena` → `sqlite`/`wikidata`.
-  [ADR 32](adr/0032-layering-and-archunit.md) records the downward gap explicitly, and
-  [ADR 54](adr/0054-musicbrainz-as-the-second-source.md) the sibling arithmetic.
+- **Adapters depend on `port` and `domain` only.** The upward half is enforced, and since issue
+  #140 so is the sibling half — every ordered pair, not a list of them. **The downward restriction
+  is the part still unenforced**: an adapter could import `support` and the build would stay green.
+  [ADR 32](adr/0032-layering-and-archunit.md) records that gap explicitly.
 - **`ingest` depends on `port` and `domain` only.** No rule says so. Only `noPackageCycles` would
   notice, and only if the new dependency closed a cycle.
 - **`mcp` does not reach into an adapter.** It does, once: `SegueService` imports

@@ -136,6 +136,29 @@ class DeveloperGuideEnumerationsTest {
   }
 
   @Test
+  @DisplayName(
+      "the guide names exactly the adapter packages ArchitectureTest fences, and counts them")
+  void shouldNameEveryAdapterWhenTheGuideDescribesTheLayering() {
+    Matcher sentence =
+        Pattern.compile("The (\\w+)\\s+adapters \\(([^)]*)\\)").matcher(section("## The layering"));
+    assertThat(sentence.find())
+        .as(
+            "docs/developer-guide.md, 'The layering' — a sentence reading 'The <count> adapters (`a`, `b`, ...)'")
+        .isTrue();
+
+    List<String> declared = ArchitectureTest.ADAPTER_PACKAGES;
+
+    assertThat(backticked(sentence.group(2)))
+        .as(
+            "the adapter list in that sentence, against ArchitectureTest.ADAPTER_PACKAGES — the one"
+                + " list adaptersDoNotDependOnEachOther and adaptersDoNotDependUpward both read")
+        .isEqualTo(declared);
+    assertThat(sentence.group(1))
+        .as("the count word in front of it")
+        .isEqualTo(NUMBER_WORDS.get(declared.size()));
+  }
+
+  @Test
   @DisplayName("the guide's package table has one row per package under src/main")
   void shouldGiveEveryPackageARowWhenTheGuideTabulatesWhatEachIsFor() {
     Set<String> tabulated =
