@@ -254,7 +254,8 @@ covers the bridge alone; the gap between them is uncovered.
   bound goes wholly to whichever adapter comes first. Wikidata is first because it was first. **No
   evidence was gathered about which source *should* win a tight budget** — that is the design note's
   GAP 3, established rather than redesigned, and GAP 4 is its companion: `sourceUnavailable` and
-  `truncated` are ORed across adapters, so a flag no longer says which source raised it.
+  `truncated` are ORed across adapters, so a flag no longer says which source raised it. GAP 4 is
+  filed as **#148**; GAP 3 is not filed.
 - **Every `PERSON` or `GROUP` expansion now costs one extra Query Service round trip**, spent by
   `mbidFor` before anything is known, including for the seeds MusicBrainz has nothing for. Not
   measured against production latency, and live rather than hypothetical.
@@ -264,14 +265,16 @@ covers the bridge alone; the gap between them is uncovered.
   loss is narrower than it first looks — `WikidataSourceAdapter.supports` returns true for every kind
   so it always runs alongside, and it sets `sourceUnavailable` when its own reverse pass fails — so a
   general Query Service outage does surface, unattributed. The residual is the narrow case.
-- **Seven issues were filed on this branch, and not one of them was found by anything failing.**
+- **Ten issues were filed on this branch, and not one of them was found by anything failing.**
   `check` was green throughout; each came out of somebody checking a claim against the tree — #139
   and #140 by checking which fences a new adapter package would inherit, #141 by checking whether a
   fixture QID resolves, #142 by checking what MusicBrainz actually uses to relate one act to
   another, #143 by checking a javadoc's stated reason against the committed fixture, #144 by
   checking this ADR's own OpenStreetMap argument against what ADR 53 already said, #145 by checking
-  the developer guide's rule table against `ArchitectureTest`. That is the enumeration; what each
-  says, and whether the condition it describes was already there at the merge-base, follows.
+  the developer guide's rule table against `ArchitectureTest`, and #146, #147 and #148 by the
+  whole-branch review reading the finished code and its deferral list. That is the enumeration;
+  what each says, and whether the condition it describes was already there at the merge-base,
+  follows.
   - **#139** — `theExporterNeverSpeaksToANetwork` passes `..wikidata.WikidataClient` to a package
     predicate, which matches no class, so that third of the rule is inert while its javadoc describes
     a ban it does not impose. **Condition present at the merge-base**; not #91's; the new argument
@@ -306,12 +309,36 @@ covers the bridge alone; the gap between them is uncovered.
     the build stayed green. The same issue records two more enumerations in that guide which this
     branch falsified the same way.
 
+  - **#146** — `MusicBrainzClient.throttle()` reads `lastRequestAt` and then sleeps the remainder,
+    which is check-then-act on a `volatile` field: two concurrent callers read the same instant,
+    wait the same remainder and fire together, so the method's own stated invariant — no two
+    requests less than the minimum interval apart — does not hold under concurrency. One client is
+    a singleton behind `SegueService` over the servlet transport, so concurrent expansions share
+    it, and MusicBrainz's ~1 request/second is a **policy for anonymous `ws/2` access** rather than
+    a performance guideline. Nothing in the repo drives concurrent expansions today and every test
+    is single-threaded. **Raised by this branch**, which wrote the client.
+  - **#147** — the GAP 9 guard validates `targetQid` and argues at length that it must not depend
+    on which bridge is wired, and the two other externally-sourced strings in the same method —
+    `seedMbid` and `relation.targetMbid()` — go unvalidated into `sourceRef`, where `Provenance`'s
+    compact constructor throws on a tab or a newline. That `IllegalArgumentException` escapes
+    `expand()`, which `SegueService.expandEntity` does not wrap, so the expansion aborts instead of
+    degrading. Not reachable through the shipped bridge, because `WikidataMusicBrainzIdentity`
+    validates both directions against a UUID pattern — **which is exactly the dependency the guard's
+    own javadoc says it does not have.** **Raised by this branch**, which wrote both.
+  - **#148** — GAP 4: `SegueService.expandEntity` ORs `sourceUnavailable` and `truncated` across
+    every adapter, so a caller learns *a* source failed and never which. **Half and half**: the
+    aggregation is at the merge-base and was unambiguous with one adapter; the ambiguity is this
+    branch's, and it bites hardest on the bridge, whose own failure yields an empty result with
+    `sourceUnavailable` **false**. This ADR and the design note both record GAP 4 as established
+    and unfixed; until #148 it was the one deferral in that set with no issue behind it.
+
   **"Predates" is true of some of the defects and of none of the issues, and collapsing those two is
-  what this roll-up got wrong before.** All seven were filed during this branch, on 2026-08-30, the
-  earliest of them 43 minutes after its first commit — so no issue predates the branch. What
-  predates it is the condition each one describes: three wholly (#139, #140, #141), two in part
-  (#144's ADR 53 sentence, #145's unenforced table), and two not at all (#142 and #143, which are
-  about the adapter this branch wrote).
+  what this roll-up got wrong before.** All ten were filed during this branch, on 2026-08-30, the
+  earliest of them 43 minutes after its first commit and the last three after its final code commit
+  — so no issue predates the branch. What predates it is the condition each one describes: three
+  wholly (#139, #140, #141), three in part (#144's ADR 53 sentence, #145's unenforced table,
+  #148's aggregation), and four not at all (#142, #143, #146 and #147, which are about the adapter
+  and the client this branch wrote).
 - **What this does not settle.** The two unbuilt adapters are unbuilt, and Open Library's obstacle is
   #92's question rather than the SPI's. **ADR 22 clause 3 is untouched**, deliberately: MusicBrainz
   was chosen partly for not forcing it, so this ADR is no evidence at all about whether the

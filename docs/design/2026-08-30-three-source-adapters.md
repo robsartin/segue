@@ -141,10 +141,16 @@ outside both packages, which ADR 32 permits in exactly one place: "`app` is the 
 permitted to depend on everything." `app/WikidataMusicBrainzIdentity` crosses `P434` in one batched
 query per 100 neighbours — chunked, because the request URI measures 180 + 43n bytes and a whole
 expansion under the shipped `max-new-edges: 200` would overrun the 8,192-byte request line; the
-class is the authority on that bound — and both directions of the fence — `musicbrainz → wikidata` and `wikidata → musicbrainz` —
-are ArchUnit rules that were watched red. This note's own text already rated that route faster
-(one round trip for a whole expansion against one per neighbour), so the supersession costs nothing
-this section priced.
+class is the authority on that bound — and both directions of the fence — `musicbrainz → wikidata`
+and `wikidata → musicbrainz` — are ArchUnit rules that were watched red.
+
+**The price this section put on that route is corrected too, and it is the same correction.** The
+paragraph above rates a SPARQL bridge at *one round trip for a whole expansion* against `url-rels`'
+one per neighbour, and that figure is what this correction originally repeated back as its reason
+for costing nothing. What shipped is one round trip per **100** neighbours — two against a full
+`max-new-edges: 200`, not one. **The comparison survives its own figure being wrong**: two round
+trips still beat 200, so the supersession costs nothing this section priced. The conclusion held
+for a reason weaker than the one given, which is worth saying rather than quietly repairing.
 
 **What it does cost is a failure channel, and neither this note nor Task 5's first report connected
 it.** A `url-rels` bridge would have failed with `MusicBrainzUnavailableException` — the adapter's
