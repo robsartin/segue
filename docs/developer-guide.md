@@ -409,7 +409,7 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `onlyIngestAppliesClaimsToTheGraph` | calling `GraphStore.record`, `GraphStore.upsertNode` or `AssertionLog.append` from outside `ingest` | [ADR 19](adr/0019-assertion-log-source-of-truth.md) |
 | `seedNeverOpensAStore` | `seed` depending on `sqlite`, `tinker`, `jena`, `ingest`, `mcp`, `app`, `retract` or `rate` — it resolves names and must not open the database even to read it | [ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md) |
 | `theExporterOnlyReads` | `export` calling `GraphStore.record`/`upsertNode` or `AssertionLog.append`, or depending on `IngestService`, or on either of the two dev tools that write (`retract`, `rate`) at all | [ADR 41](adr/0041-graph-exporter-views-and-formats.md) |
-| `theExporterNeverSpeaksToANetwork` | `export` depending on `java.net`, `javax.net` or the whole `musicbrainz` package — an export is a pure function of the database file. It also lists `..wikidata.WikidataClient`, which is a class name passed to a package predicate and therefore **matches nothing**; that is issue #139, and the `musicbrainz` argument is deliberately a package identifier so that it bites | [ADR 41](adr/0041-graph-exporter-views-and-formats.md) |
+| `theExporterNeverSpeaksToANetwork` | `export` depending on `java.net`, `javax.net`, the whole `musicbrainz` package, or any class of this project's that reaches a network API itself or through a chain of other classes here — so no HTTP client is named and none has to be remembered. The last clause replaced a `..wikidata.WikidataClient` argument that was a class name passed to a package predicate and matched nothing (issue #139) | [ADR 41](adr/0041-graph-exporter-views-and-formats.md) |
 | `theRatingsToolOnlyReads` | `ratings` calling the three world-fact writes **or either taste-layer write, `AffinityStore.put` and `updateRating`** — the only rule anywhere guarding the rating write | [ADR 43](adr/0043-listing-your-own-ratings.md) |
 | `theRatingsToolOpensNothingElse` | `ratings` depending on `tinker`, `jena`, `ingest`, `mcp`, `app`, `seed`, `export`, `retract`, `rate`, `java.net` or `javax.net` | [ADR 43](adr/0043-listing-your-own-ratings.md) |
 | `onlyTheRatingsToolReadsEveryRating` | calling `AffinityStore.readAll` from outside `ratings` — the bulk read exists for the owner's dev tool and for nothing on the MCP surface | [ADR 16](adr/0016-privacy-and-data-handling.md), [ADR 39](adr/0039-affinity-capture-and-read.md), [ADR 43](adr/0043-listing-your-own-ratings.md) |
@@ -1142,12 +1142,15 @@ allowed: the bounded views need a projection, and the exporter replays the log i
 in-memory `TinkerGraphStore` exactly as the application does at boot. Nothing durable changes.
 
 It never fetches. `ArchitectureTest.theExporterNeverSpeaksToANetwork` forbids `export` from
-depending on `java.net`, `javax.net` or the whole `musicbrainz` package, so an export is a pure
-function of one database file. It also names `..wikidata.WikidataClient`, which is a class name in a
-package predicate and matches nothing — issue #139, and the reason the `musicbrainz` argument is a
-package identifier instead. That rule arrived with the tooltips below, because that is the change that
-creates the temptation: the name of a Wikidata class is one HTTP call away, and one call per node is
-132 round trips for a depth-1 neighbourhood.
+depending on `java.net`, `javax.net`, the whole `musicbrainz` package, or **any class of this
+project's that reaches a network API itself or through a chain of other classes here** — so an
+export is a pure function of one database file. That last clause names no HTTP client, which is the
+point: it covers `WikidataClient` and `MusicBrainzClient` and whatever a third source brings,
+and it covers `WikidataEntityResolver`, which holds a client and touches `java.net` nowhere itself.
+It replaced a `..wikidata.WikidataClient` argument that was a class name passed to a package
+predicate and matched nothing (issue #139). That rule arrived with the tooltips below, because that
+is the change that creates the temptation: the name of a Wikidata class is one HTTP call away, and
+one call per node is 132 round trips for a depth-1 neighbourhood.
 
 It carries no affinity unless asked. [ADR 33](adr/0033-taste-layer-separation.md) is why a
 world-fact export is uncontroversial — the world graph can be shared or made public without

@@ -15,6 +15,7 @@ import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.GraphStore;
 import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.Dependency;
 import com.tngtech.archunit.core.domain.JavaAccess;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaCodeUnitAccess;
@@ -25,6 +26,9 @@ import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.conditions.ArchConditions;
 import com.tngtech.archunit.library.dependencies.SlicesRuleDefinition;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -402,6 +406,60 @@ class ArchitectureTest {
                   + " writes the graph, and cannot reach the one class that is allowed to, nor"
                   + " either of the two dev-side tools that write (ADR 44, ADR 46)");
 
+  /** The JDK's networking APIs — the thing an offline tool must not be able to reach. */
+  private static final DescribedPredicate<JavaClass> ON_A_NETWORK_API =
+      JavaClass.Predicates.resideInAnyPackage("java.net..", "javax.net..");
+
+  /** This project's own classes — the only ones the walk below steps through. */
+  private static final DescribedPredicate<JavaClass> OWN_CODE =
+      JavaClass.Predicates.resideInAPackage("com.robsartin.segue..");
+
+  /**
+   * A class of this project's that reaches a network API, itself or through a chain of this
+   * project's own classes.
+   *
+   * <p>The object side of {@link #theExporterNeverSpeaksToANetwork}, and the reason that rule names
+   * no HTTP client.
+   *
+   * <p><b>The walk steps only through {@code com.robsartin.segue}, and that is not a shortcut.</b>
+   * {@code JavaClass.getTransitiveDependenciesFromSelf} was tried first and is unusable here:
+   * ArchUnit resolves missing dependencies off the classpath, {@code java.lang.Class} declares
+   * {@code getResource} returning a {@code java.net.URL}, and every class extends {@code Object} —
+   * so the closure reaches {@code java.net} from literally everything. Measured, not guessed: that
+   * form reported 830 violations against an unmodified {@code export}. Restricting the hops to this
+   * project's classes asks the question actually worth asking — can the exporter get to a network
+   * through code this repository controls — and leaves the JDK and the libraries to the direct
+   * {@link #ON_A_NETWORK_API} clause.
+   */
+  private static final DescribedPredicate<JavaClass> REACHES_A_NETWORK =
+      new DescribedPredicate<>(
+          "reach java.net or javax.net, directly or through another class in this project") {
+        @Override
+        public boolean test(JavaClass javaClass) {
+          if (!OWN_CODE.test(javaClass)) {
+            return false;
+          }
+          Set<String> seen = new HashSet<>();
+          Deque<JavaClass> pending = new ArrayDeque<>(Set.of(javaClass));
+          while (!pending.isEmpty()) {
+            JavaClass current = pending.poll();
+            if (!seen.add(current.getFullName())) {
+              continue;
+            }
+            for (Dependency dependency : current.getDirectDependenciesFromSelf()) {
+              JavaClass target = dependency.getTargetClass();
+              if (ON_A_NETWORK_API.test(target)) {
+                return true;
+              }
+              if (OWN_CODE.test(target)) {
+                pending.add(target);
+              }
+            }
+          }
+          return false;
+        }
+      };
+
   /**
    * ADR 41: the exporter is offline as well as read-only.
    *
@@ -422,9 +480,23 @@ class ArchitectureTest {
    * anything from it.</b> Wikidata's exemption was bought by two offline tables the exporter
    * genuinely needs; MusicBrainz offers the exporter nothing but a second HTTP client, so the fence
    * can be the package rather than a carve-out — and a package is what {@code resideInAnyPackage}
-   * matches. The third argument below is a class name rather than a package and therefore matches
-   * nothing; that is <a href="https://github.com/robsartin/segue/issues/139">issue #139</a> and is
-   * not a pattern to copy.
+   * matches.
+   *
+   * <p><b>{@link #REACHES_A_NETWORK} is the clause that names no client.</b> This rule used to list
+   * {@code ..wikidata.WikidataClient} among the packages, which is a class name passed to a package
+   * predicate: it matched nothing, and {@code export} could hold a {@code WikidataClient} with the
+   * build green (<a href="https://github.com/robsartin/segue/issues/139">issue #139</a>, measured
+   * that way before this was changed). Naming the class instead would have fixed that one case and
+   * left the next source's client to be remembered by hand — the shape #139 says came within one
+   * step of propagating. So the object side asks what a class DOES: does it reach {@code java.net}
+   * or {@code javax.net}, itself or through a chain of this project's own classes? That covers
+   * {@code WikidataClient} and {@code MusicBrainzClient} today, {@code rate.RateServer}, and any
+   * client a third source brings, with nothing to remember.
+   *
+   * <p>Transitive rather than direct, and the difference is load-bearing: {@code
+   * WikidataEntityResolver} holds a {@code WikidataClient} and touches {@code java.net} nowhere
+   * itself, so a direct-only test would let {@code export} reach the network through one
+   * indirection. Both cases were watched go red before this was trusted.
    */
   @ArchTest
   static final ArchRule theExporterNeverSpeaksToANetwork =
@@ -432,9 +504,10 @@ class ArchitectureTest {
           .that()
           .resideInAPackage("..export..")
           .should()
-          .dependOnClassesThat()
-          .resideInAnyPackage(
-              "java.net..", "javax.net..", "..wikidata.WikidataClient", "..musicbrainz..")
+          .dependOnClassesThat(
+              ON_A_NETWORK_API
+                  .or(JavaClass.Predicates.resideInAnyPackage("..musicbrainz.."))
+                  .or(REACHES_A_NETWORK))
           .because(
               "ADR 41: an export is a pure function of the database file — a class label fetched at"
                   + " export time would make a picture depend on the internet being up");
