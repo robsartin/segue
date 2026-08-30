@@ -152,6 +152,29 @@ class RateCliTest {
   }
 
   @Test
+  @DisplayName("a database that is not there is refused rather than created and dealt as empty")
+  void anAbsentDatabaseIsRefused() throws IOException {
+    // The one refusal in this class that lives in main rather than in parse, and the only one
+    // that had no test at all (issue #107). Driven through main for the same reason
+    // RecommendationsAreNeverLoggedTest.anAbsentDatabaseIsRefused is — that is where the check
+    // is, and SqliteAssertionLog's constructor CREATES the file and its schema when it is
+    // absent, so without this guard the tool conjures an empty database and deals nothing while
+    // reporting success. main goes no further than the guard here, so no store is ever opened.
+    Path known = dir.resolve("known.csv");
+    Files.writeString(known, "Q900001\n", StandardCharsets.UTF_8);
+
+    assertThatThrownBy(
+            () ->
+                RateCli.main(
+                    new String[] {
+                      "--db", dir.resolve("nothing.db").toString(),
+                      "--known", known.toString()
+                    }))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("nothing to rate");
+  }
+
+  @Test
   @DisplayName(
       "an entity rated 4 or 5 but absent from the file joins the deck's known-list (issue #106)")
   void knownJoinsWhatWasRatedHighly() throws IOException {
