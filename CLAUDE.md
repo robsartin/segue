@@ -556,8 +556,8 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   degree** turns popularity into surprise, and it needs a **degree floor**
   (`Recommendations.MIN_CANDIDATE_DEGREE`, moved by `--min-degree`) because a normalised score
   otherwise rewards whatever is thinnest — the experiment's cosine variant put a degree-2 node
-  first. **That default is 5, lowered from ADR 45's 12 by issues #117/#118** — see ADR 45's
-  2026-08-29 amendment for the measurement, the cost and the six alternatives that lost.
+  first. **Issues #117/#118 lowered that default** — see ADR 45's 2026-08-29 amendment for the
+  number it moved to, the measurement, the cost and the six alternatives that lost.
   **Expanding a top candidate DEMOTES it**, because expansion raises the degree the score divides
   by: "expand the top candidates" is an anti-pattern, and the developer guide's "What to explore
   next" says so at length. `--scorer` keeps raw/adamic-adar/resource-allocation/lift as a dial, and
@@ -655,8 +655,8 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   measures what segue has FETCHED rather than how obscure something is — so suppressing an entity
   that was only ever offered because segue had under-fetched it is a judgement made on incomplete
   information, and nothing re-opens the question when ingest improves. ADR 50. **The floor half of
-  that limitation has since moved**: ADR 50 records that floor 5 sees all 72, and 5 is now the
-  default (ADR 45's 2026-08-29 amendment). The under-fetch half has not moved at all.
+  that limitation has since moved**: ADR 50 records that floor 5 sees all 72, and that is now
+  the default (ADR 45's 2026-08-29 amendment). The under-fetch half has not moved at all.
 
 - **The deck page is tested by running it in a real browser, because reading it as text cannot
   tell a guard from a guard-shaped comment.** Mutation-testing `DeckPageTest` (issue #103) caught

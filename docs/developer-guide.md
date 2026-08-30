@@ -1466,10 +1466,11 @@ relative order exactly, so the list simply loses its rejected members and backfi
 
 **The limitation ADR 50 records was a limitation of the floor, and issues #117 and #118 moved it.**
 ADR 50 states that floor 12 sees only 16 of the 72 off-list suppressed entities while floor 5 sees
-all 72, so most of the owner's rejections were invisible to a default-floor run. The default is now
-`Recommendations.MIN_CANDIDATE_DEGREE`, five (ADR 45's 2026-08-29 amendment), so the default run is
-the second of those two cases. What does *not* go away is the reason the floor is awkward at all:
-in-graph degree partly measures what segue has *fetched* rather than how obscure something is, so
+all 72, so most of the owner's rejections were invisible to a default-floor run. The default has
+since come down to the second of those two floors (`Recommendations.MIN_CANDIDATE_DEGREE`, moved by
+ADR 45's 2026-08-29 amendment), so a default run is now the case that sees all 72. What does *not*
+go away is the reason the floor is awkward at all: in-graph degree partly measures what segue has
+*fetched* rather than how obscure something is, so
 suppressing an entity that was only ever offered because it had been under-fetched is still a
 judgement made on incomplete information, and nothing re-opens the question when ingest improves.
 
@@ -1502,8 +1503,9 @@ took its place.
 
 Nothing is broken. Two readings of that are both defensible, and
 [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md)'s 2026-08-29 amendment records the
-decision between them along with the figures — the short version is that the demotion is partly the
-measurement improving and partly the ranking tracking ingest history rather than the world.
+decision between them along with the figures — the short version is that both readings are still
+live: the demotion may be the measurement improving, and it may be the ranking tracking ingest
+history rather than the world.
 
 Three practical consequences:
 
@@ -1511,13 +1513,20 @@ Three practical consequences:
   it.** It usually means the expansion worked.
 - **Expanding candidates does not grow the candidate pool either.** A node discovered by expansion
   arrives with one edge, and the floor excludes it — deliberately, because a degree-1 candidate has
-  exactly one intermediate, so its score is a fact about its parent rather than about itself.
-  Lowering the floor to `Recommendations.MIN_CANDIDATE_DEGREE` did not change that and was not
-  meant to.
-- **Expand the intermediates and the known-list instead**, if the aim is to move the recommendations.
-  Those raise the numerator of candidates rather than their own denominators. Expanding a candidate
-  is worth doing when the aim is to *know more about it* — just re-run `recommend` afterwards
-  expecting the list to move, rather than reading the new list as a verdict on the old one.
+  exactly one intermediate, so the only part of its score that is about the node itself is the
+  weight of that one edge. Lowering the floor did not change that and was not meant to; issue #134
+  holds the question of whether it should.
+- **There is no expansion this guide can tell you will move a candidate UP.** Expanding the
+  *intermediate* is the obvious next guess and the mechanism does not support it: each evidence term
+  is `weight / discount(degree of the intermediate)` (`Scorer`), so raising that intermediate's
+  degree makes every term already running through it *smaller*, and a `CONCEPT` intermediate taken
+  to `PathRanking.HUB_DEGREE` stops being evidence at all — 143 intermediates were excluded as hubs
+  in both runs behind ADR 45's 2026-08-29 amendment. Expanding a *known* entity does add
+  intermediates, and so terms, but its new edges also land on other nodes and raise their degrees,
+  candidates included. Neither was measured, so read that as mechanism rather than as advice.
+  Expanding a candidate is worth doing when the aim is to *know more about it* — just re-run
+  `recommend` afterwards expecting the list to move, rather than reading the new list as a verdict
+  on the old one.
 
 ### Edge type carries more of the signal than the arithmetic does
 
@@ -1639,7 +1648,7 @@ the number `RateRun` used to hold (issue #119) — so at those defaults the deck
 `./gradlew recommend`'s agree, which is what ADR 46's issue-#101 review made true and this keeps
 true. Move it the same way `recommend --min-degree` does, to rate one floor's candidate list against
 another's instead of only reading about the difference — the method ADR 45 used and issues #117 and
-#118 re-used to move the default down to five:
+#118 re-used to move the default down:
 
 ```bash
 ./gradlew rate --args="--known $HOME/known.csv --min-degree 12"

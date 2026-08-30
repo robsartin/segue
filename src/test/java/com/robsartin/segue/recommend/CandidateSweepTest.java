@@ -188,13 +188,15 @@ class CandidateSweepTest {
   }
 
   @Test
-  @DisplayName("the default floor admits a candidate with five edges (issues #117, #118)")
+  @DisplayName("the default floor admits a thinly connected candidate (issues #117, #118)")
   void theDefaultFloorAdmitsAThinlyConnectedCandidate() {
-    // The decision this pins: five, not twelve. A recognisable act sitting at degree five is
-    // thinly connected because segue has not fetched it, not because it is obscure, and the
+    // The decision this pins: the shipped default admits a candidate this thin. The degree below
+    // is the FIXTURE's, deliberately not a second copy of the constant — it asserts an upper bound
+    // on the default, which is the direction issues #117 and #118 moved it, and it is why the
+    // assertion is presence rather than equality. An entity sitting here is commonly thinly
+    // connected because segue has not fetched it rather than because it is obscure, and the
     // measured cost of excluding it was the negative signal the taste layer had no other way of
-    // getting. This is the one place the number itself is stated; everything else cites the
-    // constant.
+    // getting (ADR 45's 2026-08-29 amendment).
     node(graph, SHARED_ARTIST, NodeKind.PERSON, "the artist they both cite");
     node(graph, ANCESTOR, NodeKind.GROUP, "who that artist cites");
     edge(graph, KNOWN_ONE, SHARED_ARTIST, EdgeTypes.INFLUENCED_BY.code());

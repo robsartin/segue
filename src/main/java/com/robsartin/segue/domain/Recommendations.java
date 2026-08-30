@@ -23,14 +23,13 @@ public final class Recommendations {
    * still holds too: at a floor of 50 the list drifts back towards the famous names the
    * normalisation exists to escape.
    *
-   * <p><b>Five, and no longer the twelve ADR 45 shipped, because in-graph degree is partly a
-   * measure of what segue has FETCHED.</b> An entity at this degree is commonly thinly connected
-   * here rather than obscure in the world, so the higher floor excluded recognisable things for a
-   * reason that was about ingest history rather than about them. The move was measured before it
-   * was decided, and the cost of it is real — a lower floor makes the ranking depend more on what
-   * has been expanded. ADR 45's amendment of 2026-08-29 (issues #117, #118) is the authority on the
-   * figures, the cost, and the alternatives that were measured and lost; nothing here restates
-   * them.
+   * <p><b>Lowered from what ADR 45 shipped, because in-graph degree is partly a measure of what
+   * segue has FETCHED.</b> An entity at this degree is often thinly connected here rather than
+   * obscure in the world, so the higher floor excluded recognisable things for a reason that was
+   * about ingest history rather than about them. The move was measured before it was decided, and
+   * the cost of it is real — a lower floor exposes more of the ranking to what has been expanded.
+   * ADR 45's amendment of 2026-08-29 (issues #117, #118) is the authority on the figures, the cost,
+   * and the alternatives that were measured and lost; nothing here restates them.
    *
    * <p><b>It is a default on this graph, not a natural constant</b>, which is why {@code
    * --min-degree} exists: a domain whose entities are thinner needs a lower one, and the honest way
