@@ -545,6 +545,38 @@ class DeckBehaviourTest {
   }
 
   @Test
+  @DisplayName("the page's own script is running in strict mode")
+  void thePageRunsInStrictMode() {
+    // Issue #154. Renaming only the `let busy = false;` declaration left every one of the ten
+    // tests above green: in sloppy mode the remaining `busy = ...` assignments simply created a
+    // global, and the page went on working with the real binding stale. This page writes the
+    // affinity table, which has no history and no un-rate (ADR 39, ADR 46), so a lost declaration
+    // must fail loudly rather than as silence.
+    //
+    // Asserted at runtime rather than by looking for the directive as text, because the token
+    // `'use strict'` can be present and inert — inside a comment, or after a statement, where it
+    // is no longer a directive. What is checked here is the property that actually matters: the
+    // page's functions are strict ones. `Function.prototype.caller` is an accessor that throws
+    // TypeError, and only a non-strict function has an own `caller` shadowing it (returning
+    // null), so reading `.caller` off a function the page declared separates the two cases. Any
+    // top-level function declaration would do; `skip` is used because it is one of the guards the
+    // lost declaration would have disarmed.
+    //
+    // What this does NOT cover: it says the script is strict, not that any particular typo is
+    // caught. The mutation that found this — renaming the declaration and watching the suite go
+    // red — cannot live in the suite, and was run by hand; see the pull request for #154.
+    Object strict =
+        chrome.eval(
+            "(function () { try { skip.caller; return false; }"
+                + " catch (thrown) { return thrown instanceof TypeError; } })()");
+    assertThat(strict)
+        .as(
+            "deck.html must run in strict mode, so that an assignment to an undeclared identifier"
+                + " is a ReferenceError instead of a silent global")
+        .isEqualTo(Boolean.TRUE);
+  }
+
+  @Test
   @DisplayName("this suite is not silently doing nothing")
   void theBrowserWasActuallyDriven() {
     assertThat(chrome.eval("navigator.userAgent").toString())
