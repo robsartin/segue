@@ -387,6 +387,89 @@ another on the next. Nothing reported it, because both fills are legal.
 Not free: a fifth shaded class now has to be ranked as well as coloured, and a reordering of those
 lines is a behaviour change that reads like a formatting change. The comment on the list says so.
 
+**Amendment (2026-08-30, issue #99): the "cannot" above is about DOT, and it ends at the render —
+a rewrite after Graphviz makes the tooltips visible, and it lives here.**
+
+The #81 amendment stands unchanged and is not weakened by a word of this. DOT still cannot express
+it: Graphviz writes the `<title>` element from the object's name, an edge has no name, and no
+attribute redirects either. What #81 left was a reader who had been told at length what does not
+work and never told what does.
+
+**The fix is a property of our pipeline, not of DOT.** Once `dot` has written the SVG, the class
+and the relationship are both in the file, one attribute away from the element a browser reads. So
+`HoverableSvg` runs after the render and copies each `xlink:title` into a `<title>` element on the
+anchor that carried it. SVG resolves a tooltip to the *nearest* ancestor with a `<title>` child, so
+the inserted one wins; nothing is deleted, the attribute stays, and the outer `<title>` stays the
+QID, which keeps every tool that reads either of them working.
+
+- **It also titles the edge label, and that was found by measurement rather than by reading.**
+  Graphviz puts a node's label inside the anchor, but an edge's label outside it — still a *child*
+  of `<g class="edge">`, and a sibling of the `<g id="a_edgeN">` wrapping the anchor. Rewriting only
+  the anchors — which is what the issue asked for — leaves the visible relationship label still
+  resolving to the two QIDs, and that label is drawn on every view under the 40-edge budget and is
+  the likeliest thing a reader points at. Hit-testing the rendered label in Chrome is what showed
+  it; the file looked fixed. Whether the owner's local script has the same gap is not recorded here,
+  because it was not read.
+
+  **The parentage is load-bearing and an earlier draft of this bullet had it backwards**, saying the
+  label was a sibling of the whole `<g class="edge">`. It is not, and the difference decides whether
+  the code can work at all: `rewrite` holds the anchor's tooltip until the object group closes, so a
+  label outside that group would be reached after the reset and could never be titled. A maintainer
+  reading the wrong version would have taken the reset for a bug. Corrected before merge, on review.
+
+- **A Java tool in `export` with a Gradle task, not a shell script in `scripts/`.** The issue asked
+  for `scripts/`, and the repository has no shell script in it. Every operator tool here is a
+  `main` behind a `JavaExec` — `resolveNames`, `exportGraph`, `listRatings`, `rate` — and a fifth
+  costs no new pattern, no interpreter, and nothing in `gradle/libs.versions.toml`. It also lands
+  inside Spotless, ArchUnit and the coverage gate rather than beside them. **The weak form of this
+  argument is that a script could not be tested, and that is not true** — a test can run a script,
+  and one in this change does exactly that to the imagemap recipe. The argument is consistency and
+  no interpreter, and it is worth saying which one is load-bearing.
+
+- **Not folded into `exportGraph`.** The exporter never shells out; an export is a pure function of
+  one database file, which is what `theExporterNeverSpeaksToANetwork` and the read-only rule are
+  protecting. The SVG this reads does not exist until the operator has run `dot`, so it is a third
+  step and says so.
+
+- **The `-Tcmapx` recipe was incomplete, and the issue's diagnosis of why was wrong in a way worth
+  recording.** The issue said the map would be named `%1` unless the graph is named. It does not
+  hold: `DotWriter` names the graph after the view description, so the map is named for the view.
+  A second worry — that a name carrying spaces would not bind — **is not the issue's and should not
+  be attributed to it**; it was this work's own guess on the way to measuring, and the measurement
+  refuted it. Chrome binds `usemap="#a made-up view"` correctly, hit-tested, `<area>` returned.
+  **The actual defect was simpler and worse**: the recipe stopped after `dot`, so it produced a
+  picture and an imagemap and no page binding them. It ran cleanly and did nothing, which is the shape this project keeps meeting. The
+  recipe now writes the page and renames the map to a fixed id — not because the generated name
+  fails, but because it is unknown until you look at the file.
+
+- **The guide's recipe is executed rather than asserted.** `ImagemapRecipeTest` reads the ```` ```bash ````
+  block out of `docs/developer-guide.md` and runs it against a real `DotWriter` render, then checks
+  that the page's `usemap` names the map the recipe wrote. Issue #93 installed Graphviz in CI so a
+  claim about `dot` could be executed; this is that install being spent again. A shell snippet in a
+  markdown file is otherwise a claim with nothing behind it, which is how the broken one shipped.
+
+- **`DotWriter.note` names the SVG again, and the #81 amendment's last bullet is superseded.**
+  That bullet says the note "names the two renders that do answer the question — GraphML's
+  `typeCode`, or `-Tcmapx`". It now names `-Tsvg` together with `hoverableSvg`, and GraphML.
+  Naming the render *alone* was #81's defect, so `DotWriterTest` pins the pair rather than banning
+  the word `-Tsvg`, which is what it used to do.
+
+- **What is verified, and what is not, stated so nobody reads more into the tests.**
+  `WhatAHoverShowsTest` renders through the real binary, rewrites, and asserts the string a browser
+  would resolve for four hover targets — node shape, node label, edge line, edge label — by walking
+  to the nearest ancestor carrying a `<title>`, which is the rule a user agent applies. **No test
+  confirms that a browser paints the tooltip.** It is native browser chrome; it is in no DOM and no
+  screenshot. That half was read by hand: in Safari for #81, in both directions, and in Chrome for
+  #99, where all four targets and the imagemap's `<area>` were hit-tested and read back. It is a
+  manual observation on both issues and it should be repeated by hand if the mechanism is ever
+  doubted.
+
+Not free: there is now a third step between a graph and a picture somebody can read, and an
+operator who renders an SVG and skips it gets exactly the old confusing result. The note is what
+tells them, and it only fires above the 40-edge budget — below it the labels are drawn, so the
+picture is readable without any of this, which is the case where a reader is least likely to be
+told and least likely to need it.
+
 ## Alternatives considered
 
 - **Put it in `seed`, since that is where the other dev tool lives** — one package for

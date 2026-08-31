@@ -1223,9 +1223,9 @@ labels because a route is two or four edges, which is the same rule that keeps t
 132 node(s), 144 edge(s)
 144 edge(s) is past the 40 this picture can label legibly, so the DOT edge labels are dropped.
 Each edge keeps its type in a tooltip, but Graphviz puts that in xlink:title and a browser
-hovering the SVG shows the QIDs instead (issue #81): read the types from GraphML, which carries
-typeCode on every edge whatever the size, or render with -Tcmapx, where the tooltip becomes an
-HTML title
+hovering the SVG shows the QIDs instead (issue #81): render -Tsvg and run hoverableSvg over it,
+which moves each tooltip to where a browser looks (issue #99), or read the types from GraphML,
+which carries typeCode on every edge whatever the size
 ```
 
 That sentence comes from `DotWriter.note`, not from `ExportRun`, so the class that stays
@@ -1253,18 +1253,90 @@ identities: two nodes named `human` **silently merge into one**. An edge has no 
 named. [ADR 41](adr/0041-graph-exporter-views-and-formats.md)'s issue-#81 amendment has the full
 sweep against the real binary.
 
-**The attribute stays because it is not inert.** `dot -Tcmapx` renders it as an HTML `title` on an
-`<area>`, which every browser does show, so a PNG plus its imagemap answers the question a bare SVG
-cannot:
-
-```bash
-dot -Tpng -o graph.png -Tcmapx -o graph.map graph.dot
-```
+**The attribute stays because it is not inert.** Both routes below read it — one moves it, the
+other renders it as an HTML `title` — so everything a reader wants is already in the rendered file.
+It is simply on an element browsers do not consult.
 
 `WhatAHoverShowsTest` renders through the real Graphviz binary and asserts on `<title>` *content*
 rather than on the presence of an attribute — which is exactly the assertion whose absence let this
 ship. It skips where Graphviz is not installed, so **CI installs it**: the runner image has no
 `dot`, and without that step the test would report success while executing nothing.
+
+### So how do I see them
+
+**Render the SVG, then rewrite it.** The "cannot" above is a property of DOT, not of the file DOT
+produced. Once Graphviz has written the SVG the class and the relationship are both in it, one
+attribute away from the element a browser reads, and `hoverableSvg` moves them:
+
+```bash
+./gradlew exportGraph --args="--view neighbourhood --qid Q42 --out $HOME/one.dot"
+dot -Tsvg -o $HOME/one.svg $HOME/one.dot
+./gradlew hoverableSvg --args="--in $HOME/one.svg --out $HOME/one-hoverable.svg"
+```
+
+It is a third step rather than something `exportGraph` does, because the exporter never shells out
+to anything: an export is a pure function of one database file, and the SVG does not exist until
+you have run `dot` yourself. It writes a copy rather than editing in place, and running it twice
+over the same file changes nothing.
+
+**Why a browser then shows the right one.** SVG resolves a tooltip to the *nearest* ancestor
+carrying a `<title>` child, so the inserted one wins over the group's own without anything being
+deleted. `HoverableSvg` copies each `xlink:title` into a `<title>` element on the anchor that
+carried it — the attribute stays where it was, the outer `<title>` stays the QID, and a tool that
+reads either keeps working. All that changes is which one the browser finds first.
+
+**It titles the edge label too, and that is not a detail.** Graphviz puts a node's label inside the
+anchor, but an edge's label outside it — still a *child* of `<g class="edge">`, and a sibling of the
+`<g id="a_edgeN">` that wraps the anchor:
+
+```xml
+<g id="edge1" class="edge">
+  <title>Q901-&gt;Q902</title>              <- what a bare hover shows
+  <g id="a_edge1"><a xlink:title="…">…</a></g>
+  <text …>MEMBER_OF</text>                 <- the visible label, outside the anchor
+</g>
+```
+
+Rewriting only the anchors therefore leaves the visible relationship label — the thing a reader is
+likeliest to point at, drawn on every view under the 40-edge budget — still resolving to the two
+QIDs. That was found by hit-testing the rendered label in Chrome, not by reading the file, and it is
+pinned by a test.
+
+**What is checked, and what is not.** `WhatAHoverShowsTest` renders through the real binary, runs
+the rewrite, and asserts on the string a browser would resolve for four separate hover targets — a
+node's shape, a node's label, an edge's line and an edge's label — by walking to the nearest
+ancestor with a `<title>`, which is the rule the browser applies. What no test here does is confirm
+that the browser then *paints* the tooltip: that is native browser chrome, and it appears in no DOM
+and in no screenshot. It was checked by hand instead — in Safari during issue #81, in both
+directions, and again in Chrome for issue #99 by hit-testing all four targets and reading back the
+`<title>` the browser resolved. Both readings are recorded on their issues; neither is automated,
+and no test in this repository should be read as covering it.
+
+### The same picture as a PNG, with an imagemap
+
+`dot -Tcmapx` renders the same `tooltip` as an HTML `title` on an `<area>`, which every browser
+shows. **An imagemap does nothing on its own**, though: it needs a page binding it to the picture,
+and the map Graphviz writes is named after the view, so there is no fixed name to paste. Issue #99
+is what the recipe here used to be missing — it stopped at the first line, produced two files and
+no page, and a reader following it exactly got nothing and no way to tell why. So the recipe writes
+the page and renames the map:
+
+```bash
+dot -Tpng -o graph.png -Tcmapx -o graph.map graph.dot
+{ echo '<img src="graph.png" usemap="#graph" alt="an exported view">'
+  sed '1s|.*|<map id="graph" name="graph">|' graph.map
+} > graph.html
+```
+
+`ImagemapRecipeTest` reads that block **out of this file** and runs it, so the recipe cannot rot
+into one that does not work: it executes it against a real `DotWriter` render and asserts that the
+page's `usemap` names the map the recipe wrote and that the areas carry the class and the
+relationship. It cannot check that the tooltip is painted, for the reason given above; that half
+was read by hand in Chrome, by hit-testing the image and reading back the `<area>` the browser
+returned.
+
+Use this where the deliverable has to be a bitmap. Otherwise prefer the SVG: it scales, and it
+needs no second file kept beside it.
 
 ## Looking at what you have rated
 
