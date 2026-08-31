@@ -3,7 +3,6 @@ package com.robsartin.segue.domain;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -14,22 +13,29 @@ import java.util.regex.Pattern;
  *
  * <p><b>Identity reuses ADR 58's unallocatable-QID mechanism (issue #141).</b> Wikibase's {@code
  * ItemId} grammar is {@code Q[1-9]\d{0,9}}: the first digit after {@code Q} may never be zero, so a
- * qid that starts {@code Q0} can never be allocated by Wikidata, now or in the future. That is what
- * lets a local entity carry a real qid - the shape {@link NodeRecord} and every store already
- * expect - without a second identity type reaching {@code port}, {@code tinker} or {@code jena}
- * (design doc, "Identity").
+ * qid that starts {@code Q0} can never be allocated by Wikidata, now or in the future. ADR 58's
+ * decision reserves that leading-zero shape for a <b>stand-in</b> generally - {@code Fixture}'s
+ * constants are one population living in that shape, not the whole of what the shape means, and
+ * nothing in ADR 58 is scoped to "test fixtures" alone.
  *
- * <p><b>The local-entity band.</b> ADR 58 claimed the leading-zero space for {@code Fixture}'s test
- * stand-ins ({@code Q0900001}-{@code Q0900015}). Reusing the mechanism without a further rule would
- * leave a stand-in and one of the owner's own books looking identical - both just "some
- * leading-zero qid" - which is the convention-splitting outcome ADR 58 stopped short of, arriving
- * from the other side. So a local entity's trailing digits must additionally be {@value
- * #LOCAL_ENTITY_MIN} or greater: {@code Q0900020} and up. The gap between Fixture's current ceiling
- * (15) and this floor is deliberate headroom, not a number chosen because it looked free - ADR 58's
- * own account of how the {@code Q9000xx} range came to collide is the lesson this gap is sized
- * against.
+ * <p><b>The local-entity band is a second shape, not a number range.</b> A numeric floor inside the
+ * single-leading-zero space cannot separate two open-ended families from each other: issue #171
+ * will migrate {@code Q900100} - a stand-in family already used in 25 files, one of the largest ADR
+ * 58 leaves to migrate - into leading-zero form as {@code Q0900100}, which is larger than any floor
+ * small enough to admit this record's own examples. Choosing such a floor is exactly the mistake
+ * ADR 58's own postmortem describes: a number that looks free until something else claims it. A
+ * range also protects only one direction - nothing would stop a sixteenth {@code Fixture} constant
+ * from landing inside a floor meant for local entities and colliding silently.
  *
- * @param qid the local entity's own identifier - leading-zero, and in the local-entity band
+ * <p>So a local entity's qid takes <b>two</b> leading zeros - {@code Q00} followed by at least one
+ * more digit - while every stand-in, present and future, keeps exactly one. Both shapes are
+ * unallocatable under {@code Q[1-9]\d{0,9}} and both match every {@code Q\d+} pattern in {@code
+ * src/main}, so nothing outside this check has to learn about the second zero, and the distinction
+ * survives #171 landing on whatever numbers it lands on, because it is a shape rather than a range.
+ * <b>The leading zeros are the discriminator, not decoration</b> - {@code Q0900042} is a stand-in's
+ * shape and is refused here; {@code Q00900042} is a local entity's, and is not.
+ *
+ * @param qid the local entity's own identifier - two leading zeros ({@code Q00...})
  * @param kind what it is, same as any other node
  * @param label how the owner refers to it
  * @param mintedAt when the owner minted it
@@ -38,14 +44,10 @@ public record LocalEntity(String qid, NodeKind kind, String label, Instant minte
     implements LoggedAssertion {
 
   /**
-   * The floor of the local-entity band, read out of a leading-zero qid's trailing digits as one
-   * integer - {@code Q0900001} reads as {@code 900001}, not {@code 1}. Fixture's constants (ADR 58)
-   * run {@code Q0900001}-{@code Q0900015}, i.e. 900001-900015; this sits far enough above that
-   * ceiling that Fixture growing by a few more entries does not collide with it.
+   * The local-entity shape: {@code Q00} followed by one or more digits. Deliberately a prefix
+   * match, not a parsed value - see the class javadoc for why a numeric floor cannot do this job.
    */
-  static final long LOCAL_ENTITY_MIN = 900_020L;
-
-  private static final Pattern UNALLOCATABLE_TAIL = Pattern.compile("Q0(\\d*)");
+  private static final Pattern LOCAL_SHAPE = Pattern.compile("Q00\\d+");
 
   public LocalEntity {
     Objects.requireNonNull(qid, "qid");
@@ -61,9 +63,9 @@ public record LocalEntity(String qid, NodeKind kind, String label, Instant minte
   }
 
   /**
-   * Refuse anything Wikidata could allocate, and anything it could not that still falls outside the
-   * local-entity band (most likely one of ADR 58's fixture stand-ins). Shared with {@link SameAs},
-   * whose local side is the same claim by a different name.
+   * Refuse anything Wikidata could allocate, and anything it could not that still is not shaped
+   * like a local entity (most likely one of ADR 58's single-leading-zero stand-ins). Shared with
+   * {@link SameAs}, whose local side is the same claim by a different name.
    */
   static void checkLocalBand(String qid) {
     Qid.check(qid);
@@ -71,12 +73,11 @@ public record LocalEntity(String qid, NodeKind kind, String label, Instant minte
       throw new IllegalArgumentException(
           "a local entity's qid must not be allocatable by Wikidata, got: " + qid);
     }
-    Matcher tail = UNALLOCATABLE_TAIL.matcher(qid);
-    if (!tail.matches()
-        || tail.group(1).isEmpty()
-        || Long.parseLong(tail.group(1)) < LOCAL_ENTITY_MIN) {
+    if (!LOCAL_SHAPE.matcher(qid).matches()) {
       throw new IllegalArgumentException(
-          "a local entity's qid must be in the local-entity band (Q0900020 and up), got: " + qid);
+          "a local entity's qid must have two leading zeros (Q00..., ADR 58 issue #141) to stay"
+              + " distinct from a single-leading-zero stand-in, got: "
+              + qid);
     }
   }
 }
