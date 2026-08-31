@@ -291,6 +291,54 @@ watch it produce a blank or missing label, then fix `Labels.forQids`.
 
 ---
 
+### Task 4b: A merged local id stops being offered
+
+*Added 2026-08-31 after Task 4's review measured the defect.*
+
+**Files:**
+- Modify: `src/main/java/com/robsartin/segue/domain/KnownList.java` and whatever in `recommend`/`rate`
+  the measurement shows is needed
+- Test: alongside the existing `KnownList` and sweep tests
+
+**The spec already requires this and nothing implements it.** The design doc says a merged local id
+"stops being offered anywhere, the way ADR 50's suppressed candidate stays reachable through
+`--revise` and is never dealt". After Task 4 a merge leaves **two** affinity rows, and both are live.
+
+**Measured, not inferred:**
+
+```
+BEFORE merge   Q911 = 1.6667   shared = 1
+AFTER  merge   Q911 = 3.3333   shared = 2
+```
+
+Exactly doubled. `KnownList.promoted` promotes anything rated 4 or 5, so both rows enter the
+known-list while the graph holds both nodes carrying the same edges. A second face: where only the
+canonical id is rated, the **merged local entity appears as a candidate** — segue recommending
+something back to the owner that it already knows is the same thing he has.
+
+This degrades real recommendations the first time the owner merges something he likes, so it lands
+**before** Task 5 ships the tool that can merge.
+
+- [ ] **Step 1: Write the failing test.** A rated local entity, merged, must contribute its weight
+  **once**. Assert on the score, not on the row count — the doubling is what a reader would notice.
+
+- [ ] **Step 2: Write the second failing test.** A merged local id must not be dealt as a candidate
+  when its canonical id is rated.
+
+- [ ] **Step 3: Run both and watch them fail.** Record the messages; the first should report roughly
+  double.
+
+- [ ] **Step 4: Implement.** Resolve through the equivalence wherever the known-list and the sweep
+  read affinity. **Do not delete a row** — ADR 19 is append-only and the local row is what the owner
+  actually said at the time.
+
+- [ ] **Step 5: Prove both bite.** Revert each fix in turn, watch exactly the matching test fail,
+  restore, quote the messages.
+
+- [ ] **Step 6: Run the gate and commit**
+
+---
+
 ### Task 5: The seventh dev tool
 
 **Amended 2026-08-31: construct through the factories** — `LocalEntity.minted()`,
