@@ -37,6 +37,11 @@ import java.util.List;
  *   <li>Overlapping but non-identical band tenures, so time travel can be wrong
  *   <li>Model-generated edges that NO real source backs, including one that creates a tempting but
  *       untrustworthy shortcut between two entities
+ *   <li>An owner claim layered onto an edge a real source already asserted, so corroboration has
+ *       something to refuse counting twice (#92) — {@code Provenance.OWNER} is not a second
+ *       witness, on {@code EdgeRecord.corroboration()}'s reasoning, and both {@code GraphStore}
+ *       implementations have to agree on that or {@code GraphStoreContract} would not catch a
+ *       divergence between them
  * </ul>
  */
 public final class Fixture {
@@ -62,6 +67,7 @@ public final class Fixture {
   private static final Instant STRUCTURED_PULL = Instant.parse("2026-08-01T09:00:00Z");
   private static final Instant LASTFM_PULL = Instant.parse("2026-08-20T09:00:00Z");
   private static final Instant LLM_TURN = Instant.parse("2026-08-22T14:30:00Z");
+  private static final Instant OWNER_CLAIM = Instant.parse("2026-08-30T12:00:00Z");
 
   private Fixture() {}
 
@@ -121,6 +127,10 @@ public final class Fixture {
 
         // ---- literature --------------------------------------------
         wikidata(CAVE, "AUTHORED", ASS_SAW_ANGEL, null, null, "S-cave-novel"),
+        // The owner claiming a relationship wikidata already asserts (#92). This must NOT push
+        // the edge's corroboration to 2 — the owner routes into the graph, it does not vouch for
+        // what a real source already said, on the same reasoning that sank ADR 55's subgroup.
+        owner(CAVE, "AUTHORED", ASS_SAW_ANGEL),
 
         // ---- statistical and model-generated -----------------------
         lastfm(CAVE, "SIMILAR_TO", PJ_HARVEY, "lastfm-similar-2026-08"),
@@ -165,6 +175,10 @@ public final class Fixture {
   private static AssertionRecord llm(String from, String type, String to, String ref) {
     return new AssertionRecord(
         from, to, type, null, null, new Provenance("llm:claude", ref, LLM_TURN, 0.30));
+  }
+
+  private static AssertionRecord owner(String from, String type, String to) {
+    return new AssertionRecord(from, to, type, null, null, Provenance.owner(OWNER_CLAIM));
   }
 
   private static LocalDate date(String iso) {

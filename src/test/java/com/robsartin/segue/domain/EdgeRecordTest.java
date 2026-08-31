@@ -17,8 +17,14 @@ class EdgeRecordTest {
 
   private static final Instant WHEN = Instant.parse("2026-01-01T00:00:00Z");
 
+  // ADR 58 stand-ins (two leading zeros): neither end names a real Wikidata entity, so the
+  // fabricated INFLUENCED_BY claim below denotes nothing real either (fix round 1: the brief's
+  // original "Q42" was a real allocated item — ADR 58's own named failure pattern).
+  private static final String FROM = "Q00900042";
+  private static final String TO = "Q00900043";
+
   private static Provenance wikidataProvenance() {
-    return new Provenance("wikidata", "wikidata:Q42#P737", WHEN, 1.0);
+    return new Provenance("wikidata", "S-invented-influence", WHEN, 1.0);
   }
 
   private static Provenance ownerProvenance() {
@@ -30,8 +36,8 @@ class EdgeRecordTest {
   void shouldNotLetAnOwnerClaimCorroborateASourcesClaim() {
     EdgeRecord edge =
         new EdgeRecord(
-            "Q00900042",
-            "Q42",
+            FROM,
+            TO,
             "INFLUENCED_BY",
             null,
             null,

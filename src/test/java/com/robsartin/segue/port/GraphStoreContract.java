@@ -56,9 +56,11 @@ public abstract class GraphStoreContract {
   }
 
   @Test
-  @DisplayName("25 assertions fold into exactly 22 edges")
+  @DisplayName("26 assertions fold into exactly 22 edges")
   void ingestCollapsesAssertions() {
-    // 25 assertions, 3 pairs sharing a (from, type, to) triple (corroboration()), fold to 22.
+    // 26 assertions: 3 pairs sharing a (from, type, to) triple from two real sources
+    // (corroboration()), plus the owner's claim folding onto a fourth triple a real source
+    // already asserted (#92) — four folds, 26 assertions fold to 22 edges.
     assertThat(store.edgeCount()).isEqualTo(22);
   }
 
@@ -175,6 +177,13 @@ public abstract class GraphStoreContract {
 
     assertThat(corroborated).hasSize(3);
     assertThat(corroborated).noneMatch(EdgeRecord::isUncorroboratedHypothesis);
+    // #92: the owner also claimed Cave authored the novel wikidata already asserts — that must
+    // NOT make this triple's second edge in the corroborated(2) set. Both GraphStore
+    // implementations answer Q4 with a query of their own (a Java stream here, SPARQL's COUNT
+    // DISTINCT in JenaGraphStore); this pins the owner-exclusion on whichever engine runs this.
+    assertThat(corroborated)
+        .noneMatch(
+            e -> e.fromQid().equals(Fixture.CAVE) && e.toQid().equals(Fixture.ASS_SAW_ANGEL));
   }
 
   @Test

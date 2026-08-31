@@ -18,6 +18,7 @@ import static com.robsartin.segue.recommend.InventedWorld.SHARED_PRIZE;
 import static com.robsartin.segue.recommend.InventedWorld.THE_ACADEMY;
 import static com.robsartin.segue.recommend.InventedWorld.THE_ADMIRER;
 import static com.robsartin.segue.recommend.InventedWorld.edge;
+import static com.robsartin.segue.recommend.InventedWorld.fillerQid;
 import static com.robsartin.segue.recommend.InventedWorld.hubConcept;
 import static com.robsartin.segue.recommend.InventedWorld.node;
 import static com.robsartin.segue.recommend.InventedWorld.padDegreeTo;
@@ -268,11 +269,15 @@ class CandidateSweepTest {
     assertThat(find(sweep(), A_THIN_BAND)).isPresent();
   }
 
-  /** {@link InventedWorld#padDegreeTo}, but every filler edge is owner-sourced, not "invented". */
+  /**
+   * {@link InventedWorld#padDegreeTo}, but every filler edge is owner-sourced, not "invented".
+   * Shares {@link InventedWorld#fillerQid} rather than re-deriving the id, so the two padding
+   * helpers cannot drift onto different filler ranges.
+   */
   private void padDegreeWithOwnerEdges(String qid, int degree) {
     int already = graph.edges(qid).size();
     for (int i = already; i < degree; i++) {
-      String filler = "Q9009" + (Math.abs(qid.hashCode()) % 90 + 10) + i;
+      String filler = fillerQid(qid, i);
       node(graph, filler, NodeKind.WORK, "owner-claimed filler " + filler);
       graph.record(
           new AssertionRecord(
