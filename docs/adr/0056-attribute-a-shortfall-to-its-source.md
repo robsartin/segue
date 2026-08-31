@@ -79,11 +79,21 @@ adapters sharing one id would name an ambiguity, a blank one names nothing, and 
 would break the `ToolResult` detail and the log line it is put in. The compact constructor now
 refuses all four.
 
-**Every one of those was already forbidden and none was enforced.** `SourceAdapter.id()`'s own
-javadoc says it *is* the `sourceId` every assertion the adapter emits will carry, and `Provenance`
-refuses tabs and newlines in that field — but only when an assertion is emitted, and **an adapter
-reporting itself unavailable emits none.** The one case attribution exists for is the one nothing
-checked.
+**Two of the four were already forbidden and unenforced; two are new, and the difference is worth
+stating rather than blurring.** `SourceAdapter.id()`'s own javadoc says it *is* the `sourceId` every
+assertion the adapter emits will carry, and `Provenance` refuses tabs and newlines in that field —
+but only when an assertion is emitted, and **an adapter reporting itself unavailable emits none**, so
+the one case attribution exists for is the one nothing checked. That argument covers the separators.
+It does **not** cover blank: `Provenance` accepts a blank `sourceId`, and `id()`'s *"Stable
+identifier"* says nothing about non-blank, so refusing it is a new prohibition, justified by
+attribution rather than inherited.
+
+**Uniqueness is new too, and it forecloses something.** Provenance being keyed on `id()` implies it,
+but nothing said it, and enforcing it rules out configuring two instances of one adapter class
+against different endpoints under the same id — a mirror, a staging host, a second Query Service.
+That is judged the right trade because such a pair is indistinguishable in provenance, in
+`GraphStore.assertedBy`, and now in a shortfall message; the cost is that the day someone wants it,
+they must give the second instance its own id rather than discovering the ambiguity later.
 
 ## Alternatives considered
 
@@ -123,6 +133,18 @@ Issue #148 listed three shapes and costed none. The third won.
   constructor. **What it costs a future adapter is nothing it did not already owe** — a non-blank,
   separator-free id, unique among the configured set, is what `SourceAdapter.id()`'s contract already
   asked for. What changes is *when* a violation is discovered: at bean construction rather than never.
+- **A bridge outage is reported against `musicbrainz`, and in the shipped wiring the service that
+  fell over is Wikidata's Query Service.** This is the one place the decision knowingly puts a
+  source's name on another source's failure — the hazard
+  `MusicBrainzIdentityUnavailableException`'s own javadoc names, and avoids for the *exception type*,
+  while the user-visible *message* does it anyway. It is accepted rather than overlooked: what the
+  caller needs from that message is which source's results are missing, and MusicBrainz's are, whole.
+  The alternative — a message naming the bridge's backing service — would mean `SegueService`
+  knowing what is behind a seam ADR 32 exists to keep it from knowing. **The residual confusion is
+  narrow and one-directional**: `musicbrainz` named alone means the bridge or MusicBrainz failed,
+  and cannot distinguish them; a Query Service outage names *both* sources, because Wikidata's own
+  reverse pass fails too. Worth revisiting if a bridge is ever wired that does not share Wikidata's
+  client.
 - **A future implementor of `MusicBrainzIdentity` must throw rather than degrade**, and must still
   answer empty when empty is what it means. Throwing is for *"I could not ask"*; empty is for *"the
   answer was nothing"*. Collapsing them again re-creates the defect this ADR closes.
@@ -133,9 +155,15 @@ Issue #148 listed three shapes and costed none. The third won.
 - **GAP 3 and GAP 6 are untouched.** The shared budget still goes to whichever adapter
   `SourceAdapters.all()` names first, and `truncated` still reports ADR 36's quality-ordered cut and
   MusicBrainz's arbitrary one identically. Naming *who* truncated does not say *how well*.
-- **The user guide's captured example is now edited rather than captured.** The `expand_entity`
-  sample detail predates this change; the string shown is what the code builds, marked as such and
-  dated, rather than re-run.
+- **The user guide's bounded-expansion example was re-captured live, not edited.** The first attempt
+  at this ADR's branch *did* edit it, to `"wikidata truncated its result at the bound of 5"`, which
+  is a string the code does not produce for that seed: `Q1051182` is a `GROUP`,
+  `MusicBrainzSourceAdapter` describes groups, so both sources run, share the one `ExpandContext`,
+  and the concatenation overruns the bound as well. The real capture is two reason lines, and
+  `nodesAdded` moved from 4 to 5 — the old payload was a single-source artifact predating ADR 54.
+  **An edited example presented as what the code builds is the same defect this ADR exists to fix**,
+  a claim about behaviour that the behaviour does not support, and it was caught in review rather
+  than by anything failing.
 - **What proves it is a test that distinguishes two outages**, which is the thing that did not exist
   before. `SegueServiceTest` runs the same expansion twice with the down source swapped and asserts
   each message names one source and not the other; both failed identically before the change, with
