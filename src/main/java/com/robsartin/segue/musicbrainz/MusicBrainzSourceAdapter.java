@@ -119,12 +119,12 @@ import java.util.regex.Pattern;
  * <p><b>Both halves of that are measured rather than argued, and the saving is smaller than #143
  * assumed.</b> A dev-side probe drove this adapter and the shipped bridge over a sample of the real
  * graph's {@code PERSON} and {@code GROUP} nodes and ran the production Wikidata adapter beside it,
- * on 2026-08-30; the figures are in ADR 55 and in issue #143. Of the neighbours this adapter
- * resolved, 44% were already in the graph — where the fetch is not spent at all, because it is
- * gated on {@code isNew} — and a further tenth were described by Wikidata's own reverse pass in the
- * same call. Fewer than half were fetches a {@code neighbors()} would actually have saved, at a
- * median of one per expansion, against nodes losing or never gaining their classes at a greater
- * rate than that.
+ * on 2026-08-30; the figures and the method are in ADR 55. Of the neighbours this adapter resolved,
+ * 44% were already in the graph — where the fetch is not spent at all, because it is gated on
+ * {@code isNew} — and a further tenth were described by Wikidata's own reverse pass in the same
+ * call. Fewer than half were fetches a {@code neighbors()} would actually have saved, at a median
+ * of one per expansion, against nodes losing or never gaining their classes at a greater rate than
+ * that.
  *
  * <p><b>The route that collects the saving without the cost is a bridge that returns classes
  * alongside QIDs</b> — one batched Query Service round trip per 100 neighbours, which is the shape
