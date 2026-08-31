@@ -69,6 +69,28 @@ public record Retractions(Map<String, Integer> lastRetraction) {
       case NodeAssertion node -> !isRetractedAt(index, node.qid());
       case AssertionRecord edge ->
           !isRetractedAt(index, edge.fromQid()) && !isRetractedAt(index, edge.toQid());
+      // #92 Task 1 only adds these three types to LoggedAssertion's permits; nothing today can
+      // put one in a log this fold reads (IngestService.apply and SqliteAssertionLog.append both
+      // refuse them until Task 2/Task 4 land), and neither downstream caller of this method
+      // handles them yet either. Left throwing rather than guessing at survival semantics no
+      // test exercises.
+      case LocalEntity local ->
+          throw new UnsupportedOperationException(
+              "#92: retraction survival is not yet defined for LocalEntity: " + local.qid());
+      case OwnerEdge edge ->
+          throw new UnsupportedOperationException(
+              "#92: retraction survival is not yet defined for OwnerEdge: "
+                  + edge.fromQid()
+                  + " "
+                  + edge.typeCode()
+                  + " "
+                  + edge.toQid());
+      case SameAs sameAs ->
+          throw new UnsupportedOperationException(
+              "#92: retraction survival is not yet defined for SameAs: "
+                  + sameAs.localQid()
+                  + " -> "
+                  + sameAs.canonicalQid());
     };
   }
 

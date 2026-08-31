@@ -1,10 +1,13 @@
 package com.robsartin.segue.retract;
 
 import com.robsartin.segue.domain.AssertionRecord;
+import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
+import com.robsartin.segue.domain.OwnerEdge;
 import com.robsartin.segue.domain.Retraction;
 import com.robsartin.segue.domain.Retractions;
+import com.robsartin.segue.domain.SameAs;
 import com.robsartin.segue.ingest.IngestService;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.retract.RetractCli.Options;
@@ -138,6 +141,27 @@ public final class RetractRun {
         }
         // Retractions never survive: they describe the fold rather than appear in it.
         case Retraction ignored -> {}
+        // #92 Task 1 only adds these three types to LoggedAssertion's permits; nothing today can
+        // put one in a log this method reads (IngestService.apply and SqliteAssertionLog.append
+        // both refuse them until Task 2/Task 4 land), and how a retraction-effect count should
+        // treat them is undecided. Left throwing rather than silently under- or over-counting.
+        case LocalEntity local ->
+            throw new UnsupportedOperationException(
+                "#92: retraction effect counting does not yet handle LocalEntity: " + local.qid());
+        case OwnerEdge edge ->
+            throw new UnsupportedOperationException(
+                "#92: retraction effect counting does not yet handle OwnerEdge: "
+                    + edge.fromQid()
+                    + " "
+                    + edge.typeCode()
+                    + " "
+                    + edge.toQid());
+        case SameAs sameAs ->
+            throw new UnsupportedOperationException(
+                "#92: retraction effect counting does not yet handle SameAs: "
+                    + sameAs.localQid()
+                    + " -> "
+                    + sameAs.canonicalQid());
       }
     }
     return new Effect(qid, label, nodeClaims, edgeClaims);

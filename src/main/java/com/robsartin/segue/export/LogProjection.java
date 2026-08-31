@@ -2,12 +2,15 @@ package com.robsartin.segue.export;
 
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.EdgeRecord;
+import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeRecord;
+import com.robsartin.segue.domain.OwnerEdge;
 import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.domain.Retraction;
 import com.robsartin.segue.domain.Retractions;
+import com.robsartin.segue.domain.SameAs;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.wikidata.KindMapper;
 import java.util.ArrayList;
@@ -79,6 +82,26 @@ public record LogProjection(
         // in it. Reaching this arm would mean Retractions.survives had changed its mind.
         case Retraction retraction ->
             throw new IllegalStateException("a retraction is not projected: " + retraction.qid());
+        // #92 Task 1 only adds these three types to LoggedAssertion's permits; nothing today can
+        // put one in a log this fold reads, and how they enter the export projection is
+        // undecided. Left throwing rather than silently dropped from the export.
+        case LocalEntity local ->
+            throw new UnsupportedOperationException(
+                "#92: export projection does not yet handle LocalEntity: " + local.qid());
+        case OwnerEdge edge ->
+            throw new UnsupportedOperationException(
+                "#92: export projection does not yet handle OwnerEdge: "
+                    + edge.fromQid()
+                    + " "
+                    + edge.typeCode()
+                    + " "
+                    + edge.toQid());
+        case SameAs sameAs ->
+            throw new UnsupportedOperationException(
+                "#92: export projection does not yet handle SameAs: "
+                    + sameAs.localQid()
+                    + " -> "
+                    + sameAs.canonicalQid());
       }
     }
 

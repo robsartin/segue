@@ -29,6 +29,13 @@ public final class Qid {
 
   private static final Pattern PATTERN = Pattern.compile("Q\\d+");
 
+  /**
+   * Wikibase's own {@code ItemId} grammar (ADR 58): {@code Q[1-9]\d{0,9}}. The first digit after
+   * {@code Q} may never be zero, so this is narrower than {@link #PATTERN} - every allocatable qid
+   * matches it, and a leading-zero stand-in never can.
+   */
+  private static final Pattern ALLOCATABLE = Pattern.compile("Q[1-9]\\d*");
+
   private Qid() {}
 
   /** Whether this string is a QID, for callers that check rather than refuse. */
@@ -40,6 +47,24 @@ public final class Qid {
   public static void check(String qid) {
     if (!looksLikeAQid(qid)) {
       throw new IllegalArgumentException("qid must look like Q12345, got: " + qid);
+    }
+  }
+
+  /**
+   * Whether Wikidata could allocate this id, now or ever - ADR 58's grammar fact, not a lookup. A
+   * leading-zero qid such as {@code Q0900042} is well-formed ({@link #looksLikeAQid} is true) but
+   * never allocatable, which is what lets {@link LocalEntity} and {@link SameAs} reuse the shape
+   * without borrowing an identifier that belongs, or could ever belong, to something else.
+   */
+  public static boolean isAllocatable(String qid) {
+    return qid != null && ALLOCATABLE.matcher(qid).matches();
+  }
+
+  /** Refuse anything Wikidata could not allocate - the other half of ADR 58's grammar fact. */
+  public static void checkAllocatable(String qid) {
+    if (!isAllocatable(qid)) {
+      throw new IllegalArgumentException(
+          "qid must be allocatable by Wikidata (no leading zero), like Q12345, got: " + qid);
     }
   }
 }

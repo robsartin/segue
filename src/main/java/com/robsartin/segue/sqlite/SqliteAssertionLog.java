@@ -1,11 +1,14 @@
 package com.robsartin.segue.sqlite;
 
 import com.robsartin.segue.domain.AssertionRecord;
+import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.domain.OwnerEdge;
 import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.domain.Retraction;
+import com.robsartin.segue.domain.SameAs;
 import com.robsartin.segue.port.AssertionLog;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -195,6 +198,27 @@ public final class SqliteAssertionLog implements AssertionLog {
           ps.setDouble(13, RETRACTION_CONFIDENCE);
           ps.setString(14, r.reason());
         }
+        // #92 Task 1 only adds these three types to LoggedAssertion's permits; no row shape for
+        // them has been designed yet (the plan does not assign this file to a task). Left
+        // throwing rather than persisted wrong, so the gap is loud instead of a silently
+        // unreadable row.
+        case LocalEntity local ->
+            throw new UnsupportedOperationException(
+                "#92: no SQLite row shape yet for LocalEntity: " + local.qid());
+        case OwnerEdge edge ->
+            throw new UnsupportedOperationException(
+                "#92: no SQLite row shape yet for OwnerEdge: "
+                    + edge.fromQid()
+                    + " "
+                    + edge.typeCode()
+                    + " "
+                    + edge.toQid());
+        case SameAs sameAs ->
+            throw new UnsupportedOperationException(
+                "#92: no SQLite row shape yet for SameAs: "
+                    + sameAs.localQid()
+                    + " -> "
+                    + sameAs.canonicalQid());
       }
       ps.executeUpdate();
     } catch (SQLException ex) {
