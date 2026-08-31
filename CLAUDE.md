@@ -228,7 +228,20 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   for a display name is `name`.
 - **When comparing engines, compare full result SETS, not the first element.**
   Comparing only the shortest path is what let the multigraph bug pass CI.
-- The QIDs in `Fixture` are placeholders (Q9000xx), not real Wikidata ids.
+- **A stand-in QID carries a leading zero**, and `Fixture`'s are `Q0900001`-`Q0900015`. Wikibase's
+  item-id grammar is `Q[1-9]` followed by up to nine digits, so an id with a leading zero is
+  *unallocatable* rather than merely unallocated — no future allocation can give it a referent
+  (ADR 58). Every qid regex here is `Q\d+`, which accepts it. This replaced a `Q9000xx` range
+  chosen because a high number looked free: all fifteen resolved, and the fixture was asserting
+  that a real entity is a musician named "Nick Cave". Picking an unused-looking number **is**
+  inventing an external identifier. `FixtureQidsDenoteNothingTest` pins the shape offline and
+  `WikidataLiveSmokeTest` asks the real API.
+- **Do not read that as "the test fixtures are clean".** Only `Fixture`'s own family moved. Of the
+  258 distinct `Q\d+` literals in `src/test`, 244 resolved when measured on 2026-08-31; 201
+  allocatable-form ids remain across 71 files, 188 of which resolve. Some are deliberately real and
+  must stay (class ids like `Q5`, the entities the live tests are about); the rest are stand-ins in
+  the shape ADR 58 forbids, the largest being `Q9001xx`, shared across ~20 files. That is issue
+  #171 — check it before assuming an id in a test denotes nothing.
 - **Wikidata states creative relations on the WORK, not the person.** Fetching an
   entity returns only claims stated on it, so expanding a film finds its director
   while expanding a person does not find their films. `EdgeType.wikidataInverted`
