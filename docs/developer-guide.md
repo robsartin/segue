@@ -884,8 +884,12 @@ What you have to do, and in what order:
 4. **Pick the confidence grade deliberately.** See
    [ADR 23: quarantine model-generated assertions](adr/0023-quarantine-model-generated-assertions.md).
    A source that guesses must not be graded like one that cites.
-5. **Keep `id()` stable and consistent.** Provenance is keyed on it, and the audit query
-   (`GraphStore.assertedBy`) is how you find the blast radius when a source turns out to be wrong.
+5. **Keep `id()` stable, unique and printable.** Provenance is keyed on it, the audit query
+   (`GraphStore.assertedBy`) is how you find the blast radius when a source turns out to be wrong,
+   and since [ADR 56](adr/0056-attribute-a-shortfall-to-its-source.md) it is also what a partial
+   `expand_entity` result names when it says which source fell short. `SourceAdapters`' constructor
+   refuses a blank id, one carrying a tab or a newline, and two adapters sharing one — so a mistake
+   here fails at startup rather than surfacing as a message that names an ambiguity.
 6. **Wire it in `SegueConfiguration.sourceAdapters`.** That bean returns a `SourceAdapters` record
    wrapping the list — a bare `List<SourceAdapter>` bean would collide with Spring's own
    collection-injection machinery.
@@ -897,7 +901,9 @@ What you have to do, and in what order:
 Nothing in the graph layer changes. That is the design rule the split exists to keep, and since
 [ADR 54](adr/0054-musicbrainz-as-the-second-source.md) it is a measurement rather than an intention:
 a second production source landed with no change to `domain`, `port`, `tinker`, `jena` or `ingest`,
-and none to `mcp/SegueService` either. **What that ADR also records is everything the rule does not
+and none to `mcp/SegueService` either. *(That is a measurement of ADR 54's branch, not a standing
+guarantee: [ADR 56](adr/0056-attribute-a-shortfall-to-its-source.md) later changed `port` and
+`mcp/SegueService` — not to add a source, but to make a shortfall say which source it belongs to.)* **What that ADR also records is everything the rule does not
 cover** — the architecture fences above, an HTTP client of your own, an identity bridge that may not
 live in your package, and a `maxNewEdges` that `SegueService` now shares between adapters and spends
 in the order `SegueConfiguration.sourceAdapters` lists them.

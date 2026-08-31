@@ -188,7 +188,7 @@ public final class SegueService {
    * per-source field on {@link ExpandResult} would restate {@code id()} as a second, forgeable
    * authority for who the source was, and a per-adapter breakdown on {@link ExpansionSummary} would
    * change the tool's wire shape for a consumer that reads prose. See
-   * docs/adr/0055-attribute-a-shortfall-to-its-source.md.
+   * docs/adr/0056-attribute-a-shortfall-to-its-source.md.
    *
    * <p><b>One shortfall is deliberately attributed to nobody.</b> Every adapter is handed the same
    * {@link ExpandContext} and the bound is then applied to the concatenation, so when it is the
