@@ -348,13 +348,22 @@ class DotWriterTest {
         .contains("tooltip");
   }
 
+  /**
+   * Issue #81 deleted "render with -Tsvg and hover" from this note because it was the one thing
+   * that does not work, and pinned the deletion with a {@code doesNotContain("-Tsvg")}. Issue #99
+   * makes an SVG answer the question after all — but only once {@code hoverableSvg} has rewritten
+   * it — so the note names the render again, and the assertion has to pin the pair rather than ban
+   * the word. <b>Naming the render without naming the rewrite is the original defect</b>, and that
+   * is what this fails on.
+   */
   @Test
-  @DisplayName("the note does not send the operator to an SVG hover, which cannot show the type")
-  void doesNotSendTheOperatorToAnSvgHover() {
+  @DisplayName("the note sends the operator to an SVG only together with the rewrite it needs")
+  void shouldNameTheRewriteWhenTheNoteNamesAnSvgRender() {
     Optional<String> note = new DotWriter().note(star(DotWriter.LABEL_BUDGET + 1));
 
     assertThat(note).isPresent();
-    assertThat(note.get()).doesNotContain("-Tsvg").contains("xlink:title").contains("typeCode");
+    assertThat(note.get()).contains("xlink:title").contains("typeCode");
+    assertThat(note.get()).contains("-Tsvg").contains("hoverableSvg");
   }
 
   @Test

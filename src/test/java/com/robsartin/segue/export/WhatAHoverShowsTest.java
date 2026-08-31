@@ -5,15 +5,23 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.robsartin.segue.domain.NodeKind;
 import java.io.IOException;
+import java.io.StringReader;
 import java.io.StringWriter;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import javax.xml.XMLConstants;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.xpath.XPathConstants;
+import javax.xml.xpath.XPathFactory;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.w3c.dom.Document;
+import org.w3c.dom.Node;
+import org.xml.sax.InputSource;
 
 /**
  * What a reader gets on hover, as opposed to what is in the file.
@@ -106,6 +114,65 @@ class WhatAHoverShowsTest {
 
     assertThat(hovers).contains("Q901->Q902");
     assertThat(hovers).noneMatch(hover -> hover.contains("MEMBER_OF"));
+  }
+
+  /**
+   * What a browser shows on hovering the element {@code xpath} selects: the text of the nearest
+   * ancestor-or-self carrying a {@code <title>} child, which is the lookup SVG user agents
+   * implement. Asserting on that rather than on a substring is the point — a {@code <title>}
+   * present in the file but shadowed by an outer one is exactly the shape of defect issue #81
+   * found, and {@code contains} cannot see it.
+   *
+   * <p>Namespace-unaware on purpose: it keeps the expressions readable, and this document has one
+   * element namespace.
+   */
+  private static String hoverOver(String svg, String xpath) throws Exception {
+    DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+    // The Graphviz DOCTYPE names svg11.dtd on w3.org. Without these the parse fetches it, so the
+    // test needs the network and W3C's rate limiter gets a vote on whether the build passes.
+    factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+    factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+    Document document = factory.newDocumentBuilder().parse(new InputSource(new StringReader(svg)));
+    Node found =
+        (Node) XPathFactory.newInstance().newXPath().evaluate(xpath, document, XPathConstants.NODE);
+    assertThat(found).as("no element matched %s", xpath).isNotNull();
+    for (Node up = found;
+        up != null && up.getNodeType() == Node.ELEMENT_NODE;
+        up = up.getParentNode()) {
+      for (Node child = up.getFirstChild(); child != null; child = child.getNextSibling()) {
+        if (child.getNodeType() == Node.ELEMENT_NODE && "title".equals(child.getNodeName())) {
+          return child.getTextContent();
+        }
+      }
+    }
+    return null;
+  }
+
+  @Test
+  @DisplayName("a rewritten SVG shows a node's class where a browser looks, not its QID")
+  void shouldShowTheClassWhenTheRenderedSvgHasBeenRewritten() throws Exception {
+    String hoverable = HoverableSvg.rewrite(graphviz("svg"));
+
+    assertThat(hoverOver(hoverable, "//*[@id='node1']//ellipse")).isEqualTo("human");
+    assertThat(hoverOver(hoverable, "//*[@id='node1']//text")).isEqualTo("human");
+  }
+
+  @Test
+  @DisplayName("a rewritten SVG shows an edge's relationship on the line a reader points at")
+  void shouldShowTheRelationshipWhenTheReaderPointsAtTheEdgeLine() throws Exception {
+    String hoverable = HoverableSvg.rewrite(graphviz("svg"));
+
+    assertThat(hoverOver(hoverable, "//*[@id='edge1']//path"))
+        .isEqualTo("Wren Alderman -MEMBER_OF-> The Paper Kettles");
+  }
+
+  @Test
+  @DisplayName("a rewritten SVG shows the relationship on the edge's visible label too")
+  void shouldShowTheRelationshipWhenTheReaderPointsAtTheEdgeLabel() throws Exception {
+    String hoverable = HoverableSvg.rewrite(graphviz("svg"));
+
+    assertThat(hoverOver(hoverable, "//*[@id='edge1']/text"))
+        .isEqualTo("Wren Alderman -MEMBER_OF-> The Paper Kettles");
   }
 
   @Test

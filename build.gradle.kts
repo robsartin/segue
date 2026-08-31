@@ -168,6 +168,18 @@ tasks.register<JavaExec>("exportGraph") {
     outputs.upToDateWhen { false }
 }
 
+tasks.register<JavaExec>("hoverableSvg") {
+    group = "application"
+    description =
+        "Rewrites a Graphviz-rendered SVG so a browser shows its tooltips. Reads one file and " +
+            "writes another; no store, no network. See ADR 41's issue-#99 amendment. Example: " +
+            "./gradlew hoverableSvg --args=\"--in \$HOME/one.svg --out \$HOME/one-hoverable.svg\""
+    mainClass.set("com.robsartin.segue.export.HoverableSvg")
+    classpath = sourceSets["main"].runtimeClasspath
+    // Never up-to-date: the render changes under it, and Gradle has no way to know.
+    outputs.upToDateWhen { false }
+}
+
 tasks.register<JavaExec>("listRatings") {
     group = "application"
     description =

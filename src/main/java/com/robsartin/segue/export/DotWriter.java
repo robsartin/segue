@@ -133,8 +133,13 @@ public final class DotWriter implements ViewWriter {
    * says where the type went — and says it accurately, which it did not until issue #81. It used to
    * read "render with -Tsvg and hover", which is the one thing that does not work: Graphviz puts
    * the tooltip in {@code xlink:title}, and the {@code <title>} element a browser actually shows
-   * holds the QIDs. {@code typeCode} in GraphML carries every type however dense the view is, and
-   * {@code -Tcmapx} is the render that turns the tooltip into an HTML {@code title}.
+   * holds the QIDs.
+   *
+   * <p><b>It names the SVG again, and issue #99 is why that is not a regression.</b> The render is
+   * still unreadable as Graphviz writes it; what changed is that {@link HoverableSvg} rewrites it
+   * afterwards. So the note names the two together and never the render alone — {@code
+   * DotWriterTest} pins the pair. {@code typeCode} in GraphML remains the answer that needs no
+   * second step, and the developer guide carries the imagemap route for a PNG workflow.
    */
   @Override
   public Optional<String> note(GraphView view) {
@@ -147,9 +152,10 @@ public final class DotWriter implements ViewWriter {
             + LABEL_BUDGET
             + " this picture can label legibly, so the DOT edge labels are dropped. Each edge"
             + " keeps its type in a tooltip, but Graphviz puts that in xlink:title and a browser"
-            + " hovering the SVG shows the QIDs instead (issue #81): read the types from GraphML,"
-            + " which carries typeCode on every edge whatever the size, or render with -Tcmapx,"
-            + " where the tooltip becomes an HTML title");
+            + " hovering the SVG shows the QIDs instead (issue #81): render -Tsvg and run"
+            + " hoverableSvg over it, which moves each tooltip to where a browser looks (issue"
+            + " #99), or read the types from GraphML, which carries typeCode on every edge"
+            + " whatever the size");
   }
 
   /** True while the picture can still carry a label on every edge. */
