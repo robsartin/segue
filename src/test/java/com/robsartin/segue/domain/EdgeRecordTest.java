@@ -17,11 +17,13 @@ class EdgeRecordTest {
 
   private static final Instant WHEN = Instant.parse("2026-01-01T00:00:00Z");
 
-  // ADR 58 stand-ins (two leading zeros): neither end names a real Wikidata entity, so the
-  // fabricated INFLUENCED_BY claim below denotes nothing real either (fix round 1: the brief's
-  // original "Q42" was a real allocated item — ADR 58's own named failure pattern).
-  private static final String FROM = "Q00900042";
-  private static final String TO = "Q00900043";
+  // ADR 58 stand-ins (ONE leading zero, Fixture's own Q0900001... shape): neither end names a
+  // real Wikidata entity, so the fabricated INFLUENCED_BY claim below denotes nothing real either
+  // (fix round 1: the brief's original "Q42" was a real allocated item — ADR 58's own named
+  // failure pattern). Two leading zeros is LocalEntity's shape, not this one - see
+  // LocalEntity.checkLocalShape and OwnerClaimProjectionTest:44 (fix round 2).
+  private static final String FROM = "Q0900042";
+  private static final String TO = "Q0900043";
 
   private static Provenance wikidataProvenance() {
     return new Provenance("wikidata", "S-invented-influence", WHEN, 1.0);
