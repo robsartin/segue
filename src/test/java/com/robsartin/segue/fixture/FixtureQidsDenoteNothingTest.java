@@ -15,11 +15,11 @@ import org.junit.jupiter.api.Test;
  * The fixture's identifiers must be ones Wikidata can never allocate (ADR 58, issue #141).
  *
  * <p><b>Why this test exists.</b> The fixture ids were chosen in the {@code Q9000xx} range on the
- * assumption that a high number would be free. It was not: every one of them resolved to a real
+ * assumption that a high number would be free. It was not: all but one of them resolved to a real
  * Wikidata entity — a German village, a Hungarian academic, a brewery — so the fixture was quietly
- * asserting that a real person's identifier is a musician named "Nick Cave". The repository's own
- * standing rule is never to invent an external identifier, and picking an unused-looking number is
- * inventing one.
+ * asserting that a real person's identifier is a musician named "Nick Cave". The one exception is a
+ * deleted item, not a free number. The repository's own standing rule is never to invent an
+ * external identifier, and picking an unused-looking number is inventing one.
  *
  * <p><b>Why a range cannot fix it.</b> Wikidata keeps allocating, so any range verified as free
  * today has a shelf life. The only durable answer is a form the identifier grammar itself refuses,

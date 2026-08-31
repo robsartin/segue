@@ -15,11 +15,17 @@ import java.util.function.Predicate;
  * Invented bands, invented people, invented QIDs — and an invented class that means "you were
  * elected to this".
  *
- * <p>{@code Q90xxxx} is the placeholder range this project uses everywhere (see {@code
- * fixture.Fixture} and {@code export.InventedGraph}), chosen so nothing here can be mistaken for a
- * real Wikidata identifier. <b>Nothing in this file comes from anybody's graph or anybody's
- * list.</b> ADR 40 and issue #37 are explicit that this repository is public and that the real data
- * lives outside it, and a recommender's fixture is the one most tempting to copy from a real run.
+ * <p><b>The QIDs are invented in the sense that nobody looked them up — not in the sense that they
+ * denote nothing.</b> Most of the ids below resolve to real Wikidata entities. They come from a
+ * {@code Q900xxx} range once described as a placeholder range used everywhere; it was never free,
+ * and {@code fixture.Fixture} has since moved to ids Wikibase's item-id grammar refuses (ADR 58).
+ * This file and {@code export.InventedGraph} have not, because the family is shared across many
+ * unrelated test files — see <a href="https://github.com/robsartin/segue/issues/171">issue
+ * #171</a>. No assertion here depends on what any id denotes.
+ *
+ * <p><b>Nothing in this file comes from anybody's graph or anybody's list.</b> ADR 40 and issue #37
+ * are explicit that this repository is public and that the real data lives outside it, and a
+ * recommender's fixture is the one most tempting to copy from a real run.
  */
 final class InventedWorld {
 
