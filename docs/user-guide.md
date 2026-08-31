@@ -960,13 +960,20 @@ Passing a deliberately tiny `maxNewEdges`:
 ```json
 {
   "outcome": "partial",
-  "detail": "the result was truncated at the bound of 5 (correlation 01a03bd9-d109-7ec3-bdf0-f171569cbd99)",
+  "detail": "wikidata truncated its result at the bound of 5 (correlation 01a03bd9-d109-7ec3-bdf0-f171569cbd99)",
   "payload": { "qid": "Q1051182", "nodesAdded": 4, "edgesAdded": 5,
                "skippedNeighbors": 0, "truncated": true, "sourceUnavailable": false }
 }
 ```
 
-`truncated: true` is the signal, and the detail string names the bound that was hit. Raise
+`truncated: true` is the signal, and the detail string names the source that cut short and the
+bound it hit. *(The capture run predates issue #148 and returned the unattributed
+`"the result was truncated at the bound of 5"`; the source name above is what the code builds
+today, edited in on 2026-08-30 rather than re-captured.)* A source that could not be reached at all
+is named the same way — `"musicbrainz was unavailable and could not be reached"` — so an outage in
+one source is distinguishable from an outage in another. The one shortfall named against no source
+is `"the combined result was truncated at the bound of N"`, which is what you see when every source
+returned everything it had and the bound cut the total: no single one of them made that cut. Raise
 `maxNewEdges` and call again — expanding the same entity twice is safe, and the second call is
 faster because its neighbours are already known nodes. The one seed where raising it does nothing is
 a `CONCEPT`, which is capped whatever you ask for; the detail names the ceiling it actually applied
