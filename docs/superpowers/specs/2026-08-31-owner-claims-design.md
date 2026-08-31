@@ -47,7 +47,12 @@ This is the whole design. Everything below follows from it.
 `ItemId` grammar is `Q[1-9]\d{0,9}`, so a leading zero can never be allocated; every QID pattern in
 `src/main` is `Q\d+`. A local entity therefore carries an id no production code has to learn about.
 
-`domain`, `port`, `tinker` and `jena` are unchanged. ADR 18's purity holds.
+No QID pattern, and no code in `port`, `tinker` or `jena`, has to learn a second identity shape.
+
+`domain` does change, but only to gain the claim types themselves: `LoggedAssertion` is a sealed
+interface permitting `NodeAssertion`, `AssertionRecord` and `Retraction`, and owner claims join that
+list. `Retraction` is the precedent — a first-person claim, in `domain`, with its own validation and
+no `Provenance`. ADR 18's purity rule is about third-party dependencies, which this does not touch.
 
 **ADR 58 claimed the leading-zero space for test fixtures.** Local entities need a documented band
 of their own inside it, or a reader cannot tell a stand-in from one of the owner's books. That is a
@@ -81,14 +86,22 @@ stops being offered anywhere, the way ADR 50's suppressed candidate stays reacha
 
 ## Routing, recommendation and expansion
 
-**Routing: one narrow exemption.** `PathRanking` demotes anything `isUncorroboratedHypothesis`. An
-owner edge sits at corroboration 1 forever, so without an exemption every path the owner asserted
-ranks last — the exact routes it was added for.
+**Routing: no exemption is needed, and the first draft of this spec was wrong to claim one.**
+`PathRanking.restsOnAModelGuess` asks `EdgeRecord.isUncorroboratedHypothesis()`, which is true only
+when *every* source `isHypothesis()` — and that is `sourceId.startsWith("llm:")`. An owner edge
+carries a non-`llm:` provenance, so it is already not a hypothesis and paths through it are already
+not demoted. **`PathRanking` and `EdgeRecord.isUncorroboratedHypothesis` are unchanged.**
 
-The exemption is that **first-person claims sit outside the corroboration ladder rather than low on
-it**. ADR 23 quarantines model guesses because a model can be confidently wrong about the world; the
-owner cannot be wrong about their own shelf. That is the argument, and it does not extend to
-anything else.
+**Corroboration does need one change, in the other direction.** `EdgeRecord.corroboration()` counts
+distinct `sourceId`s. An edge asserted by both Wikidata and the owner would therefore count **2**,
+letting the owner manufacture agreement with himself — the same hazard ADR 55 identified when it
+declined `subgroup`, where either coding would manufacture corroboration with one Wikidata coding
+while withholding it from the other.
+
+So owner claims must be **excluded from the corroboration count**: they route, and they do not
+vouch. That is the precise sense in which first-person claims sit outside the ladder rather than low
+on it. ADR 23 quarantines model guesses because a model can be confidently wrong about the world;
+the owner cannot be wrong about their own shelf, and also cannot be a second witness to it.
 
 **Recommendation: no exemption at all.** An owner edge counts toward degree like any other. A local
 entity with two edges sits below `MIN_CANDIDATE_DEGREE` and is not a candidate; connect it further
