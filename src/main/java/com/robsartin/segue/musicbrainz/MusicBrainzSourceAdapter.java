@@ -60,11 +60,17 @@ import java.util.regex.Pattern;
  * <b>Skipping is normal operation here, not an error</b>, which is why nothing is flagged when it
  * happens.
  *
- * <p><b>{@code subgroup} is absent too, and for a plainer reason: nothing justifies a mapping
- * yet.</b> It is how MusicBrainz relates one act to another it is part of — {@code member of band}
- * is not used for that — so it is the relation a group-in-group edge would come from. P361 is
- * registered as {@code PART_OF}, but whether {@code subgroup} means that is a judgement nobody here
- * has made, and ADR 38 admits one property at a time. Worth its own issue; not decided by omission.
+ * <p><b>{@code subgroup} is absent too, and that is now a decision with a record rather than an
+ * omission: ADR 55, on a count</b> (<a href="https://github.com/robsartin/segue/issues/142">issue
+ * #142</a>). It is how MusicBrainz relates one act to another it is part of — {@code member of
+ * band} is not used for that — so it is the only relation this source has that could produce a
+ * group-in-group edge. A probe over a sample of the real graph's {@code PERSON} and {@code GROUP}
+ * nodes found it <b>twice in 959 relations</b>, on one seed, of which one target resolved to a QID:
+ * the whole vocabulary decision would have bought one edge. Both candidate codes — {@link
+ * EdgeTypes#MEMBER_OF} (P463) and {@link EdgeTypes#PART_OF} (P361) — are already in use between two
+ * groups in this graph, stated by Wikidata, which splits them; MusicBrainz says only {@code
+ * subgroup} and draws no such distinction. ADR 55 is the authority on the figures and on why each
+ * candidate lost.
  *
  * <p><b>{@code collaboration} is deliberately absent.</b> MusicBrainz states it as a first-class
  * artist relation, and {@code EdgeTypes.COLLABORATED_WITH} exists — but it is registered {@code
@@ -86,24 +92,47 @@ import java.util.regex.Pattern;
  * all, so the n kept here are simply the n MusicBrainz listed first. {@link ExpandResult#truncated}
  * reports both the same way (GAP 6).
  *
- * <p><b>No {@code neighbors} yet — and NOT because the data is missing.</b> {@link ExpandResult}
- * treats them as an optimisation an adapter may supply and is explicit that one which does not know
- * is not obliged to guess, so an absent neighbour falls back to the caller's own fetch. This
- * adapter takes that fallback, and the earlier claim here that it had to — that the response
- * carries a name but not the neighbour's type — was false. Every relation in the committed fixture
- * carries {@code artist.type}: 22 {@code Person} and 2 {@code Group}, which map one-to-one onto
- * {@link #DESCRIBED}. {@code MusicBrainzClient.parseRelations} reads {@code artist.id} and {@code
- * artist.name} off that same node and simply does not read {@code artist.type}, and {@link
- * ArtistRelation} has no field for it. With the QID from {@link MusicBrainzIdentity#qidsFor} and
- * the label from {@link ArtistRelation#targetName}, a {@code NodeAssertion} is constructible at
- * zero extra network cost — and each one saved is one {@code EntityResolver.fetch} that {@code
- * SegueService} would otherwise spend per newly discovered neighbour.
+ * <p><b>No {@code neighbors}, and neither because the data is missing nor because it was never
+ * examined</b> (<a href="https://github.com/robsartin/segue/issues/143">issue #143</a>). {@link
+ * ExpandResult} treats them as an optimisation an adapter may supply and is explicit that one which
+ * does not know is not obliged to guess, so an absent neighbour falls back to the caller's own
+ * fetch. This adapter takes that fallback <i>deliberately</i>, and the reason is not the one an
+ * earlier version of this javadoc gave. That version said the response carries a name but not the
+ * neighbour's type, and it was false: every relation in the committed fixture carries {@code
+ * artist.type} — 22 {@code Person} and 2 {@code Group}, which map one-to-one onto {@link
+ * #DESCRIBED}.
  *
- * <p>It is <a href="https://github.com/robsartin/segue/issues/143">issue #143</a> rather than a
- * line added here, because it is not free of consequence: the {@code NodeAssertion} would carry an
- * empty {@code instanceOf} (see the next paragraph), and {@code NodeAssertion.toNode()} is what
- * {@code IngestService.apply} calls — so the interaction with GAP 7 wants deciding on its own
- * evidence, not as a side effect of wiring a second source.
+ * <p><b>The response pays for two thirds of a neighbour's identity, and the missing third is the
+ * expensive one.</b> With the QID from {@link MusicBrainzIdentity#qidsFor} and the label from
+ * {@link ArtistRelation#targetName}, a {@code NodeAssertion} is constructible at zero extra network
+ * cost. What MusicBrainz cannot supply is {@code instanceOf}: it classifies an artist as {@code
+ * Person} or {@code Group} without stating Wikidata classes, so the list would be empty. {@code
+ * SegueService} prefers an adapter's neighbour to a fetch and records it <b>whether or not the node
+ * already exists</b> (issue #55), and {@code TinkerGraphStore.upsertNode} writes {@code instanceOf}
+ * on every upsert, empty included and deliberately so — its own comment says a later claim stating
+ * no classes must not leave an earlier claim's behind. So this adapter's {@code neighbors()} would
+ * not merely decline to add classes; it would remove the ones already there, and give the ones it
+ * discovered none. {@code PathRanking.isHub}, {@code CandidateSweep}, {@code rate/Card}, {@code
+ * DotWriter} and {@code GraphMlWriter} all read that field, and ADR 42 is the decision that the log
+ * keeps the raw classes so a derivation can be revisited at all.
+ *
+ * <p><b>Both halves of that are measured rather than argued, and the saving is smaller than #143
+ * assumed.</b> A dev-side probe drove this adapter and the shipped bridge over a sample of the real
+ * graph's {@code PERSON} and {@code GROUP} nodes and ran the production Wikidata adapter beside it,
+ * on 2026-08-30; the figures and the method are in ADR 55. Of the neighbours this adapter resolved,
+ * 44% were already in the graph — where the fetch is not spent at all, because it is gated on
+ * {@code isNew} — and a further tenth were described by Wikidata's own reverse pass in the same
+ * call. Fewer than half were fetches a {@code neighbors()} would actually have saved, at a median
+ * of one per expansion, against nodes losing or never gaining their classes at a greater rate than
+ * that.
+ *
+ * <p><b>The route that collects the saving without the cost is a bridge that returns classes
+ * alongside QIDs</b> — one batched Query Service round trip per 100 neighbours, which is the shape
+ * {@code ReverseClaims} already uses for Wikidata's own neighbours, rather than one fetch each.
+ * That widens {@link MusicBrainzIdentity} and the {@code app} class behind it, so it is a change of
+ * its own and not a line here. ADR 55 records the decision and {@code
+ * MusicBrainzNeighbourIdentityTest} holds it: those tests were watched red against an adapter that
+ * did emit neighbours, and they are what stops that coming back by accident.
  *
  * <p><b>No stated classes, so {@code instanceOf} stays empty.</b> MusicBrainz classifies an artist
  * as {@code Person} or {@code Group} without stating Wikidata classes, which is exactly the case
