@@ -22,12 +22,21 @@ import java.util.Objects;
  * @param hubIntermediatesExcluded how many distinct intermediates were refused as hubs (issues #52
  *     and #66). Distinct nodes, not routes: "the hall of fame was excluded once" is the fact worth
  *     reporting, and counting routes through it would report the popularity of the hub instead
+ * @param heldOutByFloor how many distinct entities the degree floor discarded — entities that
+ *     passed every other candidate test and failed only on how many edges they carry (issue #135).
+ *     Until this field existed the floor was the one filter here whose bite was reported by
+ *     nothing, while being the filter the tool's own default most often re-decides
+ * @param heldOutAtDegreeOne how many of those carry exactly one edge: what expansion has discovered
+ *     and nothing has reached a second time (issue #134). Counted apart from the rest because a run
+ *     that says nothing about it is a run in which the graph's growth is invisible
  */
 public record Sweep(
     List<Recommendation> candidates,
     int knownFound,
     int knownMissing,
-    int hubIntermediatesExcluded) {
+    int hubIntermediatesExcluded,
+    int heldOutByFloor,
+    int heldOutAtDegreeOne) {
 
   public Sweep {
     candidates = List.copyOf(Objects.requireNonNull(candidates, "candidates"));

@@ -10,6 +10,7 @@ import static com.robsartin.segue.recommend.InventedWorld.ELECTED_TO;
 import static com.robsartin.segue.recommend.InventedWorld.FELLOW_PRIZEWINNER;
 import static com.robsartin.segue.recommend.InventedWorld.HALL_OF_FAME;
 import static com.robsartin.segue.recommend.InventedWorld.INSTITUTIONS;
+import static com.robsartin.segue.recommend.InventedWorld.JUST_DISCOVERED;
 import static com.robsartin.segue.recommend.InventedWorld.KNOWN_ONE;
 import static com.robsartin.segue.recommend.InventedWorld.KNOWN_TWO;
 import static com.robsartin.segue.recommend.InventedWorld.SHARED_ARTIST;
@@ -171,6 +172,63 @@ class CandidateSweepTest {
     padDegreeTo(graph, A_RECORD, FLOOR);
 
     assertThat(find(sweep(), A_RECORD)).isEmpty();
+  }
+
+  @Test
+  @DisplayName("the floor reports how many entities it discarded on degree alone")
+  void theFloorReportsWhatItHeldOut() {
+    node(graph, SHARED_ARTIST, NodeKind.PERSON, "the artist they both cite");
+    node(graph, A_THIN_BAND, NodeKind.GROUP, "two edges to its name");
+    edge(graph, KNOWN_ONE, SHARED_ARTIST, EdgeTypes.INFLUENCED_BY.code());
+    edge(graph, SHARED_ARTIST, A_THIN_BAND, EdgeTypes.INFLUENCED_BY.code());
+    padDegreeTo(graph, A_THIN_BAND, FLOOR - 2);
+
+    assertThat(sweep().heldOutByFloor()).isEqualTo(1);
+    assertThat(sweep(Scorer.LIFT, FLOOR - 2, Recommendations.EQUAL_REGARD).heldOutByFloor())
+        .isZero();
+  }
+
+  @Test
+  @DisplayName("an entity the kind rules refuse is not counted against the floor")
+  void whatTheKindRulesRefuseIsNotTheFloorsDoing() {
+    node(graph, SHARED_ARTIST, NodeKind.PERSON, "the artist they both cite");
+    node(graph, A_RECORD, NodeKind.WORK, "a record, which is not a thing to go and explore");
+    edge(graph, KNOWN_ONE, SHARED_ARTIST, EdgeTypes.INFLUENCED_BY.code());
+    edge(graph, SHARED_ARTIST, A_RECORD, EdgeTypes.PERFORMED.code());
+
+    assertThat(sweep().heldOutByFloor()).isZero();
+  }
+
+  @Test
+  @DisplayName("what one expansion discovered is counted apart, at exactly one edge")
+  void degreeOneGrowthIsCountedApart() {
+    node(graph, SHARED_ARTIST, NodeKind.PERSON, "the artist they both cite");
+    node(graph, JUST_DISCOVERED, NodeKind.GROUP, "one edge to its name");
+    node(graph, A_THIN_BAND, NodeKind.GROUP, "two edges to its name");
+    edge(graph, KNOWN_ONE, SHARED_ARTIST, EdgeTypes.INFLUENCED_BY.code());
+    edge(graph, SHARED_ARTIST, JUST_DISCOVERED, EdgeTypes.INFLUENCED_BY.code());
+    edge(graph, SHARED_ARTIST, A_THIN_BAND, EdgeTypes.INFLUENCED_BY.code());
+    padDegreeTo(graph, A_THIN_BAND, FLOOR - 2);
+
+    Sweep sweep = sweep();
+
+    assertThat(sweep.heldOutByFloor()).isEqualTo(2);
+    assertThat(sweep.heldOutAtDegreeOne()).isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("an entity held out is counted once however many intermediates reach it")
+  void anEntityHeldOutIsCountedOnce() {
+    node(graph, SHARED_ARTIST, NodeKind.PERSON, "the artist they both cite");
+    node(graph, THE_ADMIRER, NodeKind.PERSON, "another that reaches it");
+    node(graph, A_THIN_BAND, NodeKind.GROUP, "two edges to its name");
+    edge(graph, KNOWN_ONE, SHARED_ARTIST, EdgeTypes.INFLUENCED_BY.code());
+    edge(graph, KNOWN_TWO, THE_ADMIRER, EdgeTypes.INFLUENCED_BY.code());
+    edge(graph, SHARED_ARTIST, A_THIN_BAND, EdgeTypes.INFLUENCED_BY.code());
+    edge(graph, THE_ADMIRER, A_THIN_BAND, EdgeTypes.INFLUENCED_BY.code());
+    padDegreeTo(graph, A_THIN_BAND, FLOOR - 1);
+
+    assertThat(sweep().heldOutByFloor()).isEqualTo(1);
   }
 
   @Test

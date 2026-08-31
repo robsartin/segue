@@ -55,6 +55,14 @@
   <p class="problem" id="problem" role="alert"></p>
 </main>
 <script>
+  // Sloppy mode turns a lost declaration into a silent global. Renaming only the `let busy`
+  // declaration below left this page working and the whole browser suite green (issue #154):
+  // every remaining `busy = ...` simply created a second, global variable, and the real binding
+  // went stale. This page writes the `affinity` table, which has no history and no un-rate
+  // (ADR 39, ADR 46), so a guard that fails as silence is the wrong kind of failure here. In
+  // strict mode an assignment to an undeclared identifier is a ReferenceError instead.
+  'use strict';
+
   let index = 0;
   let rated = 0;
   // The card currently on screen, captured by show() and consumed by rate().
