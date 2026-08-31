@@ -71,23 +71,23 @@ Model them on `domain/Retraction.java` — a first-person `LoggedAssertion` with
   @Test
   @DisplayName("should accept a local entity on an id Wikidata cannot allocate")
   void shouldAcceptALocalEntityOnAnIdWikidataCannotAllocate() {
-    LocalEntity minted = new LocalEntity("Q0900042", NodeKind.PERSON, "a minted person", Instant.EPOCH);
+    LocalEntity minted = new LocalEntity("Q00900042", NodeKind.PERSON, "a minted person", Instant.EPOCH);
 
     assertThat(minted.toNode().instanceOf()).isEmpty();
-    assertThat(minted.toNode().qid()).isEqualTo("Q0900042");
+    assertThat(minted.toNode().qid()).isEqualTo("Q00900042");
   }
 
   @Test
   @DisplayName("should refuse a merge whose canonical side is not a real Wikidata id")
   void shouldRefuseAMergeWhoseCanonicalSideIsNotARealWikidataId() {
-    assertThatThrownBy(() -> new SameAs("Q0900042", "Q0900043", Instant.EPOCH))
+    assertThatThrownBy(() -> new SameAs("Q00900042", "Q00900043", Instant.EPOCH))
         .isInstanceOf(IllegalArgumentException.class);
   }
 
   @Test
   @DisplayName("should refuse an owner edge whose type nothing registers")
   void shouldRefuseAnOwnerEdgeWhoseTypeNothingRegisters() {
-    assertThatThrownBy(() -> new OwnerEdge("Q0900042", "Q42", "NOT_A_TYPE", Instant.EPOCH))
+    assertThatThrownBy(() -> new OwnerEdge("Q00900042", "Q42", "NOT_A_TYPE", Instant.EPOCH))
         .isInstanceOf(IllegalArgumentException.class);
   }
 ```
@@ -160,19 +160,19 @@ the same hazard as one existing behaviour walks into.
   @Test
   @DisplayName("should put a minted entity in the graph with no classes")
   void shouldPutAMintedEntityInTheGraphWithNoClasses() {
-    ingest.record(new LocalEntity("Q0900042", NodeKind.PERSON, "a minted person", NOW));
+    ingest.record(new LocalEntity("Q00900042", NodeKind.PERSON, "a minted person", NOW));
 
-    assertThat(graph.node("Q0900042")).isPresent();
-    assertThat(graph.node("Q0900042").orElseThrow().instanceOf()).isEmpty();
+    assertThat(graph.node("Q00900042")).isPresent();
+    assertThat(graph.node("Q00900042").orElseThrow().instanceOf()).isEmpty();
   }
 
   @Test
   @DisplayName("should record an owner edge as the owner's claim, not a model's guess")
   void shouldRecordAnOwnerEdgeAsTheOwnersClaimNotAModelsGuess() {
-    ingest.record(new LocalEntity("Q0900042", NodeKind.PERSON, "a minted person", NOW));
-    ingest.record(new OwnerEdge("Q0900042", "Q0900043", "INFLUENCED_BY", NOW));
+    ingest.record(new LocalEntity("Q00900042", NodeKind.PERSON, "a minted person", NOW));
+    ingest.record(new OwnerEdge("Q00900042", "Q00900043", "INFLUENCED_BY", NOW));
 
-    EdgeRecord edge = onlyEdgeFrom("Q0900042");
+    EdgeRecord edge = onlyEdgeFrom("Q00900042");
     assertThat(edge.sources()).singleElement().matches(Provenance::isOwner);
     assertThat(edge.isUncorroboratedHypothesis())
         .as("an owner claim is not a model guess, so PathRanking must not demote it")
@@ -204,7 +204,7 @@ The second assertion is the load-bearing one, and it is why **no `PathRanking` c
   void shouldNotLetAnOwnerClaimCorroborateASourcesClaim() {
     EdgeRecord edge =
         new EdgeRecord(
-            "Q0900042", "Q42", "INFLUENCED_BY", null, null,
+            "Q00900042", "Q42", "INFLUENCED_BY", null, null,
             List.of(wikidataProvenance(), ownerProvenance()));
 
     assertThat(edge.corroboration())
@@ -239,10 +239,10 @@ The second assertion is the load-bearing one, and it is why **no `PathRanking` c
   @Test
   @DisplayName("should carry an owner edge to the canonical id when a merge is asserted")
   void shouldCarryAnOwnerEdgeToTheCanonicalIdWhenAMergeIsAsserted() {
-    ingest.record(new LocalEntity("Q0900042", NodeKind.PERSON, "a minted person", NOW));
-    ingest.record(new OwnerEdge("Q0900042", "Q42", "INFLUENCED_BY", NOW));
+    ingest.record(new LocalEntity("Q00900042", NodeKind.PERSON, "a minted person", NOW));
+    ingest.record(new OwnerEdge("Q00900042", "Q42", "INFLUENCED_BY", NOW));
 
-    ingest.record(new SameAs("Q0900042", "Q900", NOW));
+    ingest.record(new SameAs("Q00900042", "Q900", NOW));
 
     assertThat(edgesFrom("Q900")).hasSize(1);
   }
@@ -250,10 +250,10 @@ The second assertion is the load-bearing one, and it is why **no `PathRanking` c
   @Test
   @DisplayName("should carry a rating to the canonical id when a merge is asserted")
   void shouldCarryARatingToTheCanonicalIdWhenAMergeIsAsserted() {
-    ingest.record(new LocalEntity("Q0900042", NodeKind.PERSON, "a minted person", NOW));
-    affinity.put(new AffinityRecord("Q0900042", 5, null, NOW));
+    ingest.record(new LocalEntity("Q00900042", NodeKind.PERSON, "a minted person", NOW));
+    affinity.put(new AffinityRecord("Q00900042", 5, null, NOW));
 
-    ingest.record(new SameAs("Q0900042", "Q900", NOW));
+    ingest.record(new SameAs("Q00900042", "Q900", NOW));
 
     assertThat(affinity.find("Q900")).isPresent();
     assertThat(affinity.find("Q900").orElseThrow().rating()).isEqualTo(5);
@@ -262,11 +262,11 @@ The second assertion is the load-bearing one, and it is why **no `PathRanking` c
   @Test
   @DisplayName("should keep the local id resolvable after a merge, because the log still names it")
   void shouldKeepTheLocalIdResolvableAfterAMergeBecauseTheLogStillNamesIt() {
-    ingest.record(new LocalEntity("Q0900042", NodeKind.PERSON, "a minted person", NOW));
+    ingest.record(new LocalEntity("Q00900042", NodeKind.PERSON, "a minted person", NOW));
 
-    ingest.record(new SameAs("Q0900042", "Q900", NOW));
+    ingest.record(new SameAs("Q00900042", "Q900", NOW));
 
-    assertThat(graph.node("Q0900042")).isPresent();
+    assertThat(graph.node("Q00900042")).isPresent();
   }
 ```
 
