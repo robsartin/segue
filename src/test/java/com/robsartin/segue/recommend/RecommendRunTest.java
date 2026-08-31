@@ -118,6 +118,8 @@ class RecommendRunTest {
 
     assertThat(beforeTheFile).anyMatch(note -> note.contains("candidate"));
     assertThat(beforeTheFile).anyMatch(note -> note.contains("2 entity(ies)"));
+    assertThat(beforeTheFile).anyMatch(note -> note.contains("cleared the floor of"));
+    assertThat(beforeTheFile).anyMatch(note -> note.contains("held out"));
   }
 
   @Test
