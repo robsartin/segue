@@ -94,28 +94,17 @@ public final class IngestService {
           throw new IllegalStateException(
               "a retraction is honoured by the projection's fold, never applied to a graph: "
                   + retraction.qid());
-      // #92 Task 1 adds these three to LoggedAssertion's permits so the type exists; Task 2
-      // gives them real graph effects (LocalEntity -> upsertNode, OwnerEdge -> record, both
-      // carrying Provenance.OWNER) and Task 4 gives SameAs its merge. Left throwing rather than
-      // silently mishandled, so a caller that reaches here before that lands fails loudly instead
-      // of writing something wrong to the graph.
-      case LocalEntity local ->
-          throw new UnsupportedOperationException(
-              "#92 Task 2: local entities are not yet applied to the graph: " + local.qid());
-      case OwnerEdge edge ->
-          throw new UnsupportedOperationException(
-              "#92 Task 2: owner edges are not yet applied to the graph: "
-                  + edge.fromQid()
-                  + " "
-                  + edge.typeCode()
-                  + " "
-                  + edge.toQid());
-      case SameAs sameAs ->
-          throw new UnsupportedOperationException(
-              "#92 Task 4: merges are not yet applied to the graph: "
-                  + sameAs.localQid()
-                  + " -> "
-                  + sameAs.canonicalQid());
+      // The owner's own claims (#92) project exactly like the sourced ones - a minted entity is
+      // a node, an asserted relationship is an edge - and differ only in the provenance they
+      // carry, which each record decides for itself (LocalEntity.toNode, OwnerEdge.toAssertion)
+      // so replay and this switch cannot attribute the same claim differently.
+      case LocalEntity local -> graph.upsertNode(local.toNode());
+      case OwnerEdge edge -> graph.record(edge.toAssertion());
+      // #92 Task 4 gives a merge its graph effect: resolving edges and the rating onto the
+      // canonical id. Until then it is logged and does nothing here, which is the honest state
+      // rather than a half-merge - ADR 19 makes the log the source of truth, so a merge recorded
+      // now is applied by the replay that follows Task 4, with nothing lost in between.
+      case SameAs ignored -> {}
     }
   }
 }

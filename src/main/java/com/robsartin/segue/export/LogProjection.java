@@ -82,26 +82,21 @@ public record LogProjection(
         // in it. Reaching this arm would mean Retractions.survives had changed its mind.
         case Retraction retraction ->
             throw new IllegalStateException("a retraction is not projected: " + retraction.qid());
-        // #92 Task 1 only adds these three types to LoggedAssertion's permits; nothing today can
-        // put one in a log this fold reads, and how they enter the export projection is
-        // undecided. Left throwing rather than silently dropped from the export.
-        case LocalEntity local ->
-            throw new UnsupportedOperationException(
-                "#92: export projection does not yet handle LocalEntity: " + local.qid());
-        case OwnerEdge edge ->
-            throw new UnsupportedOperationException(
-                "#92: export projection does not yet handle OwnerEdge: "
-                    + edge.fromQid()
-                    + " "
-                    + edge.typeCode()
-                    + " "
-                    + edge.toQid());
-        case SameAs sameAs ->
-            throw new UnsupportedOperationException(
-                "#92: export projection does not yet handle SameAs: "
-                    + sameAs.localQid()
-                    + " -> "
-                    + sameAs.canonicalQid());
+        // The owner's claims (#92) enter this fold through the same conversions the graph uses,
+        // for this class's own stated reason: an exported picture that disagreed with the running
+        // graph about what is in it would be worse than no picture. No KindMapper.rederive for a
+        // minted entity - re-derivation reads the P31 classes a source stated, and the owner
+        // stated a kind directly and no classes at all, so there is nothing to re-derive from.
+        case LocalEntity minted -> nodes.put(minted.qid(), minted.toNode());
+        case OwnerEdge owned -> {
+          AssertionRecord claim = owned.toAssertion();
+          byEdge.computeIfAbsent(claim.edgeKey(), key -> new ArrayList<>()).add(claim);
+        }
+        // A merge has no picture of its own: it is a statement about identity, not a node or an
+        // edge, and #92 Task 4 resolves it by moving the claims that DO have one onto the
+        // canonical id. Drawing it as an edge would put a relationship in the export that
+        // find_paths cannot route along, which this class's last paragraph forbids.
+        case SameAs ignored -> {}
       }
     }
 

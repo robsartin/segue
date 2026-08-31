@@ -36,4 +36,21 @@ public record OwnerEdge(String fromQid, String toQid, String typeCode, Instant a
       throw new IllegalArgumentException("no registered edge type for code: " + typeCode);
     }
   }
+
+  /**
+   * The projection's view of this claim, attributed to the owner rather than to a source (#92).
+   *
+   * <p>The graph and the export fold both hold relationships as {@link AssertionRecord}s carrying
+   * {@link Provenance}, and there is no third shape for an unsourced one. So the conversion lives
+   * here, once, on {@link LocalEntity#toNode()}'s precedent: {@code IngestService.apply}, replay
+   * and {@code LogProjection} all project the same owner edge the same way, and cannot drift into
+   * attributing it differently.
+   *
+   * <p>No validity dates: an owner asserting that a relationship holds is not stating when it began
+   * or ended, and inventing an interval here would make the edge answer {@code validAt} questions
+   * on a claim nobody made.
+   */
+  public AssertionRecord toAssertion() {
+    return new AssertionRecord(fromQid, toQid, typeCode, null, null, Provenance.owner(assertedAt));
+  }
 }

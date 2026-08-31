@@ -141,27 +141,31 @@ public final class RetractRun {
         }
         // Retractions never survive: they describe the fold rather than appear in it.
         case Retraction ignored -> {}
-        // #92 Task 1 only adds these three types to LoggedAssertion's permits; nothing today can
-        // put one in a log this method reads (IngestService.apply and SqliteAssertionLog.append
-        // both refuse them until Task 2/Task 4 land), and how a retraction-effect count should
-        // treat them is undecided. Left throwing rather than silently under- or over-counting.
-        case LocalEntity local ->
-            throw new UnsupportedOperationException(
-                "#92: retraction effect counting does not yet handle LocalEntity: " + local.qid());
-        case OwnerEdge edge ->
-            throw new UnsupportedOperationException(
-                "#92: retraction effect counting does not yet handle OwnerEdge: "
-                    + edge.fromQid()
-                    + " "
-                    + edge.typeCode()
-                    + " "
-                    + edge.toQid());
-        case SameAs sameAs ->
-            throw new UnsupportedOperationException(
-                "#92: retraction effect counting does not yet handle SameAs: "
-                    + sameAs.localQid()
-                    + " -> "
-                    + sameAs.canonicalQid());
+        // The owner's claims (#92) are counted in the same two buckets they project into, so the
+        // report still says what will stop projecting rather than what a source claimed. A minted
+        // entity supplies the label too: without this, retracting something the owner minted
+        // would print "(no node claim in the projection)" for an entity that is plainly in the
+        // graph - and the label is the safety feature this report exists for.
+        case LocalEntity minted -> {
+          if (minted.qid().equals(qid)) {
+            label = minted.label();
+            nodeClaims++;
+          }
+        }
+        case OwnerEdge owned -> {
+          if (owned.fromQid().equals(qid) || owned.toQid().equals(qid)) {
+            edgeClaims++;
+          }
+        }
+        // Counted with the edges rather than ignored, matching Retractions.survives, which drops
+        // a merge naming a retracted entity on the edge rule. Counting is what decides whether
+        // "nothing to retract" is refused, so a merge the retraction WILL reach has to be
+        // visible here or an entity known only through one would be unretractable.
+        case SameAs merge -> {
+          if (merge.localQid().equals(qid) || merge.canonicalQid().equals(qid)) {
+            edgeClaims++;
+          }
+        }
       }
     }
     return new Effect(qid, label, nodeClaims, edgeClaims);

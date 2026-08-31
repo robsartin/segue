@@ -29,13 +29,15 @@ import java.util.List;
  *
  * <p>A {@link LoggedAssertion} is stored as one row discriminated by {@code kind}: a node claim
  * fills {@code node_kind}/{@code label}, an edge claim fills {@code to_qid}/{@code type_code} and
- * the validity dates, and a retraction (ADR 44) fills {@code qid} and {@code reason} alone. The two
- * claims carry their provenance; the retraction has none, and {@code asserted_at} carries the one
- * time dimension it does have. Sequence order is the autoincrement primary key, which is exactly
- * the replay order {@code GraphProjector} needs, and it is also what orders a retraction against
- * the claims it reaches. The instant is stored as an ISO-8601 string so sub-second precision
- * survives - the truncation the Gremlin {@code ProvenanceCodec} suffers is deliberately not
- * repeated here.
+ * the validity dates, and a retraction (ADR 44) fills {@code qid} and {@code reason} alone. The
+ * owner's three first-person claims (#92) reuse those same columns rather than adding any: {@code
+ * LOCAL} fills a node claim's, while {@code OWNER_EDGE} and {@code SAME_AS} put their two ends in
+ * {@code qid} and {@code to_qid}. The two sourced claims carry their provenance; the retraction has
+ * none, and {@code asserted_at} carries the one time dimension it does have. Sequence order is the
+ * autoincrement primary key, which is exactly the replay order {@code GraphProjector} needs, and it
+ * is also what orders a retraction against the claims it reaches. The instant is stored as an
+ * ISO-8601 string so sub-second precision survives - the truncation the Gremlin {@code
+ * ProvenanceCodec} suffers is deliberately not repeated here.
  *
  * <p>This adapter touches only {@code java.sql}, not the driver, so the engine stays swappable.
  */
@@ -198,27 +200,56 @@ public final class SqliteAssertionLog implements AssertionLog {
           ps.setDouble(13, RETRACTION_CONFIDENCE);
           ps.setString(14, r.reason());
         }
-        // #92 Task 1 only adds these three types to LoggedAssertion's permits; no row shape for
-        // them has been designed yet (the plan does not assign this file to a task). Left
-        // throwing rather than persisted wrong, so the gap is loud instead of a silently
-        // unreadable row.
-        case LocalEntity local ->
-            throw new UnsupportedOperationException(
-                "#92: no SQLite row shape yet for LocalEntity: " + local.qid());
-        case OwnerEdge edge ->
-            throw new UnsupportedOperationException(
-                "#92: no SQLite row shape yet for OwnerEdge: "
-                    + edge.fromQid()
-                    + " "
-                    + edge.typeCode()
-                    + " "
-                    + edge.toQid());
-        case SameAs sameAs ->
-            throw new UnsupportedOperationException(
-                "#92: no SQLite row shape yet for SameAs: "
-                    + sameAs.localQid()
-                    + " -> "
-                    + sameAs.canonicalQid());
+        // The owner's three first-person claims (#92). Each reuses the columns whose meaning
+        // already matches - a minted entity is a node's shape, an owner edge and a merge are a
+        // pair of qids - rather than adding columns, so no migration is needed and a row stays
+        // readable in a SQL client. They are given the reserved owner provenance rather than
+        // RETRACTION_SOURCE's padding: source_id and confidence are NOT NULL, and "owner" is the
+        // honest answer to who said this, not a placeholder somebody might go looking for.
+        case LocalEntity local -> {
+          ps.setString(1, "LOCAL");
+          ps.setString(2, local.qid());
+          ps.setString(3, null);
+          ps.setString(4, null);
+          ps.setString(5, local.kind().name());
+          // No instance_of: the owner stated a kind directly and no source stated any classes,
+          // which is the same emptiness LocalEntity.toNode() carries into the graph.
+          ps.setString(6, null);
+          ps.setString(7, local.label());
+          ps.setString(8, null);
+          ps.setString(9, null);
+          bindProvenance(ps, Provenance.owner(local.mintedAt()));
+        }
+        case OwnerEdge edge -> {
+          ps.setString(1, "OWNER_EDGE");
+          ps.setString(2, edge.fromQid());
+          ps.setString(3, edge.toQid());
+          ps.setString(4, edge.typeCode());
+          ps.setString(5, null);
+          ps.setString(6, null);
+          ps.setString(7, null);
+          // No validity dates, matching OwnerEdge.toAssertion(): the owner asserted that the
+          // relationship holds, not when it began or ended.
+          ps.setString(8, null);
+          ps.setString(9, null);
+          bindProvenance(ps, Provenance.owner(edge.assertedAt()));
+        }
+        case SameAs sameAs -> {
+          ps.setString(1, "SAME_AS");
+          // The local side goes in qid and the canonical side in to_qid, and the order is not
+          // arbitrary: SameAs refuses to be built the other way round (its local side must be
+          // Q00..., its canonical side allocatable), so readRow reconstructing it in this order
+          // is checked by the record's own constructor on the way back in.
+          ps.setString(2, sameAs.localQid());
+          ps.setString(3, sameAs.canonicalQid());
+          ps.setString(4, null);
+          ps.setString(5, null);
+          ps.setString(6, null);
+          ps.setString(7, null);
+          ps.setString(8, null);
+          ps.setString(9, null);
+          bindProvenance(ps, Provenance.owner(sameAs.assertedAt()));
+        }
       }
       ps.executeUpdate();
     } catch (SQLException ex) {
@@ -240,27 +271,46 @@ public final class SqliteAssertionLog implements AssertionLog {
     return out;
   }
 
+  /**
+   * One row back into the claim that wrote it.
+   *
+   * <p>Provenance is built only for the two sourced kinds, by {@link #provenanceOf}. The
+   * first-person rows - a retraction (ADR 44) and the owner's three (#92) - do not reconstruct one
+   * from the columns: a retraction's are {@link #RETRACTION_SOURCE} padding, and an owner claim's
+   * are derived from what the record already carries, so reading them back would be a second source
+   * of truth for a value {@link Provenance#owner} already defines.
+   */
   private static LoggedAssertion readRow(ResultSet rs) throws SQLException {
-    // Read before the provenance is built: a retraction row has none, and the two columns
-    // Provenance would be built from are padding for it (see RETRACTION_SOURCE).
-    if ("RETRACT".equals(rs.getString("kind"))) {
-      return new Retraction(
-          rs.getString("qid"), rs.getString("reason"), Instant.parse(rs.getString("asserted_at")));
-    }
-    Provenance provenance =
-        new Provenance(
-            rs.getString("source_id"),
-            rs.getString("source_ref"),
-            Instant.parse(rs.getString("asserted_at")),
-            rs.getDouble("confidence"));
     return switch (rs.getString("kind")) {
+      case "RETRACT" ->
+          new Retraction(
+              rs.getString("qid"),
+              rs.getString("reason"),
+              Instant.parse(rs.getString("asserted_at")));
+      case "LOCAL" ->
+          new LocalEntity(
+              rs.getString("qid"),
+              NodeKind.valueOf(rs.getString("node_kind")),
+              rs.getString("label"),
+              Instant.parse(rs.getString("asserted_at")));
+      case "OWNER_EDGE" ->
+          new OwnerEdge(
+              rs.getString("qid"),
+              rs.getString("to_qid"),
+              rs.getString("type_code"),
+              Instant.parse(rs.getString("asserted_at")));
+      case "SAME_AS" ->
+          new SameAs(
+              rs.getString("qid"),
+              rs.getString("to_qid"),
+              Instant.parse(rs.getString("asserted_at")));
       case "NODE" ->
           new NodeAssertion(
               rs.getString("qid"),
               NodeKind.valueOf(rs.getString("node_kind")),
               rs.getString("label"),
               decodeClasses(rs.getString("instance_of")),
-              provenance);
+              provenanceOf(rs));
       case "EDGE" ->
           new AssertionRecord(
               rs.getString("qid"),
@@ -268,9 +318,18 @@ public final class SqliteAssertionLog implements AssertionLog {
               rs.getString("type_code"),
               dateOrNull(rs.getString("valid_from")),
               dateOrNull(rs.getString("valid_to")),
-              provenance);
+              provenanceOf(rs));
       default -> throw new IllegalStateException("unknown assertion kind: " + rs.getString("kind"));
     };
+  }
+
+  /** The provenance columns of a sourced claim, read back. */
+  private static Provenance provenanceOf(ResultSet rs) throws SQLException {
+    return new Provenance(
+        rs.getString("source_id"),
+        rs.getString("source_ref"),
+        Instant.parse(rs.getString("asserted_at")),
+        rs.getDouble("confidence"));
   }
 
   /** Binds the provenance columns of a sourced claim, and the {@code reason} it does not have. */

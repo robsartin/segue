@@ -69,28 +69,20 @@ public record Retractions(Map<String, Integer> lastRetraction) {
       case NodeAssertion node -> !isRetractedAt(index, node.qid());
       case AssertionRecord edge ->
           !isRetractedAt(index, edge.fromQid()) && !isRetractedAt(index, edge.toQid());
-      // #92 Task 1 only adds these three types to LoggedAssertion's permits; nothing today can
-      // put one in a log this fold reads (IngestService.apply and SqliteAssertionLog.append both
-      // refuse them until Task 2/Task 4 land), and neither downstream caller of this method
-      // handles them yet either. Left throwing rather than guessing at survival semantics no
-      // test exercises.
-      case LocalEntity local ->
-          throw new UnsupportedOperationException(
-              "#92: retraction survival is not yet defined for LocalEntity: " + local.qid());
+      // The owner's three claims (#92) are retracted by the same rule as the sourced ones, and
+      // by the same argument: the unit is the entity, so a claim reaches the projection unless
+      // an entity it names was retracted after it was made. Who said it makes no difference to
+      // whether it was taken back - "I minted the wrong thing" is exactly the case ADR 44
+      // exists for, arriving from the owner's own hand rather than a source's.
+      case LocalEntity local -> !isRetractedAt(index, local.qid());
       case OwnerEdge edge ->
-          throw new UnsupportedOperationException(
-              "#92: retraction survival is not yet defined for OwnerEdge: "
-                  + edge.fromQid()
-                  + " "
-                  + edge.typeCode()
-                  + " "
-                  + edge.toQid());
+          !isRetractedAt(index, edge.fromQid()) && !isRetractedAt(index, edge.toQid());
+      // A merge names two entities and is dropped if either is retracted, on the edge's rule and
+      // not the node's: a SameAs holds a relationship between two ids rather than asserting that
+      // either exists, so retracting the canonical side has to reach it too. Carrying an
+      // equivalence onto a retracted entity is the failure this rules out.
       case SameAs sameAs ->
-          throw new UnsupportedOperationException(
-              "#92: retraction survival is not yet defined for SameAs: "
-                  + sameAs.localQid()
-                  + " -> "
-                  + sameAs.canonicalQid());
+          !isRetractedAt(index, sameAs.localQid()) && !isRetractedAt(index, sameAs.canonicalQid());
     };
   }
 
