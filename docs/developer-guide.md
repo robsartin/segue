@@ -347,9 +347,9 @@ reachable from the application — nothing imports any of them, and each is ente
 has a different relationship with the data and a different fence to match.
 
 - **`seed` reaches `wikidata` and stops.** It may not touch `sqlite`, `tinker`, `jena`, `ingest`,
-  `mcp`, `app` or `retract`: it cannot open the database even to read it, which is the fence that
-  makes a tool reading a private list of names safe
-  ([ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)).
+  `mcp`, `app` or any other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`): it cannot open the
+  database even to read it, which is the fence that makes a tool reading a private list of names
+  safe ([ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)).
 - **`export` reaches `sqlite`, `tinker` and `ingest`**, because reading the graph is its whole job,
   and it may build a throwaway projection ([ADR 41](adr/0041-graph-exporter-views-and-formats.md)).
 - **`ratings` reaches `sqlite` and nothing else**, because it needs the least: a bulk read of the
@@ -1041,8 +1041,9 @@ creates no edge.
 It never writes. `ArchitectureTest.seedNeverOpensAStore` forbids `seed` from depending on `sqlite`,
 `tinker`, `jena`, `ingest`, `mcp` or `app`, so it cannot open the database even to read it, and
 cannot quietly become an MCP tool. Every sibling dev tool is on the same list, so it cannot reach
-one and open a store through that instead. It also never needs the network in `check`: the judgement is a
-pure function, and everything that speaks HTTP is tested against `StubWikidataServer`.
+one and open a store through that instead. It also never needs the network in `check`: the
+judgement is a pure function, and everything that speaks HTTP is tested against
+`StubWikidataServer`.
 
 ## Looking at the graph
 
@@ -1138,8 +1139,8 @@ It never writes. `ArchitectureTest.theExporterOnlyReads` forbids `export` from c
 `GraphStore.record`, `GraphStore.upsertNode` or `AssertionLog.append`, and from depending on
 `IngestService` at all — the second half is the one no other rule covers, and without it a class
 here could route a claim through the one legitimate writer. It also forbids depending on any sibling
-dev tool, so the exporter cannot borrow a looser fence than its own. `GraphProjector` is deliberately
-allowed: the bounded views need a projection, and the exporter replays the log into a throwaway
+dev tool, so the exporter cannot borrow a looser fence than its own. `GraphProjector` is
+deliberately allowed: the bounded views need a projection, and the exporter replays the log into a throwaway
 in-memory `TinkerGraphStore` exactly as the application does at boot. Nothing durable changes.
 
 It never fetches. `ArchitectureTest.theExporterNeverSpeaksToANetwork` forbids `export` from
@@ -1797,8 +1798,8 @@ Four ArchUnit rules hold the boundary: `rate` may call `AffinityStore.updateRati
 that appends to the assertion log or touches the graph; it may never call `AffinityRecord.note()`;
 no class in the package may depend on `AffinityRecord` at all, with no exception — `RateServer`
 used to be named as one, and lost it when its write stopped constructing a record; and it may not
-reach `jena`, `mcp`, `app`, `seed`, `export`, `ratings` or `retract`, the sibling fence every dev
-tool carries. The bounds of the scale live on `RatingScale`, which carries no rating, so a class
+reach `jena`, `mcp`, `app` or any dev tool but `recommend` (`ArchitectureTest.DEV_TOOL_PACKAGES`),
+the sibling fence every dev tool carries. The bounds of the scale live on `RatingScale`, which carries no rating, so a class
 that only needs to say "1 to 5" — `RateCli`'s usage string and its `--revise` check — can say it
 without naming the type that carries one.
 
