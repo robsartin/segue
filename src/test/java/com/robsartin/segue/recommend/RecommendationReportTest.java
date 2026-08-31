@@ -3,6 +3,7 @@ package com.robsartin.segue.recommend;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.domain.EdgeRecord;
+import com.robsartin.segue.domain.FloorReading;
 import com.robsartin.segue.domain.Hop;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
@@ -48,12 +49,22 @@ class RecommendationReportTest {
 
   private static String report(List<Explained> explained, Sweep sweep) throws IOException {
     StringWriter out = new StringWriter();
-    RecommendationReport.write(sweep, explained, Scorer.LIFT, 12, out);
+    RecommendationReport.write(
+        sweep,
+        explained,
+        Scorer.LIFT,
+        FloorReading.of(
+            sweep.candidates(),
+            explained.stream().map(Explained::candidate).toList(),
+            12,
+            sweep.heldOutByFloor(),
+            sweep.heldOutAtDegreeOne()),
+        out);
     return out.toString();
   }
 
   private static Sweep sweep() {
-    return new Sweep(List.of(RECOMMENDED), 815, 0, 41);
+    return new Sweep(List.of(RECOMMENDED), 815, 0, 41, 0, 0);
   }
 
   @Test
@@ -119,8 +130,61 @@ class RecommendationReportTest {
   @Test
   @DisplayName("nothing to recommend is a sentence, not an empty file")
   void nothingToRecommendIsASentence() throws IOException {
-    String written = report(List.of(), new Sweep(List.of(), 815, 0, 41));
+    String written = report(List.of(), new Sweep(List.of(), 815, 0, 41, 0, 0));
 
     assertThat(written).contains(RecommendationReport.NOTHING_FOUND);
+  }
+
+  @Test
+  @DisplayName("the header takes a reading of the floor, so a later run can be read against it")
+  void theHeaderTakesAReadingOfTheFloor() throws IOException {
+    String written = report(List.of(new Explained(RECOMMENDED, List.of(ROUTE))), sweep());
+
+    assertThat(written).contains("1 candidate(s) cleared the floor of 12, median degree 80");
+    assertThat(written)
+        .contains(
+            "of the 1 ranked, median degree 80, 0 sit exactly on the floor and 0 have every edge"
+                + " already counted as evidence");
+    // The caveat travels with the figure. A median read across two floors differs for a reason
+    // that is arithmetic, and the header is where somebody actually compares two runs.
+    assertThat(written).contains("comparable with a later run at this floor, not across floors");
+  }
+
+  @Test
+  @DisplayName("the header says what the floor held out, and how much of it is one edge")
+  void theHeaderSaysWhatTheFloorHeldOut() throws IOException {
+    Sweep held = new Sweep(List.of(RECOMMENDED), 815, 0, 41, 7669, 5874);
+
+    String written = report(List.of(new Explained(RECOMMENDED, List.of(ROUTE))), held);
+
+    assertThat(written).contains("held out 7669 entity(ies)");
+    assertThat(written).contains("5874 of them carrying a single edge");
+  }
+
+  @Test
+  @DisplayName("a candidate on the floor with nothing else known about it is counted as both")
+  void anEntryOnTheFloorWithEveryEdgeCountedIsCountedAsBoth() throws IOException {
+    Recommendation onTheFloor =
+        new Recommendation(
+            CANDIDATE,
+            0.5,
+            2,
+            List.of(
+                new SharedIntermediate(KNOWN.qid(), "Q900201", 4, 1.0),
+                new SharedIntermediate(KNOWN.qid(), "Q900202", 4, 1.0)));
+    Sweep sweep = new Sweep(List.of(onTheFloor), 815, 0, 41, 0, 0);
+
+    StringWriter out = new StringWriter();
+    RecommendationReport.write(
+        sweep,
+        List.of(new Explained(onTheFloor, List.of())),
+        Scorer.LIFT,
+        FloorReading.of(sweep.candidates(), List.of(onTheFloor), 2, 0, 0),
+        out);
+
+    assertThat(out.toString())
+        .contains(
+            "of the 1 ranked, median degree 2, 1 sit exactly on the floor and 1 have every edge"
+                + " already counted as evidence");
   }
 }

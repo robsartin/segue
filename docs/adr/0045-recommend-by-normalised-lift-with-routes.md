@@ -695,3 +695,13 @@ separately rather than closed with them. **None is rejected here; each is undeci
 - **Nothing about the scorer changed.** The floor filters candidates and nothing else: every entry
   common to the two runs above carries an identical score and degree, and the same independence was
   checked pool-wide, across 3,399 candidates, while measuring the alternatives.
+
+**Amendment (2026-08-30, issues #133, #134 and #135): the three questions the amendment above left
+open are decided in [ADR 57](0057-the-floor-reports-itself.md), which is the authority on them.**
+
+Nothing above is withdrawn and no decision above is edited. In short: the floor now emits a reading
+of itself on every run, so the drift this document's amendment left silent is visible; a newly
+discovered node is still not ranked, and the run reports how many are held out; and recording
+expansion state to feed the score is refused on measurement rather than deferred. The reading
+reproduces four of the eight rows of that amendment's before-and-after table, at both floors, which
+is how it was checked that it changes no ranking.
