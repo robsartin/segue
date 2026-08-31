@@ -227,6 +227,11 @@ The second assertion is the load-bearing one, and it is why **no `PathRanking` c
 
 ### Task 4: The merge carries edges and ratings
 
+**Amended 2026-08-31 after Task 2's review: construct through the factories.** Task 2 moved the
+mutable conventions out of the canonical constructors and into `LocalEntity.minted()`,
+`OwnerEdge.claimed()` and `SameAs.declared()`. The code blocks below predate that. Use the factories;
+a raw constructor will not enforce the two-leading-zero shape or the registered-type check.
+
 **Files:**
 - Modify: `src/main/java/com/robsartin/segue/ingest/IngestService.java`
 - Test: `src/test/java/com/robsartin/segue/ingest/MergeCarriesEverythingTest.java`
@@ -288,6 +293,11 @@ watch it produce a blank or missing label, then fix `Labels.forQids`.
 
 ### Task 5: The seventh dev tool
 
+**Amended 2026-08-31: construct through the factories** — `LocalEntity.minted()`,
+`OwnerEdge.claimed()`, `SameAs.declared()`. The canonical constructors enforce only Wikidata's
+grammar; the conventions live in the factories, and Task 6 adds an ArchUnit rule requiring their use
+outside `domain` and `sqlite`.
+
 **Files:**
 - Create: `src/main/java/com/robsartin/segue/own/{OwnRun,OwnCli}.java`
 - Modify: `build.gradle.kts`
@@ -319,6 +329,18 @@ Cover, each as its own test: `mint` appends exactly one claim and returns the id
 - [ ] **Step 1: Write the failing test for the refusal**
 
 `expand_entity` on a local entity must say *this entity has no source to expand from*, distinctly. ADR 56 established that an empty `ExpandResult` already means both "found nothing" and "source unavailable"; a third meaning rebuilds the defect ADR 56 fixed. Assert on the message, not only on the emptiness.
+
+- [ ] **Step 2a: Fence the claim constructors.** *Added 2026-08-31 after Task 2's review.* Task 2
+inverted the validation split: the canonical constructors of `LocalEntity`, `OwnerEdge` and `SameAs`
+enforce only Wikidata's immutable grammar, while the mutable conventions live in the static factories
+`minted()`, `claimed()` and `declared()`. That is what keeps the log readable when a convention
+tightens — but it means `new OwnerEdge(a, b, "NOT_A_TYPE", now)` is constructible and appendable.
+
+Task 2 deliberately did **not** add a duplicate check at the write boundary, on the grounds that an
+unpinned second copy of a rule is what a future writer misses. **The structural fix is here**: an
+ArchUnit rule that nothing outside `domain` and `sqlite` calls those constructors directly —
+everything else goes through the factories. Positive control required: call a constructor from `own`,
+watch the rule go red naming itself, revert, quote the message.
 
 - [ ] **Step 2: Write the failing ArchUnit rule and add `own` to `DEV_TOOL_PACKAGES`**
 
