@@ -193,6 +193,44 @@ class SegueServiceTest {
   }
 
   @Test
+  @DisplayName(
+      "should name the unavailable source and not the healthy one when wikidata is down"
+          + " (issue #148)")
+  void shouldNameTheUnavailableSourceAndNotTheHealthyOneWhenWikidataIsDown() {
+    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+    ingest.record(new NodeAssertion("Q2", NodeKind.GROUP, "Bad Seeds", WIKIDATA));
+    AssertionRecord edge = new AssertionRecord("Q1", "Q2", "MEMBER_OF", null, null, WIKIDATA);
+
+    ToolResult<SegueService.ExpansionSummary> result =
+        service(
+                new StubSourceAdapter("wikidata", ExpandResult.unavailable()),
+                new StubSourceAdapter("musicbrainz", ExpandResult.of(List.of(edge))))
+            .expandEntity("Q1", 10);
+
+    assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.PARTIAL);
+    assertThat(result.detail()).contains("wikidata").doesNotContain("musicbrainz");
+  }
+
+  @Test
+  @DisplayName(
+      "should name the unavailable source and not the healthy one when musicbrainz is down"
+          + " (issue #148)")
+  void shouldNameTheUnavailableSourceAndNotTheHealthyOneWhenMusicbrainzIsDown() {
+    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+    ingest.record(new NodeAssertion("Q2", NodeKind.GROUP, "Bad Seeds", WIKIDATA));
+    AssertionRecord edge = new AssertionRecord("Q1", "Q2", "MEMBER_OF", null, null, WIKIDATA);
+
+    ToolResult<SegueService.ExpansionSummary> result =
+        service(
+                new StubSourceAdapter("wikidata", ExpandResult.of(List.of(edge))),
+                new StubSourceAdapter("musicbrainz", ExpandResult.unavailable()))
+            .expandEntity("Q1", 10);
+
+    assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.PARTIAL);
+    assertThat(result.detail()).contains("musicbrainz").doesNotContain("wikidata");
+  }
+
+  @Test
   @DisplayName("expandEntity reports partial when the result was truncated")
   void expandEntityReportsPartialWhenTruncated() {
     ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
@@ -206,6 +244,58 @@ class SegueServiceTest {
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.PARTIAL);
     assertThat(result.detail()).containsIgnoringCase("truncat");
     assertThat(result.payload().truncated()).isTrue();
+  }
+
+  @Test
+  @DisplayName("should name the source that truncated and not the one that did not (issue #148)")
+  void shouldNameTheSourceThatTruncatedAndNotTheOneThatDidNot() {
+    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+    ingest.record(new NodeAssertion("Q2", NodeKind.GROUP, "Bad Seeds", WIKIDATA));
+    AssertionRecord edge = new AssertionRecord("Q1", "Q2", "MEMBER_OF", null, null, WIKIDATA);
+
+    ToolResult<SegueService.ExpansionSummary> result =
+        service(
+                new StubSourceAdapter("wikidata", ExpandResult.of(List.of(edge))),
+                new StubSourceAdapter("musicbrainz", new ExpandResult(List.of(edge), false, true)))
+            .expandEntity("Q1", 10);
+
+    assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.PARTIAL);
+    assertThat(result.detail()).containsIgnoringCase("truncat");
+    assertThat(result.detail()).contains("musicbrainz").doesNotContain("wikidata");
+  }
+
+  @Test
+  @DisplayName(
+      "should blame no source when it was the shared bound that cut the concatenation"
+          + " (issue #148, GAP 3)")
+  void shouldBlameNoSourceWhenItWasTheSharedBoundThatCutTheConcatenation() {
+    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+    List<AssertionRecord> assertions = new ArrayList<>();
+    List<NodeAssertion> neighbors = new ArrayList<>();
+    for (int i = 0; i < 3; i++) {
+      String qid = "Q" + (700 + i);
+      assertions.add(new AssertionRecord("Q1", qid, "MEMBER_OF", null, null, WIKIDATA));
+      neighbors.add(new NodeAssertion(qid, NodeKind.GROUP, "Group " + i, WIKIDATA));
+    }
+    // Neither adapter reports truncating: each returned everything it had. What overran the bound
+    // is the concatenation, and no single adapter made that cut.
+    ExpandResult whole = new ExpandResult(assertions, neighbors, false, false);
+
+    ToolResult<SegueService.ExpansionSummary> result =
+        service(
+                new StubSourceAdapter("wikidata", whole),
+                new StubSourceAdapter("musicbrainz", whole))
+            .expandEntity("Q1", 4);
+
+    assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.PARTIAL);
+    assertThat(result.payload().truncated()).isTrue();
+    // Asserting the phrase and not only the absence of a name: "names no source" was already true
+    // of the aggregate message this issue replaces, so on its own it would have passed before the
+    // change and proved nothing.
+    assertThat(result.detail())
+        .contains("the combined result was truncated at the bound of 4")
+        .doesNotContain("wikidata")
+        .doesNotContain("musicbrainz");
   }
 
   @Test

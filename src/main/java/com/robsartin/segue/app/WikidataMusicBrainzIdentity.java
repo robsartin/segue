@@ -2,6 +2,7 @@ package com.robsartin.segue.app;
 
 import com.robsartin.segue.domain.Qid;
 import com.robsartin.segue.musicbrainz.MusicBrainzIdentity;
+import com.robsartin.segue.musicbrainz.MusicBrainzIdentityUnavailableException;
 import com.robsartin.segue.wikidata.WikidataClient;
 import com.robsartin.segue.wikidata.WikidataUnavailableException;
 import java.util.Collection;
@@ -32,19 +33,26 @@ import tools.jackson.databind.JsonNode;
  * third source resolving identities some other way is the same shape of work rather than a change
  * to either.
  *
- * <p><b>It degrades, and never throws.</b> {@link MusicBrainzIdentity} declares no failure type,
- * and {@code SegueService.expandEntity} calls {@code adapter.expand} with no {@code try}, so a
- * {@link WikidataUnavailableException} escaping either method below would leave the SPI's "failures
- * degrade rather than propagate" contract through the back door — a tool call would return an error
- * where the tool layer expects a flagged result. Both methods therefore swallow it.
+ * <p><b>It reports its failures, and no longer swallows them</b> (<a
+ * href="https://github.com/robsartin/segue/issues/148">issue #148</a>). It used to. {@link
+ * MusicBrainzIdentity} declared no failure type and {@code SegueService.expandEntity} calls {@code
+ * adapter.expand} with no {@code try}, so a {@link WikidataUnavailableException} escaping either
+ * method below would have left the SPI's "failures degrade rather than propagate" contract through
+ * the back door — and swallowing was the only other option available.
  *
- * <p><b>The cost of that is visible and is not hidden here.</b> An unreachable Wikidata makes
- * {@link #mbidFor} empty, and an empty MBID is how {@code MusicBrainzSourceAdapter} says
- * "MusicBrainz holds nothing bridged to this seed" — so a Query Service outage reads downstream as
- * "this artist has no members" rather than as "a source did not answer", which is the exact
- * confusion that adapter's own {@code sourceUnavailable} comment exists to prevent. Closing it
- * needs a failure channel on the seam, which is a change to an interface Task 3 settled; it is
- * written down instead.
+ * <p><b>What that cost was recorded here before it was fixed, which is why it could be.</b> An
+ * unreachable Wikidata made {@link #mbidFor} empty, and an empty MBID is how {@code
+ * MusicBrainzSourceAdapter} says "MusicBrainz holds nothing bridged to this seed" — so a Query
+ * Service outage read downstream as "this artist has no members" rather than as "a source did not
+ * answer", which is the exact confusion that adapter's own {@code sourceUnavailable} comment exists
+ * to prevent. ADR 54 records it as an established consequence.
+ *
+ * <p><b>The seam now declares {@link MusicBrainzIdentityUnavailableException}, so this class throws
+ * it and the adapter catches it.</b> The SPI contract is untouched: nothing above {@code
+ * MusicBrainzSourceAdapter.expand} sees the throw, and what reaches the tool layer is still a
+ * flagged {@code ExpandResult} — but the flag is now set, where before it was false. The exception
+ * is translated rather than passed through because {@code musicbrainz} may not import {@code
+ * wikidata} (ADR 32); see {@link #ask}.
  *
  * <p><b>The seed query is one round trip; the neighbourhood is as few as its size allows.</b>
  * {@link #qidsFor} puts a whole neighbourhood into {@code VALUES} clauses — the measured
@@ -97,11 +105,14 @@ public final class WikidataMusicBrainzIdentity implements MusicBrainzIdentity {
    * {@code MusicBrainzSourceAdapter} spends on relations <i>before</i> it resolves any neighbour.
    * So the shipped configuration could hand this method 200 MBIDs and exceed the limit in one go.
    *
-   * <p><b>What that would have cost is silence.</b> A 414 is not transient, so {@link
-   * WikidataClient} does not retry it: it throws at once, {@link #ask} swallows it, the map comes
-   * back empty, and every neighbour of that seed is dropped while {@code sourceUnavailable} stays
-   * false — the "this artist has no members" reading the class note above exists to keep this
-   * bridge from producing.
+   * <p><b>What that would have cost is a whole seed's neighbourhood.</b> A 414 is not transient, so
+   * {@link WikidataClient} does not retry it: it throws at once. Before issue #148 {@link #ask}
+   * swallowed that, the map came back empty, and every neighbour of the seed was dropped while
+   * {@code sourceUnavailable} stayed false — the "this artist has no members" reading the class
+   * note above exists to keep this bridge from producing. It is now reported rather than silent,
+   * which makes the batching a correctness measure rather than the only thing standing between an
+   * outsized request and unflagged data loss; the batching stays because a reported failure is
+   * still a failure.
    *
    * <p><b>100 rather than 186.</b> 4,480 bytes is a batch whose safety does not depend on having
    * got the arithmetic exactly right, or on the template never gaining a line; the cost of the
@@ -134,9 +145,6 @@ public final class WikidataMusicBrainzIdentity implements MusicBrainzIdentity {
       return Optional.empty();
     }
     JsonNode response = ask(SEED_TEMPLATE.formatted(qid, MBID_PROPERTY));
-    if (response == null) {
-      return Optional.empty();
-    }
     for (JsonNode row : response.path("results").path("bindings")) {
       String mbid = row.at("/mbid/value").asText(null);
       if (mbid != null && MBID.matcher(mbid).matches()) {
@@ -161,17 +169,12 @@ public final class WikidataMusicBrainzIdentity implements MusicBrainzIdentity {
     for (int from = 0; from < asked.size(); from += MAX_MBIDS_PER_QUERY) {
       List<String> chunk = asked.subList(from, Math.min(from + MAX_MBIDS_PER_QUERY, asked.size()));
       String values = chunk.stream().map(m -> "\"" + m + "\"").collect(Collectors.joining(" "));
-      JsonNode response = ask(BATCH_TEMPLATE.formatted(values, MBID_PROPERTY));
-      if (response == null) {
-        // One chunk's failure fails the whole call, which is what a single request already did.
-        // Returning what the earlier chunks resolved would be worse than useless: a half-filled
-        // map is indistinguishable from Wikidata knowing no QID for the rest, and that is the
-        // normal drop path (ADR 22 clause 2) which reports nothing to anybody. Half an answer
-        // would make a Query Service outage into silent, unflagged data loss for whichever
-        // neighbours happened to land in the failing chunk.
-        return Map.of();
-      }
-      collect(response, resolved);
+      // One chunk's failure fails the whole call, by throwing out of ask(). Returning what the
+      // earlier chunks resolved would be worse than useless: a half-filled map is
+      // indistinguishable from Wikidata knowing no QID for the rest, and that is the normal drop
+      // path (ADR 22 clause 2) which reports nothing to anybody. Returning an EMPTY map, which is
+      // what this did before issue #148, had the same problem for every neighbour at once.
+      collect(ask(BATCH_TEMPLATE.formatted(values, MBID_PROPERTY)), resolved);
     }
     return Map.copyOf(resolved);
   }
@@ -197,13 +200,21 @@ public final class WikidataMusicBrainzIdentity implements MusicBrainzIdentity {
     }
   }
 
-  /** The response, or null when Wikidata did not answer. See the class note on degrading. */
+  /**
+   * The response, or {@link MusicBrainzIdentityUnavailableException} when Wikidata did not answer.
+   *
+   * <p>The translation is the point (issue #148): {@code musicbrainz} may not import {@code
+   * wikidata} (ADR 32), so {@link WikidataUnavailableException} cannot cross the seam and the
+   * failure has to arrive as the type the seam declares. Nothing is swallowed here any more — see
+   * the class note.
+   */
   private JsonNode ask(String sparql) {
     try {
       return queryService.get(Map.of("query", sparql, "format", "json"));
     } catch (WikidataUnavailableException e) {
-      log.warn("Wikidata did not answer the MBID bridge; resolving nothing this call", e);
-      return null;
+      log.warn("Wikidata did not answer the MBID bridge", e);
+      throw new MusicBrainzIdentityUnavailableException(
+          "the Wikidata-backed MBID bridge could not be asked", e);
     }
   }
 }

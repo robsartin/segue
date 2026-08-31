@@ -960,13 +960,29 @@ Passing a deliberately tiny `maxNewEdges`:
 ```json
 {
   "outcome": "partial",
-  "detail": "the result was truncated at the bound of 5 (correlation 01a03bd9-d109-7ec3-bdf0-f171569cbd99)",
-  "payload": { "qid": "Q1051182", "nodesAdded": 4, "edgesAdded": 5,
+  "detail": "wikidata, musicbrainz truncated their results at the bound of 5; the combined result was truncated at the bound of 5",
+  "payload": { "qid": "Q1051182", "nodesAdded": 5, "edgesAdded": 5,
                "skippedNeighbors": 0, "truncated": true, "sourceUnavailable": false }
 }
 ```
 
-`truncated: true` is the signal, and the detail string names the bound that was hit. Raise
+*(Re-captured live on 2026-08-30 against both shipped sources, for issue #148. The earlier capture
+predated the second source and returned one unattributed line,
+`"the result was truncated at the bound of 5"`, with `nodesAdded: 4`. The `detail` above carries no
+correlation id because the capture drove the facade directly rather than going over the HTTP
+transport; a real tool call appends one.)*
+
+`truncated: true` is the signal, and **two different things can set it, so the detail can carry two
+lines.** The first names the sources that cut their own results short. The second says the
+concatenation overran the bound — every adapter is handed the same `maxNewEdges` and the total is
+bounded afterwards, so when that bound makes the cut **no single source made it** and none is named.
+Both appear above, which is the ordinary case for a well-connected seed at a tight bound rather than
+a corner case: this seed is a `GROUP`, both sources describe groups, and each had more to say than
+five.
+
+A source that could not be reached at all is named the same way —
+`"musicbrainz was unavailable and could not be reached"` — so an outage in one source is
+distinguishable from an outage in another. Raise
 `maxNewEdges` and call again — expanding the same entity twice is safe, and the second call is
 faster because its neighbours are already known nodes. The one seed where raising it does nothing is
 a `CONCEPT`, which is capped whatever you ask for; the detail names the ceiling it actually applied

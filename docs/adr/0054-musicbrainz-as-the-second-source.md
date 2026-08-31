@@ -376,3 +376,38 @@ covers the bridge alone; the gap between them is uncovered.
   said to extend the sibling rules. It is corrected alongside this ADR to name what a new package
   actually fails to inherit, because that walkthrough is the document a sixth adapter's author will
   read instead of this one.
+
+**Amendment (2026-08-30, issue #148): GAP 4 is fixed, and the silent bridge failure this ADR
+recorded as a consequence no longer happens.**
+
+Nothing above is withdrawn, no decision changes and no sentence above is edited.
+[ADR 56](0056-attribute-a-shortfall-to-its-source.md) records what changed and why the two
+alternatives lost. Three statements above are now false, and they are named here rather than left
+for a reader to trip over:
+
+- **"GAP 3 and GAP 4 are established and not fixed"** — GAP 4 is fixed. `SegueService.expandEntity`
+  still ORs the two booleans, deliberately, but the `ToolResult` detail now names the sources by
+  `adapter.id()`, so *"MusicBrainz is down"* and *"Wikidata is down"* are distinguishable. **GAP 3 is
+  not fixed and is not this amendment's subject**: the shared budget still goes to whichever adapter
+  the list names first, and the two order tests above still pin exactly that. A shortfall the shared
+  bound caused is reported as belonging to no source, which is the honest reading of GAP 3 rather
+  than a fix for it.
+- **"A P434-only outage reads downstream as 'this artist has no members'"** — it does not. The seam
+  declares `MusicBrainzIdentityUnavailableException`, `WikidataMusicBrainzIdentity` throws it where
+  it swallowed, and `MusicBrainzSourceAdapter` catches it into `ExpandResult.unavailable()`. **The
+  reasoning that made this consequence look survivable was sound and the conclusion was still wrong**
+  — the residual really is narrow, because `WikidataSourceAdapter.supports` returns true for every
+  kind and a general outage surfaces through it, but narrow is not reported, and the tool result for
+  the narrow case was `ok`.
+- **"The bridge degrades instead of throwing, because the seam declares no failure type"** — the seam
+  declares one now. What has not changed is why it could not before: `musicbrainz` may not import
+  `wikidata` (ADR 32), so the failure is translated in `app` rather than passed through.
+
+**One count in the ADR 25 bullet above also moved.** That amendment records this branch touching no
+`port` file. #148 touches one: `SourceAdapters` gains a compact constructor refusing a blank,
+duplicated or separator-carrying adapter id, because attribution keys on `id()` and nothing checked
+that an id identifies. It costs a conforming adapter nothing — see ADR 56.
+
+**What this does not change.** MusicBrainz as the second source, the whitelist, the one-pass shape,
+the corroboration finding, and every enumeration of what a new adapter package fails to inherit. The
+correction is to two consequences, not to the decision.

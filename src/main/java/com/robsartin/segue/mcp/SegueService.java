@@ -178,6 +178,23 @@ public final class SegueService {
    * assertions can name one pair of nodes. Counting per assertion told a calling model that two
    * entities were lost when one was.
    *
+   * <p><b>A shortfall is flagged aggregately and attributed in prose</b> (issue #148). {@link
+   * ExpansionSummary#sourceUnavailable()} and {@link ExpansionSummary#truncated()} stay ORed across
+   * adapters; the {@code detail} string names the sources by {@link SourceAdapter#id()}, which the
+   * SPI already requires every adapter to have. With one source "a source was unavailable" was
+   * unambiguous. With two it is unactionable — "MusicBrainz is down" and "Wikidata is down" call
+   * for different next moves — and the model reads {@code detail} first, so that is where the
+   * subject belongs. The two alternatives lost on cost against a benefit nothing here would use: a
+   * per-source field on {@link ExpandResult} would restate {@code id()} as a second, forgeable
+   * authority for who the source was, and a per-adapter breakdown on {@link ExpansionSummary} would
+   * change the tool's wire shape for a consumer that reads prose. See
+   * docs/adr/0056-attribute-a-shortfall-to-its-source.md.
+   *
+   * <p><b>One shortfall is deliberately attributed to nobody.</b> Every adapter is handed the same
+   * {@link ExpandContext} and the bound is then applied to the concatenation, so when it is the
+   * shared budget that cut the result, no single adapter made the cut. That reason says so instead
+   * of naming one — the design note's GAP 3, which this issue does not settle.
+   *
    * <p><b>A {@code CONCEPT} seed is bounded below whatever {@code maxNewEdges} was requested</b>
    * ({@link ExpansionBounds}, issue #112): {@code maxNewEdges} resolves to {@code
    * ExpansionBounds.effective(node.kind(), maxNewEdges)} before it reaches {@link ExpandContext} or
@@ -201,8 +218,13 @@ public final class SegueService {
     int effectiveMax = ExpansionBounds.effective(node.kind(), maxNewEdges);
     ExpandContext ctx = new ExpandContext(effectiveMax);
 
-    boolean sourceUnavailable = false;
-    boolean adapterTruncated = false;
+    // Which sources fell short, in the order the adapters ran, rather than whether any did.
+    // Issue #148: the booleans below are still ORed — a caller asking "is this result complete?"
+    // wants one answer — but "a source was unavailable" is unactionable once there is more than
+    // one source, because "MusicBrainz is down" and "Wikidata is down" call for different next
+    // moves. The subject lives in the detail string; see the reasons built at the end.
+    List<String> unavailableSources = new ArrayList<>();
+    List<String> truncatingSources = new ArrayList<>();
     List<AssertionRecord> collected = new ArrayList<>();
     // Identity an adapter already knew, keyed by qid. First writer wins, matching the way the
     // graph resolves a conflict everywhere else: two sources describing one entity differently
@@ -213,15 +235,26 @@ public final class SegueService {
         continue;
       }
       ExpandResult result = adapter.expand(node, ctx);
-      sourceUnavailable |= result.sourceUnavailable();
-      adapterTruncated |= result.truncated();
+      if (result.sourceUnavailable()) {
+        unavailableSources.add(adapter.id());
+      }
+      if (result.truncated()) {
+        truncatingSources.add(adapter.id());
+      }
       collected.addAll(result.assertions());
       for (NodeAssertion neighbor : result.neighbors()) {
         described.putIfAbsent(neighbor.qid(), neighbor);
       }
     }
 
-    boolean truncated = adapterTruncated || collected.size() > effectiveMax;
+    // The shared budget cutting the concatenation is NOT attributable to any one adapter — every
+    // adapter was handed the same ExpandContext and the bound is applied to what they jointly
+    // returned (the design note's GAP 3, established rather than fixed here). So it is reported as
+    // its own reason rather than folded into the named ones, which would put a source's name on a
+    // cut it did not make.
+    boolean boundCutTheConcatenation = collected.size() > effectiveMax;
+    boolean sourceUnavailable = !unavailableSources.isEmpty();
+    boolean truncated = !truncatingSources.isEmpty() || boundCutTheConcatenation;
     List<AssertionRecord> bounded =
         collected.size() > effectiveMax
             ? collected.stream().limit(effectiveMax).toList()
@@ -309,10 +342,22 @@ public final class SegueService {
             qid, nodesAdded, edgesAdded, skippedNeighbors, truncated, sourceUnavailable);
     List<String> reasons = new ArrayList<>();
     if (sourceUnavailable) {
-      reasons.add("a source was unavailable and could not be reached");
+      reasons.add(
+          String.join(", ", unavailableSources)
+              + (unavailableSources.size() == 1 ? " was" : " were")
+              + " unavailable and could not be reached");
     }
-    if (truncated) {
-      reasons.add("the result was truncated at the bound of " + effectiveMax);
+    if (!truncatingSources.isEmpty()) {
+      reasons.add(
+          String.join(", ", truncatingSources)
+              + (truncatingSources.size() == 1
+                  ? " truncated its result"
+                  : " truncated their results")
+              + " at the bound of "
+              + effectiveMax);
+    }
+    if (boundCutTheConcatenation) {
+      reasons.add("the combined result was truncated at the bound of " + effectiveMax);
     }
     if (skippedNeighbors > 0) {
       reasons.add(skippedNeighbors + " neighbour(s) could not be resolved and were skipped");
@@ -525,8 +570,12 @@ public final class SegueService {
    *     GraphStore.record}
    * @param skippedNeighbors distinct entities this call could not identify, counted once each
    *     however many assertions named them
-   * @param truncated the adapter or the {@code maxNewEdges} bound cut the result short
-   * @param sourceUnavailable at least one source could not be reached at all
+   * @param truncated an adapter or the {@code maxNewEdges} bound cut the result short — aggregate
+   *     across sources on purpose, because the question it answers ("is this result complete?") has
+   *     one answer however many sources ran; <b>which</b> source is named in {@link
+   *     ToolResult#detail} (issue #148)
+   * @param sourceUnavailable at least one source could not be reached at all — aggregate for the
+   *     same reason, and attributed in the same place
    */
   public record ExpansionSummary(
       String qid,
