@@ -347,9 +347,9 @@ reachable from the application — nothing imports any of them, and each is ente
 has a different relationship with the data and a different fence to match.
 
 - **`seed` reaches `wikidata` and stops.** It may not touch `sqlite`, `tinker`, `jena`, `ingest`,
-  `mcp`, `app` or `retract`: it cannot open the database even to read it, which is the fence that
-  makes a tool reading a private list of names safe
-  ([ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)).
+  `mcp`, `app` or any other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`): it cannot open the
+  database even to read it, which is the fence that makes a tool reading a private list of names
+  safe ([ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)).
 - **`export` reaches `sqlite`, `tinker` and `ingest`**, because reading the graph is its whole job,
   and it may build a throwaway projection ([ADR 41](adr/0041-graph-exporter-views-and-formats.md)).
 - **`ratings` reaches `sqlite` and nothing else**, because it needs the least: a bulk read of the
@@ -408,23 +408,23 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `noPackageCycles` | any dependency cycle between slices of `com.robsartin.segue` | [ADR 32](adr/0032-layering-and-archunit.md) |
 | `springOnlyInAppAndMcp` | `org.springframework.*` anywhere outside `app` and `mcp` | [ADR 25](adr/0025-source-adapter-spi.md), [ADR 32](adr/0032-layering-and-archunit.md) |
 | `onlyIngestAppliesClaimsToTheGraph` | calling `GraphStore.record`, `GraphStore.upsertNode` or `AssertionLog.append` from outside `ingest` | [ADR 19](adr/0019-assertion-log-source-of-truth.md) |
-| `seedNeverOpensAStore` | `seed` depending on `sqlite`, `tinker`, `jena`, `ingest`, `mcp`, `app`, `retract` or `rate` — it resolves names and must not open the database even to read it | [ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md) |
-| `theExporterOnlyReads` | `export` calling `GraphStore.record`/`upsertNode` or `AssertionLog.append`, or depending on `IngestService`, or on either of the two dev tools that write (`retract`, `rate`) at all | [ADR 41](adr/0041-graph-exporter-views-and-formats.md) |
+| `seedNeverOpensAStore` | `seed` depending on `sqlite`, `tinker`, `jena`, `ingest`, `mcp`, `app` or every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`, so a new tool joins every fence at once) — it resolves names and must not open the database even to read it | [ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md) |
+| `theExporterOnlyReads` | `export` calling `GraphStore.record`/`upsertNode` or `AssertionLog.append`, or depending on `IngestService`, or on every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`, so a new tool joins every fence at once), at all | [ADR 41](adr/0041-graph-exporter-views-and-formats.md) |
 | `theExporterNeverSpeaksToANetwork` | `export` depending on `java.net`, `javax.net`, the whole `musicbrainz` package, or any class of this project's that reaches a network API itself or through a chain of other classes here — so no HTTP client is named and none has to be remembered. The last clause replaced a `..wikidata.WikidataClient` argument that was a class name passed to a package predicate and matched nothing (issue #139) | [ADR 41](adr/0041-graph-exporter-views-and-formats.md) |
 | `theRatingsToolOnlyReads` | `ratings` calling the three world-fact writes **or either taste-layer write, `AffinityStore.put` and `updateRating`** — the only rule anywhere guarding the rating write | [ADR 43](adr/0043-listing-your-own-ratings.md) |
-| `theRatingsToolOpensNothingElse` | `ratings` depending on `tinker`, `jena`, `ingest`, `mcp`, `app`, `seed`, `export`, `retract`, `rate`, `java.net` or `javax.net` | [ADR 43](adr/0043-listing-your-own-ratings.md) |
+| `theRatingsToolOpensNothingElse` | `ratings` depending on `tinker`, `jena`, `ingest`, `mcp`, `app`, `java.net`, `javax.net` or every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`, so a new tool joins every fence at once) | [ADR 43](adr/0043-listing-your-own-ratings.md) |
 | `onlyTheRatingsToolReadsEveryRating` | calling `AffinityStore.readAll` from outside `ratings` — the bulk read exists for the owner's dev tool and for nothing on the MCP surface | [ADR 16](adr/0016-privacy-and-data-handling.md), [ADR 39](adr/0039-affinity-capture-and-read.md), [ADR 43](adr/0043-listing-your-own-ratings.md) |
 | `theRetractionToolWritesOnlyRetractions` | `retract` calling the three world-fact writes, either taste-layer write (`AffinityStore.put`, `updateRating`) or `AffinityStore.readAll` — it appends a retraction through `IngestService` and writes nothing else, least of all a rating | [ADR 44](adr/0044-retraction-as-a-new-claim.md) |
-| `theRetractionToolOpensNothingElse` | `retract` depending on `GraphStore` **as a type**, on `AffinityStore`, or on `tinker`, `jena`, `mcp`, `app`, `seed`, `export`, `ratings`, `rate`, `java.net` or `javax.net` — a retraction has no graph half, so the tool must not be able to hold one | [ADR 44](adr/0044-retraction-as-a-new-claim.md) |
+| `theRetractionToolOpensNothingElse` | `retract` depending on `GraphStore` **as a type**, on `AffinityStore`, or on `tinker`, `jena`, `mcp`, `app`, `java.net`, `javax.net` or every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`, so a new tool joins every fence at once) — a retraction has no graph half, so the tool must not be able to hold one | [ADR 44](adr/0044-retraction-as-a-new-claim.md) |
 | `theRecommenderOnlyReads` | `recommend` calling the three world-fact writes or either taste-layer write (`AffinityStore.put`, `updateRating`), or depending on `IngestService` at all | [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
 | `theRecommenderReadsRatingsAndNeverNotes` | `recommend` depending on `AffinityRecord` **as a type**, or calling `AffinityStore.find` or `readAll` — it may hold the store and call the note-free `readRatings`, and nothing that carries free text | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 39](adr/0039-affinity-capture-and-read.md), [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
 | `onlyTheRatingsToolReadsANote` | calling `AffinityRecord.note()` from outside `ratings` and `sqlite` — the score is ordinary data, the note is the owner's and is read on their own machine | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 43](adr/0043-listing-your-own-ratings.md) |
 | `onlyTheRecommenderReadsEveryRating` | calling `AffinityStore.readRatings` from outside `recommend` **and `rate`** — the note-free bulk read belongs to the two dev-side tools that weight and deal by it, and ADR 26 still pins the surface at six tools | [ADR 26](adr/0026-mcp-tool-surface.md), [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
-| `theRecommenderOpensNothingElse` | `recommend` depending on `jena`, `mcp`, `app`, `seed`, `export`, `ratings`, `retract`, `rate`, `java.net` or `javax.net` — `rate` depends on `recommend` by design, and this is what keeps that trip one-way | [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
-| `theRatingDeckWritesOnlyAffinity` | `rate` calling the three world-fact writes — the deck records what the owner thinks, never what the world says | [ADR 46](adr/0046-the-rating-deck.md) |
+| `theRecommenderOpensNothingElse` | `recommend` depending on `jena`, `mcp`, `app`, `java.net`, `javax.net` or every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`, so a new tool joins every fence at once) — `rate` depends on `recommend` by design, and this is what keeps that trip one-way | [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
+| `theRatingDeckWritesOnlyAffinity` | `rate` calling the three world-fact writes, or depending on `IngestService` **as a type** — the deck records what the owner thinks, never what the world says, and cannot route a claim through the one class allowed to write one | [ADR 46](adr/0046-the-rating-deck.md) |
 | `theRatingDeckNeverReadsANote` | `rate` calling `AffinityRecord.note()` — it writes the score and must not be able to display the note | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 46](adr/0046-the-rating-deck.md) |
 | `theRatingDeckLogsNoRating` | any class in `rate` depending on `AffinityRecord` as a type, **with no exception** — the deck writes through `AffinityStore.updateRating`, which builds no record, so nothing here may hold a rating to log | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 46](adr/0046-the-rating-deck.md) |
-| `theRatingDeckOpensNothingElse` | `rate` depending on `jena`, `mcp`, `app`, `seed`, `export`, `ratings` or `retract`. `recommend` is deliberately allowed (the candidate sweep) and so is `java.net` — this is the one dev tool that is an HTTP server, fenced instead by the loopback bind and the `Origin` allowlist | [ADR 46](adr/0046-the-rating-deck.md) |
+| `theRatingDeckOpensNothingElse` | `rate` depending on `jena`, `mcp`, `app` or every other dev tool bar one. `recommend` is deliberately allowed (the candidate sweep) and so is `java.net` — this is the one dev tool that is an HTTP server, fenced instead by the loopback bind and the `Origin` allowlist | [ADR 46](adr/0046-the-rating-deck.md) |
 | `nothingWritesToStandardOut` | reading `System.out` anywhere except the one named exception, `SegueApplication` | [ADR 28](adr/0028-mcp-transports.md) |
 | `nothingWritesToStandardError`, `noPrintStackTrace`, `noJavaUtilLogging` | bypassing SLF4J | [ADR 30](adr/0030-structured-logging.md) |
 | `affinityNeverTouchesTheWorldFactLayer` | a taste-layer type depending on the log, the graph, `IngestService` or the claim records | [ADR 33](adr/0033-taste-layer-separation.md) |
@@ -1040,8 +1040,10 @@ creates no edge.
 
 It never writes. `ArchitectureTest.seedNeverOpensAStore` forbids `seed` from depending on `sqlite`,
 `tinker`, `jena`, `ingest`, `mcp` or `app`, so it cannot open the database even to read it, and
-cannot quietly become an MCP tool. It also never needs the network in `check`: the judgement is a
-pure function, and everything that speaks HTTP is tested against `StubWikidataServer`.
+cannot quietly become an MCP tool. Every sibling dev tool is on the same list, so it cannot reach
+one and open a store through that instead. It also never needs the network in `check`: the
+judgement is a pure function, and everything that speaks HTTP is tested against
+`StubWikidataServer`.
 
 ## Looking at the graph
 
@@ -1136,8 +1138,9 @@ ends are both on the list.
 It never writes. `ArchitectureTest.theExporterOnlyReads` forbids `export` from calling
 `GraphStore.record`, `GraphStore.upsertNode` or `AssertionLog.append`, and from depending on
 `IngestService` at all — the second half is the one no other rule covers, and without it a class
-here could route a claim through the one legitimate writer. `GraphProjector` is deliberately
-allowed: the bounded views need a projection, and the exporter replays the log into a throwaway
+here could route a claim through the one legitimate writer. It also forbids depending on any sibling
+dev tool, so the exporter cannot borrow a looser fence than its own. `GraphProjector` is
+deliberately allowed: the bounded views need a projection, and the exporter replays the log into a throwaway
 in-memory `TinkerGraphStore` exactly as the application does at boot. Nothing durable changes.
 
 It never fetches. `ArchitectureTest.theExporterNeverSpeaksToANetwork` forbids `export` from
@@ -1404,7 +1407,7 @@ writes, and nothing guarded the *rating* write, because until this tool the only
 `mcp` holding an `AffinityStore` looked up one qid at a time.
 
 It opens nothing else. `theRatingsToolOpensNothingElse` bans `tinker`, `jena`, `ingest`, `mcp`,
-`app`, both sibling tools and `java.net`. It needs a bulk read of the `affinity` table and the node
+`app`, every sibling tool and `java.net`. It needs a bulk read of the `affinity` table and the node
 claims in the log, both through `sqlite`; no traversal, so no engine, and no projection, so no
 `ingest`. The sibling tools are banned so this one cannot inherit their looser fences — `export`
 may use `GraphProjector`, and this may not.
@@ -1464,7 +1467,7 @@ and shows up in a `full` or `subgraph` export.
 | --- | --- | --- |
 | write anything but a retraction | `theRetractionToolWritesOnlyRetractions` | no graph write, no direct `AssertionLog.append`, and never a taste-layer write (`AffinityStore.put` or `updateRating`) — a retraction is about the world-fact layer, and a rating is the one thing here that cannot be regenerated |
 | hold a `GraphStore` at all | `theRetractionToolOpensNothingElse` | a retraction has no graph half; `GraphStore` cannot remove anything and ADR 41 already refused to widen that port for a dev tool. `IngestService.retract` is static so that satisfying a constructor could never become the reason this tool held a graph |
-| reach a network, an engine or a sibling tool | `theRetractionToolOpensNothingElse` | a decision about your own graph is a pure function of one local file; a dependency on `seed`, `export` or `ratings` would let this inherit a different fence |
+| reach a network, an engine or a sibling tool | `theRetractionToolOpensNothingElse` | a decision about your own graph is a pure function of one local file; a dependency on any sibling tool would let this inherit a different fence |
 
 ### Why this is not a seventh MCP tool
 
@@ -1884,8 +1887,8 @@ Four ArchUnit rules hold the boundary: `rate` may call `AffinityStore.updateRati
 that appends to the assertion log or touches the graph; it may never call `AffinityRecord.note()`;
 no class in the package may depend on `AffinityRecord` at all, with no exception — `RateServer`
 used to be named as one, and lost it when its write stopped constructing a record; and it may not
-reach `jena`, `mcp`, `app`, `seed`, `export`, `ratings` or `retract`, the sibling fence every dev
-tool carries. The bounds of the scale live on `RatingScale`, which carries no rating, so a class
+reach `jena`, `mcp`, `app` or any dev tool but `recommend` (`ArchitectureTest.DEV_TOOL_PACKAGES`),
+the sibling fence every dev tool carries. The bounds of the scale live on `RatingScale`, which carries no rating, so a class
 that only needs to say "1 to 5" — `RateCli`'s usage string and its `--revise` check — can say it
 without naming the type that carries one.
 
