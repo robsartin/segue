@@ -253,7 +253,7 @@ class CorroborationAcrossSourcesTest {
 
   private EdgeRecord replayed(java.util.function.Function<GraphStore, List<EdgeRecord>> read) {
     try (GraphStore rebuilt = new TinkerGraphStore()) {
-      GraphProjector.project(log, rebuilt);
+      GraphProjector.project(log, rebuilt, IdentityMerge.NONE);
       List<EdgeRecord> found = read.apply(rebuilt);
       assertThat(found).hasSize(1);
       return found.get(0);

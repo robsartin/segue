@@ -4,6 +4,7 @@ import com.robsartin.segue.domain.KnownList;
 import com.robsartin.segue.domain.RatingScale;
 import com.robsartin.segue.domain.Recommendations;
 import com.robsartin.segue.ingest.GraphProjector;
+import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import com.robsartin.segue.support.QidList;
@@ -192,7 +193,7 @@ public final class RateCli {
     try (SqliteAssertionLog assertions = new SqliteAssertionLog(options.database());
         SqliteAffinityStore affinity = new SqliteAffinityStore(options.database());
         TinkerGraphStore graph = new TinkerGraphStore()) {
-      long applied = GraphProjector.project(assertions, graph);
+      long applied = GraphProjector.project(assertions, graph, IdentityMerge.NONE);
       log.info("replayed {} assertion(s) from {}", applied, options.database());
 
       // A count, never a qid and never a score (ADR 33).

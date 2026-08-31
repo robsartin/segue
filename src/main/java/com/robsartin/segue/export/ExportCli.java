@@ -2,6 +2,7 @@ package com.robsartin.segue.export;
 
 import com.robsartin.segue.ingest.GraphProjector;
 import com.robsartin.segue.port.AffinityStore;
+import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import com.robsartin.segue.tinker.TinkerGraphStore;
@@ -280,7 +281,7 @@ public final class ExportCli {
       // The bounded views traverse, so they need the projection. The full and subgraph views read
       // the log directly (ADR 19) and would pay a multi-second replay for nothing.
       if (!options.view().readsTheWholeLog()) {
-        long applied = GraphProjector.project(assertions, graph);
+        long applied = GraphProjector.project(assertions, graph, IdentityMerge.NONE);
         log.info("replayed {} assertion(s) from {}", applied, options.database());
       }
 

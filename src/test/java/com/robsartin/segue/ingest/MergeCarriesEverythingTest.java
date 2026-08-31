@@ -121,7 +121,7 @@ class MergeCarriesEverythingTest {
     ingest.record(SameAs.declared(MINTED, CANONICAL, NOW));
 
     try (GraphStore rebuilt = new TinkerGraphStore()) {
-      GraphProjector.project(log, rebuilt);
+      GraphProjector.project(log, rebuilt, IdentityMerge.NONE);
 
       assertThat(rebuilt.edges(CANONICAL))
           .as("a merge applied live and not on replay is a graph that changes at every boot")
@@ -167,6 +167,59 @@ class MergeCarriesEverythingTest {
 
     assertThat(affinity.find(CANONICAL).orElseThrow().rating())
         .as("ADR 39 lets the later rating win, and a merge is not a licence to undo one")
+        .isEqualTo(2);
+  }
+
+  @Test
+  @DisplayName("should carry an edge that points AT the local id, not only one that starts there")
+  void shouldCarryAnEdgeThatPointsAtTheLocalIdNotOnlyOneThatStartsThere() {
+    ingest.record(new NodeAssertion(NEIGHBOUR, NodeKind.PERSON, "a sourced person", SOURCE));
+    ingest.record(LocalEntity.minted(MINTED, NodeKind.PERSON, "a minted person", NOW));
+    ingest.record(OwnerEdge.claimed(NEIGHBOUR, MINTED, "INFLUENCED_BY", NOW));
+
+    ingest.record(SameAs.declared(MINTED, CANONICAL, NOW));
+
+    assertThat(graph.edges(CANONICAL))
+        .singleElement()
+        .extracting(EdgeRecord::fromQid, EdgeRecord::toQid)
+        .as("half a carry is a half-merge - the to-side has to be rewritten as well as the from")
+        .containsExactly(NEIGHBOUR, CANONICAL);
+  }
+
+  @Test
+  @DisplayName(
+      "should carry the rating on replay, repairing a merge logged when nothing carried it")
+  void shouldCarryTheRatingOnReplayRepairingAMergeLoggedWhenNothingCarriedIt() {
+    IngestService blind = new IngestService(log, graph, IdentityMerge.NONE);
+    blind.record(LocalEntity.minted(MINTED, NodeKind.PERSON, "a minted person", NOW));
+    affinity.put(new AffinityRecord(MINTED, 5, null, NOW));
+    blind.record(SameAs.declared(MINTED, CANONICAL, NOW));
+    assertThat(affinity.find(CANONICAL)).as("the precondition: nothing carried it").isEmpty();
+
+    try (GraphStore rebuilt = new TinkerGraphStore()) {
+      GraphProjector.project(log, rebuilt, IdentityMerge.carryingRatings(affinity));
+    }
+
+    assertThat(affinity.find(CANONICAL).orElseThrow().rating())
+        .as("the graph half self-heals on replay; without this the taste half never would")
+        .isEqualTo(5);
+  }
+
+  @Test
+  @DisplayName(
+      "should leave a rating the owner made against the canonical id after the merge alone")
+  void shouldLeaveARatingTheOwnerMadeAgainstTheCanonicalIdAfterTheMergeAlone() {
+    ingest.record(LocalEntity.minted(MINTED, NodeKind.PERSON, "a minted person", NOW));
+    affinity.put(new AffinityRecord(MINTED, 5, null, NOW));
+    ingest.record(SameAs.declared(MINTED, CANONICAL, NOW));
+    affinity.put(new AffinityRecord(CANONICAL, 2, null, LATER));
+
+    try (GraphStore rebuilt = new TinkerGraphStore()) {
+      GraphProjector.project(log, rebuilt, IdentityMerge.carryingRatings(affinity));
+    }
+
+    assertThat(affinity.find(CANONICAL).orElseThrow().rating())
+        .as("a replayed carry must not undo what the owner said after the merge")
         .isEqualTo(2);
   }
 

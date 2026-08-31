@@ -70,11 +70,17 @@ public class SegueConfiguration {
   }
 
   @Bean(destroyMethod = "close")
-  GraphStore graphStore(AssertionLog assertionLog) {
+  GraphStore graphStore(AssertionLog assertionLog, IdentityMerge identityMerge) {
     // The graph is a projection of the log (ADR 19). Rebuilding it at boot is what makes
     // that true rather than aspirational — and what makes the engine choice reversible.
+    //
+    // The real IdentityMerge, not NONE (#92): affinity is NOT rebuilt by this replay, so boot is
+    // the one moment that can repair a merge whose rating was never carried — one declared by a
+    // build that could not carry it, or through a wiring that passed NONE. The carry refuses to
+    // overwrite a newer rating, so replaying it is idempotent. The three dev-side tools that
+    // replay the same log pass NONE, because they may not write the taste layer at all.
     GraphStore store = new TinkerGraphStore();
-    long replayed = GraphProjector.project(assertionLog, store);
+    long replayed = GraphProjector.project(assertionLog, store, identityMerge);
     log.info("replayed {} assertions into {}", replayed, store.id());
     return store;
   }
@@ -133,18 +139,31 @@ public class SegueConfiguration {
                 new MusicBrainzClient(), new WikidataMusicBrainzIdentity(queryService), clock)));
   }
 
-  /**
-   * <b>The affinity store is here so that a merge cannot orphan a rating</b> (#92). It is not
-   * handed to {@code ingest} — {@link IdentityMerge} carries two qids and no taste-layer type, so
-   * ADR 33's fence stands and {@code IngestService} still cannot see a rating. What the wiring
-   * decides is that a merge declared through this application has something to follow it; {@link
-   * IdentityMerge#NONE} is the other answer, and it is never the right one where ratings exist.
-   */
   @Bean
   IngestService ingestService(
-      AssertionLog assertionLog, GraphStore graphStore, AffinityStore affinityStore) {
-    return new IngestService(
-        assertionLog, graphStore, IdentityMerge.carryingRatings(affinityStore));
+      AssertionLog assertionLog, GraphStore graphStore, IdentityMerge identityMerge) {
+    return new IngestService(assertionLog, graphStore, identityMerge);
+  }
+
+  /**
+   * <b>What follows a merge outside the graph, and the one bean that decides whether a rating
+   * survives one</b> (#92).
+   *
+   * <p>Its own bean rather than a call inside {@link #ingestService}, because two beans need it and
+   * because a wiring decision this consequential should be readable on its own line. {@link
+   * IdentityMerge#NONE} here would make the running application orphan the owner's rating on every
+   * merge, silently and unrecoverably — {@code MergeWiringTest} is what fails if anyone writes it.
+   *
+   * <p>{@code IngestService} is still not given the {@link AffinityStore}: this port carries two
+   * qids and no taste-layer type, so ADR 33's fence — {@code
+   * ArchitectureTest.theWorldFactLayerNeverTouchesAffinity} — stands unchanged, and {@code ingest}
+   * can neither read a score nor reach a note. That a world-fact claim may now trigger an effect in
+   * the taste layer at all is the widening ADR 33's amendment (#92 Task 6) has to record, along
+   * with the decision bullet it also breaks: {@code note_affinity} is no longer the only writer.
+   */
+  @Bean
+  IdentityMerge identityMerge(AffinityStore affinityStore) {
+    return IdentityMerge.carryingRatings(affinityStore);
   }
 
   /**

@@ -5,6 +5,7 @@ import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.Retractions;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.GraphStore;
+import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.wikidata.KindMapper;
 import java.util.List;
 
@@ -46,9 +47,21 @@ public final class GraphProjector {
   /**
    * Replay {@code log} into {@code store}. An empty log leaves an empty graph.
    *
+   * <p><b>{@code merges} is required rather than defaulted, and it is not always the real one.</b>
+   * A merge has an effect outside the graph - the owner's rating follows the equivalence - and
+   * replay is what repairs a merge whose rating was never carried, because affinity is the one
+   * thing here that is durable and is therefore rebuilt by nothing. But three of this method's four
+   * production callers are read-only dev tools that replay into a throwaway graph ({@code
+   * ExportCli}, {@code RecommendCli}, {@code RateCli}); an exporter that wrote a rating would be
+   * exactly what {@code ArchitectureTest.theExporterOnlyReads} exists to prevent, and no ArchUnit
+   * rule would catch it, because the write would happen inside {@code port}. They pass {@link
+   * IdentityMerge#NONE} and say so. The application's boot replay passes the real one.
+   *
+   * @param merges what follows a merge outside the graph; {@link IdentityMerge#NONE} for a caller
+   *     that must not write the taste layer
    * @return how many assertions were applied
    */
-  public static long project(AssertionLog log, GraphStore store) {
+  public static long project(AssertionLog log, GraphStore store, IdentityMerge merges) {
     List<LoggedAssertion> assertions = log.readAll();
     Retractions retractions = Retractions.in(assertions);
     long applied = 0;
@@ -58,7 +71,7 @@ public final class GraphProjector {
         continue;
       }
       try {
-        IngestService.apply(store, rederived(assertion));
+        IngestService.apply(store, merges, rederived(assertion));
         applied++;
       } catch (RuntimeException e) {
         // Sequence is 1-based, matching the log's own autoincrement.

@@ -13,6 +13,7 @@ import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.Retraction;
 import com.robsartin.segue.export.InventedGraph.FakeAssertionLog;
 import com.robsartin.segue.ingest.GraphProjector;
+import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import java.time.Instant;
 import java.util.List;
@@ -63,7 +64,7 @@ class BothFoldsAgreeTest {
     LogProjection folded = LogProjection.of(log);
 
     try (TinkerGraphStore replayed = new TinkerGraphStore()) {
-      GraphProjector.project(log, replayed);
+      GraphProjector.project(log, replayed, IdentityMerge.NONE);
 
       for (String qid : List.of(WREN, KETTLES, HOLLOW_TIDE, MARLOW)) {
         assertThat(replayed.node(qid).isPresent())
@@ -83,7 +84,7 @@ class BothFoldsAgreeTest {
             .collect(Collectors.toSet());
 
     try (TinkerGraphStore replayed = new TinkerGraphStore()) {
-      GraphProjector.project(log, replayed);
+      GraphProjector.project(log, replayed, IdentityMerge.NONE);
 
       Set<String> inGraph =
           folded.isEmpty()

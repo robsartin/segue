@@ -3,6 +3,7 @@ package com.robsartin.segue.recommend;
 import com.robsartin.segue.domain.Recommendations;
 import com.robsartin.segue.domain.Scorer;
 import com.robsartin.segue.ingest.GraphProjector;
+import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import com.robsartin.segue.tinker.TinkerGraphStore;
@@ -211,7 +212,7 @@ public final class RecommendCli {
     try (SqliteAssertionLog assertions = new SqliteAssertionLog(options.database());
         SqliteAffinityStore affinity = new SqliteAffinityStore(options.database());
         TinkerGraphStore graph = new TinkerGraphStore()) {
-      long applied = GraphProjector.project(assertions, graph);
+      long applied = GraphProjector.project(assertions, graph, IdentityMerge.NONE);
       log.info("replayed {} assertion(s) from {}", applied, options.database());
 
       // The one line in this tool that reads the taste layer, and it reads half of it (issue #85).

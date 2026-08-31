@@ -116,7 +116,7 @@ class OwnerClaimProjectionTest {
             OwnerEdge.claimed(MINTED, OTHER_MINTED, "INFLUENCED_BY", NOW)));
 
     try (GraphStore rebuilt = new TinkerGraphStore()) {
-      assertThat(GraphProjector.project(log, rebuilt)).isEqualTo(3);
+      assertThat(GraphProjector.project(log, rebuilt, IdentityMerge.NONE)).isEqualTo(3);
       assertThat(rebuilt.node(MINTED)).isPresent();
       assertThat(rebuilt.edges(MINTED)).hasSize(1);
     }
@@ -133,7 +133,7 @@ class OwnerClaimProjectionTest {
     IngestService.retract(log, new Retraction(MINTED, "minted the wrong thing", NOW));
 
     try (GraphStore rebuilt = new TinkerGraphStore()) {
-      GraphProjector.project(log, rebuilt);
+      GraphProjector.project(log, rebuilt, IdentityMerge.NONE);
 
       assertThat(rebuilt.node(MINTED)).isEmpty();
       assertThat(rebuilt.node(OTHER_MINTED)).isPresent();
@@ -264,7 +264,7 @@ class OwnerClaimProjectionTest {
             SameAs.declared(MINTED, CANONICAL, NOW)));
 
     try (GraphStore rebuilt = new TinkerGraphStore()) {
-      assertThat(GraphProjector.project(log, rebuilt))
+      assertThat(GraphProjector.project(log, rebuilt, IdentityMerge.NONE))
           .as("the count is rows the projection consumed, and #92 Task 4 gives a merge an effect")
           .isEqualTo(2);
     }

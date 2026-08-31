@@ -13,6 +13,7 @@ import com.robsartin.segue.export.ExportCli.Options;
 import com.robsartin.segue.export.InventedGraph.FakeAssertionLog;
 import com.robsartin.segue.ingest.GraphProjector;
 import com.robsartin.segue.port.AffinityStore;
+import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -52,7 +53,7 @@ class ExportRunTest {
                 edge(WREN, KETTLES, "MEMBER_OF"),
                 edge(MARLOW, KETTLES, "MEMBER_OF"));
     graph = new TinkerGraphStore();
-    GraphProjector.project(log, graph);
+    GraphProjector.project(log, graph, IdentityMerge.NONE);
     selector = new ViewSelector(graph, log);
   }
 
@@ -313,7 +314,7 @@ class ExportRunTest {
       log.with(node(qid, NodeKind.WORK, "Invented Work " + i), edge(WREN, qid, "ACTED_IN"));
     }
     graph = new TinkerGraphStore();
-    GraphProjector.project(log, graph);
+    GraphProjector.project(log, graph, IdentityMerge.NONE);
     selector = new ViewSelector(graph, log);
   }
 

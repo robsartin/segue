@@ -83,7 +83,7 @@ class WikidataIngestEndToEndTest {
 
       assertThat(reopened.readAll()).containsExactly(fetched);
 
-      GraphProjector.project(reopened, rebuilt);
+      GraphProjector.project(reopened, rebuilt, IdentityMerge.NONE);
 
       NodeRecord projected = rebuilt.node("Q180337").orElseThrow();
       assertThat(projected.instanceOf()).containsExactly("Q11424");
@@ -141,7 +141,7 @@ class WikidataIngestEndToEndTest {
     try (AssertionLog reopened = new SqliteAssertionLog(dbFile);
         GraphStore rebuilt = new TinkerGraphStore()) {
 
-      long replayed = GraphProjector.project(reopened, rebuilt);
+      long replayed = GraphProjector.project(reopened, rebuilt, IdentityMerge.NONE);
 
       assertThat(replayed).isEqualTo(recorded.size());
       assertThat(rebuilt.node("Q180337")).isPresent();

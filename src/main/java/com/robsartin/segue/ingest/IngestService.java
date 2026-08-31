@@ -56,14 +56,7 @@ public final class IngestService {
       throw new IllegalArgumentException("a retraction is appended by retract(), not record()");
     }
     log.append(assertion);
-    apply(graph, assertion);
-    if (assertion instanceof SameAs merge) {
-      // The third write, and last for the same reason the graph write is second: the log is the
-      // source of truth, so failing with the log ahead is the recoverable direction. It is
-      // deliberately NOT inside apply() - apply is what replay calls, and a rating carried again
-      // at every boot would overwrite whatever the owner has said since. See IdentityMerge.
-      merges.follow(merge.localQid(), merge.canonicalQid());
-    }
+    apply(graph, merges, assertion);
   }
 
   /**
@@ -100,7 +93,7 @@ public final class IngestService {
    * this switch would be free to disagree, and a rebuilt graph that silently differs from the one
    * it replaced defeats the point of having a log at all.
    */
-  static void apply(GraphStore graph, LoggedAssertion assertion) {
+  static void apply(GraphStore graph, IdentityMerge merges, LoggedAssertion assertion) {
     switch (assertion) {
       case NodeAssertion node -> graph.upsertNode(node.toNode());
       case AssertionRecord edge -> graph.record(edge);
@@ -122,7 +115,12 @@ public final class IngestService {
       // A merge is an asserted equivalence, never an edit (ADR 19, ADR 44): the claims already
       // made against the local id are carried onto the canonical one, and the local id is left
       // exactly where it was so every earlier log entry keeps meaning what it meant.
-      case SameAs merge -> carry(graph, merge);
+      case SameAs merge -> {
+        carry(graph, merge);
+        // The taste half, and it runs on replay too - see carry()'s last paragraph and
+        // IdentityMerge, which together say why that is a repair rather than a hazard.
+        merges.follow(merge.localQid(), merge.canonicalQid());
+      }
     }
   }
 
@@ -147,6 +145,17 @@ public final class IngestService {
    * merge is applied, so claims appended <em>after</em> a merge stay on the id they were made
    * against. That matches {@link com.robsartin.segue.domain.Retractions}, which also asks what had
    * already been said when the decision was made, and it keeps live ingest and replay identical.
+   *
+   * <p><b>Replay carries the rating as well as the edges, and the first version of this task said
+   * otherwise on an argument that measurement contradicts.</b> That argument was "a rating carried
+   * again at every boot would overwrite whatever the owner has said since". It would not: {@code
+   * IdentityMerge.carryingRatings} refuses to overwrite a rating whose {@code updatedAt} is newer,
+   * so a replayed carry over a canonical id the owner has re-rated changes nothing. The only case a
+   * replayed carry alters is a local id re-rated <em>after</em> the merge, where it moves the
+   * owner's most recent word onto the canonical id - which is the repair, not the loss. Keeping it
+   * out of replay had a real cost instead: a merge logged by a build that could not carry, or wired
+   * to {@link IdentityMerge#NONE}, would strand its rating forever, because affinity is the one
+   * thing replay does not rebuild.
    */
   private static void carry(GraphStore graph, SameAs merge) {
     String local = merge.localQid();

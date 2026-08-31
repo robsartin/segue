@@ -98,7 +98,7 @@ class IngestServiceTest {
     ingest.record(new AssertionRecord("Q1", "Q2", "MEMBER_OF", null, null, WIKIDATA));
 
     try (GraphStore rebuilt = new TinkerGraphStore()) {
-      GraphProjector.project(log, rebuilt);
+      GraphProjector.project(log, rebuilt, IdentityMerge.NONE);
 
       assertThat(rebuilt.edgeCount()).isEqualTo(graph.edgeCount());
       assertThat(rebuilt.node("Q1")).isEqualTo(graph.node("Q1"));

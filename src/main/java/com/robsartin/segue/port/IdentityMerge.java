@@ -23,11 +23,20 @@ import java.util.Optional;
  * world-fact claim may now <em>trigger</em> an effect in the taste layer without knowing what it is
  * — belongs on the record.
  *
- * <p><b>Not applied by replay, and that is the point of the split.</b> {@code GraphProjector} calls
- * the static {@code IngestService.apply}, which has no {@code IdentityMerge}: the graph is a
- * projection and is rebuilt from the log at every boot, while affinity is durable and is rebuilt by
- * nothing. Carrying a rating once, when the merge is declared, is what a durable store needs; doing
- * it again at every boot would replay an old rating over whatever the owner has said since.
+ * <p><b>Replay applies it too, and the first version of this port claimed the opposite.</b> That
+ * claim was "carrying a rating again at every boot would replay an old rating over whatever the
+ * owner has said since", and measurement contradicts it: {@link #carryingRatings} refuses to
+ * overwrite a rating with a newer {@code updatedAt}, so a replayed carry over a canonical id the
+ * owner has re-rated changes nothing at all. The only case it alters is a local id re-rated
+ * <em>after</em> the merge, where it moves the owner's most recent word onto the canonical id.
+ *
+ * <p>Keeping it out of replay had a real cost the other way. Affinity is the one thing here that
+ * replay does <b>not</b> rebuild, so a merge logged when nothing could carry it - by an earlier
+ * build, or through a wiring that passed {@link #NONE} - would strand its rating permanently. Boot
+ * replay is the only repair path there is, which is why {@code GraphProjector.project} takes one of
+ * these. Its three dev-tool callers pass {@link #NONE}: an exporter that wrote a rating is what
+ * {@code ArchitectureTest.theExporterOnlyReads} exists to prevent, and no rule would catch it,
+ * because the write would happen in this package.
  */
 @FunctionalInterface
 public interface IdentityMerge {
@@ -36,7 +45,8 @@ public interface IdentityMerge {
    * A merge has been declared: carry what is keyed by {@code localQid} onto {@code canonicalQid}.
    *
    * <p>Called after the claim is in the log and in the graph, on {@code IngestService.record}'s own
-   * ordering argument: the recoverable direction is for the log to be ahead.
+   * ordering argument: the recoverable direction is for the log to be ahead. Called again by every
+   * replay of that log, which is what makes an uncarried merge repairable rather than permanent.
    */
   void follow(String localQid, String canonicalQid);
 
