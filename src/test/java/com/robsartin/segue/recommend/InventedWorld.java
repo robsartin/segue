@@ -45,6 +45,9 @@ final class InventedWorld {
   static final String A_RECORD = "Q900305";
   static final String A_THIN_BAND = "Q900306";
 
+  /** One edge to its name: what expansion adds, and what the floor holds out (issue #134). */
+  static final String JUST_DISCOVERED = "Q900308";
+
   /** The invented Wikidata class that means "elected, not collaborating" (issue #66). */
   static final String ELECTED_TO = "Q900801";
 

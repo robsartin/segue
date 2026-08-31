@@ -1,5 +1,6 @@
 package com.robsartin.segue.recommend;
 
+import com.robsartin.segue.domain.FloorReading;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.PathResult;
 import com.robsartin.segue.domain.Recommendation;
@@ -53,14 +54,17 @@ public final class RecommendationReport {
    * @param sweep what the pass over the graph looked at, for the header's counts
    * @param explained the ranked candidates, in the order they should be read
    * @param scorer where on the spectrum this run sat, named so a file can be compared with another
-   * @param minDegree the floor this run applied, named for the same reason
+   * @param reading what the floor admitted and held out on this run (issue #135). It carries the
+   *     floor, so this method no longer takes the number separately — two arguments that had to
+   *     agree are one
    */
   public static void write(
-      Sweep sweep, List<Explained> explained, Scorer scorer, int minDegree, Writer out)
+      Sweep sweep, List<Explained> explained, Scorer scorer, FloorReading reading, Writer out)
       throws IOException {
     Objects.requireNonNull(sweep, "sweep");
     Objects.requireNonNull(explained, "explained");
     Objects.requireNonNull(scorer, "scorer");
+    Objects.requireNonNull(reading, "reading");
     Objects.requireNonNull(out, "out");
 
     out.write(PERSONAL_DATA_HEADER);
@@ -82,11 +86,13 @@ public final class RecommendationReport {
     out.write(".\n# ");
     out.write(
         "candidates need at least "
-            + minDegree
+            + reading.floor()
             + " edges; "
             + sweep.hubIntermediatesExcluded()
             + " hub intermediate(s) were excluded rather than discounted (issues #52 and #66).");
-    out.write("\n\n");
+    out.write("\n");
+    out.write(floorReading(reading));
+    out.write("\n");
 
     if (explained.isEmpty()) {
       out.write(NOTHING_FOUND);
@@ -107,6 +113,42 @@ public final class RecommendationReport {
       }
       out.write("\n");
     }
+  }
+
+  /**
+   * The two lines that make the floor readable rather than merely applied (issue #135).
+   *
+   * <p><b>It is in the file rather than only in the log because the file is what gets kept.</b> A
+   * run is compared against an earlier run by opening two files, which is how both floors this
+   * project has shipped were chosen; a diagnostic that lived only in the terminal would be gone by
+   * the time the comparison happened.
+   *
+   * <p>Every figure is an aggregate and none is a name, so these two lines are quotable where the
+   * ranking under them is not (ADR 51).
+   */
+  private static String floorReading(FloorReading reading) {
+    return "# floor reading, for comparison with a later run (issue #135): "
+        + reading.pool()
+        + " candidate(s) cleared the floor of "
+        + reading.floor()
+        + ", median degree "
+        + reading.poolMedianDegree()
+        + "; of the "
+        + reading.head()
+        + " ranked, median degree "
+        + reading.headMedianDegree()
+        + ", "
+        + reading.headOnTheFloor()
+        + " sit exactly on the floor and "
+        + reading.headEveryEdgeCounted()
+        + " have every edge already counted as evidence."
+        + " The pool's median is comparable with a later run at this floor, not across floors.\n"
+        + "# the floor held out "
+        + reading.heldOut()
+        + " entity(ies) that passed every other candidate test, "
+        + reading.heldOutAtDegreeOne()
+        + " of them carrying a single edge — what expansion discovered and nothing has reached"
+        + " again (issue #134).\n";
   }
 
   /**

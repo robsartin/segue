@@ -1,5 +1,6 @@
 package com.robsartin.segue.recommend;
 
+import com.robsartin.segue.domain.FloorReading;
 import com.robsartin.segue.domain.KnownList;
 import com.robsartin.segue.domain.Recommendation;
 import com.robsartin.segue.domain.Recommendations;
@@ -131,6 +132,35 @@ public final class RecommendRun {
             + " hub intermediate(s) excluded rather than discounted (issues #52 and #66)");
 
     List<Recommendation> ranked = Recommendations.rank(sweep.candidates(), options.top());
+
+    // Issue #135: the floor is a measured default and the graph it was measured against changes
+    // under it. Read here rather than inside the report, so the figures reach the operator before
+    // the file exists — the same argument the three counts above are here for.
+    FloorReading reading =
+        FloorReading.of(
+            sweep.candidates(),
+            ranked,
+            options.minDegree(),
+            sweep.heldOutByFloor(),
+            sweep.heldOutAtDegreeOne());
+    notes.accept(
+        reading.pool()
+            + " candidate(s) cleared the floor of "
+            + reading.floor()
+            + " at median degree "
+            + reading.poolMedianDegree()
+            + "; "
+            + reading.headOnTheFloor()
+            + " of the "
+            + reading.head()
+            + " ranked sit exactly on it");
+    notes.accept(
+        "the floor held out "
+            + reading.heldOut()
+            + " entity(ies), "
+            + reading.heldOutAtDegreeOne()
+            + " of them at a single edge (issues #134, #135)");
+
     Routes routes = new Routes(graph, recognitionInstitutionClass);
     List<Explained> explained = new ArrayList<>();
     for (Recommendation candidate : ranked) {
@@ -138,7 +168,7 @@ public final class RecommendRun {
     }
 
     try (Writer out = Files.newBufferedWriter(options.out(), StandardCharsets.UTF_8)) {
-      RecommendationReport.write(sweep, explained, options.scorer(), options.minDegree(), out);
+      RecommendationReport.write(sweep, explained, options.scorer(), reading, out);
     }
     notes.accept("wrote " + options.out());
     return List.copyOf(explained);
