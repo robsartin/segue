@@ -158,7 +158,7 @@ class WikidataEntityResolverTest {
     try (StubWikidataServer stub = new StubWikidataServer()) {
       stub.enqueueBody(
           """
-          {"entities":{"Q90000501":{"id":"Q90000501",
+          {"entities":{"Q090000501":{"id":"Q090000501",
             "labels":{"mul":{"language":"mul","value":"Marguerite Vale"}},
             "claims":{"P31":[{"mainsnak":{"snaktype":"value",
               "datavalue":{"value":{"id":"Q5"}}}}]}}}}
@@ -166,7 +166,7 @@ class WikidataEntityResolverTest {
       EntityResolver resolver =
           new WikidataEntityResolver(new WikidataClient(stub.baseUri()), FIXED);
 
-      Optional<NodeAssertion> fetched = resolver.fetch("Q90000501");
+      Optional<NodeAssertion> fetched = resolver.fetch("Q090000501");
 
       assertThat(fetched).isPresent();
       assertThat(fetched.orElseThrow().label()).isEqualTo("Marguerite Vale");
@@ -182,7 +182,7 @@ class WikidataEntityResolverTest {
     try (StubWikidataServer stub = new StubWikidataServer()) {
       stub.enqueueBody(
           """
-          {"entities":{"Q90000502":{"id":"Q90000502",
+          {"entities":{"Q090000502":{"id":"Q090000502",
             "labels":{"en":{"language":"en","value":"The Tin Lanterns"},
                       "mul":{"language":"mul","value":"Tin Lanterns"}},
             "claims":{}}}}
@@ -190,7 +190,7 @@ class WikidataEntityResolverTest {
       EntityResolver resolver =
           new WikidataEntityResolver(new WikidataClient(stub.baseUri()), FIXED);
 
-      assertThat(resolver.fetch("Q90000502").orElseThrow().label()).isEqualTo("The Tin Lanterns");
+      assertThat(resolver.fetch("Q090000502").orElseThrow().label()).isEqualTo("The Tin Lanterns");
     }
   }
 }

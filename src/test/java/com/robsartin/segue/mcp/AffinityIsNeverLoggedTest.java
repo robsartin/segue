@@ -85,7 +85,7 @@ class AffinityIsNeverLoggedTest {
             affinity,
             Clock.systemUTC());
     graph.upsertNode(
-        new NodeAssertion("Q900001", NodeKind.WORK, "A Placeholder Work", WIKIDATA).toNode());
+        new NodeAssertion("Q0900001", NodeKind.WORK, "A Placeholder Work", WIKIDATA).toNode());
 
     captured = new ListAppender<>();
     captured.start();
@@ -108,7 +108,7 @@ class AffinityIsNeverLoggedTest {
   @Test
   @DisplayName("a successful note_affinity emits no log event of any kind")
   void successfulRatingIsNotLogged() {
-    service.noteAffinity("Q900001", 5, NOTE);
+    service.noteAffinity("Q0900001", 5, NOTE);
 
     assertNothingWasLogged();
   }
@@ -119,7 +119,7 @@ class AffinityIsNeverLoggedTest {
     // The three refusals noteAffinity models: not a QID, not in the graph, off the scale.
     service.noteAffinity("not-a-qid", 5, NOTE);
     service.noteAffinity("Q900404", 5, NOTE);
-    service.noteAffinity("Q900001", 9, NOTE);
+    service.noteAffinity("Q0900001", 9, NOTE);
 
     assertNothingWasLogged();
   }
@@ -127,10 +127,10 @@ class AffinityIsNeverLoggedTest {
   @Test
   @DisplayName("reading affinity back through get_entity is silent about it as well")
   void readingAffinityBackIsNotLogged() {
-    service.noteAffinity("Q900001", 4, NOTE);
+    service.noteAffinity("Q0900001", 4, NOTE);
     captured.list.clear();
 
-    service.getEntity("Q900001");
+    service.getEntity("Q0900001");
 
     assertNothingWasLogged();
   }

@@ -23,13 +23,13 @@ class DeckTest {
 
   private static final Map<String, NodeRecord> NODES =
       Map.of(
-          "Q900001", new NodeRecord("Q900001", NodeKind.GROUP, "Low Degree", List.of("Q900901")),
-          "Q900002", new NodeRecord("Q900002", NodeKind.GROUP, "High Degree", List.of("Q900901")),
-          "Q900003", new NodeRecord("Q900003", NodeKind.PERSON, "Mid Degree", List.of("Q900902")),
-          "Q900004", new NodeRecord("Q900004", NodeKind.WORK, "Already Rated", List.of()));
+          "Q0900001", new NodeRecord("Q0900001", NodeKind.GROUP, "Low Degree", List.of("Q900901")),
+          "Q0900002", new NodeRecord("Q0900002", NodeKind.GROUP, "High Degree", List.of("Q900901")),
+          "Q0900003", new NodeRecord("Q0900003", NodeKind.PERSON, "Mid Degree", List.of("Q900902")),
+          "Q0900004", new NodeRecord("Q0900004", NodeKind.WORK, "Already Rated", List.of()));
 
   private static final Map<String, Integer> DEGREES =
-      Map.of("Q900001", 3, "Q900002", 90, "Q900003", 20, "Q900004", 50);
+      Map.of("Q0900001", 3, "Q0900002", 90, "Q0900003", 20, "Q0900004", 50);
 
   private static List<Card> deal(
       List<String> known, Map<String, Integer> ratings, List<Explained> cands) {
@@ -45,9 +45,9 @@ class DeckTest {
   @Test
   @DisplayName("known entities are dealt by in-graph degree, highest first")
   void ordersKnownByDegreeDescending() {
-    List<Card> cards = deal(List.of("Q900001", "Q900002", "Q900003"), Map.of(), List.of());
+    List<Card> cards = deal(List.of("Q0900001", "Q0900002", "Q0900003"), Map.of(), List.of());
 
-    assertThat(cards).extracting(Card::qid).containsExactly("Q900002", "Q900003", "Q900001");
+    assertThat(cards).extracting(Card::qid).containsExactly("Q0900002", "Q0900003", "Q0900001");
     assertThat(cards.get(0).degree()).hasValue(90);
   }
 
@@ -55,25 +55,25 @@ class DeckTest {
   @DisplayName("an entity that is already rated is never dealt")
   void excludesAlreadyRated() {
     List<Card> cards =
-        deal(List.of("Q900001", "Q900004", "Q900002"), Map.of("Q900004", 4), List.of());
+        deal(List.of("Q0900001", "Q0900004", "Q0900002"), Map.of("Q0900004", 4), List.of());
 
-    assertThat(cards).extracting(Card::qid).doesNotContain("Q900004");
+    assertThat(cards).extracting(Card::qid).doesNotContain("Q0900004");
     assertThat(cards).hasSize(2);
   }
 
   @Test
   @DisplayName("an entity on the list but absent from the graph is skipped, not dealt blank")
   void skipsEntitiesMissingFromTheGraph() {
-    List<Card> cards = deal(List.of("Q900002", "Q900999"), Map.of(), List.of());
+    List<Card> cards = deal(List.of("Q0900002", "Q900999"), Map.of(), List.of());
 
-    assertThat(cards).extracting(Card::qid).containsExactly("Q900002");
+    assertThat(cards).extracting(Card::qid).containsExactly("Q0900002");
   }
 
   @Test
   @DisplayName("a known card carries a degree and no routes; the reverse for a candidate")
   void knownAndCandidateCardsDifferInShape() {
-    Card known = Card.known(NODES.get("Q900002"), 90);
-    Card candidate = Card.candidate(NODES.get("Q900003"), List.of("a -[X]-> b"));
+    Card known = Card.known(NODES.get("Q0900002"), 90);
+    Card candidate = Card.candidate(NODES.get("Q0900003"), List.of("a -[X]-> b"));
 
     assertThat(known.degree()).hasValue(90);
     assertThat(known.routes()).isEmpty();
@@ -84,11 +84,11 @@ class DeckTest {
   @Test
   @DisplayName("a candidate is dealt after every fifth known card, and leftovers are not dropped")
   void interleavesCandidatesEveryFifthCard() {
-    List<String> known = List.of("Q900001", "Q900002", "Q900003", "Q900005", "Q900006");
+    List<String> known = List.of("Q0900001", "Q0900002", "Q0900003", "Q0900005", "Q0900006");
     Map<String, NodeRecord> extra =
         Map.of(
-            "Q900005", new NodeRecord("Q900005", NodeKind.GROUP, "Five", List.of()),
-            "Q900006", new NodeRecord("Q900006", NodeKind.GROUP, "Six", List.of()));
+            "Q0900005", new NodeRecord("Q0900005", NodeKind.GROUP, "Five", List.of()),
+            "Q0900006", new NodeRecord("Q0900006", NodeKind.GROUP, "Six", List.of()));
     Explained one = candidateFor("Q900101", "Candidate One");
     Explained two = candidateFor("Q900102", "Candidate Two");
 
@@ -159,14 +159,14 @@ class DeckTest {
   void reviseDealsOnlyThatRating() {
     List<Card> cards =
         Deck.deal(
-            List.of("Q900001", "Q900002", "Q900003"),
+            List.of("Q0900001", "Q0900002", "Q0900003"),
             q -> DEGREES.getOrDefault(q, 0),
             q -> Optional.ofNullable(NODES.get(q)),
-            Map.of("Q900001", 3, "Q900002", 5, "Q900003", 3),
+            Map.of("Q0900001", 3, "Q0900002", 5, "Q0900003", 3),
             List.of(),
             OptionalInt.of(3));
 
-    assertThat(cards).extracting(Card::qid).containsExactly("Q900003", "Q900001");
+    assertThat(cards).extracting(Card::qid).containsExactly("Q0900003", "Q0900001");
   }
 
   @Test
@@ -174,23 +174,23 @@ class DeckTest {
       "revise also deals a suppressed entity that is off the known list — the walk widens to"
           + " known-list plus suppressed, not known-list alone (issue #106)")
   void reviseReachesASuppressedEntityOffTheKnownList() {
-    // Q900008 is deliberately absent from knownQids — that is exactly what KnownList.suppressed
+    // Q0900008 is deliberately absent from knownQids — that is exactly what KnownList.suppressed
     // means (issue #106's javadoc: "deliberately not part of the known-list"). Before
     // dealRevision's walk widens, this entity is unreachable at any --revise target: it is on
     // no list dealRevision ever iterates.
     NodeRecord suppressedNode =
-        new NodeRecord("Q900008", NodeKind.PERSON, "Suppressed, off the list", List.of());
+        new NodeRecord("Q0900008", NodeKind.PERSON, "Suppressed, off the list", List.of());
 
     List<Card> cards =
         Deck.deal(
-            List.of("Q900001"),
+            List.of("Q0900001"),
             q -> DEGREES.getOrDefault(q, 0),
-            q -> Optional.ofNullable(q.equals("Q900008") ? suppressedNode : NODES.get(q)),
-            Map.of("Q900001", 3, "Q900008", KnownList.SUPPRESSION_RATING),
+            q -> Optional.ofNullable(q.equals("Q0900008") ? suppressedNode : NODES.get(q)),
+            Map.of("Q0900001", 3, "Q0900008", KnownList.SUPPRESSION_RATING),
             List.of(),
             OptionalInt.of(KnownList.SUPPRESSION_RATING));
 
-    assertThat(cards).extracting(Card::qid).containsExactly("Q900008");
+    assertThat(cards).extracting(Card::qid).containsExactly("Q0900008");
   }
 
   @Test
@@ -202,24 +202,24 @@ class DeckTest {
     // claim was untested — reviseDealsOnlyThatRating asserted membership in any order and
     // buildsAReviseDeck dealt a single card, so deleting the sort left the suite green.
     //
-    // Q900003 and Q900004 are given the SAME degree, so the qid tiebreak is pinned too: without
+    // Q0900003 and Q0900004 are given the SAME degree, so the qid tiebreak is pinned too: without
     // it the order of two equal-degree cards is whatever the known list happened to say, and a
     // deck that reshuffles between runs over an unchanged table is not a deck anyone can resume.
     Map<String, Integer> degrees =
-        Map.of("Q900001", 3, "Q900002", 90, "Q900003", 50, "Q900004", 50);
+        Map.of("Q0900001", 3, "Q0900002", 90, "Q0900003", 50, "Q0900004", 50);
 
     List<Card> cards =
         Deck.deal(
-            List.of("Q900001", "Q900002", "Q900003", "Q900004"),
+            List.of("Q0900001", "Q0900002", "Q0900003", "Q0900004"),
             q -> degrees.getOrDefault(q, 0),
             q -> Optional.ofNullable(NODES.get(q)),
-            Map.of("Q900001", 3, "Q900002", 3, "Q900003", 3, "Q900004", 3),
+            Map.of("Q0900001", 3, "Q0900002", 3, "Q0900003", 3, "Q0900004", 3),
             List.of(),
             OptionalInt.of(3));
 
     assertThat(cards)
         .extracting(Card::qid)
-        .containsExactly("Q900002", "Q900003", "Q900004", "Q900001");
+        .containsExactly("Q0900002", "Q0900003", "Q0900004", "Q0900001");
   }
 
   @Test
@@ -227,10 +227,10 @@ class DeckTest {
   void reviseCardShowsTheCurrentRating() {
     List<Card> cards =
         Deck.deal(
-            List.of("Q900002"),
+            List.of("Q0900002"),
             q -> DEGREES.getOrDefault(q, 0),
             q -> Optional.ofNullable(NODES.get(q)),
-            Map.of("Q900002", 5),
+            Map.of("Q0900002", 5),
             List.of(),
             OptionalInt.of(5));
 
@@ -243,14 +243,14 @@ class DeckTest {
   void reviseDealsNoCandidates() {
     List<Card> cards =
         Deck.deal(
-            List.of("Q900001"),
+            List.of("Q0900001"),
             q -> DEGREES.getOrDefault(q, 0),
             q -> Optional.ofNullable(NODES.get(q)),
-            Map.of("Q900001", 3),
+            Map.of("Q0900001", 3),
             List.of(candidateFor("Q900101", "Candidate One")),
             OptionalInt.of(3));
 
-    assertThat(cards).extracting(Card::qid).containsExactly("Q900001");
+    assertThat(cards).extracting(Card::qid).containsExactly("Q0900001");
   }
 
   @Test
@@ -259,14 +259,14 @@ class DeckTest {
   void defaultModeIsUnchanged() {
     List<Card> cards =
         Deck.deal(
-            List.of("Q900001", "Q900002"),
+            List.of("Q0900001", "Q0900002"),
             q -> DEGREES.getOrDefault(q, 0),
             q -> Optional.ofNullable(NODES.get(q)),
-            Map.of("Q900002", 4),
+            Map.of("Q0900002", 4),
             List.of(),
             OptionalInt.empty());
 
-    assertThat(cards).extracting(Card::qid).containsExactly("Q900001");
+    assertThat(cards).extracting(Card::qid).containsExactly("Q0900001");
     assertThat(cards.get(0).currentRating()).isEmpty();
   }
 

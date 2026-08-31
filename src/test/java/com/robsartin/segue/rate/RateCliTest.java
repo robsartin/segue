@@ -161,7 +161,7 @@ class RateCliTest {
     // absent, so without this guard the tool conjures an empty database and deals nothing while
     // reporting success. main goes no further than the guard here, so no store is ever opened.
     Path known = dir.resolve("known.csv");
-    Files.writeString(known, "Q900001\n", StandardCharsets.UTF_8);
+    Files.writeString(known, "Q0900001\n", StandardCharsets.UTF_8);
 
     assertThatThrownBy(
             () ->
@@ -179,21 +179,21 @@ class RateCliTest {
       "an entity rated 4 or 5 but absent from the file joins the deck's known-list (issue #106)")
   void knownJoinsWhatWasRatedHighly() throws IOException {
     Path list = dir.resolve("known.csv");
-    Files.writeString(list, "Q900001\n", StandardCharsets.UTF_8);
+    Files.writeString(list, "Q0900001\n", StandardCharsets.UTF_8);
 
-    List<String> known = RateCli.known(list, Map.of("Q900002", 5, "Q900003", 2));
+    List<String> known = RateCli.known(list, Map.of("Q0900002", 5, "Q0900003", 2));
 
-    assertThat(known).containsExactlyInAnyOrder("Q900001", "Q900002");
+    assertThat(known).containsExactlyInAnyOrder("Q0900001", "Q0900002");
   }
 
   @Test
   @DisplayName("an entity already on the file is not duplicated by its own rating")
   void knownDoesNotDuplicate() throws IOException {
     Path list = dir.resolve("known.csv");
-    Files.writeString(list, "Q900001\n", StandardCharsets.UTF_8);
+    Files.writeString(list, "Q0900001\n", StandardCharsets.UTF_8);
 
-    List<String> known = RateCli.known(list, Map.of("Q900001", 5));
+    List<String> known = RateCli.known(list, Map.of("Q0900001", 5));
 
-    assertThat(known).containsExactly("Q900001");
+    assertThat(known).containsExactly("Q0900001");
   }
 }

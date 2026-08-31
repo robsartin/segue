@@ -21,10 +21,10 @@ PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 PREFIX xsd:  <http://www.w3.org/2001/XMLSchema#>
 """
 
-CAVE, BAD_SEEDS, BIRTHDAY_PARTY, GRINDERMAN = "Q900001","Q900002","Q900003","Q900004"
-ELLIS, BLIXA, NEUBAUTEN, MICK = "Q900005","Q900006","Q900007","Q900008"
-PROPOSITION, HILLCOAT, ASS_ANGEL = "Q900009","Q900010","Q900011"
-ROAD_FILM, MCCARTHY, ROAD_NOVEL, PJ = "Q900012","Q900013","Q900014","Q900015"
+CAVE, BAD_SEEDS, BIRTHDAY_PARTY, GRINDERMAN = "Q0900001","Q0900002","Q0900003","Q0900004"
+ELLIS, BLIXA, NEUBAUTEN, MICK = "Q0900005","Q0900006","Q0900007","Q0900008"
+PROPOSITION, HILLCOAT, ASS_ANGEL = "Q0900009","Q0900010","Q0900011"
+ROAD_FILM, MCCARTHY, ROAD_NOVEL, PJ = "Q0900012","Q0900013","Q0900014","Q0900015"
 
 NODES = [
     (CAVE,"PERSON","Nick Cave"), (BAD_SEEDS,"GROUP","Nick Cave and the Bad Seeds"),
@@ -164,12 +164,12 @@ r3 = sorted(key(r) for r in ds.query(Q3 % (BAD_SEEDS, BAD_SEEDS, "1984-06-01", "
 for k in r3: print("      ", k)
 members84 = sorted({k[0] for k in r3 if k[1] == "MEMBER_OF"})
 check("three members in June 1984", len(members84) == 3)
-check("matches the Java answer [Q900001, Q900006, Q900008]",
+check("matches the Java answer [Q0900001, Q0900006, Q0900008]",
       members84 == [CAVE, BLIXA, MICK])
 r3b = sorted(key(r) for r in ds.query(Q3 % (BAD_SEEDS, BAD_SEEDS, "2010-06-01", "2010-06-01")))
 members10 = sorted({k[0] for k in r3b if k[1] == "MEMBER_OF"})
 print("      June 2010:", members10)
-check("matches the Java answer [Q900001, Q900005]", members10 == [CAVE, ELLIS])
+check("matches the Java answer [Q0900001, Q0900005]", members10 == [CAVE, ELLIS])
 
 # ---- Q4 corroboration -----------------------------------------------------
 print("\n-- Q4 corroboration: 2+ distinct sources")

@@ -20,17 +20,17 @@ import java.util.Optional;
  * <p><b>Every value here is made up.</b> ADR 33, as amended by issue #37, makes the filesystem the
  * boundary rather than repository visibility - this repository is public - so a fixture written
  * from a real listing is one of the few ways the only personal data segue holds could leak. The
- * qids are the {@code Q9000xx} placeholders the rest of the suite uses, the labels are of things
- * that do not exist, and the notes are deliberately unlike anything anyone would write.
+ * qids are the graph fixture's unallocatable stand-ins (ADR 58), the labels are of things that do
+ * not exist, and the notes are deliberately unlike anything anyone would write.
  */
 final class InventedRatings {
 
   static final Instant EARLY = Instant.parse("2026-02-01T08:00:00Z");
   static final Instant LATE = Instant.parse("2026-04-01T08:00:00.500Z");
 
-  static final String QUARTET = "Q900001";
-  static final String NOVEL = "Q900002";
-  static final String VANISHED = "Q900003";
+  static final String QUARTET = "Q0900001";
+  static final String NOVEL = "Q0900002";
+  static final String VANISHED = "Q0900003";
 
   static final String QUARTET_LABEL = "The Invented Quartet";
   static final String NOVEL_LABEL = "A Placeholder Novel";

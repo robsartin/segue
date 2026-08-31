@@ -44,8 +44,8 @@ class MusicBrainzLiveSmokeTest {
    */
   private static final String HOT_CLUB_QUINTET = "ee55e4e8-807d-49b1-8470-d1c0898ed7cb";
 
-  private static final String QUINTET_QID = "Q900001";
-  private static final String MEMBER_QID = "Q900002";
+  private static final String QUINTET_QID = "Q0900001";
+  private static final String MEMBER_QID = "Q0900002";
 
   @Test
   @DisplayName("MusicBrainz still answers artist-rels in the shape this client parses")

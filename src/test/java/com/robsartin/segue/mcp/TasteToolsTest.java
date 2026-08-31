@@ -63,7 +63,7 @@ class TasteToolsTest {
             Clock.fixed(RATED_AT, ZoneOffset.UTC));
     tools = new TasteTools(service);
     graph.upsertNode(
-        new NodeAssertion("Q900001", NodeKind.WORK, "A Placeholder Work", WIKIDATA).toNode());
+        new NodeAssertion("Q0900001", NodeKind.WORK, "A Placeholder Work", WIKIDATA).toNode());
   }
 
   @AfterEach
@@ -77,7 +77,7 @@ class TasteToolsTest {
   @Test
   @DisplayName("a recorded rating comes back as a non-error result with structured content")
   void recordsARating() {
-    CallToolResult result = tools.noteAffinity("Q900001", 4, "an invented note");
+    CallToolResult result = tools.noteAffinity("Q0900001", 4, "an invented note");
 
     assertThat(result.isError()).isFalse();
     assertThat(outcomeOf(result)).isEqualTo("ok");
@@ -100,7 +100,7 @@ class TasteToolsTest {
   @Test
   @DisplayName("the correlation id is cleared after the call, success or failure (ADR 29)")
   void correlationIdIsCleared() {
-    tools.noteAffinity("Q900001", 4, null);
+    tools.noteAffinity("Q0900001", 4, null);
     assertThat(MDC.get(CorrelationId.KEY)).isNull();
 
     tools.noteAffinity("Q900404", 4, null);

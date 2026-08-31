@@ -37,19 +37,16 @@ class MusicBrainzSourceAdapterTest {
    * 1948. Its choice is argued in {@code MusicBrainzClientTest}'s javadoc and is a reproducible API
    * probe, never a statement about anyone's taste (ADR 51).
    *
-   * <p><b>The QIDs below are arbitrary, not invented.</b> They come from the {@code Q9000xx} range
-   * this repository's tests use by convention, and that range is not free: every {@code Q9000xx}
-   * anyone has checked resolves to a real Wikidata entity, so the mappings asserted here do tie a
-   * real MBID to an unrelated real QID. Nothing may be read out of any of them — they are
-   * well-formed ids picked for the convention, and no assertion below depends on what one denotes.
-   * {@code CLAUDE.md} states repo-wide that the range holds placeholders which are not real
-   * Wikidata ids; that sentence is false, predates this branch, and belongs to <a
-   * href="https://github.com/robsartin/segue/issues/141">issue #141</a> rather than being half
-   * repaired here.
+   * <p><b>The QIDs below cannot denote anything.</b> This test is where the problem behind <a
+   * href="https://github.com/robsartin/segue/issues/141">issue #141</a> was found: the ids then in
+   * use came from a {@code Q9000xx} range assumed to be free, it was not, and so this file really
+   * did tie a real MBID to an unrelated real person's QID. They now carry a leading zero, which
+   * Wikibase's item-id grammar refuses, so no allocation can give them a referent (ADR 58). No
+   * assertion below depends on what any of them denotes, because none of them can denote.
    */
   private static final String QUINTET_MBID = "ee55e4e8-807d-49b1-8470-d1c0898ed7cb";
 
-  private static final String QUINTET_QID = "Q900001";
+  private static final String QUINTET_QID = "Q0900001";
 
   // The first three "member of band" relations in the committed fixture, in the order it states
   // them. Fixture order is load-bearing for the truncation test below and nowhere else.
@@ -57,9 +54,9 @@ class MusicBrainzSourceAdapterTest {
   private static final String SECOND_MEMBER_MBID = "7bad5ad3-0333-4661-9b26-44114adf5595";
   private static final String THIRD_MEMBER_MBID = "63eaba3d-5d77-427f-aa94-d8bb2593b99f";
 
-  private static final String FIRST_MEMBER_QID = "Q900002";
-  private static final String SECOND_MEMBER_QID = "Q900003";
-  private static final String THIRD_MEMBER_QID = "Q900004";
+  private static final String FIRST_MEMBER_QID = "Q0900002";
+  private static final String SECOND_MEMBER_QID = "Q0900003";
+  private static final String THIRD_MEMBER_QID = "Q0900004";
 
   /** MBIDs and QIDs that appear in no fixture, for relations written by hand in this test. */
   private static final String STUB_MEMBER_MBID = "11111111-1111-1111-1111-111111111111";
@@ -75,9 +72,9 @@ class MusicBrainzSourceAdapterTest {
 
   private static final String NEWLINE_MBID_AS_JSON = "33333333-3333-3333-3333-333333333333\\nx";
 
-  private static final String STUB_MEMBER_QID = "Q900010";
+  private static final String STUB_MEMBER_QID = "Q0900010";
 
-  private static final String OTHER_STUB_MEMBER_QID = "Q900011";
+  private static final String OTHER_STUB_MEMBER_QID = "Q0900011";
 
   private static final Instant ASSERTED_AT = Instant.parse("2026-08-30T12:00:00Z");
   private static final Clock CLOCK = Clock.fixed(ASSERTED_AT, ZoneOffset.UTC);

@@ -77,8 +77,8 @@ class MusicBrainzNeighbourIdentityTest {
 
   private static final String NEIGHBOUR_MBID = "9afdcb99-d4ba-41b4-b4b2-467a712bd9fa";
 
-  private static final String SEED_QID = "Q900001";
-  private static final String NEIGHBOUR_QID = "Q900002";
+  private static final String SEED_QID = "Q0900001";
+  private static final String NEIGHBOUR_QID = "Q0900002";
 
   /** {@code Q5}, the class every one of the fixture's whitelisted neighbours would carry. */
   private static final String HUMAN = "Q5";

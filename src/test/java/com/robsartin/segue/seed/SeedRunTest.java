@@ -17,17 +17,17 @@ class SeedRunTest {
   @TempDir Path dir;
 
   private static final String TWO_HITS =
-      "{\"search\":[{\"id\":\"Q90000401\",\"label\":\"x\",\"description\":\"y\"}],\"success\":1}";
+      "{\"search\":[{\"id\":\"Q090000401\",\"label\":\"x\",\"description\":\"y\"}],\"success\":1}";
   private static final String OTHER_HIT =
-      "{\"search\":[{\"id\":\"Q90000402\",\"label\":\"x\",\"description\":\"y\"}],\"success\":1}";
+      "{\"search\":[{\"id\":\"Q090000402\",\"label\":\"x\",\"description\":\"y\"}],\"success\":1}";
 
   private static final String FACTS =
       """
       {"entities":{
-        "Q90000401":{"id":"Q90000401","labels":{"en":{"value":"Velvet Ossuary"}},
+        "Q090000401":{"id":"Q090000401","labels":{"en":{"value":"Velvet Ossuary"}},
           "sitelinks":{"enwiki":{},"frwiki":{}},
           "claims":{"P31":[{"mainsnak":{"snaktype":"value","datavalue":{"value":{"id":"Q215380"}}}}]}},
-        "Q90000402":{"id":"Q90000402","labels":{"en":{"value":"Something Else"}},
+        "Q090000402":{"id":"Q090000402","labels":{"en":{"value":"Something Else"}},
           "sitelinks":{"enwiki":{}},
           "claims":{"P31":[{"mainsnak":{"snaktype":"value","datavalue":{"value":{"id":"Q215380"}}}}]}}
       }}
@@ -66,7 +66,7 @@ class SeedRunTest {
       // Two spellings of one act each get their own mapping row, both carrying the one QID.
       assertThat(SeedFiles.readRows(dir.resolve("mapping.csv")))
           .hasSize(2)
-          .allSatisfy(row -> assertThat(row.qid()).isEqualTo("Q90000401"));
+          .allSatisfy(row -> assertThat(row.qid()).isEqualTo("Q090000401"));
       assertThat(SeedFiles.readRows(dir.resolve("review.csv"))).hasSize(1);
     }
   }

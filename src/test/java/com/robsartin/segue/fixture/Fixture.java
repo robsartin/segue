@@ -13,10 +13,18 @@ import java.util.List;
  * The Nick Cave neighbourhood - chosen because one person is a musician, a band member with dates,
  * a novelist, a screenwriter and a film composer. A model that survives him survives going broad.
  *
- * <p><b>The QIDs below are PLACEHOLDERS in the Q9000xx range, not real Wikidata identifiers.</b>
- * They live in test sources precisely so they cannot reach a real store — see
- * docs/adr/0022-wikidata-identity-and-vocabulary.md. Slice 1 resolves real QIDs via
- * wbsearchentities; nothing depends on these values.
+ * <p><b>The QIDs below cannot denote anything, and that is a fact about their shape rather than a
+ * promise.</b> Each carries a leading zero, which Wikibase's item-id grammar refuses outright, so
+ * there is no number Wikidata can ever allocate that would make one of them real (ADR 58, issue
+ * #141).
+ *
+ * <p>They did not start that way. They were picked in a {@code Q9000xx} range on the assumption
+ * that a high number would be unused, and every one of them resolved — this fixture was telling the
+ * suite that a real Wikidata entity is a musician named "Nick Cave". Choosing an unused-looking
+ * number is inventing an external identifier, which is the one thing this repository's own rule
+ * forbids. See docs/adr/0022-wikidata-identity-and-vocabulary.md and its 2026-08-31 amendment.
+ *
+ * <p>Nothing depends on these values; slice 1 resolves real QIDs via wbsearchentities.
  *
  * <p>The fixture deliberately contains:
  *
@@ -32,21 +40,21 @@ import java.util.List;
 public final class Fixture {
 
   // --- entities ----------------------------------------------------------
-  public static final String CAVE = "Q900001";
-  public static final String BAD_SEEDS = "Q900002";
-  public static final String BIRTHDAY_PARTY = "Q900003";
-  public static final String GRINDERMAN = "Q900004";
-  public static final String ELLIS = "Q900005";
-  public static final String BLIXA = "Q900006";
-  public static final String NEUBAUTEN = "Q900007";
-  public static final String HARVEY_MICK = "Q900008";
-  public static final String PROPOSITION = "Q900009";
-  public static final String HILLCOAT = "Q900010";
-  public static final String ASS_SAW_ANGEL = "Q900011";
-  public static final String ROAD_FILM = "Q900012";
-  public static final String MCCARTHY = "Q900013";
-  public static final String ROAD_NOVEL = "Q900014";
-  public static final String PJ_HARVEY = "Q900015";
+  public static final String CAVE = "Q0900001";
+  public static final String BAD_SEEDS = "Q0900002";
+  public static final String BIRTHDAY_PARTY = "Q0900003";
+  public static final String GRINDERMAN = "Q0900004";
+  public static final String ELLIS = "Q0900005";
+  public static final String BLIXA = "Q0900006";
+  public static final String NEUBAUTEN = "Q0900007";
+  public static final String HARVEY_MICK = "Q0900008";
+  public static final String PROPOSITION = "Q0900009";
+  public static final String HILLCOAT = "Q0900010";
+  public static final String ASS_SAW_ANGEL = "Q0900011";
+  public static final String ROAD_FILM = "Q0900012";
+  public static final String MCCARTHY = "Q0900013";
+  public static final String ROAD_NOVEL = "Q0900014";
+  public static final String PJ_HARVEY = "Q0900015";
 
   // --- sources -----------------------------------------------------------
   private static final Instant STRUCTURED_PULL = Instant.parse("2026-08-01T09:00:00Z");

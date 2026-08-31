@@ -54,8 +54,8 @@ class SeedResolverTest {
   @DisplayName("a confident literal answer is not asked about a second time")
   void aConfidentLiteralStopsThere() {
     try (StubWikidataServer stub = new StubWikidataServer()) {
-      stub.enqueueBody(searchHits("Q90000301"));
-      stub.enqueueBody("{\"entities\":{" + band("Q90000301", "Sir Halcyon Drift", 9) + "}}");
+      stub.enqueueBody(searchHits("Q090000301"));
+      stub.enqueueBody("{\"entities\":{" + band("Q090000301", "Sir Halcyon Drift", 9) + "}}");
 
       Map<String, Decision> decisions =
           resolverAgainst(stub).resolve(List.of(group("Sir Halcyon Drift")));
@@ -65,7 +65,7 @@ class SeedResolverTest {
           .satisfies(
               d -> {
                 assertThat(d.outcome()).isEqualTo(Outcome.ACCEPTED);
-                assertThat(d.qid()).isEqualTo("Q90000301");
+                assertThat(d.qid()).isEqualTo("Q090000301");
               });
       // One search, one batched fetch. The honorific fallback was never asked.
       assertThat(stub.requestCount()).isEqualTo(2);
@@ -79,8 +79,8 @@ class SeedResolverTest {
       // Pass one: the literal finds nothing at all.
       stub.enqueueBody(searchHits());
       // Pass two: the honorific-stripped spelling finds the act.
-      stub.enqueueBody(searchHits("Q90000302"));
-      stub.enqueueBody("{\"entities\":{" + band("Q90000302", "Halcyon Drift", 14) + "}}");
+      stub.enqueueBody(searchHits("Q090000302"));
+      stub.enqueueBody("{\"entities\":{" + band("Q090000302", "Halcyon Drift", 14) + "}}");
 
       Map<String, Decision> decisions =
           resolverAgainst(stub).resolve(List.of(group("Sir Halcyon Drift")));
@@ -90,7 +90,7 @@ class SeedResolverTest {
           .satisfies(
               d -> {
                 assertThat(d.outcome()).isEqualTo(Outcome.ACCEPTED);
-                assertThat(d.qid()).isEqualTo("Q90000302");
+                assertThat(d.qid()).isEqualTo("Q090000302");
               });
     }
   }
@@ -99,13 +99,13 @@ class SeedResolverTest {
   @DisplayName("a batch of names shares one fetch")
   void oneFetchServesTheWholeBatch() {
     try (StubWikidataServer stub = new StubWikidataServer()) {
-      stub.enqueueBody(searchHits("Q90000303"));
-      stub.enqueueBody(searchHits("Q90000304"));
+      stub.enqueueBody(searchHits("Q090000303"));
+      stub.enqueueBody(searchHits("Q090000304"));
       stub.enqueueBody(
           "{\"entities\":{"
-              + band("Q90000303", "Velvet Ossuary", 9)
+              + band("Q090000303", "Velvet Ossuary", 9)
               + ","
-              + band("Q90000304", "Bramble Sons", 7)
+              + band("Q090000304", "Bramble Sons", 7)
               + "}}");
 
       Map<String, Decision> decisions =
@@ -140,9 +140,9 @@ class SeedResolverTest {
   void keepsTheStrongerReport() {
     try (StubWikidataServer stub = new StubWikidataServer()) {
       // The literal finds a name match of the wrong kind — reviewable, with a candidate.
-      stub.enqueueBody(searchHits("Q90000305"));
+      stub.enqueueBody(searchHits("Q090000305"));
       stub.enqueueBody(
-          "{\"entities\":{\"Q90000305\":{\"id\":\"Q90000305\",\"labels\":{\"en\":{\"value\":"
+          "{\"entities\":{\"Q090000305\":{\"id\":\"Q090000305\",\"labels\":{\"en\":{\"value\":"
               + "\"Sir Halcyon Drift\"}},\"sitelinks\":{\"enwiki\":{}},\"claims\":{\"P31\":"
               + "[{\"mainsnak\":{\"snaktype\":\"value\",\"datavalue\":{\"value\":{\"id\":"
               + "\"Q11424\"}}}}]}}}}");
@@ -157,7 +157,7 @@ class SeedResolverTest {
           .satisfies(
               d -> {
                 assertThat(d.outcome()).isEqualTo(Outcome.REVIEW);
-                assertThat(d.qid()).isEqualTo("Q90000305");
+                assertThat(d.qid()).isEqualTo("Q090000305");
               });
     }
   }

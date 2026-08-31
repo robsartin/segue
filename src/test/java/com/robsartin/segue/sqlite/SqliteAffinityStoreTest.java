@@ -23,9 +23,9 @@ import org.junit.jupiter.api.io.TempDir;
  * The taste layer's store: the same SQLite file as the assertion log, its own table (ADR 33 rejects
  * a second database file), one row per entity (ADR 39 chose overwrite over a history table).
  *
- * <p>Every rating and note here is invented, and the qids are the Q9000xx placeholders the graph
- * fixture uses. ADR 33 (as amended by issue #37) names a test fixture written from real ratings as
- * one of the ways this public repository could leak the only personal data segue holds.
+ * <p>Every rating and note here is invented, and the qids are the unallocatable stand-ins the graph
+ * fixture uses (ADR 58). ADR 33 (as amended by issue #37) names a test fixture written from real
+ * ratings as one of the ways this public repository could leak the only personal data segue holds.
  */
 class SqliteAffinityStoreTest {
 
@@ -36,7 +36,7 @@ class SqliteAffinityStoreTest {
   @DisplayName("an entity with no affinity reads back empty, not a default rating")
   void unratedReadsEmpty() {
     try (SqliteAffinityStore store = SqliteAffinityStore.inMemory()) {
-      assertThat(store.find("Q900001")).isEmpty();
+      assertThat(store.find("Q0900001")).isEmpty();
     }
   }
 
@@ -44,24 +44,24 @@ class SqliteAffinityStoreTest {
   @DisplayName("a rating with a note round-trips exactly, sub-second timestamp included")
   void roundTripsWithNote() {
     AffinityRecord affinity =
-        new AffinityRecord("Q900001", 4, "invented note for the test suite", FIRST);
+        new AffinityRecord("Q0900001", 4, "invented note for the test suite", FIRST);
 
     try (SqliteAffinityStore store = SqliteAffinityStore.inMemory()) {
       store.put(affinity);
 
-      assertThat(store.find("Q900001")).contains(affinity);
+      assertThat(store.find("Q0900001")).contains(affinity);
     }
   }
 
   @Test
   @DisplayName("a rating with no note round-trips with the note still null")
   void roundTripsWithoutNote() {
-    AffinityRecord affinity = new AffinityRecord("Q900002", 2, null, FIRST);
+    AffinityRecord affinity = new AffinityRecord("Q0900002", 2, null, FIRST);
 
     try (SqliteAffinityStore store = SqliteAffinityStore.inMemory()) {
       store.put(affinity);
 
-      assertThat(store.find("Q900002")).contains(affinity);
+      assertThat(store.find("Q0900002")).contains(affinity);
     }
   }
 
@@ -69,14 +69,14 @@ class SqliteAffinityStoreTest {
   @DisplayName("re-rating overwrites in place: one row, the later rating, the later timestamp")
   void reRatingOverwritesInPlace(@TempDir Path dir) throws SQLException {
     Path db = dir.resolve("segue.db");
-    AffinityRecord first = new AffinityRecord("Q900001", 2, "first impression, invented", FIRST);
-    AffinityRecord second = new AffinityRecord("Q900001", 5, "grew on me, also invented", LATER);
+    AffinityRecord first = new AffinityRecord("Q0900001", 2, "first impression, invented", FIRST);
+    AffinityRecord second = new AffinityRecord("Q0900001", 5, "grew on me, also invented", LATER);
 
     try (SqliteAffinityStore store = new SqliteAffinityStore(db)) {
       store.put(first);
       store.put(second);
 
-      assertThat(store.find("Q900001")).contains(second);
+      assertThat(store.find("Q0900001")).contains(second);
     }
     // Read the table directly, because "latest wins" and "one row per entity" are different
     // claims and only the second one rules out a history table accumulating behind the port.
@@ -87,10 +87,10 @@ class SqliteAffinityStoreTest {
   @DisplayName("re-rating can clear a note the earlier rating carried")
   void reRatingCanClearTheNote() {
     try (SqliteAffinityStore store = SqliteAffinityStore.inMemory()) {
-      store.put(new AffinityRecord("Q900001", 3, "an invented note", FIRST));
-      store.put(new AffinityRecord("Q900001", 3, null, LATER));
+      store.put(new AffinityRecord("Q0900001", 3, "an invented note", FIRST));
+      store.put(new AffinityRecord("Q0900001", 3, null, LATER));
 
-      assertThat(store.find("Q900001")).contains(new AffinityRecord("Q900001", 3, null, LATER));
+      assertThat(store.find("Q0900001")).contains(new AffinityRecord("Q0900001", 3, null, LATER));
     }
   }
 
@@ -98,13 +98,13 @@ class SqliteAffinityStoreTest {
   @DisplayName("affinity survives a restart, because it is in SQLite like everything else")
   void persistsAcrossReopen(@TempDir Path dir) {
     Path db = dir.resolve("segue.db");
-    AffinityRecord affinity = new AffinityRecord("Q900001", 5, "invented note", FIRST);
+    AffinityRecord affinity = new AffinityRecord("Q0900001", 5, "invented note", FIRST);
 
     try (SqliteAffinityStore store = new SqliteAffinityStore(db)) {
       store.put(affinity);
     }
     try (SqliteAffinityStore reopened = new SqliteAffinityStore(db)) {
-      assertThat(reopened.find("Q900001")).contains(affinity);
+      assertThat(reopened.find("Q0900001")).contains(affinity);
     }
   }
 
@@ -117,16 +117,16 @@ class SqliteAffinityStoreTest {
         SqliteAffinityStore affinity = new SqliteAffinityStore(db)) {
       log.append(
           new NodeAssertion(
-              "Q900001",
+              "Q0900001",
               NodeKind.PERSON,
               "A Placeholder Person",
-              new Provenance("wikidata", "Q900001", FIRST, 1.0)));
-      affinity.put(new AffinityRecord("Q900001", 4, "invented note", FIRST));
+              new Provenance("wikidata", "Q0900001", FIRST, 1.0)));
+      affinity.put(new AffinityRecord("Q0900001", 4, "invented note", FIRST));
 
       // Neither store can see the other's rows: the log replays one assertion and no rating,
       // and the affinity table holds one rating and no assertion.
       assertThat(log.readAll()).hasSize(1);
-      assertThat(affinity.find("Q900001")).isPresent();
+      assertThat(affinity.find("Q0900001")).isPresent();
     }
     assertThat(rowCount(db, "assertion")).isEqualTo(1);
     assertThat(rowCount(db, "affinity")).isEqualTo(1);
@@ -136,20 +136,20 @@ class SqliteAffinityStoreTest {
   @DisplayName("readAll returns every rating, in qid order, so the caller decides the ordering")
   void readsEveryRatingInQidOrder() {
     try (SqliteAffinityStore store = SqliteAffinityStore.inMemory()) {
-      store.put(new AffinityRecord("Q900003", 5, "an invented note", LATER));
-      store.put(new AffinityRecord("Q900001", 2, null, FIRST));
-      store.put(new AffinityRecord("Q900002", 4, "another invented note", FIRST));
+      store.put(new AffinityRecord("Q0900003", 5, "an invented note", LATER));
+      store.put(new AffinityRecord("Q0900001", 2, null, FIRST));
+      store.put(new AffinityRecord("Q0900002", 4, "another invented note", FIRST));
 
       assertThat(store.readAll())
           .extracting(AffinityRecord::qid)
-          .containsExactly("Q900001", "Q900002", "Q900003");
+          .containsExactly("Q0900001", "Q0900002", "Q0900003");
     }
   }
 
   @Test
   @DisplayName("readAll carries the whole row, note and timestamp included")
   void readsTheWholeRow() {
-    AffinityRecord affinity = new AffinityRecord("Q900001", 3, "an invented note", FIRST);
+    AffinityRecord affinity = new AffinityRecord("Q0900001", 3, "an invented note", FIRST);
 
     try (SqliteAffinityStore store = SqliteAffinityStore.inMemory()) {
       store.put(affinity);
@@ -170,15 +170,15 @@ class SqliteAffinityStoreTest {
   @DisplayName("readRatings returns every score by qid, and cannot return a note (issue #85)")
   void readsEveryScoreAndNoNotes() {
     try (SqliteAffinityStore store = SqliteAffinityStore.inMemory()) {
-      store.put(new AffinityRecord("Q900003", 5, "an invented note", LATER));
-      store.put(new AffinityRecord("Q900001", 2, null, FIRST));
-      store.put(new AffinityRecord("Q900002", 4, "another invented note", FIRST));
+      store.put(new AffinityRecord("Q0900003", 5, "an invented note", LATER));
+      store.put(new AffinityRecord("Q0900001", 2, null, FIRST));
+      store.put(new AffinityRecord("Q0900002", 4, "another invented note", FIRST));
 
       // A Map<String, Integer> has nowhere to put a note, and the SQL behind it does not select
       // the column. That is the whole point of a second bulk read existing beside readAll: the
       // recommender needs the scores and must not be able to hold the words (ADR 33, issue #85).
       assertThat(store.readRatings())
-          .containsExactlyInAnyOrderEntriesOf(Map.of("Q900001", 2, "Q900002", 4, "Q900003", 5));
+          .containsExactlyInAnyOrderEntriesOf(Map.of("Q0900001", 2, "Q0900002", 4, "Q0900003", 5));
     }
   }
 
@@ -194,11 +194,11 @@ class SqliteAffinityStoreTest {
   @DisplayName("updateRating changes the rating and leaves an existing note exactly as it was")
   void updateRatingKeepsTheNote() {
     try (SqliteAffinityStore store = SqliteAffinityStore.inMemory()) {
-      store.put(new AffinityRecord("Q900001", 3, "invented note for the test suite", FIRST));
+      store.put(new AffinityRecord("Q0900001", 3, "invented note for the test suite", FIRST));
 
-      store.updateRating("Q900001", 2, LATER);
+      store.updateRating("Q0900001", 2, LATER);
 
-      AffinityRecord after = store.find("Q900001").orElseThrow();
+      AffinityRecord after = store.find("Q0900001").orElseThrow();
       assertThat(after.rating()).isEqualTo(2);
       assertThat(after.note()).isEqualTo("invented note for the test suite");
       assertThat(after.updatedAt()).isEqualTo(LATER);
@@ -211,9 +211,9 @@ class SqliteAffinityStoreTest {
     // The deck's default mode writes first ratings through this same call, so a method that could
     // only UPDATE would refuse the commoner of its two cases.
     try (SqliteAffinityStore store = SqliteAffinityStore.inMemory()) {
-      store.updateRating("Q900002", 5, FIRST);
+      store.updateRating("Q0900002", 5, FIRST);
 
-      AffinityRecord written = store.find("Q900002").orElseThrow();
+      AffinityRecord written = store.find("Q0900002").orElseThrow();
       assertThat(written.rating()).isEqualTo(5);
       assertThat(written.note()).isNull();
       assertThat(written.updatedAt()).isEqualTo(FIRST);
@@ -226,10 +226,10 @@ class SqliteAffinityStoreTest {
     // The one write into this table that does not build an AffinityRecord, so it would otherwise
     // be the one write with no range check at all.
     try (SqliteAffinityStore store = SqliteAffinityStore.inMemory()) {
-      assertThatThrownBy(() -> store.updateRating("Q900003", 9, FIRST))
+      assertThatThrownBy(() -> store.updateRating("Q0900003", 9, FIRST))
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageNotContaining("9");
-      assertThat(store.find("Q900003")).isEmpty();
+      assertThat(store.find("Q0900003")).isEmpty();
     }
   }
 
