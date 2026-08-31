@@ -28,8 +28,8 @@ So the deferral has expired on its own stated terms.
 
 ## The shape: which two properties it borrows
 
-ADR 33 keeps affinity separate from world facts: first-person, no `Provenance`, no corroboration,
-and it **never reaches the graph**. World facts are sourced, corroboratable, and project.
+ADR 33 keeps affinity separate from world facts — *"Two layers, two stores"* — first-person, no
+`Provenance`, no corroboration, and `note_affinity` **never writes to the graph**. World facts are sourced, corroboratable, and project.
 
 Owner claims need affinity's epistemology and the world layer's destination:
 
@@ -146,8 +146,13 @@ A guard never seen to fail has never been tested (#93, and #139 was a second ins
 
 - A new ADR recording this decision and the alternatives below.
 - **ADR 22** — a dated amendment: clause 1 now admits a second identity kind, and what that costs.
-- **ADR 33** — a dated amendment: its "the two layers never meet below `SegueService`" is false once
-  there are three. It must say what the third layer may touch.
+- **ADR 33** — a dated amendment. Its **"Two layers, two stores"** (line 30) becomes three, and its
+  **"`note_affinity` is the only tool that writes affinity, and it never writes to the graph.
+  `IngestService` never sees a rating"** (lines 37-38) still holds for affinity but no longer
+  describes the whole first-person surface. The amendment must say what the third layer may touch.
+- **`CLAUDE.md:183`** — *"Affinity is not an assertion, and the two layers never meet below
+  `SegueService`"* becomes false with three layers. It is not an ADR and needs no amendment, only a
+  correction.
 - **ADR 26** — a dated amendment: the stated condition for `assert_edge` is met, and the tool arrives
   dev-side rather than on the MCP surface, for a reason ADR 26 did not anticipate.
 
