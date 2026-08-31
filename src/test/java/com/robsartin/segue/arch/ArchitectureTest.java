@@ -33,6 +33,7 @@ import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Stream;
 
 /**
  * Each rule names the decision it defends. See docs/adr/0032-layering-and-archunit.md.
@@ -102,6 +103,51 @@ class ArchitectureTest {
   /** {@code ..jena..}-style patterns over {@link #ADAPTER_PACKAGES}, for the package predicates. */
   private static String[] adapterPackagePatterns() {
     return ADAPTER_PACKAGES.stream().map(p -> ".." + p + "..").toArray(String[]::new);
+  }
+
+  /**
+   * ADR 32's dev-side tools, in one place. Adding a tool adds one entry here and nothing else.
+   *
+   * <p><b>This list is why the sibling fences cannot go stale one at a time.</b> Each tool's fence
+   * used to spell its siblings out by hand, and five of the six spellings were incomplete: {@code
+   * recommend} — the fifth tool, and the newest when this was written — was missing from {@link
+   * #seedNeverOpensAStore}, {@link #theRatingsToolOpensNothingElse}, {@link
+   * #theRetractionToolOpensNothingElse} and {@link #theExporterOnlyReads}, and {@code export}
+   * fenced no sibling but the two writers. Each omission was invisible in the rule that had it,
+   * because a rule that lists four packages looks exactly like a rule that lists five. Deriving the
+   * list is the same move <a href="https://github.com/robsartin/segue/issues/140">issue #140</a>
+   * made for {@link #ADAPTER_PACKAGES}, for the same reason: the gap was only ever visible by
+   * enumerating the ordered pairs, and now there is nothing to enumerate by hand.
+   *
+   * <p>{@link #noPackageCycles} is not a backstop here, for #140's reason exactly — where a sibling
+   * fence exists it forbids the return edge, so no cycle can form.
+   */
+  static final List<String> DEV_TOOL_PACKAGES =
+      List.of("export", "rate", "ratings", "recommend", "retract", "seed");
+
+  /**
+   * Every dev-tool package except the ones named, as {@code ..x..} patterns, then {@code
+   * alsoFenced} unchanged.
+   *
+   * <p>{@code permitted} always contains the tool's own package, and contains a second entry only
+   * where a decision allows one sibling — today only {@code rate → recommend} (ADR 46). Written as
+   * an allowlist rather than a denylist so that the exception is the thing a reader has to justify,
+   * and so a seventh tool is fenced from all six the moment it joins {@link #DEV_TOOL_PACKAGES}.
+   *
+   * @throws IllegalArgumentException if {@code permitted} names something that is not a dev tool —
+   *     a typo would otherwise silently widen or invert the fence it was meant to describe
+   */
+  private static String[] otherDevToolsAnd(List<String> permitted, String... alsoFenced) {
+    if (!DEV_TOOL_PACKAGES.containsAll(permitted)) {
+      throw new IllegalArgumentException(
+          "not dev-tool packages: " + permitted + " — known tools are " + DEV_TOOL_PACKAGES);
+    }
+    return Stream.concat(
+            DEV_TOOL_PACKAGES.stream()
+                .filter(t -> !permitted.contains(t))
+                .map(t -> ".." + t + ".."),
+            Stream.of(alsoFenced))
+        .toArray(String[]::new);
   }
 
   /** One slice per adapter package; everything else is ignored, so it is never compared. */
@@ -184,6 +230,11 @@ class ArchitectureTest {
    * AssertionLog} — {@link #onlyIngestAppliesClaimsToTheGraph} already forbids the calls, and this
    * forbids reaching the objects at all, so it cannot open {@code ~/.segue/segue.db} even to read
    * it. It also cannot become a seventh MCP tool by accident: {@code mcp} is on the same list.
+   *
+   * <p>Every sibling tool is on that list too, from {@link #DEV_TOOL_PACKAGES}. Three of them —
+   * {@code export}, {@code ratings} and {@code recommend} — were missing until issue #105, so this
+   * tool could have reached {@code ExportRun} and opened the database through it, which is the one
+   * thing this rule's whole safety argument says it cannot do.
    */
   @ArchTest
   static final ArchRule seedNeverOpensAStore =
@@ -193,14 +244,14 @@ class ArchitectureTest {
           .should()
           .dependOnClassesThat()
           .resideInAnyPackage(
-              "..sqlite..",
-              "..tinker..",
-              "..jena..",
-              "..ingest..",
-              "..mcp..",
-              "..app..",
-              "..retract..",
-              "..rate..")
+              otherDevToolsAnd(
+                  List.of("seed"),
+                  "..sqlite..",
+                  "..tinker..",
+                  "..jena..",
+                  "..ingest..",
+                  "..mcp..",
+                  "..app.."))
           .because(
               "ADR 40: the seeding tool resolves and reports — it never writes the graph, never"
                   + " opens the database, and is deliberately not an MCP tool (ADR 26)");
@@ -410,9 +461,18 @@ class ArchitectureTest {
    * <p><b>There are two dev-side tools that write, not one.</b> This Javadoc said "the one dev-side
    * tool that [writes]" while ADR 46 was adding a second — {@code rate}, which writes a rating
    * through {@code AffinityStore.put} — so the sentence was literally false and the rule below
-   * covered only half of what it claimed. Both packages are banned now, and they write to different
-   * layers: {@code retract} appends a world-fact claim through {@code IngestService}, {@code rate}
-   * writes the taste layer and never touches {@code ingest} at all (ADR 33).
+   * covered only half of what it claimed. They write to different layers: {@code retract} appends a
+   * world-fact claim through {@code IngestService}, {@code rate} writes the taste layer and never
+   * touches {@code ingest} at all (ADR 33).
+   *
+   * <p><b>Every sibling is banned now, not only the two that write</b> (<a
+   * href="https://github.com/robsartin/segue/issues/105">issue #105</a>). Naming the writers was
+   * the narrowest reading of the fence: the reason a sibling is forbidden is that reaching it lets
+   * this package inherit that sibling's fence instead of its own, and a read-only sibling has a
+   * fence too. {@code ratings} may sweep the whole affinity table and {@code export} may not;
+   * {@code recommend} and {@code seed} each carry clauses this rule does not. The list comes from
+   * {@link #DEV_TOOL_PACKAGES} rather than from this Javadoc, so a seventh tool is covered without
+   * anyone remembering to come back here.
    */
   @ArchTest
   static final ArchRule theExporterOnlyReads =
@@ -424,19 +484,20 @@ class ArchitectureTest {
                   .or(
                       ArchConditions.dependOnClassesThat(
                           JavaClass.Predicates.equivalentTo(IngestService.class)))
-                  // ADR 44 added a fourth dev-side tool, and it was the first one that writes;
-                  // ADR 46's rating deck is the second. Without these two clauses the exporter
-                  // could reach RetractRun and append a retraction through it, or RateServer and
-                  // write a rating through that, inheriting a looser fence than its own — the
-                  // exact shape theRatingsToolOpensNothingElse already refuses for its siblings.
-                  // The two writers write to different layers and neither is the exporter's.
+                  // Without this clause the exporter could reach RetractRun and append a
+                  // retraction through it, or RateServer and write a rating through that, or
+                  // RatingsRun and sweep the table it may not sweep — inheriting a looser fence
+                  // than its own, the exact shape theRatingsToolOpensNothingElse refuses. Issue
+                  // #105: this listed only the two writers, which left the three read-only
+                  // siblings reachable; it is derived from DEV_TOOL_PACKAGES now.
                   .or(
                       ArchConditions.dependOnClassesThat(
-                          JavaClass.Predicates.resideInAnyPackage("..retract..", "..rate.."))))
+                          JavaClass.Predicates.resideInAnyPackage(
+                              otherDevToolsAnd(List.of("export"))))))
           .because(
               "ADR 41: the exporter is a read-only tool — it never appends to the log, never"
-                  + " writes the graph, and cannot reach the one class that is allowed to, nor"
-                  + " either of the two dev-side tools that write (ADR 44, ADR 46)");
+                  + " writes the graph, cannot reach the one class that is allowed to, and cannot"
+                  + " reach a sibling tool to borrow its fence (issue #105)");
 
   /** The JDK's networking APIs — the thing an offline tool must not be able to reach. */
   private static final DescribedPredicate<JavaClass> ON_A_NETWORK_API =
@@ -577,9 +638,11 @@ class ArchitectureTest {
    * <p>The tightest of the three dev-tool fences, and it can be, because this tool needs the least:
    * a bulk read of the {@code affinity} table and the node claims in the log, both through {@code
    * sqlite}. No traversal, so no {@code tinker}; no projection, so no {@code ingest}; no picture,
-   * so no {@code export}. {@code seed} and {@code export} are banned as well as the application
-   * packages, because a dependency on a sibling tool would quietly let this one inherit the
-   * sibling's looser fence - {@code export} may use {@code GraphProjector}, and this may not.
+   * so no {@code export}. Every sibling tool is banned as well as the application packages, because
+   * a dependency on a sibling would quietly let this one inherit the sibling's looser fence -
+   * {@code export} may use {@code GraphProjector}, and this may not. The sibling half of that list
+   * is derived from {@link #DEV_TOOL_PACKAGES}: it was written out by hand until issue #105, and
+   * {@code recommend} — the fifth tool — had never been added to it.
    *
    * <p>{@code java.net} for the same reason {@link #theExporterNeverSpeaksToANetwork} names it:
    * this tool joins qids to labels, a label is one HTTP call away, and a rating whose entity has
@@ -595,17 +658,15 @@ class ArchitectureTest {
           .should()
           .dependOnClassesThat()
           .resideInAnyPackage(
-              "..tinker..",
-              "..jena..",
-              "..ingest..",
-              "..mcp..",
-              "..app..",
-              "..seed..",
-              "..export..",
-              "..retract..",
-              "..rate..",
-              "java.net..",
-              "javax.net..")
+              otherDevToolsAnd(
+                  List.of("ratings"),
+                  "..tinker..",
+                  "..jena..",
+                  "..ingest..",
+                  "..mcp..",
+                  "..app..",
+                  "java.net..",
+                  "javax.net.."))
           .because(
               "ADR 43: the ratings tool reads the affinity table and the log's node claims, offline"
                   + " — it needs no engine, no projection and no network, and cannot become an MCP"
@@ -798,16 +859,34 @@ class ArchitectureTest {
    * <p>The mirror image of {@code theRatingsToolOnlyReads}. That tool may read every rating and
    * write none; this one may write a rating and must not touch the graph or the log. Between them
    * the two dev tools that meet the affinity table can each do exactly one thing to it.
+   *
+   * <p><b>{@code IngestService} is banned as a type, and that clause is issue #105's</b> — the same
+   * clause {@link #theExporterOnlyReads} and {@link #theRecommenderOnlyReads} already carried, and
+   * for the reason the exporter's Javadoc gives: without it a class here could route a claim
+   * through the one legitimate writer and break no other rule, because the three write calls this
+   * rule forbids would all be made by {@code ingest} rather than by {@code rate}. The deck's
+   * Javadoc had asserted that {@code rate} never touches {@code ingest} since ADR 46; nothing held
+   * it, and the assertion was measured green with a violation in place before this was added.
+   *
+   * <p>The {@code ingest} <em>package</em> stays reachable, exactly as it does for the exporter and
+   * the recommender: {@code RateCli} needs {@code GraphProjector} to replay the log into the
+   * throwaway in-memory graph a card's routes are traversed on. {@code IngestService} is the one
+   * class in it that writes, so the fence is the type and not the package.
    */
   @ArchTest
   static final ArchRule theRatingDeckWritesOnlyAffinity =
       noClasses()
           .that()
           .resideInAPackage("..rate..")
-          .should(ArchConditions.accessTargetWhere(APPLIES_A_CLAIM))
+          .should(
+              ArchConditions.accessTargetWhere(APPLIES_A_CLAIM)
+                  .or(
+                      ArchConditions.dependOnClassesThat(
+                          JavaClass.Predicates.equivalentTo(IngestService.class))))
           .because(
               "ADR 46: the deck records what the owner thinks and never what the world says — it"
-                  + " appends no claim, records no edge and upserts no node");
+                  + " appends no claim, records no edge, upserts no node, and cannot reach the one"
+                  + " class that is allowed to");
 
   /**
    * Issue #85, held by construction and then by rule.
@@ -880,13 +959,15 @@ class ArchitectureTest {
    * so reaching {@code retract} (which appends a world-fact claim) or {@code ratings} (which reads
    * every note) would each be a way around a rule this package is otherwise held to.
    *
-   * <p><b>{@code recommend} is deliberately NOT banned, and it is the only sibling pair in the
-   * project that may depend on each other.</b> The candidate half of the deck is the recommender's
-   * own {@code CandidateSweep}, {@code Routes} and {@code Sweep}, so that a card's routes are the
-   * routes that tool would give for the same pair rather than a second implementation that can
-   * drift. ADR 46 argues that dependency and ADR 45 moved {@code QidList} into {@code support}
-   * rather than let a shared reader create it by accident. It runs one way only: {@link
-   * #theRecommenderOpensNothingElse} bans the return trip.
+   * <p><b>{@code recommend} is deliberately NOT banned, and it is the only one of the thirty
+   * ordered pairs six dev tools make that is left open.</b> It is expressed as the second entry in
+   * this rule's {@code permitted} list rather than as an omission from a hand-written denylist,
+   * which is what makes it reviewable: the exception is the thing a reader has to justify. The
+   * candidate half of the deck is the recommender's own {@code CandidateSweep}, {@code Routes} and
+   * {@code Sweep}, so that a card's routes are the routes that tool would give for the same pair
+   * rather than a second implementation that can drift. ADR 46 argues that dependency and ADR 45
+   * moved {@code QidList} into {@code support} rather than let a shared reader create it by
+   * accident. It runs one way only: {@link #theRecommenderOpensNothingElse} bans the return trip.
    *
    * <p><b>{@code java.net} is deliberately NOT banned either</b>, and this is the one dev tool that
    * could not carry that clause. Its whole shape is an HTTP server: {@code RateServer} binds an
@@ -904,13 +985,7 @@ class ArchitectureTest {
           .should()
           .dependOnClassesThat()
           .resideInAnyPackage(
-              "..jena..",
-              "..mcp..",
-              "..app..",
-              "..seed..",
-              "..export..",
-              "..ratings..",
-              "..retract..")
+              otherDevToolsAnd(List.of("rate", "recommend"), "..jena..", "..mcp..", "..app.."))
           .because(
               "ADR 46: the deck replays one local log into one in-memory graph and serves it on"
                   + " loopback — it needs no second engine and no sibling tool but the recommender,"
@@ -919,12 +994,13 @@ class ArchitectureTest {
   /**
    * ADR 45: the recommender needs a log, an engine and nothing else.
    *
-   * <p>The same fence its siblings carry, with the same reasoning. {@code seed}, {@code export},
-   * {@code ratings} and {@code retract} are banned as packages because a dependency on a sibling
-   * would let this tool inherit the sibling's different fence - {@code retract} may write, and this
-   * may not. {@code java.net} because a recommendation is a pure function of one local file: the
-   * list of what somebody already knows never leaves the machine, which is ADR 40's argument for
-   * why the seeding list lives outside this repository, applied to the tool that reads it.
+   * <p>The same fence its siblings carry, with the same reasoning. Every other dev tool is banned
+   * as a package - the list comes from {@link #DEV_TOOL_PACKAGES} - because a dependency on a
+   * sibling would let this tool inherit the sibling's different fence: {@code retract} may write,
+   * and this may not. {@code java.net} because a recommendation is a pure function of one local
+   * file: the list of what somebody already knows never leaves the machine, which is ADR 40's
+   * argument for why the seeding list lives outside this repository, applied to the tool that reads
+   * it.
    *
    * <p>{@code jena} is banned as the reference adapter nothing outside the bake-off should reach;
    * {@code tinker} is not, because the throwaway projection is a {@code TinkerGraphStore} the same
@@ -938,16 +1014,13 @@ class ArchitectureTest {
           .should()
           .dependOnClassesThat()
           .resideInAnyPackage(
-              "..jena..",
-              "..mcp..",
-              "..app..",
-              "..seed..",
-              "..export..",
-              "..ratings..",
-              "..retract..",
-              "..rate..",
-              "java.net..",
-              "javax.net..")
+              otherDevToolsAnd(
+                  List.of("recommend"),
+                  "..jena..",
+                  "..mcp..",
+                  "..app..",
+                  "java.net..",
+                  "javax.net.."))
           .because(
               "ADR 45: the recommender replays one local log into one in-memory graph, offline —"
                   + " it needs no sibling tool, no second engine and no network, and cannot become"
@@ -1004,8 +1077,10 @@ class ArchitectureTest {
    * the reason it held one.
    *
    * <p>The sibling tools are banned for the reason ADR 43 gives: a dependency on one would let this
-   * one inherit the sibling's different fence. {@code java.net} because a decision about your own
-   * graph is a pure function of one local file, and nothing about it leaves the machine.
+   * one inherit the sibling's different fence. They come from {@link #DEV_TOOL_PACKAGES}, which is
+   * how {@code recommend} joined them — it was absent from the hand-written list until issue #105.
+   * {@code java.net} because a decision about your own graph is a pure function of one local file,
+   * and nothing about it leaves the machine.
    */
   @ArchTest
   static final ArchRule theRetractionToolOpensNothingElse =
@@ -1018,16 +1093,14 @@ class ArchitectureTest {
                   .or(JavaClass.Predicates.equivalentTo(AffinityStore.class))
                   .or(
                       JavaClass.Predicates.resideInAnyPackage(
-                          "..tinker..",
-                          "..jena..",
-                          "..mcp..",
-                          "..app..",
-                          "..seed..",
-                          "..export..",
-                          "..ratings..",
-                          "..rate..",
-                          "java.net..",
-                          "javax.net..")))
+                          otherDevToolsAnd(
+                              List.of("retract"),
+                              "..tinker..",
+                              "..jena..",
+                              "..mcp..",
+                              "..app..",
+                              "java.net..",
+                              "javax.net.."))))
           .because(
               "ADR 44: retraction is a decision about the log, made offline, from a tool that"
                   + " cannot hold a graph, a rating, an engine or a network connection");
