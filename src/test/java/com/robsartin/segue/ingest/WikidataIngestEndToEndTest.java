@@ -12,6 +12,7 @@ import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.ExpandContext;
 import com.robsartin.segue.port.ExpandResult;
 import com.robsartin.segue.port.GraphStore;
+import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.port.SourceAdapter;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import com.robsartin.segue.tinker.TinkerGraphStore;
@@ -73,7 +74,7 @@ class WikidataIngestEndToEndTest {
               .orElseThrow();
 
       assertThat(fetched.instanceOf()).containsExactly("Q11424");
-      new IngestService(log, graph).record(fetched);
+      new IngestService(log, graph, IdentityMerge.NONE).record(fetched);
     }
 
     // Nothing above is still open, and no stub is running: this is the offline half.
@@ -129,7 +130,7 @@ class WikidataIngestEndToEndTest {
       }
       recorded.addAll(claims);
 
-      new IngestService(log, graph).recordAll(recorded);
+      new IngestService(log, graph, IdentityMerge.NONE).recordAll(recorded);
 
       assertThat(claims).isNotEmpty();
       assertThat(graph.edgeCount()).isEqualTo(expectedEdges);

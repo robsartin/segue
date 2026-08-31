@@ -12,6 +12,7 @@ import com.robsartin.segue.domain.SameAs;
 import com.robsartin.segue.export.LogProjection;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.GraphStore;
+import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.retract.RetractCli;
 import com.robsartin.segue.retract.RetractRun;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
@@ -60,7 +61,7 @@ class OwnerClaimProjectionTest {
   void setUp() {
     log = SqliteAssertionLog.inMemory();
     graph = new TinkerGraphStore();
-    ingest = new IngestService(log, graph);
+    ingest = new IngestService(log, graph, IdentityMerge.NONE);
   }
 
   @AfterEach

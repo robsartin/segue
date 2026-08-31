@@ -13,6 +13,7 @@ import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.EntityResolver;
 import com.robsartin.segue.port.GraphStore;
+import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.port.SourceAdapters;
 import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
@@ -89,7 +90,7 @@ class NoteNeverLeavesThroughAToolTest {
         new SegueService(
             new StubResolver(),
             graph,
-            new IngestService(log, graph),
+            new IngestService(log, graph, IdentityMerge.NONE),
             new SourceAdapters(List.of(new FixtureSourceAdapter())),
             affinity,
             Clock.fixed(RATED_AT, ZoneOffset.UTC));

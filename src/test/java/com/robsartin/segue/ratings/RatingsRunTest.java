@@ -2,6 +2,8 @@ package com.robsartin.segue.ratings;
 
 import static com.robsartin.segue.ratings.InventedRatings.EARLY;
 import static com.robsartin.segue.ratings.InventedRatings.LATE;
+import static com.robsartin.segue.ratings.InventedRatings.MINTED;
+import static com.robsartin.segue.ratings.InventedRatings.MINTED_LABEL;
 import static com.robsartin.segue.ratings.InventedRatings.NOVEL;
 import static com.robsartin.segue.ratings.InventedRatings.NOVEL_LABEL;
 import static com.robsartin.segue.ratings.InventedRatings.NOVEL_NOTE;
@@ -9,6 +11,7 @@ import static com.robsartin.segue.ratings.InventedRatings.QUARTET;
 import static com.robsartin.segue.ratings.InventedRatings.QUARTET_LABEL;
 import static com.robsartin.segue.ratings.InventedRatings.QUARTET_NOTE;
 import static com.robsartin.segue.ratings.InventedRatings.VANISHED;
+import static com.robsartin.segue.ratings.InventedRatings.minted;
 import static com.robsartin.segue.ratings.InventedRatings.node;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -73,6 +76,22 @@ class RatingsRunTest {
         .containsExactlyInAnyOrder(
             org.assertj.core.groups.Tuple.tuple(QUARTET, QUARTET_LABEL, 5, QUARTET_NOTE),
             org.assertj.core.groups.Tuple.tuple(NOVEL, NOVEL_LABEL, 3, NOVEL_NOTE));
+  }
+
+  @Test
+  @DisplayName(
+      "an entity the owner minted reads as a name too, because the owner's claim is a claim")
+  void namesAnEntityTheOwnerMinted() throws IOException {
+    FakeAffinityStore ratings = new FakeAffinityStore().rated(MINTED, 4, null, EARLY);
+    FakeAssertionLog log = new FakeAssertionLog().with(minted(MINTED, MINTED_LABEL));
+
+    List<AffinityRow> rows = run(ratings, log, SortOrder.RATING);
+
+    assertThat(rows)
+        .singleElement()
+        .extracting(AffinityRow::label, AffinityRow::displayLabel)
+        .as("a minted entity IS in the graph, so the listing must not say it is not")
+        .containsExactly(MINTED_LABEL, MINTED_LABEL);
   }
 
   @Test

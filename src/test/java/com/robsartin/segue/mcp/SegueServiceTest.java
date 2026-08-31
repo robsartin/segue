@@ -21,6 +21,7 @@ import com.robsartin.segue.port.EntityResolver;
 import com.robsartin.segue.port.ExpandContext;
 import com.robsartin.segue.port.ExpandResult;
 import com.robsartin.segue.port.GraphStore;
+import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.port.SourceAdapter;
 import com.robsartin.segue.port.SourceAdapters;
 import com.robsartin.segue.sqlite.SqliteAffinityStore;
@@ -70,7 +71,7 @@ class SegueServiceTest {
   void setUp() {
     log = SqliteAssertionLog.inMemory();
     graph = new TinkerGraphStore();
-    ingest = new IngestService(log, graph);
+    ingest = new IngestService(log, graph, IdentityMerge.NONE);
     resolver = new StubEntityResolver();
     affinity = SqliteAffinityStore.inMemory();
     clock = new SettableClock(RATED_AT);

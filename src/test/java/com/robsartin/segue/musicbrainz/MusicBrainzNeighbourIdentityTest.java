@@ -14,6 +14,7 @@ import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.EntityResolver;
 import com.robsartin.segue.port.GraphStore;
+import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.port.SourceAdapter;
 import com.robsartin.segue.port.SourceAdapters;
 import com.robsartin.segue.sqlite.SqliteAffinityStore;
@@ -97,7 +98,7 @@ class MusicBrainzNeighbourIdentityTest {
   void setUp() {
     log = SqliteAssertionLog.inMemory();
     graph = new TinkerGraphStore();
-    ingest = new IngestService(log, graph);
+    ingest = new IngestService(log, graph, IdentityMerge.NONE);
     affinity = SqliteAffinityStore.inMemory();
     ingest.record(
         new NodeAssertion(

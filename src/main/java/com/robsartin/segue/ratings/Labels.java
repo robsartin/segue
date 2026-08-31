@@ -1,5 +1,6 @@
 package com.robsartin.segue.ratings;
 
+import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.port.AssertionLog;
@@ -44,8 +45,26 @@ final class Labels {
       return labels;
     }
     for (LoggedAssertion assertion : log.readAll()) {
-      if (assertion instanceof NodeAssertion claim && qids.contains(claim.qid())) {
-        labels.put(claim.qid(), claim.label());
+      // Two claim types name an entity, not one (#92). A source states a NodeAssertion; the owner
+      // mints a LocalEntity, which is a first-person claim and deliberately not a NodeAssertion -
+      // it carries no Provenance, because the owner minting it IS the source. Both put a node in
+      // the graph, so both have to answer here, and the failure of matching only the first was
+      // silent rather than loud: a rated minted entity listed as AffinityRow.NO_LABEL - "(not in
+      // the graph)" - while being in the graph. That string exists for a rating that OUTLIVED its
+      // node, which is the opposite situation and the reason nothing noticed.
+      String qid = null;
+      String label = null;
+      if (assertion instanceof NodeAssertion claim) {
+        qid = claim.qid();
+        label = claim.label();
+      } else if (assertion instanceof LocalEntity claim) {
+        qid = claim.qid();
+        label = claim.label();
+      }
+      // Last claim wins, matching upsertNode and the boot replay, across both kinds together: a
+      // merged entity a source later names is renamed here too, in the order the log holds.
+      if (qid != null && qids.contains(qid)) {
+        labels.put(qid, label);
       }
     }
     return labels;

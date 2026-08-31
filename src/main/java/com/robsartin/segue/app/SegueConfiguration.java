@@ -12,6 +12,7 @@ import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.EntityResolver;
 import com.robsartin.segue.port.GraphStore;
+import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.port.SourceAdapters;
 import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
@@ -132,9 +133,18 @@ public class SegueConfiguration {
                 new MusicBrainzClient(), new WikidataMusicBrainzIdentity(queryService), clock)));
   }
 
+  /**
+   * <b>The affinity store is here so that a merge cannot orphan a rating</b> (#92). It is not
+   * handed to {@code ingest} — {@link IdentityMerge} carries two qids and no taste-layer type, so
+   * ADR 33's fence stands and {@code IngestService} still cannot see a rating. What the wiring
+   * decides is that a merge declared through this application has something to follow it; {@link
+   * IdentityMerge#NONE} is the other answer, and it is never the right one where ratings exist.
+   */
   @Bean
-  IngestService ingestService(AssertionLog assertionLog, GraphStore graphStore) {
-    return new IngestService(assertionLog, graphStore);
+  IngestService ingestService(
+      AssertionLog assertionLog, GraphStore graphStore, AffinityStore affinityStore) {
+    return new IngestService(
+        assertionLog, graphStore, IdentityMerge.carryingRatings(affinityStore));
   }
 
   /**

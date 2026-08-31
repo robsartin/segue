@@ -11,6 +11,7 @@ import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.domain.Retraction;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.GraphStore;
+import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import java.time.Instant;
@@ -40,7 +41,7 @@ class IngestServiceTest {
   void setUp() {
     log = SqliteAssertionLog.inMemory();
     graph = new TinkerGraphStore();
-    ingest = new IngestService(log, graph);
+    ingest = new IngestService(log, graph, IdentityMerge.NONE);
   }
 
   @AfterEach

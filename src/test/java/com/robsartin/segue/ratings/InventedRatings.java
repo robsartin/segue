@@ -1,6 +1,7 @@
 package com.robsartin.segue.ratings;
 
 import com.robsartin.segue.domain.AffinityRecord;
+import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
@@ -32,8 +33,17 @@ final class InventedRatings {
   static final String NOVEL = "Q0900002";
   static final String VANISHED = "Q0900003";
 
+  /**
+   * Two leading zeros: an entity the owner minted himself (#92), not one of ADR 58's
+   * single-leading-zero stand-ins. Rateable like anything else in the graph, and the log holds it
+   * as a {@code LocalEntity} rather than a {@code NodeAssertion} - which is the whole reason this
+   * constant exists.
+   */
+  static final String MINTED = "Q00900042";
+
   static final String QUARTET_LABEL = "The Invented Quartet";
   static final String NOVEL_LABEL = "A Placeholder Novel";
+  static final String MINTED_LABEL = "A Book No Source Knows";
   static final String QUARTET_NOTE = "a note about a band nobody has heard of";
   static final String NOVEL_NOTE = "a second invented note, unlike the first";
 
@@ -45,6 +55,11 @@ final class InventedRatings {
   /** A node claim, the way the log holds one. */
   static NodeAssertion node(String qid, String label) {
     return new NodeAssertion(qid, NodeKind.WORK, label, SOURCE);
+  }
+
+  /** The owner's own claim that something exists, the way the log holds one (#92). */
+  static LocalEntity minted(String qid, String label) {
+    return LocalEntity.minted(qid, NodeKind.WORK, label, EARLY);
   }
 
   /** A log that answers {@code readAll} from a list and counts how often it is asked. */

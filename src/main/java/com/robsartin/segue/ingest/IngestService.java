@@ -1,16 +1,21 @@
 package com.robsartin.segue.ingest;
 
 import com.robsartin.segue.domain.AssertionRecord;
+import com.robsartin.segue.domain.EdgeRecord;
 import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
+import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.OwnerEdge;
+import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.domain.Retraction;
 import com.robsartin.segue.domain.SameAs;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.GraphStore;
+import com.robsartin.segue.port.IdentityMerge;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * The only thing in the system that writes.
@@ -28,10 +33,17 @@ public final class IngestService {
 
   private final AssertionLog log;
   private final GraphStore graph;
+  private final IdentityMerge merges;
 
-  public IngestService(AssertionLog log, GraphStore graph) {
+  /**
+   * @param merges what follows a merge outside the graph. Required rather than defaulted, and
+   *     {@link IdentityMerge#NONE} says so out loud where there is nothing to follow - see that
+   *     constant for why a silent default is the wrong shape here
+   */
+  public IngestService(AssertionLog log, GraphStore graph, IdentityMerge merges) {
     this.log = Objects.requireNonNull(log, "log");
     this.graph = Objects.requireNonNull(graph, "graph");
+    this.merges = Objects.requireNonNull(merges, "merges");
   }
 
   /** Append one claim to the log, then apply it to the graph. */
@@ -45,6 +57,13 @@ public final class IngestService {
     }
     log.append(assertion);
     apply(graph, assertion);
+    if (assertion instanceof SameAs merge) {
+      // The third write, and last for the same reason the graph write is second: the log is the
+      // source of truth, so failing with the log ahead is the recoverable direction. It is
+      // deliberately NOT inside apply() - apply is what replay calls, and a rating carried again
+      // at every boot would overwrite whatever the owner has said since. See IdentityMerge.
+      merges.follow(merge.localQid(), merge.canonicalQid());
+    }
   }
 
   /**
@@ -100,11 +119,61 @@ public final class IngestService {
       // so replay and this switch cannot attribute the same claim differently.
       case LocalEntity local -> graph.upsertNode(local.toNode());
       case OwnerEdge edge -> graph.record(edge.toAssertion());
-      // #92 Task 4 gives a merge its graph effect: resolving edges and the rating onto the
-      // canonical id. Until then it is logged and does nothing here, which is the honest state
-      // rather than a half-merge - ADR 19 makes the log the source of truth, so a merge recorded
-      // now is applied by the replay that follows Task 4, with nothing lost in between.
-      case SameAs ignored -> {}
+      // A merge is an asserted equivalence, never an edit (ADR 19, ADR 44): the claims already
+      // made against the local id are carried onto the canonical one, and the local id is left
+      // exactly where it was so every earlier log entry keeps meaning what it meant.
+      case SameAs merge -> carry(graph, merge);
+    }
+  }
+
+  /**
+   * Carry what the owner claimed about a local id onto the id Wikidata turned out to have.
+   *
+   * <p><b>Nothing is removed.</b> The local node stays, its edges stay, and the canonical id gains
+   * copies. That is what "a merged local id stays resolvable" means in practice - a route or a
+   * rating recorded last month still names the local id, and a projection that deleted it would
+   * make those entries unreadable while the log still holds them.
+   *
+   * <p><b>The canonical id gets a node only when nothing has claimed one.</b> A merge is usually
+   * declared before any source has expanded the real item, and {@code TinkerGraphStore.record}
+   * requires both endpoints to exist - so without this, a carried edge would throw, and it would
+   * throw again at every boot on a log row ADR 19 forbids deleting. When a source HAS named the
+   * entity, that claim wins: {@code upsertNode} is last-writer-wins, and overwriting a source's
+   * label with the owner's working title would be the merge editing the world rather than recording
+   * an identity. The stand-in carries no {@code instanceOf}, because the owner stated no classes -
+   * the same reason {@link LocalEntity#toNode()} carries none.
+   *
+   * <p><b>Order is log order, deliberately.</b> This reads the graph as it stands at the moment the
+   * merge is applied, so claims appended <em>after</em> a merge stay on the id they were made
+   * against. That matches {@link com.robsartin.segue.domain.Retractions}, which also asks what had
+   * already been said when the decision was made, and it keeps live ingest and replay identical.
+   */
+  private static void carry(GraphStore graph, SameAs merge) {
+    String local = merge.localQid();
+    String canonical = merge.canonicalQid();
+    Optional<NodeRecord> minted = graph.node(local);
+    if (minted.isEmpty()) {
+      // Nothing has been claimed under the local id, so there is nothing to carry. Not an error:
+      // the log is append-only and a merge may legitimately be replayed before the claim it
+      // resolves has been re-applied - Retractions can also have dropped that claim and kept this
+      // row, when the retraction lies between them.
+      return;
+    }
+    if (graph.node(canonical).isEmpty()) {
+      graph.upsertNode(
+          new NodeRecord(canonical, minted.get().kind(), minted.get().label(), List.of()));
+    }
+    for (EdgeRecord edge : graph.edges(local)) {
+      String from = edge.fromQid().equals(local) ? canonical : edge.fromQid();
+      String to = edge.toQid().equals(local) ? canonical : edge.toQid();
+      // Every supporting assertion, not one: an edge holds the provenance of everyone who claimed
+      // it, and re-recording it as a single assertion would drop the others and change what
+      // EdgeRecord.corroboration() counts on the canonical id.
+      for (Provenance source : edge.sources()) {
+        graph.record(
+            new AssertionRecord(
+                from, to, edge.typeCode(), edge.validFrom(), edge.validTo(), source));
+      }
     }
   }
 }
