@@ -13,10 +13,18 @@ import java.util.List;
 /**
  * Invented people, invented bands, invented QIDs.
  *
- * <p>Q90xxxx is the placeholder range this project already uses in {@code fixture.Fixture}, chosen
- * so nothing here can be mistaken for a real Wikidata identifier. Nothing in this file is derived
- * from a real graph, a real list or a real rating: ADR 40 and issue #37 are explicit that this
- * repository is public and that the personal data lives outside it.
+ * <p><b>The QIDs are invented in the sense that nobody looked them up — not in the sense that they
+ * denote nothing.</b> Some of the ids below resolve to real Wikidata entities. They were picked
+ * from a {@code Q900xxx} range described as a placeholder range shared with {@code
+ * fixture.Fixture}; that range was never free, and {@code Fixture} has since moved to ids
+ * Wikibase's item-id grammar refuses (ADR 58). This file has not, because that family is shared
+ * across many unrelated test files and moving one of them would split the convention rather than
+ * mend it. Tracked as <a href="https://github.com/robsartin/segue/issues/171">issue #171</a>;
+ * nothing here depends on what any id denotes.
+ *
+ * <p>Nothing in this file is derived from a real graph, a real list or a real rating: ADR 40 and
+ * issue #37 are explicit that this repository is public and that the personal data lives outside
+ * it.
  */
 final class InventedGraph {
 

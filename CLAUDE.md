@@ -232,16 +232,16 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   item-id grammar is `Q[1-9]` followed by up to nine digits, so an id with a leading zero is
   *unallocatable* rather than merely unallocated — no future allocation can give it a referent
   (ADR 58). Every qid regex here is `Q\d+`, which accepts it. This replaced a `Q9000xx` range
-  chosen because a high number looked free: all fifteen resolved, and the fixture was asserting
-  that a real entity is a musician named "Nick Cave". Picking an unused-looking number **is**
-  inventing an external identifier. `FixtureQidsDenoteNothingTest` pins the shape offline and
-  `WikidataLiveSmokeTest` asks the real API.
-- **Do not read that as "the test fixtures are clean".** Only `Fixture`'s own family moved. Of the
-  258 distinct `Q\d+` literals in `src/test`, 244 resolved when measured on 2026-08-31; 201
-  allocatable-form ids remain across 71 files, 188 of which resolve. Some are deliberately real and
-  must stay (class ids like `Q5`, the entities the live tests are about); the rest are stand-ins in
-  the shape ADR 58 forbids, the largest being `Q9001xx`, shared across ~20 files. That is issue
-  #171 — check it before assuming an id in a test denotes nothing.
+  chosen because a high number looked free; nearly all of them resolved, and the fixture was
+  asserting that a real entity is a musician named "Nick Cave". Picking an unused-looking number
+  **is** inventing an external identifier. `FixtureQidsDenoteNothingTest` pins the shape offline
+  and `WikidataLiveSmokeTest` asks the real API.
+- **Do not read that as "the test fixtures are clean".** Only `Fixture`'s own family moved. Most
+  ids still in `src/test` are allocatable-form and most of those resolve to real entities. Some are
+  deliberately real and must stay (class ids like `Q5`, the entities the live tests are about); the
+  rest are stand-ins in the shape ADR 58 forbids, the largest being `Q9001xx`, shared across many
+  unrelated files. **ADR 58 holds the counts and the date they were taken — do not restate them
+  here.** Before assuming an id in a test denotes nothing, check issue #171.
 - **Wikidata states creative relations on the WORK, not the person.** Fetching an
   entity returns only claims stated on it, so expanding a film finds its director
   while expanding a person does not find their films. `EdgeType.wikidataInverted`
@@ -826,8 +826,9 @@ returning each neighbour's label and P31 inline.
 
 Design rule: adding a source must not require touching the graph layer.
 
-Retiring the placeholder QIDs in `Fixture` was deliberately left undone — it
-touches every test's expected counts and deserves its own change. The
+Retiring `Fixture`'s stand-in QIDs was done in issue #141: they now carry a
+leading zero, which Wikibase's item-id grammar refuses (ADR 58). The same sweep
+across the rest of `src/test` is still outstanding and is issue #171. The
 neighbour-QID fan-out is now mostly moot for Wikidata: the reverse lookup already
 returns identity for the entities it discovers, so `expandEntity` fetches only
 the ones a source could not describe. A bounded virtual-thread fan-out for that

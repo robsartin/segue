@@ -23,8 +23,13 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Invented people, invented bands, invented QIDs - Q900xxx, the placeholder range this project
- * already uses. Nothing here is derived from a real graph (ADR 40, issue #37).
+ * Invented people, invented bands, and QIDs that were not looked up - which is not the same as QIDs
+ * that denote nothing. Some of the {@code Q900xxx} ids here resolve to real Wikidata entities. The
+ * range was described as this project's placeholder range; it was never free, and {@code
+ * fixture.Fixture} has since moved to ids Wikibase's item-id grammar refuses (ADR 58). This file
+ * has not, because the family is shared across many unrelated test files - see <a
+ * href="https://github.com/robsartin/segue/issues/171">issue #171</a>. Nothing here depends on what
+ * any id denotes, and nothing here is derived from a real graph (ADR 40, issue #37).
  */
 class RetractRunTest {
 
