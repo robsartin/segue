@@ -53,11 +53,14 @@ import org.junit.jupiter.api.Test;
  * and a MusicBrainz {@code neighbors()} does not merely decline to add classes: it removes the ones
  * already there.
  *
- * <p><b>Both tests below were watched red.</b> The adapter was changed to emit a {@code
- * NodeAssertion} per resolved neighbour — {@code artist.type} read into {@link ArtistRelation},
- * {@code Person}/{@code Group} mapped onto {@link NodeKind} — and the failures are recorded in
- * issue #143. The change was then reverted, and these tests are what stops it coming back by
- * accident.
+ * <p><b>Both tests below were watched red, and here is what they said.</b> The adapter was changed
+ * to emit a {@code NodeAssertion} per resolved neighbour — {@code artist.type} read into {@link
+ * ArtistRelation}, {@code Person}/{@code Group} mapped onto {@link NodeKind} — and both failed with
+ * {@code Expecting actual: [] to contain exactly (and in same order): ["Q5"]}: the first because
+ * the class it had was erased, the second because the class it should have been given never
+ * arrived. The change was then reverted (ADR 4), and these tests are what stops it coming back by
+ * accident. The message is quoted here rather than cited elsewhere because it is short enough to
+ * carry, and ADR 55 records the decision it settled.
  *
  * <p><b>What this is not.</b> It is not an argument that the saving is imaginary. It is measured
  * and real, and the route that collects it without this cost is a bridge that returns classes

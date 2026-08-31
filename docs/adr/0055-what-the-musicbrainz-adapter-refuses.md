@@ -91,9 +91,14 @@ on this sample, in exchange for a permanent vocabulary commitment.
 checking it changed the argument. #142 is titled "the one relation that would give `MEMBER_OF`
 between two groups", which is true of MusicBrainz and false of the graph: the log copy already holds
 **136 `MEMBER_OF` and 34 `PART_OF` assertions whose endpoints are both `GROUP`** — 162 distinct
-pairs, 2 of which carry both codes. **Every one of the 170 has `source_id` `wikidata`.** Group-in-
-group is a shape this graph has had all along, from P463 and P361 stated directly, and `subgroup`
-would add one edge to it.
+pairs, 2 of which carry both codes. Group-in-group is a shape this graph has had all along, from
+P463 and P361 stated directly, and `subgroup` would add one edge to it.
+
+**Every one of the 170 carries `source_id` `wikidata`, and that fact discriminates nothing** — all
+318,116 assertions in the log copy do, because MusicBrainz had never run against that database. It
+is worth one line only to rule out the reading that these edges were already MusicBrainz's, and it
+establishes nothing beyond that. The load-bearing figure is the 170 itself, and it is reproducible
+from any copy of the log.
 
 ### The adapter returns no `neighbors()` — the saving is under half of what #143 assumed (#143)
 
@@ -113,6 +118,14 @@ it looks.** Of the 120 bridged seeds, 90 produced at least one neighbour that re
 | new, but described by Wikidata's own reverse pass in the same call | 44 | 10% | no — `described` wins |
 | **new and undescribed** | **214** | **46%** | **yes — this is the whole saving** |
 
+**The 44 are a property of the shipped wiring, not of the two sources**, and noticing that makes
+the trade worse rather than better. `SegueService` merges adapter-supplied neighbours with
+`described.putIfAbsent` — first writer wins — and `SegueConfiguration.sourceAdapters` is the
+authority on the order, which is `wikidata, musicbrainz`. So those 44 keep their classes only
+because Wikidata described them first. Reverse the list, as ADR 54 records
+`CorroborationAcrossSourcesTest` doing for the bound, and MusicBrainz's class-less claim wins them
+too — a further 44 neighbour-descriptions degraded, with the saving unchanged at 214.
+
 Per expansion the saving is a **median of 1** fetch, p90 of 4, max of 54. Separately, the shared
 `maxNewEdges` bound (ADR 54's GAP 3) would have discarded MusicBrainz's assertions on only 2 of the
 90 seeds at the shipped bound of 200, so the bound is not what limits this.
@@ -130,10 +143,24 @@ classes:
   the same call, so MusicBrainz's class-less claim would be the one recorded for them — and **all 57
   carry a non-empty `instanceOf` today, which the upsert would erase.**
 
-`PathRanking.isHub`, `CandidateSweep`, `rate/Card`, `DotWriter` and `GraphMlWriter` all read that
-field, and [ADR 42](0042-store-p31-and-rederive-kind-at-projection.md) is the decision that the log
-keeps the raw classes so a derivation can be revisited at all. **271 nodes degraded to save 214
-round trips is the trade, and it is the wrong way round.**
+**Ten files in `src/main` name `instanceOf()`, and this is the enumeration rather than a sample of
+it**, because a count is a set claim and a short one invites the reading that the rest do not
+matter. Five consume it to decide something: `PathRanking.isHub` and `recommend/CandidateSweep`
+(the recognition-institution half of the hub rule), `rate/Card` (what a card says the entity is),
+`export/DotWriter` (node shading and label) and `wikidata/KindMapper` (the derivation ADR 42 exists
+to keep revisable). Three persist it — `tinker/TinkerGraphStore`, `jena/JenaGraphStore`,
+`sqlite/SqliteAssertionLog` — and two carry it outward, `export/ViewSelector` and
+`export/GraphMlWriter`. [ADR 42](0042-store-p31-and-rederive-kind-at-projection.md) is the decision
+that the log keeps the raw classes so a derivation can be revisited at all.
+
+**The trade, in the units each side is actually counted in, and with no total offered.** The saving
+is 214 fetches — an event per neighbour per expansion, which is what a round trip is. The cost is
+214 neighbours created with an empty `instanceOf` in those same expansions, plus **57 distinct
+existing nodes** whose classes the upsert erases, de-duplicated across the sample because a node is
+erased once however many expansions reach it. **The two are not the same unit and are deliberately
+not added up here** — an earlier draft of this ADR summed them to 271, which was a per-expansion
+count and a distinct-node count in one figure. Either side of the ledger, read alone, says the same
+thing: more nodes lose classes than round trips are saved.
 
 **Watched red, not reasoned.** The adapter was changed to emit a `NodeAssertion` per resolved
 neighbour — `artist.type` read into `ArtistRelation`, `Person`/`Group` mapped onto `NodeKind` — and
@@ -182,14 +209,14 @@ so that path is safe, and `MusicBrainzNeighbourIdentityTest`'s third test assert
 
 ### For `neighbors()` (#143)
 
-- **Emit them anyway and accept the class loss.** The trade is quantified above: 271 nodes degraded
-  against 214 round trips saved, at a median of one per expansion. ADR 54's GAP 8 already judged an
+- **Emit them anyway and accept the class loss.** The trade is quantified above — 214 fetches saved,
+  at a median of one per expansion, against 214 class-less creations and 57 distinct erasures. ADR 54's GAP 8 already judged an
   empty `instanceOf` "harmless" for MusicBrainz on the ground that artists are not recognition
   institutions, and that judgement holds for the hub rule and **only** for the hub rule — it did not
   consider erasing classes a node already has, nor `rate/Card`, `DotWriter` or ADR 42's
   re-derivation.
 - **Emit them and fix the refresh in `SegueService` so a class-less source cannot overwrite a
-  described node.** This is a real fix and it addresses 57 of the 271; it leaves the 214 new nodes
+  described node.** This is a real fix and it addresses the 57 erasures; it leaves the 214 new nodes
   class-less, and it changes `mcp`, which is outside the adapter. Not taken here, and not because it
   is wrong.
 - **Widen the bridge to return classes alongside QIDs — the route that actually wins.** One batched
