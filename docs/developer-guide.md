@@ -347,9 +347,9 @@ reachable from the application — nothing imports any of them, and each is ente
 has a different relationship with the data and a different fence to match.
 
 - **`seed` reaches `wikidata` and stops.** It may not touch `sqlite`, `tinker`, `jena`, `ingest`,
-  `mcp`, `app` or `retract`: it cannot open the database even to read it, which is the fence that
-  makes a tool reading a private list of names safe
-  ([ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)).
+  `mcp`, `app` or any other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`): it cannot open the
+  database even to read it, which is the fence that makes a tool reading a private list of names
+  safe ([ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)).
 - **`export` reaches `sqlite`, `tinker` and `ingest`**, because reading the graph is its whole job,
   and it may build a throwaway projection ([ADR 41](adr/0041-graph-exporter-views-and-formats.md)).
 - **`ratings` reaches `sqlite` and nothing else**, because it needs the least: a bulk read of the
@@ -408,23 +408,23 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `noPackageCycles` | any dependency cycle between slices of `com.robsartin.segue` | [ADR 32](adr/0032-layering-and-archunit.md) |
 | `springOnlyInAppAndMcp` | `org.springframework.*` anywhere outside `app` and `mcp` | [ADR 25](adr/0025-source-adapter-spi.md), [ADR 32](adr/0032-layering-and-archunit.md) |
 | `onlyIngestAppliesClaimsToTheGraph` | calling `GraphStore.record`, `GraphStore.upsertNode` or `AssertionLog.append` from outside `ingest` | [ADR 19](adr/0019-assertion-log-source-of-truth.md) |
-| `seedNeverOpensAStore` | `seed` depending on `sqlite`, `tinker`, `jena`, `ingest`, `mcp`, `app`, `retract` or `rate` — it resolves names and must not open the database even to read it | [ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md) |
-| `theExporterOnlyReads` | `export` calling `GraphStore.record`/`upsertNode` or `AssertionLog.append`, or depending on `IngestService`, or on either of the two dev tools that write (`retract`, `rate`) at all | [ADR 41](adr/0041-graph-exporter-views-and-formats.md) |
+| `seedNeverOpensAStore` | `seed` depending on `sqlite`, `tinker`, `jena`, `ingest`, `mcp`, `app` or every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`, so a new tool joins every fence at once) — it resolves names and must not open the database even to read it | [ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md) |
+| `theExporterOnlyReads` | `export` calling `GraphStore.record`/`upsertNode` or `AssertionLog.append`, or depending on `IngestService`, or on every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`, so a new tool joins every fence at once), at all | [ADR 41](adr/0041-graph-exporter-views-and-formats.md) |
 | `theExporterNeverSpeaksToANetwork` | `export` depending on `java.net`, `javax.net`, the whole `musicbrainz` package, or any class of this project's that reaches a network API itself or through a chain of other classes here — so no HTTP client is named and none has to be remembered. The last clause replaced a `..wikidata.WikidataClient` argument that was a class name passed to a package predicate and matched nothing (issue #139) | [ADR 41](adr/0041-graph-exporter-views-and-formats.md) |
 | `theRatingsToolOnlyReads` | `ratings` calling the three world-fact writes **or either taste-layer write, `AffinityStore.put` and `updateRating`** — the only rule anywhere guarding the rating write | [ADR 43](adr/0043-listing-your-own-ratings.md) |
-| `theRatingsToolOpensNothingElse` | `ratings` depending on `tinker`, `jena`, `ingest`, `mcp`, `app`, `seed`, `export`, `retract`, `rate`, `java.net` or `javax.net` | [ADR 43](adr/0043-listing-your-own-ratings.md) |
+| `theRatingsToolOpensNothingElse` | `ratings` depending on `tinker`, `jena`, `ingest`, `mcp`, `app`, `java.net`, `javax.net` or every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`, so a new tool joins every fence at once) | [ADR 43](adr/0043-listing-your-own-ratings.md) |
 | `onlyTheRatingsToolReadsEveryRating` | calling `AffinityStore.readAll` from outside `ratings` — the bulk read exists for the owner's dev tool and for nothing on the MCP surface | [ADR 16](adr/0016-privacy-and-data-handling.md), [ADR 39](adr/0039-affinity-capture-and-read.md), [ADR 43](adr/0043-listing-your-own-ratings.md) |
 | `theRetractionToolWritesOnlyRetractions` | `retract` calling the three world-fact writes, either taste-layer write (`AffinityStore.put`, `updateRating`) or `AffinityStore.readAll` — it appends a retraction through `IngestService` and writes nothing else, least of all a rating | [ADR 44](adr/0044-retraction-as-a-new-claim.md) |
-| `theRetractionToolOpensNothingElse` | `retract` depending on `GraphStore` **as a type**, on `AffinityStore`, or on `tinker`, `jena`, `mcp`, `app`, `seed`, `export`, `ratings`, `rate`, `java.net` or `javax.net` — a retraction has no graph half, so the tool must not be able to hold one | [ADR 44](adr/0044-retraction-as-a-new-claim.md) |
+| `theRetractionToolOpensNothingElse` | `retract` depending on `GraphStore` **as a type**, on `AffinityStore`, or on `tinker`, `jena`, `mcp`, `app`, `java.net`, `javax.net` or every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`, so a new tool joins every fence at once) — a retraction has no graph half, so the tool must not be able to hold one | [ADR 44](adr/0044-retraction-as-a-new-claim.md) |
 | `theRecommenderOnlyReads` | `recommend` calling the three world-fact writes or either taste-layer write (`AffinityStore.put`, `updateRating`), or depending on `IngestService` at all | [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
 | `theRecommenderReadsRatingsAndNeverNotes` | `recommend` depending on `AffinityRecord` **as a type**, or calling `AffinityStore.find` or `readAll` — it may hold the store and call the note-free `readRatings`, and nothing that carries free text | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 39](adr/0039-affinity-capture-and-read.md), [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
 | `onlyTheRatingsToolReadsANote` | calling `AffinityRecord.note()` from outside `ratings` and `sqlite` — the score is ordinary data, the note is the owner's and is read on their own machine | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 43](adr/0043-listing-your-own-ratings.md) |
 | `onlyTheRecommenderReadsEveryRating` | calling `AffinityStore.readRatings` from outside `recommend` **and `rate`** — the note-free bulk read belongs to the two dev-side tools that weight and deal by it, and ADR 26 still pins the surface at six tools | [ADR 26](adr/0026-mcp-tool-surface.md), [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
-| `theRecommenderOpensNothingElse` | `recommend` depending on `jena`, `mcp`, `app`, `seed`, `export`, `ratings`, `retract`, `rate`, `java.net` or `javax.net` — `rate` depends on `recommend` by design, and this is what keeps that trip one-way | [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
-| `theRatingDeckWritesOnlyAffinity` | `rate` calling the three world-fact writes — the deck records what the owner thinks, never what the world says | [ADR 46](adr/0046-the-rating-deck.md) |
+| `theRecommenderOpensNothingElse` | `recommend` depending on `jena`, `mcp`, `app`, `java.net`, `javax.net` or every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`, so a new tool joins every fence at once) — `rate` depends on `recommend` by design, and this is what keeps that trip one-way | [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
+| `theRatingDeckWritesOnlyAffinity` | `rate` calling the three world-fact writes, or depending on `IngestService` **as a type** — the deck records what the owner thinks, never what the world says, and cannot route a claim through the one class allowed to write one | [ADR 46](adr/0046-the-rating-deck.md) |
 | `theRatingDeckNeverReadsANote` | `rate` calling `AffinityRecord.note()` — it writes the score and must not be able to display the note | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 46](adr/0046-the-rating-deck.md) |
 | `theRatingDeckLogsNoRating` | any class in `rate` depending on `AffinityRecord` as a type, **with no exception** — the deck writes through `AffinityStore.updateRating`, which builds no record, so nothing here may hold a rating to log | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 46](adr/0046-the-rating-deck.md) |
-| `theRatingDeckOpensNothingElse` | `rate` depending on `jena`, `mcp`, `app`, `seed`, `export`, `ratings` or `retract`. `recommend` is deliberately allowed (the candidate sweep) and so is `java.net` — this is the one dev tool that is an HTTP server, fenced instead by the loopback bind and the `Origin` allowlist | [ADR 46](adr/0046-the-rating-deck.md) |
+| `theRatingDeckOpensNothingElse` | `rate` depending on `jena`, `mcp`, `app` or every other dev tool bar one. `recommend` is deliberately allowed (the candidate sweep) and so is `java.net` — this is the one dev tool that is an HTTP server, fenced instead by the loopback bind and the `Origin` allowlist | [ADR 46](adr/0046-the-rating-deck.md) |
 | `nothingWritesToStandardOut` | reading `System.out` anywhere except the one named exception, `SegueApplication` | [ADR 28](adr/0028-mcp-transports.md) |
 | `nothingWritesToStandardError`, `noPrintStackTrace`, `noJavaUtilLogging` | bypassing SLF4J | [ADR 30](adr/0030-structured-logging.md) |
 | `affinityNeverTouchesTheWorldFactLayer` | a taste-layer type depending on the log, the graph, `IngestService` or the claim records | [ADR 33](adr/0033-taste-layer-separation.md) |
@@ -1046,8 +1046,10 @@ creates no edge.
 
 It never writes. `ArchitectureTest.seedNeverOpensAStore` forbids `seed` from depending on `sqlite`,
 `tinker`, `jena`, `ingest`, `mcp` or `app`, so it cannot open the database even to read it, and
-cannot quietly become an MCP tool. It also never needs the network in `check`: the judgement is a
-pure function, and everything that speaks HTTP is tested against `StubWikidataServer`.
+cannot quietly become an MCP tool. Every sibling dev tool is on the same list, so it cannot reach
+one and open a store through that instead. It also never needs the network in `check`: the
+judgement is a pure function, and everything that speaks HTTP is tested against
+`StubWikidataServer`.
 
 ## Looking at the graph
 
@@ -1142,8 +1144,9 @@ ends are both on the list.
 It never writes. `ArchitectureTest.theExporterOnlyReads` forbids `export` from calling
 `GraphStore.record`, `GraphStore.upsertNode` or `AssertionLog.append`, and from depending on
 `IngestService` at all — the second half is the one no other rule covers, and without it a class
-here could route a claim through the one legitimate writer. `GraphProjector` is deliberately
-allowed: the bounded views need a projection, and the exporter replays the log into a throwaway
+here could route a claim through the one legitimate writer. It also forbids depending on any sibling
+dev tool, so the exporter cannot borrow a looser fence than its own. `GraphProjector` is
+deliberately allowed: the bounded views need a projection, and the exporter replays the log into a throwaway
 in-memory `TinkerGraphStore` exactly as the application does at boot. Nothing durable changes.
 
 It never fetches. `ArchitectureTest.theExporterNeverSpeaksToANetwork` forbids `export` from
@@ -1229,9 +1232,9 @@ labels because a route is two or four edges, which is the same rule that keeps t
 132 node(s), 144 edge(s)
 144 edge(s) is past the 40 this picture can label legibly, so the DOT edge labels are dropped.
 Each edge keeps its type in a tooltip, but Graphviz puts that in xlink:title and a browser
-hovering the SVG shows the QIDs instead (issue #81): read the types from GraphML, which carries
-typeCode on every edge whatever the size, or render with -Tcmapx, where the tooltip becomes an
-HTML title
+hovering the SVG shows the QIDs instead (issue #81): render -Tsvg and run hoverableSvg over it,
+which moves each tooltip to where a browser looks (issue #99), or read the types from GraphML,
+which carries typeCode on every edge whatever the size
 ```
 
 That sentence comes from `DotWriter.note`, not from `ExportRun`, so the class that stays
@@ -1259,18 +1262,90 @@ identities: two nodes named `human` **silently merge into one**. An edge has no 
 named. [ADR 41](adr/0041-graph-exporter-views-and-formats.md)'s issue-#81 amendment has the full
 sweep against the real binary.
 
-**The attribute stays because it is not inert.** `dot -Tcmapx` renders it as an HTML `title` on an
-`<area>`, which every browser does show, so a PNG plus its imagemap answers the question a bare SVG
-cannot:
-
-```bash
-dot -Tpng -o graph.png -Tcmapx -o graph.map graph.dot
-```
+**The attribute stays because it is not inert.** Both routes below read it — one moves it, the
+other renders it as an HTML `title` — so everything a reader wants is already in the rendered file.
+It is simply on an element browsers do not consult.
 
 `WhatAHoverShowsTest` renders through the real Graphviz binary and asserts on `<title>` *content*
 rather than on the presence of an attribute — which is exactly the assertion whose absence let this
 ship. It skips where Graphviz is not installed, so **CI installs it**: the runner image has no
 `dot`, and without that step the test would report success while executing nothing.
+
+### So how do I see them
+
+**Render the SVG, then rewrite it.** The "cannot" above is a property of DOT, not of the file DOT
+produced. Once Graphviz has written the SVG the class and the relationship are both in it, one
+attribute away from the element a browser reads, and `hoverableSvg` moves them:
+
+```bash
+./gradlew exportGraph --args="--view neighbourhood --qid Q42 --out $HOME/one.dot"
+dot -Tsvg -o $HOME/one.svg $HOME/one.dot
+./gradlew hoverableSvg --args="--in $HOME/one.svg --out $HOME/one-hoverable.svg"
+```
+
+It is a third step rather than something `exportGraph` does, because the exporter never shells out
+to anything: an export is a pure function of one database file, and the SVG does not exist until
+you have run `dot` yourself. It writes a copy rather than editing in place, and running it twice
+over the same file changes nothing.
+
+**Why a browser then shows the right one.** SVG resolves a tooltip to the *nearest* ancestor
+carrying a `<title>` child, so the inserted one wins over the group's own without anything being
+deleted. `HoverableSvg` copies each `xlink:title` into a `<title>` element on the anchor that
+carried it — the attribute stays where it was, the outer `<title>` stays the QID, and a tool that
+reads either keeps working. All that changes is which one the browser finds first.
+
+**It titles the edge label too, and that is not a detail.** Graphviz puts a node's label inside the
+anchor, but an edge's label outside it — still a *child* of `<g class="edge">`, and a sibling of the
+`<g id="a_edgeN">` that wraps the anchor:
+
+```xml
+<g id="edge1" class="edge">
+  <title>Q901-&gt;Q902</title>              <- what a bare hover shows
+  <g id="a_edge1"><a xlink:title="…">…</a></g>
+  <text …>MEMBER_OF</text>                 <- the visible label, outside the anchor
+</g>
+```
+
+Rewriting only the anchors therefore leaves the visible relationship label — the thing a reader is
+likeliest to point at, drawn on every view under the 40-edge budget — still resolving to the two
+QIDs. That was found by hit-testing the rendered label in Chrome, not by reading the file, and it is
+pinned by a test.
+
+**What is checked, and what is not.** `WhatAHoverShowsTest` renders through the real binary, runs
+the rewrite, and asserts on the string a browser would resolve for four separate hover targets — a
+node's shape, a node's label, an edge's line and an edge's label — by walking to the nearest
+ancestor with a `<title>`, which is the rule the browser applies. What no test here does is confirm
+that the browser then *paints* the tooltip: that is native browser chrome, and it appears in no DOM
+and in no screenshot. It was checked by hand instead — in Safari during issue #81, in both
+directions, and again in Chrome for issue #99 by hit-testing all four targets and reading back the
+`<title>` the browser resolved. Both readings are recorded on their issues; neither is automated,
+and no test in this repository should be read as covering it.
+
+### The same picture as a PNG, with an imagemap
+
+`dot -Tcmapx` renders the same `tooltip` as an HTML `title` on an `<area>`, which every browser
+shows. **An imagemap does nothing on its own**, though: it needs a page binding it to the picture,
+and the map Graphviz writes is named after the view, so there is no fixed name to paste. Issue #99
+is what the recipe here used to be missing — it stopped at the first line, produced two files and
+no page, and a reader following it exactly got nothing and no way to tell why. So the recipe writes
+the page and renames the map:
+
+```bash
+dot -Tpng -o graph.png -Tcmapx -o graph.map graph.dot
+{ echo '<img src="graph.png" usemap="#graph" alt="an exported view">'
+  sed '1s|.*|<map id="graph" name="graph">|' graph.map
+} > graph.html
+```
+
+`ImagemapRecipeTest` reads that block **out of this file** and runs it, so the recipe cannot rot
+into one that does not work: it executes it against a real `DotWriter` render and asserts that the
+page's `usemap` names the map the recipe wrote and that the areas carry the class and the
+relationship. It cannot check that the tooltip is painted, for the reason given above; that half
+was read by hand in Chrome, by hit-testing the image and reading back the `<area>` the browser
+returned.
+
+Use this where the deliverable has to be a bitmap. Otherwise prefer the SVG: it scales, and it
+needs no second file kept beside it.
 
 ## Looking at what you have rated
 
@@ -1338,7 +1413,7 @@ writes, and nothing guarded the *rating* write, because until this tool the only
 `mcp` holding an `AffinityStore` looked up one qid at a time.
 
 It opens nothing else. `theRatingsToolOpensNothingElse` bans `tinker`, `jena`, `ingest`, `mcp`,
-`app`, both sibling tools and `java.net`. It needs a bulk read of the `affinity` table and the node
+`app`, every sibling tool and `java.net`. It needs a bulk read of the `affinity` table and the node
 claims in the log, both through `sqlite`; no traversal, so no engine, and no projection, so no
 `ingest`. The sibling tools are banned so this one cannot inherit their looser fences — `export`
 may use `GraphProjector`, and this may not.
@@ -1398,7 +1473,7 @@ and shows up in a `full` or `subgraph` export.
 | --- | --- | --- |
 | write anything but a retraction | `theRetractionToolWritesOnlyRetractions` | no graph write, no direct `AssertionLog.append`, and never a taste-layer write (`AffinityStore.put` or `updateRating`) — a retraction is about the world-fact layer, and a rating is the one thing here that cannot be regenerated |
 | hold a `GraphStore` at all | `theRetractionToolOpensNothingElse` | a retraction has no graph half; `GraphStore` cannot remove anything and ADR 41 already refused to widen that port for a dev tool. `IngestService.retract` is static so that satisfying a constructor could never become the reason this tool held a graph |
-| reach a network, an engine or a sibling tool | `theRetractionToolOpensNothingElse` | a decision about your own graph is a pure function of one local file; a dependency on `seed`, `export` or `ratings` would let this inherit a different fence |
+| reach a network, an engine or a sibling tool | `theRetractionToolOpensNothingElse` | a decision about your own graph is a pure function of one local file; a dependency on any sibling tool would let this inherit a different fence |
 
 ### Why this is not a seventh MCP tool
 
@@ -1818,8 +1893,8 @@ Four ArchUnit rules hold the boundary: `rate` may call `AffinityStore.updateRati
 that appends to the assertion log or touches the graph; it may never call `AffinityRecord.note()`;
 no class in the package may depend on `AffinityRecord` at all, with no exception — `RateServer`
 used to be named as one, and lost it when its write stopped constructing a record; and it may not
-reach `jena`, `mcp`, `app`, `seed`, `export`, `ratings` or `retract`, the sibling fence every dev
-tool carries. The bounds of the scale live on `RatingScale`, which carries no rating, so a class
+reach `jena`, `mcp`, `app` or any dev tool but `recommend` (`ArchitectureTest.DEV_TOOL_PACKAGES`),
+the sibling fence every dev tool carries. The bounds of the scale live on `RatingScale`, which carries no rating, so a class
 that only needs to say "1 to 5" — `RateCli`'s usage string and its `--revise` check — can say it
 without naming the type that carries one.
 
