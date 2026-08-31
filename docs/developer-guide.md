@@ -1509,7 +1509,9 @@ ADR 45's 2026-08-29 amendment), so a default run is now the case that sees all 7
 go away is the reason the floor is awkward at all: in-graph degree partly measures what segue has
 *fetched* rather than how obscure something is, so
 suppressing an entity that was only ever offered because it had been under-fetched is still a
-judgement made on incomplete information, and nothing re-opens the question when ingest improves.
+judgement made on incomplete information. **The "nothing re-opens the question" half of that
+sentence was true until issue #135** — every run now emits a reading of the floor, and
+[ADR 57](adr/0057-the-floor-reports-itself.md) states what in that reading re-opens it.
 
 ### The score, in one formula
 
@@ -1528,6 +1530,17 @@ it, which is the thing this feature exists to escape.
 Dividing by the candidate's degree rewards a small denominator, so a **degree floor is not
 optional** — `--min-degree`, defaulting to `Recommendations.MIN_CANDIDATE_DEGREE`. Without one the
 answer is whatever is thinnest.
+
+**The floor reports itself, and reading it is how you tell a drifted run from a wrong one**
+([ADR 57](adr/0057-the-floor-reports-itself.md), issue #135). Two header lines in every output file,
+and the same figures as notes before the file exists: how many candidates cleared the floor and at
+what median degree, how many of the ranked entries sit exactly on it, how many have every edge they
+carry already counted as evidence, and how many entities the floor held out — with the single-edge
+ones counted apart. `FloorReading` is the authority on the figures. The floor is an absolute count
+and degree grows with ingest, so the number is a default measured on one graph rather than a
+constant; ADR 57 records the baseline and names the one condition that says to re-run the two-floor
+comparison. Nothing fails a build when it drifts. What changes is that a drifted run looks
+different.
 
 ### Expanding a top candidate demotes it — "expand the top candidates" is an anti-pattern
 
@@ -1551,8 +1564,12 @@ Three practical consequences:
 - **Expanding candidates does not grow the candidate pool either.** A node discovered by expansion
   arrives with one edge, and the floor excludes it — deliberately, because a degree-1 candidate has
   exactly one intermediate, so the only part of its score that is about the node itself is the
-  weight of that one edge. Lowering the floor did not change that and was not meant to; issue #134
-  holds the question of whether it should.
+  weight of that one edge. Lowering the floor did not change that and was not meant to. **Issue
+  #134 asked whether it should and the answer is no** ([ADR 57](adr/0057-the-floor-reports-itself.md)):
+  ranking such nodes was measured as unusable, and listing them is thousands of rows in an order
+  nothing justifies. What the run does instead is **count** them, in the floor reading above — so
+  growth is visible even though it is not ranked. If you want one of them ranked, expand it:
+  `expand_entity` needs only that the entity be in the graph, and a discovered node already is.
 - **There is no expansion this guide can tell you will move a candidate UP.** Expanding the
   *intermediate* is the obvious next guess and the mechanism does not support it: each evidence term
   is `weight / discount(degree of the intermediate)` (`Scorer`), so raising that intermediate's
