@@ -19,10 +19,12 @@ import java.util.List;
  * #141).
  *
  * <p>They did not start that way. They were picked in a {@code Q9000xx} range on the assumption
- * that a high number would be unused, and every one of them resolved — this fixture was telling the
- * suite that a real Wikidata entity is a musician named "Nick Cave". Choosing an unused-looking
- * number is inventing an external identifier, which is the one thing this repository's own rule
- * forbids. See docs/adr/0022-wikidata-identity-and-vocabulary.md and its 2026-08-31 amendment.
+ * that a high number would be unused, and all but one of them resolved — this fixture was telling
+ * the suite that a real Wikidata entity is a musician named "Nick Cave". The exception is a deleted
+ * item rather than a free number, which is the same collision arriving a step later. Choosing an
+ * unused-looking number is inventing an external identifier, which is the one thing this
+ * repository's own rule forbids. See docs/adr/0022-wikidata-identity-and-vocabulary.md and its
+ * 2026-08-31 amendment.
  *
  * <p>Nothing depends on these values; slice 1 resolves real QIDs via wbsearchentities.
  *

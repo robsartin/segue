@@ -238,11 +238,11 @@ class WikidataLiveSmokeTest {
    * issue #141 the day the fixture was written.
    *
    * <p>The fixture ids were picked in the {@code Q9000xx} range on the assumption that a high
-   * number would be unused. Every one of them resolved. The fixture therefore told the suite that a
-   * real Wikidata entity is a musician, a band or a film — and the offline tests, which never call
-   * Wikidata, could not notice. That is this repository's own rule turned on itself: never invent
-   * an external identifier, because a fixture confirms the error forever and only a live test
-   * catches it.
+   * number would be unused. All but one of them resolved, the exception being a deleted item rather
+   * than a free number. The fixture therefore told the suite that a real Wikidata entity is a
+   * musician, a band or a film — and the offline tests, which never call Wikidata, could not
+   * notice. That is this repository's own rule turned on itself: never invent an external
+   * identifier, because a fixture confirms the error forever and only a live test catches it.
    *
    * <p>The fixture now uses ids with a leading zero, which Wikibase's item-id grammar refuses
    * outright — it reads {@code Q[1-9]} followed by up to nine more digits — so there is no number

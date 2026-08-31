@@ -20,18 +20,28 @@ The guarantee was false, and a single lookup disproves it.
 
 ### What was measured
 
-Every `Q\d+` string literal in `src/test` was resolved against Wikidata's Action and REST APIs on
-2026-08-31:
+**This section is the only place these counts live.** They are a snapshot, they drift as tests are
+added, and restating them elsewhere is how they came to disagree during the review of this ADR. Cite
+this section; do not copy it.
+
+The set counted is every distinct `Q\d+` token — matched as `\bQ\d+\b`, so javadoc mentions count
+as well as string literals — in every file `git ls-files src/test` reports. Each was resolved
+against Wikidata's Action and REST APIs on **2026-08-31**, against `main` at `cd1d8dc`:
 
 | set | distinct ids | resolve to a real entity |
 |---|---|---|
-| `Fixture`'s own ids | 15 | 14 (the fifteenth is a deleted item, not a free one) |
+| `Fixture`'s own ids | 15 | **14** — the fifteenth, `Q900014`, is a *deleted* item, not a free one |
 | the `Q90000xxx` ids the seed tests use | 37 | 37 |
-| all `Q\d+` literals in `src/test` | 258 | 244 |
+| all `Q\d+` tokens in `src/test` | 263 | 248 |
+
+A narrower definition gives a smaller number: counting only fully-quoted string literals misses ids
+named in javadoc and gives 258. The wider count is used here because a stand-in named in prose
+denotes a real entity just as firmly as one in a literal.
 
 So the fixture was not asserting things about nothing. It was asserting that a real entity — the
 sample includes a German village, several Hungarian academics and two breweries — is a musician
-named "Nick Cave", a band, or a film. `MusicBrainzLiveSmokeTest` was worse: it paired a genuine
+named "Nick Cave", a band, or a film. The one id that does not resolve is no comfort: it is a
+deleted item rather than an unused number, which is the same collision arriving a step later. `MusicBrainzLiveSmokeTest` was worse: it paired a genuine
 MBID with `Q900001`, tying a real ensemble's identifier to an unrelated real place.
 
 ### Why this happened, and why it is this repository's own lesson
@@ -112,13 +122,13 @@ test.
   `Fixture` javadoc carry the reason, so a future contributor who "corrects" the zero fails the
   build with a message that explains itself.
 - **The repository is not clean.** This decision moved `Fixture`'s own family — 401 literals across
-  30 files. 201 distinct allocatable-form ids remain in `src/test` across 71 files, 188 of which
-  resolve. They are a mix of deliberate real references that must not change (class ids such as
-  `Q5`; the entities the live tests and recorded JSON fixtures are genuinely about) and stand-ins
-  in exactly the shape this ADR forbids, the largest being `Q9001xx`, shared across roughly twenty
-  unrelated files. Triaging them needs judgment per site rather than a rename, and half-migrating a
-  shared family would split the convention rather than mend it
-  ([ADR 4](0004-mikado-method-for-changes.md)), so it is
+  30 files. By the definition above, **207** distinct allocatable-form ids remain in `src/test`
+  across **79** files, **193** of which resolve. They are a mix of deliberate real references that
+  must not change (class ids such as `Q5`; the entities the live tests and recorded JSON fixtures
+  are genuinely about) and stand-ins in exactly the shape this ADR forbids, the largest being
+  `Q9001xx`, shared across roughly twenty unrelated files. Triaging them needs judgment per site
+  rather than a rename, and half-migrating a shared family would split the convention rather than
+  mend it ([ADR 4](0004-mikado-method-for-changes.md)), so it is
   [issue #171](https://github.com/robsartin/segue/issues/171).
 - The enforcing test is scoped to `Fixture`'s constants. Widening it to a scan of all test sources
   needs the allowlist of deliberately-real ids that #171 produces.
