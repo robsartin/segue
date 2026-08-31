@@ -27,6 +27,28 @@ import java.util.Optional;
  * <p>{@link #qidsFor} is batched rather than one call per neighbour: the alternative is a round
  * trip per neighbour, and the measured neighbourhood was 387 across 40 seeds (#91's 2026-08-29
  * comment).
+ *
+ * <p><b>Both methods may fail, and say so</b> (<a
+ * href="https://github.com/robsartin/segue/issues/148">issue #148</a>). {@link
+ * MusicBrainzIdentityUnavailableException} is the one failure this seam declares, and declaring it
+ * is the whole point: the empty answer is already spoken for twice over — an empty {@link #mbidFor}
+ * means MusicBrainz holds no record bridged to that seed, and an MBID absent from {@link #qidsFor}
+ * means ADR 22 clause 2 declining to reach that neighbour — so an implementation that degraded to
+ * empty on failure was saying "nothing here" when it meant "I could not look". ADR 54 records what
+ * that cost: a Query Service outage on the seed lookup read downstream as "this artist has no
+ * members", with {@code ExpandResult.sourceUnavailable} false.
+ *
+ * <p>It is unchecked, like {@code WikidataUnavailableException} and {@link
+ * MusicBrainzUnavailableException}, and declared in both signatures anyway so that an implementor
+ * reads the channel off the interface rather than off this paragraph. {@code
+ * MusicBrainzSourceAdapter} catches it at both call sites and turns it into {@code
+ * ExpandResult.unavailable()}, so it never reaches the SPI — an implementation is not being asked
+ * to break the "failures degrade rather than propagate" contract, it is being given the only way to
+ * honour it.
+ *
+ * <p><b>An implementation may still answer empty, and should, when that is what it means.</b>
+ * Throwing is for "I could not ask", not for "the answer was nothing" — the two readings this type
+ * exists to keep apart.
  */
 public interface MusicBrainzIdentity {
 
@@ -38,8 +60,11 @@ public interface MusicBrainzIdentity {
    * see its class note for what that guard protects and why it may not depend on knowing which
    * implementation is behind this seam (issue #147). Returning a malformed value is therefore a way
    * to lose an expansion silently, not a way to break one.
+   *
+   * @throws MusicBrainzIdentityUnavailableException if the bridge could not be asked at all, which
+   *     is not the same answer as empty — see the type's Javadoc
    */
-  Optional<String> mbidFor(String qid);
+  Optional<String> mbidFor(String qid) throws MusicBrainzIdentityUnavailableException;
 
   /**
    * The QID for each MBID in {@code mbids} that this source can bridge. An MBID absent from the
@@ -52,6 +77,12 @@ public interface MusicBrainzIdentity {
    * artist-relation neighbours, 49% (190 of 387) carry no QID at all, and a 30-entity sample of
    * that 49% was tribute bands, pseudonyms, billing variants and relatives — material the identity
    * spine is declining to reach, on purpose, rather than failing to reach.
+   *
+   * @throws MusicBrainzIdentityUnavailableException if the bridge could not be asked at all. A
+   *     partial map is not an option here for the reason the dropping above states: half an answer
+   *     is indistinguishable from the normal drop path, so an implementation that cannot answer for
+   *     every MBID it was handed throws rather than returning what it managed.
    */
-  Map<String, String> qidsFor(Collection<String> mbids);
+  Map<String, String> qidsFor(Collection<String> mbids)
+      throws MusicBrainzIdentityUnavailableException;
 }

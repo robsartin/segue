@@ -221,6 +221,43 @@ class MusicBrainzSourceAdapterTest {
   }
 
   @Test
+  @DisplayName("should report the source unavailable when the identity bridge cannot answer")
+  void shouldReportTheSourceUnavailableWhenTheIdentityBridgeCannotAnswer() {
+    // Issue #148. Before the bridge had a failure channel this case was indistinguishable from
+    // "MusicBrainz holds no record bridged to this seed": both were an empty Optional, and the
+    // adapter read the empty one as the normal no-bridge answer and flagged nothing. An outage
+    // therefore reached the caller as "this artist has no members".
+    MusicBrainzSourceAdapter adapter =
+        new MusicBrainzSourceAdapter(
+            MusicBrainzClient.readingFrom(fixture("artist-with-relations.json")),
+            new UnavailableIdentity(),
+            CLOCK);
+
+    ExpandResult result = adapter.expand(quintet(), new ExpandContext(200));
+
+    assertThat(result.sourceUnavailable()).isTrue();
+    assertThat(result.assertions()).isEmpty();
+  }
+
+  @Test
+  @DisplayName("should report the source unavailable when the bridge fails resolving neighbours")
+  void shouldReportTheSourceUnavailableWhenTheBridgeFailsResolvingNeighbours() {
+    // The other of the bridge's two calls, and the one with more to lose: the seed resolved, the
+    // relations arrived, and only the MBID-to-QID pass fell over. Dropping every neighbour for
+    // want of a QID is also normal operation (49% of them), so this failure was silent too.
+    MusicBrainzSourceAdapter adapter =
+        new MusicBrainzSourceAdapter(
+            MusicBrainzClient.readingFrom(fixture("artist-with-relations.json")),
+            new UnavailableOnBatch(StubIdentity.of(mapping(QUINTET_MBID, QUINTET_QID))),
+            CLOCK);
+
+    ExpandResult result = adapter.expand(quintet(), new ExpandContext(200));
+
+    assertThat(result.sourceUnavailable()).isTrue();
+    assertThat(result.assertions()).isEmpty();
+  }
+
+  @Test
   @DisplayName("should drop a begin date below day precision and keep one that reaches it")
   void shouldDropABeginDateBelowDayPrecisionAndKeepOneThatReachesIt(@TempDir Path dir)
       throws IOException {
@@ -549,6 +586,40 @@ class MusicBrainzSourceAdapterTest {
       mapping.put(pairs[i], pairs[i + 1]);
     }
     return Map.copyOf(mapping);
+  }
+
+  /** A bridge that cannot reach whatever is behind it, in either direction. */
+  private static final class UnavailableIdentity implements MusicBrainzIdentity {
+
+    @Override
+    public Optional<String> mbidFor(String qid) {
+      throw new MusicBrainzIdentityUnavailableException("the bridge did not answer");
+    }
+
+    @Override
+    public Map<String, String> qidsFor(Collection<String> mbids) {
+      throw new MusicBrainzIdentityUnavailableException("the bridge did not answer");
+    }
+  }
+
+  /** A bridge that resolves the seed and then falls over on the neighbourhood batch. */
+  private static final class UnavailableOnBatch implements MusicBrainzIdentity {
+
+    private final MusicBrainzIdentity delegate;
+
+    private UnavailableOnBatch(MusicBrainzIdentity delegate) {
+      this.delegate = delegate;
+    }
+
+    @Override
+    public Optional<String> mbidFor(String qid) {
+      return delegate.mbidFor(qid);
+    }
+
+    @Override
+    public Map<String, String> qidsFor(Collection<String> mbids) {
+      throw new MusicBrainzIdentityUnavailableException("the bridge did not answer");
+    }
   }
 
   /**

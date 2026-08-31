@@ -112,7 +112,15 @@ import java.util.regex.Pattern;
  * {@code NodeAssertion} cleanly and blow up later inside {@code IngestService.apply} (GAP 7).
  *
  * <p><b>Failures degrade rather than propagate</b>, as {@link SourceAdapter#expand} requires: an
- * unreachable MusicBrainz yields a flagged empty result, not a thrown error.
+ * unreachable MusicBrainz yields a flagged empty result, not a thrown error. <b>So does an
+ * unreachable identity bridge, which it did not before</b> (<a
+ * href="https://github.com/robsartin/segue/issues/148">issue #148</a>). {@link MusicBrainzIdentity}
+ * now declares {@link MusicBrainzIdentityUnavailableException}, and both of its calls are caught
+ * here. The distinction that buys is the one this adapter could not draw: {@link
+ * MusicBrainzIdentity#mbidFor} returning empty means MusicBrainz holds no record bridged to this
+ * seed, and an empty {@link MusicBrainzIdentity#qidsFor} entry means ADR 22 clause 2 declining to
+ * reach that neighbour — both normal operation. A bridge that simply could not answer had no third
+ * thing to return, so its failure arrived as one of those two and set no flag.
  *
  * <p><b>Every string this adapter puts in a {@link Provenance} is guarded, and this is where each
  * one is guarded</b> (<a href="https://github.com/robsartin/segue/issues/147">issue #147</a>).
@@ -223,7 +231,17 @@ public final class MusicBrainzSourceAdapter implements SourceAdapter {
     Objects.requireNonNull(seed, "seed");
     Objects.requireNonNull(ctx, "ctx");
 
-    Optional<String> bridged = identity.mbidFor(seed.qid());
+    Optional<String> bridged;
+    try {
+      bridged = identity.mbidFor(seed.qid());
+    } catch (MusicBrainzIdentityUnavailableException e) {
+      // Issue #148. Caught here and turned into the flag, not allowed past expand(): the SPI says
+      // failures degrade rather than propagate, and SegueService.expandEntity wraps nothing. The
+      // reason this catch exists at all is that the empty answer below already means something —
+      // "no MusicBrainz record is bridged to this seed" — so before the seam had a failure type,
+      // an outage had no way to say anything other than that.
+      return ExpandResult.unavailable();
+    }
     if (bridged.isEmpty() || !looksLikeAnMbid(bridged.get())) {
       // Two cases, one answer. Either MusicBrainz has no record bridged to this QID, or the bridge
       // answered with something that is not an MBID — which cannot name a MusicBrainz record and,
@@ -252,8 +270,16 @@ public final class MusicBrainzSourceAdapter implements SourceAdapter {
     List<ArtistRelation> bounded = mappable.stream().limit(ctx.maxNewEdges()).toList();
     boolean truncated = bounded.size() < mappable.size();
 
-    Map<String, String> qids =
-        identity.qidsFor(bounded.stream().map(ArtistRelation::targetMbid).distinct().toList());
+    Map<String, String> qids;
+    try {
+      qids = identity.qidsFor(bounded.stream().map(ArtistRelation::targetMbid).distinct().toList());
+    } catch (MusicBrainzIdentityUnavailableException e) {
+      // The same reasoning one call later, and with more at stake: an empty map is how ADR 22
+      // clause 2 declines to reach a neighbour, measured at 49% of them, so a failed batch used to
+      // drop every neighbour of this seed while reporting nothing. No assertion has been built
+      // yet, so there is nothing partial to keep.
+      return ExpandResult.unavailable();
+    }
 
     // One instant for the whole expansion, not one per assertion: everything here was learned from
     // a single response at a single moment, and repeated clock reads would say otherwise (ADR 20).

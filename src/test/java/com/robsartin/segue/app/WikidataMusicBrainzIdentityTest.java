@@ -1,10 +1,11 @@
 package com.robsartin.segue.app;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.entry;
 
 import com.robsartin.segue.musicbrainz.MusicBrainzIdentity;
+import com.robsartin.segue.musicbrainz.MusicBrainzIdentityUnavailableException;
 import com.robsartin.segue.wikidata.StubWikidataServer;
 import com.robsartin.segue.wikidata.WikidataClient;
 import java.net.URLDecoder;
@@ -173,13 +174,15 @@ class WikidataMusicBrainzIdentityTest {
       // shape of the answer, not how long WikidataClient waits before giving it.
       stub.enqueueStatus(404);
 
-      Map<String, String> resolved = identity(stub).qidsFor(mbids);
+      MusicBrainzIdentity identity = identity(stub);
 
-      // Not the first chunk's answer. A half-filled map is indistinguishable from Wikidata
-      // knowing no QID for the missing half, which is the normal drop path (ADR 22 clause 2) and
-      // is reported to nobody — so a chunk failure would become silent data loss for an
-      // arbitrary subset. One request's failure fails the call, as it did when there was one.
-      assertThat(resolved).isEmpty();
+      // Not the first chunk's answer, and since issue #148 not an empty map either. A half-filled
+      // map is indistinguishable from Wikidata knowing no QID for the missing half, which is the
+      // normal drop path (ADR 22 clause 2) and is reported to nobody — so a chunk failure would
+      // become silent data loss for an arbitrary subset. An empty map had the same problem for
+      // every subset at once; one request's failure now fails the call out loud.
+      assertThatThrownBy(() -> identity.qidsFor(mbids))
+          .isInstanceOf(MusicBrainzIdentityUnavailableException.class);
     }
   }
 
@@ -244,17 +247,21 @@ class WikidataMusicBrainzIdentityTest {
   }
 
   @Test
-  @DisplayName("should resolve nothing rather than throw when Wikidata is unavailable")
-  void shouldResolveNothingRatherThanThrowWhenWikidataIsUnavailable() {
+  @DisplayName(
+      "should report the bridge unavailable rather than an empty map when Wikidata is down")
+  void shouldReportTheBridgeUnavailableRatherThanAnEmptyMapWhenWikidataIsDown() {
+    // Reversed by issue #148, for the same reason as the seed lookup and with more to lose: an
+    // absent key is how ADR 22 clause 2 declines to reach a neighbour, which happens to 49% of
+    // them, so an empty map on failure was silent loss of every neighbour of the seed.
     try (StubWikidataServer stub = new StubWikidataServer()) {
       // 404 rather than 503: WikidataClient retries a transient status four times, and the
-      // property under test is that the failure never leaves this class, not how long it waits.
+      // property under test is what the failure becomes, not how long it waits first.
       stub.enqueueStatus(404);
 
       MusicBrainzIdentity identity = identity(stub);
 
-      assertThatCode(() -> assertThat(identity.qidsFor(List.of(MEMBER_MBID))).isEmpty())
-          .doesNotThrowAnyException();
+      assertThatThrownBy(() -> identity.qidsFor(List.of(MEMBER_MBID)))
+          .isInstanceOf(MusicBrainzIdentityUnavailableException.class);
     }
   }
 
@@ -280,15 +287,22 @@ class WikidataMusicBrainzIdentityTest {
   }
 
   @Test
-  @DisplayName("should find no MBID rather than throw when Wikidata is unavailable")
-  void shouldFindNoMbidRatherThanThrowWhenWikidataIsUnavailable() {
+  @DisplayName("should report the bridge unavailable rather than no MBID when Wikidata is down")
+  void shouldReportTheBridgeUnavailableRatherThanNoMbidWhenWikidataIsDown() {
+    // Reversed by issue #148. This test used to assert that the failure never left this class,
+    // and swallowing it was the whole defect: an empty Optional is how MusicBrainzSourceAdapter
+    // is told "MusicBrainz holds no record bridged to this seed", so an outage arrived downstream
+    // as "this artist has no members" with sourceUnavailable false. The seam now declares a
+    // failure, and this class is the one that has one to report.
     try (StubWikidataServer stub = new StubWikidataServer()) {
+      // 404 rather than 503: WikidataClient retries a transient status four times, and the
+      // property under test is what the failure becomes, not how long it waits first.
       stub.enqueueStatus(404);
 
       MusicBrainzIdentity identity = identity(stub);
 
-      assertThatCode(() -> assertThat(identity.mbidFor(QUINTET_QID)).isEmpty())
-          .doesNotThrowAnyException();
+      assertThatThrownBy(() -> identity.mbidFor(QUINTET_QID))
+          .isInstanceOf(MusicBrainzIdentityUnavailableException.class);
     }
   }
 
