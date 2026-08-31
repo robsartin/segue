@@ -315,6 +315,21 @@ Cover, each as its own test: `mint` appends exactly one claim and returns the id
 
 - [ ] **Step 3: Implement**, then register the Gradle task beside `retractEntity` — same `group`, a description that says it needs no network, and the sqlite native-library grant `retractEntity` already carries.
 
+- [ ] **Step 2a: Fence the claim constructors.** *Added 2026-08-31 after Task 2's review.* Task 2
+inverted the validation split: the canonical constructors of `LocalEntity`, `OwnerEdge` and `SameAs`
+enforce only Wikidata's immutable grammar, while the mutable conventions live in the static factories
+`minted()`, `claimed()` and `declared()`. That is what keeps the log readable when a convention
+tightens — but it means `new OwnerEdge(a, b, "NOT_A_TYPE", now)` is constructible and appendable.
+
+Task 2 deliberately did **not** add a duplicate check at the write boundary, on the grounds that an
+unpinned second copy of a rule is what a future writer misses. **The structural fix is here**: an
+ArchUnit rule that nothing outside `domain` and `sqlite` calls those constructors directly —
+everything else goes through the factories. Positive control required: call a constructor from `own`,
+watch the rule go red naming itself, revert, quote the message.
+
+*(Moved here from Task 6 on 2026-08-31: this task lands the first writer, so
+the fence must arrive with it rather than one task later.)*
+
 - [ ] **Step 4: Run the gate and commit**
 
 ---
@@ -330,17 +345,6 @@ Cover, each as its own test: `mint` appends exactly one claim and returns the id
 
 `expand_entity` on a local entity must say *this entity has no source to expand from*, distinctly. ADR 56 established that an empty `ExpandResult` already means both "found nothing" and "source unavailable"; a third meaning rebuilds the defect ADR 56 fixed. Assert on the message, not only on the emptiness.
 
-- [ ] **Step 2a: Fence the claim constructors.** *Added 2026-08-31 after Task 2's review.* Task 2
-inverted the validation split: the canonical constructors of `LocalEntity`, `OwnerEdge` and `SameAs`
-enforce only Wikidata's immutable grammar, while the mutable conventions live in the static factories
-`minted()`, `claimed()` and `declared()`. That is what keeps the log readable when a convention
-tightens — but it means `new OwnerEdge(a, b, "NOT_A_TYPE", now)` is constructible and appendable.
-
-Task 2 deliberately did **not** add a duplicate check at the write boundary, on the grounds that an
-unpinned second copy of a rule is what a future writer misses. **The structural fix is here**: an
-ArchUnit rule that nothing outside `domain` and `sqlite` calls those constructors directly —
-everything else goes through the factories. Positive control required: call a constructor from `own`,
-watch the rule go red naming itself, revert, quote the message.
 
 - [ ] **Step 2: Write the failing ArchUnit rule and add `own` to `DEV_TOOL_PACKAGES`**
 
