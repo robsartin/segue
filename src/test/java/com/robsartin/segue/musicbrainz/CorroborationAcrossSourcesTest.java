@@ -11,6 +11,7 @@ import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.ingest.GraphProjector;
 import com.robsartin.segue.ingest.IngestService;
 import com.robsartin.segue.mcp.SegueService;
+import com.robsartin.segue.mcp.ToolResult;
 import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.EntityResolver;
@@ -178,13 +179,52 @@ class CorroborationAcrossSourcesTest {
     }
   }
 
-  // ---- helpers ----------------------------------------------------------
+  /**
+   * The residual case ADR 54 named and could not close: the P434 bridge alone fails.
+   *
+   * <p>It is the sharpest test of issue #148 available here because <b>both</b> of that ADR's
+   * complaints are in it at once. The bridge degraded to an empty MBID, which is how the adapter is
+   * told "MusicBrainz holds no record bridged to this seed", so the outage arrived as *"this artist
+   * has no members"* with {@code sourceUnavailable} false — nothing to attribute. And had it been
+   * flagged, the flag was ORed across adapters and would not have said whose.
+   *
+   * <p>Wikidata is healthy here and answers both passes, which is what makes the result a
+   * distinction rather than a blanket failure. In the shipped wiring the bridge is Wikidata-backed
+   * and a Query Service outage takes out both sources at once; this is the narrower failure, where
+   * MusicBrainz is the only source that lost anything.
+   */
+  @Test
+  @DisplayName("should name musicbrainz alone when only its identity bridge fails (issue #148)")
+  void shouldNameMusicbrainzAloneWhenOnlyItsIdentityBridgeFails() {
+    try (StubWikidataServer actionApi = new StubWikidataServer();
+        StubWikidataServer queryService = new StubWikidataServer()) {
+      actionApi.enqueueBody(seedEntity());
+      queryService.enqueueBody(memberOfBacklink(OTHER_MEMBER_QID));
 
-  private void expandWith(SourceAdapter... adapters) {
-    expandWith(200, adapters);
+      ToolResult<SegueService.ExpansionSummary> result =
+          expandWith(
+              wikidata(actionApi, queryService),
+              new MusicBrainzSourceAdapter(
+                  MusicBrainzClient.readingFrom(fixture()), new BridgeThatCannotAnswer(), CLOCK));
+
+      assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.PARTIAL);
+      assertThat(result.payload().sourceUnavailable()).isTrue();
+      assertThat(result.detail()).contains("musicbrainz").doesNotContain("wikidata");
+      // Wikidata's claim still landed: the shortfall is one source's, not the expansion's.
+      assertThat(edgeAssertionsInTheLog())
+          .extracting(a -> a.provenance().sourceId())
+          .containsExactly("wikidata");
+    }
   }
 
-  private void expandWith(int maxNewEdges, SourceAdapter... adapters) {
+  // ---- helpers ----------------------------------------------------------
+
+  private ToolResult<SegueService.ExpansionSummary> expandWith(SourceAdapter... adapters) {
+    return expandWith(200, adapters);
+  }
+
+  private ToolResult<SegueService.ExpansionSummary> expandWith(
+      int maxNewEdges, SourceAdapter... adapters) {
     SegueService service =
         new SegueService(
             new AlwaysResolves(),
@@ -193,7 +233,21 @@ class CorroborationAcrossSourcesTest {
             new SourceAdapters(List.of(adapters)),
             affinity,
             CLOCK);
-    service.expandEntity(QUINTET_QID, maxNewEdges);
+    return service.expandEntity(QUINTET_QID, maxNewEdges);
+  }
+
+  /** A P434 bridge that cannot be asked — the outage ADR 54 recorded as arriving silently. */
+  private static final class BridgeThatCannotAnswer implements MusicBrainzIdentity {
+
+    @Override
+    public Optional<String> mbidFor(String qid) {
+      throw new MusicBrainzIdentityUnavailableException("the query service did not answer");
+    }
+
+    @Override
+    public Map<String, String> qidsFor(java.util.Collection<String> mbids) {
+      throw new MusicBrainzIdentityUnavailableException("the query service did not answer");
+    }
   }
 
   private EdgeRecord replayed(java.util.function.Function<GraphStore, List<EdgeRecord>> read) {
