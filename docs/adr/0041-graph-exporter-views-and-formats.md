@@ -403,12 +403,19 @@ the inserted one wins; nothing is deleted, the attribute stays, and the outer `<
 QID, which keeps every tool that reads either of them working.
 
 - **It also titles the edge label, and that was found by measurement rather than by reading.**
-  Graphviz puts a node's label inside the anchor and an edge's label *outside* it, as a sibling of
-  the whole `<g class="edge">`. Rewriting only the anchors — which is what the issue asked for —
-  leaves the visible relationship label still resolving to the two QIDs, and that label is drawn on
-  every view under the 40-edge budget and is the likeliest thing a reader points at. Hit-testing
-  the rendered label in Chrome is what showed it; the file looked fixed. Whether the owner's local
-  script has the same gap is not recorded here, because it was not read.
+  Graphviz puts a node's label inside the anchor, but an edge's label outside it — still a *child*
+  of `<g class="edge">`, and a sibling of the `<g id="a_edgeN">` wrapping the anchor. Rewriting only
+  the anchors — which is what the issue asked for — leaves the visible relationship label still
+  resolving to the two QIDs, and that label is drawn on every view under the 40-edge budget and is
+  the likeliest thing a reader points at. Hit-testing the rendered label in Chrome is what showed
+  it; the file looked fixed. Whether the owner's local script has the same gap is not recorded here,
+  because it was not read.
+
+  **The parentage is load-bearing and an earlier draft of this bullet had it backwards**, saying the
+  label was a sibling of the whole `<g class="edge">`. It is not, and the difference decides whether
+  the code can work at all: `rewrite` holds the anchor's tooltip until the object group closes, so a
+  label outside that group would be reached after the reset and could never be titled. A maintainer
+  reading the wrong version would have taken the reset for a bug. Corrected before merge, on review.
 
 - **A Java tool in `export` with a Gradle task, not a shell script in `scripts/`.** The issue asked
   for `scripts/`, and the repository has no shell script in it. Every operator tool here is a
@@ -425,12 +432,13 @@ QID, which keeps every tool that reads either of them working.
   step and says so.
 
 - **The `-Tcmapx` recipe was incomplete, and the issue's diagnosis of why was wrong in a way worth
-  recording.** It said the map would be named `%1` for an unnamed graph and that a name with
-  spaces would not bind. Neither holds: `DotWriter` names the graph after the view description, so
-  the map is named for the view, and Chrome binds `usemap="#a made-up view"` correctly — measured,
-  by hit-testing the image and getting the `<area>` back. **The actual defect was simpler and
-  worse**: the recipe stopped after `dot`, so it produced a picture and an imagemap and no page
-  binding them. It ran cleanly and did nothing, which is the shape this project keeps meeting. The
+  recording.** The issue said the map would be named `%1` unless the graph is named. It does not
+  hold: `DotWriter` names the graph after the view description, so the map is named for the view.
+  A second worry — that a name carrying spaces would not bind — **is not the issue's and should not
+  be attributed to it**; it was this work's own guess on the way to measuring, and the measurement
+  refuted it. Chrome binds `usemap="#a made-up view"` correctly, hit-tested, `<area>` returned.
+  **The actual defect was simpler and worse**: the recipe stopped after `dot`, so it produced a
+  picture and an imagemap and no page binding them. It ran cleanly and did nothing, which is the shape this project keeps meeting. The
   recipe now writes the page and renames the map to a fixed id — not because the generated name
   fails, but because it is unknown until you look at the file.
 

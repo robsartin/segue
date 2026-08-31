@@ -49,12 +49,18 @@ public final class HoverableSvg {
    * The same SVG, with every {@code xlink:title} also present as a {@code <title>} element on the
    * anchor that carried it — and on the edge label that anchor does not contain.
    *
-   * <p><b>Why the second half exists.</b> Graphviz puts a node's label inside the anchor and an
-   * edge's label outside it, as a sibling of the whole {@code <g class="edge">}. Rewriting only the
-   * anchors therefore leaves the one thing a reader is most likely to point at — the visible
-   * relationship label, drawn on every view under {@code DotWriter.LABEL_BUDGET} edges — still
-   * resolving to the group's own {@code <title>}, which is the two QIDs. Measured in Chrome by
-   * hit-testing the rendered label, and pinned by {@code WhatAHoverShowsTest}.
+   * <p><b>Why the second half exists.</b> Graphviz puts a node's label inside the anchor, but an
+   * edge's label outside it — still a <em>child</em> of {@code <g class="edge">}, and a sibling of
+   * the {@code <g id="a_edgeN">} that wraps the anchor. Rewriting only the anchors therefore leaves
+   * the one thing a reader is most likely to point at — the visible relationship label, drawn on
+   * every view under {@code DotWriter.LABEL_BUDGET} edges — still resolving to the group's own
+   * {@code <title>}, which is the two QIDs. Measured in Chrome by hit-testing the rendered label,
+   * and pinned by {@code WhatAHoverShowsTest}.
+   *
+   * <p><b>That parentage is what makes the scan below work</b>, so it is worth being exact about.
+   * {@code tooltip} is held from the anchor until the object group closes, and the label is reached
+   * inside that window precisely because it is within the group. Were it a sibling of {@code <g
+   * class="edge">} rather than a child, the reset would already have fired and this could not work.
    *
    * <p>Nothing is deleted, nothing is re-escaped and nothing is re-serialised: the input is copied
    * through verbatim and elements are inserted into it. The attribute's value is already XML

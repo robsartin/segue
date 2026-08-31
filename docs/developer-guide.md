@@ -1286,11 +1286,21 @@ carried it — the attribute stays where it was, the outer `<title>` stays the Q
 reads either keeps working. All that changes is which one the browser finds first.
 
 **It titles the edge label too, and that is not a detail.** Graphviz puts a node's label inside the
-anchor and an edge's label *outside* it, as a sibling of the whole `<g class="edge">`. Rewriting
-only the anchors therefore leaves the visible relationship label — the thing a reader is likeliest
-to point at, drawn on every view under the 40-edge budget — still resolving to the two QIDs. That
-was found by hit-testing the rendered label in Chrome, not by reading the file, and it is pinned by
-a test.
+anchor, but an edge's label outside it — still a *child* of `<g class="edge">`, and a sibling of the
+`<g id="a_edgeN">` that wraps the anchor:
+
+```xml
+<g id="edge1" class="edge">
+  <title>Q901-&gt;Q902</title>              <- what a bare hover shows
+  <g id="a_edge1"><a xlink:title="…">…</a></g>
+  <text …>MEMBER_OF</text>                 <- the visible label, outside the anchor
+</g>
+```
+
+Rewriting only the anchors therefore leaves the visible relationship label — the thing a reader is
+likeliest to point at, drawn on every view under the 40-edge budget — still resolving to the two
+QIDs. That was found by hit-testing the rendered label in Chrome, not by reading the file, and it is
+pinned by a test.
 
 **What is checked, and what is not.** `WhatAHoverShowsTest` renders through the real binary, runs
 the rewrite, and asserts on the string a browser would resolve for four separate hover targets — a
