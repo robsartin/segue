@@ -116,8 +116,37 @@ git commit -m "Give the owner three claims the log can carry (#92)"
 ### Task 2: They project, and they carry the owner's name
 
 **Files:**
-- Modify: `src/main/java/com/robsartin/segue/domain/Provenance.java`, `src/main/java/com/robsartin/segue/ingest/IngestService.java`
+- Modify: `src/main/java/com/robsartin/segue/domain/Provenance.java`, `src/main/java/com/robsartin/segue/ingest/IngestService.java`, `src/main/java/com/robsartin/segue/sqlite/SqliteAssertionLog.java`, `src/main/java/com/robsartin/segue/domain/Retractions.java`
 - Test: `src/test/java/com/robsartin/segue/ingest/OwnerClaimProjectionTest.java`
+
+**Amended 2026-08-31 after Task 1's review. The original file list was wrong and this task could not
+have gone green on it.**
+
+Task 1 found that `LoggedAssertion` has **five** exhaustive switches, not the one this plan named,
+and left throwing stubs in four. Three of them are on the round trip and **must be filled together
+or not at all**:
+
+- `SqliteAssertionLog.append` — the write half.
+- `SqliteAssertionLog.readRow` — the read half. Its `default -> throw` is named in no task; it is
+  yours.
+- `Retractions.survives` — called **first** on every row, in all three folds, reached from MCP boot
+  replay, `rate`, `recommend`, `exportGraph` and `retractEntity`.
+
+**Why the order matters more than the code.** `IngestService.record` is `log.append()` *then*
+`apply()`, so this task's first test dies in the persistence path before reaching the switch this
+task owns. And filling `append` alone would let one owner claim into the owner's real database and
+make it **unbootable across every tool** — with ADR 19 forbidding deletion of the row. Task 1's
+throwing `append` is currently the gate that keeps that impossible; do not remove it without the
+other two.
+
+**Do not fake the log to go green.** The cheap route is an in-memory `AssertionLog` test double,
+which would make this task pass while production still throws and hide the round-trip gap until
+Task 5. Use `SqliteAssertionLog.inMemory()`, the real class, as `IngestServiceTest` and
+`RetractRunTest` already do.
+
+`RetractRun.measure` and `LogProjection.of` are the two stubs **not** on the round trip. Judge
+whether they need filling here and say which you chose; a stub only the new types can reach is not
+the same hazard as one existing behaviour walks into.
 
 **Interfaces:**
 - Consumes: Task 1's three records.
@@ -246,6 +275,12 @@ The second assertion is the load-bearing one, and it is why **no `PathRanking` c
 - [ ] **Step 3: Implement `case SameAs`.** It resolves both the graph and affinity onto the canonical id, and leaves the local id resolvable.
 
 - [ ] **Step 4: Prove the rating case bites.** Remove the affinity half of the resolution, watch the second test fail, restore. **Report the message** — an orphaned rating is the failure this test exists for.
+
+- [ ] **Step 4b: A merged local entity must still have a label.** *Added 2026-08-31 after Task 1's
+review.* `ratings/Labels.forQids` filters `instanceof NodeAssertion`, so a local entity — which is a
+`LocalEntity`, not a `NodeAssertion` — has **no label in `listRatings`**. This fails silently rather
+than throwing, and this task is what makes a rated local entity possible. Write the failing test,
+watch it produce a blank or missing label, then fix `Labels.forQids`.
 
 - [ ] **Step 5: Run the gate and commit**
 
