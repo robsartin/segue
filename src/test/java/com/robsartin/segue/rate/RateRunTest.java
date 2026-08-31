@@ -39,10 +39,10 @@ import org.junit.jupiter.api.Test;
  */
 class RateRunTest {
 
-  private static final String KNOWN_ONE = "Q900001";
-  private static final String KNOWN_TWO = "Q900002";
-  private static final String SHARED_ARTIST = "Q900003";
-  private static final String ANCESTOR = "Q900004";
+  private static final String KNOWN_ONE = "Q0900001";
+  private static final String KNOWN_TWO = "Q0900002";
+  private static final String SHARED_ARTIST = "Q0900003";
+  private static final String ANCESTOR = "Q0900004";
 
   private static final Instant WHEN = Instant.parse("2026-01-01T00:00:00Z");
 
@@ -86,23 +86,23 @@ class RateRunTest {
   @DisplayName("revise mode deals the rated entities and says so, without naming a rating")
   void buildsAReviseDeck() throws Exception {
     try (TinkerGraphStore graph = new TinkerGraphStore()) {
-      graph.upsertNode(new NodeRecord("Q900001", NodeKind.GROUP, "One", List.of()));
-      graph.upsertNode(new NodeRecord("Q900002", NodeKind.GROUP, "Two", List.of()));
+      graph.upsertNode(new NodeRecord("Q0900001", NodeKind.GROUP, "One", List.of()));
+      graph.upsertNode(new NodeRecord("Q0900002", NodeKind.GROUP, "Two", List.of()));
       List<String> notes = new ArrayList<>();
 
       List<Card> deck =
           RateRun.buildDeck(
               graph,
-              List.of("Q900001", "Q900002"),
-              Map.of("Q900001", 3, "Q900002", 5),
+              List.of("Q0900001", "Q0900002"),
+              Map.of("Q0900001", 3, "Q0900002", 5),
               0,
               MIN_CANDIDATE_DEGREE,
               OptionalInt.of(3),
               notes::add);
 
-      assertThat(deck).extracting(Card::qid).containsExactly("Q900001");
+      assertThat(deck).extracting(Card::qid).containsExactly("Q0900001");
       assertThat(deck.get(0).currentRating()).hasValue(3);
-      assertThat(notes).noneMatch(n -> n.contains("Q900001") || n.contains("Q900002"));
+      assertThat(notes).noneMatch(n -> n.contains("Q0900001") || n.contains("Q0900002"));
     }
   }
 
@@ -115,15 +115,16 @@ class RateRunTest {
     // nothing anywhere explaining the 37 — and the 37 are entities rated at some point and since
     // dropped from the list, which the deck will never deal.
     try (TinkerGraphStore graph = new TinkerGraphStore()) {
-      graph.upsertNode(new NodeRecord("Q900001", NodeKind.GROUP, "On the list", List.of()));
-      graph.upsertNode(new NodeRecord("Q900009", NodeKind.GROUP, "Rated, off the list", List.of()));
+      graph.upsertNode(new NodeRecord("Q0900001", NodeKind.GROUP, "On the list", List.of()));
+      graph.upsertNode(
+          new NodeRecord("Q0900009", NodeKind.GROUP, "Rated, off the list", List.of()));
       List<String> notes = new ArrayList<>();
 
       List<Card> deck =
           RateRun.buildDeck(
               graph,
-              List.of("Q900001"),
-              Map.of("Q900001", 3, "Q900009", 3),
+              List.of("Q0900001"),
+              Map.of("Q0900001", 3, "Q0900009", 3),
               0,
               MIN_CANDIDATE_DEGREE,
               OptionalInt.of(3),
@@ -132,7 +133,7 @@ class RateRunTest {
       assertThat(deck).hasSize(1);
       assertThat(notes).anyMatch(n -> n.contains("1 ") && n.contains("up for reconsideration"));
       assertThat(notes).noneMatch(n -> n.contains("2 ") && n.contains("up for reconsideration"));
-      assertThat(notes).noneMatch(n -> n.contains("Q900001") || n.contains("Q900009"));
+      assertThat(notes).noneMatch(n -> n.contains("Q0900001") || n.contains("Q0900009"));
     }
   }
 
@@ -142,32 +143,32 @@ class RateRunTest {
           + " suppressed entity is exactly the case Deck.dealRevision must widen its walk for"
           + " (issue #106)")
   void reviseReachesASuppressedEntityOffTheList() throws Exception {
-    // Q900009 is never on the known list, unlike reviseCountsOnlyWhatItCanDeal's off-list
+    // Q0900009 is never on the known list, unlike reviseCountsOnlyWhatItCanDeal's off-list
     // entity — it is suppressed instead (rated at KnownList.SUPPRESSION_RATING), which is
     // precisely the entity a revision pass exists to let the owner reconsider. If the count
     // undercounts what dealRevision actually deals, that is the exact "121 vs 84" bug this
     // class's own comment warns about, reintroduced one rating tier down.
     try (TinkerGraphStore graph = new TinkerGraphStore()) {
-      graph.upsertNode(new NodeRecord("Q900001", NodeKind.GROUP, "On the list", List.of()));
+      graph.upsertNode(new NodeRecord("Q0900001", NodeKind.GROUP, "On the list", List.of()));
       graph.upsertNode(
-          new NodeRecord("Q900009", NodeKind.GROUP, "Rejected, off the list", List.of()));
+          new NodeRecord("Q0900009", NodeKind.GROUP, "Rejected, off the list", List.of()));
       List<String> notes = new ArrayList<>();
 
       List<Card> deck =
           RateRun.buildDeck(
               graph,
-              List.of("Q900001"),
+              List.of("Q0900001"),
               Map.of(
-                  "Q900001", KnownList.SUPPRESSION_RATING,
-                  "Q900009", KnownList.SUPPRESSION_RATING),
+                  "Q0900001", KnownList.SUPPRESSION_RATING,
+                  "Q0900009", KnownList.SUPPRESSION_RATING),
               0,
               MIN_CANDIDATE_DEGREE,
               OptionalInt.of(KnownList.SUPPRESSION_RATING),
               notes::add);
 
-      assertThat(deck).extracting(Card::qid).containsExactlyInAnyOrder("Q900001", "Q900009");
+      assertThat(deck).extracting(Card::qid).containsExactlyInAnyOrder("Q0900001", "Q0900009");
       assertThat(notes).anyMatch(n -> n.contains("2") && n.contains("up for reconsideration"));
-      assertThat(notes).noneMatch(n -> n.contains("Q900001") || n.contains("Q900009"));
+      assertThat(notes).noneMatch(n -> n.contains("Q0900001") || n.contains("Q0900009"));
     }
   }
 

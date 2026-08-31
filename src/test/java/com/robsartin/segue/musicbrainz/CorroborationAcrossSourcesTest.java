@@ -61,7 +61,7 @@ import org.junit.jupiter.api.Test;
  * ingest shapes, one edge, and the count is what says so.
  *
  * <p>The MBIDs are the committed fixture's own, argued in {@code MusicBrainzClientTest}'s javadoc
- * as a reproducible API probe; the QIDs are this repository's {@code Q9000xx} test range, and the
+ * as a reproducible API probe; the QIDs are the fixture's unallocatable stand-ins (ADR 58), and the
  * mapping between them is this test's, not a fact about anyone.
  */
 class CorroborationAcrossSourcesTest {
@@ -69,9 +69,9 @@ class CorroborationAcrossSourcesTest {
   private static final String QUINTET_MBID = "ee55e4e8-807d-49b1-8470-d1c0898ed7cb";
   private static final String FIRST_MEMBER_MBID = "9afdcb99-d4ba-41b4-b4b2-467a712bd9fa";
 
-  private static final String QUINTET_QID = "Q900001";
-  private static final String MEMBER_QID = "Q900002";
-  private static final String OTHER_MEMBER_QID = "Q900003";
+  private static final String QUINTET_QID = "Q0900001";
+  private static final String MEMBER_QID = "Q0900002";
+  private static final String OTHER_MEMBER_QID = "Q0900003";
 
   private static final Instant NOW = Instant.parse("2026-08-30T12:00:00Z");
   private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);

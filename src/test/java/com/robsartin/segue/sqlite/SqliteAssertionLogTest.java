@@ -38,14 +38,14 @@ class SqliteAssertionLogTest {
     NodeAssertion node = new NodeAssertion("Q5593", NodeKind.PERSON, "Pablo Picasso", WIKIDATA);
     AssertionRecord datedEdge =
         new AssertionRecord(
-            "Q900001",
-            "Q900002",
+            "Q0900001",
+            "Q0900002",
             "MEMBER_OF",
             LocalDate.of(1983, 1, 1),
             LocalDate.of(2003, 6, 30),
             WIKIDATA);
     AssertionRecord openEdge =
-        new AssertionRecord("Q900001", "Q900013", "INFLUENCED_BY", null, null, LLM);
+        new AssertionRecord("Q0900001", "Q0900013", "INFLUENCED_BY", null, null, LLM);
 
     try (SqliteAssertionLog log = SqliteAssertionLog.inMemory()) {
       log.append(node);

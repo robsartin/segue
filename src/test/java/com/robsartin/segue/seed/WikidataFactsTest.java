@@ -17,8 +17,8 @@ class WikidataFactsTest {
   private static final String TWO_ENTITIES =
       """
       {"entities":{
-        "Q90000101":{
-          "id":"Q90000101",
+        "Q090000101":{
+          "id":"Q090000101",
           "labels":{"en":{"language":"en","value":"Marguerite Vale"}},
           "descriptions":{"en":{"language":"en","value":"guitarist"}},
           "aliases":{"en":[{"language":"en","value":"Maggie Vale"}]},
@@ -29,8 +29,8 @@ class WikidataFactsTest {
                     {"mainsnak":{"snaktype":"value","datavalue":{"value":{"id":"Q639669"}}}}]
           }
         },
-        "Q90000102":{
-          "id":"Q90000102",
+        "Q090000102":{
+          "id":"Q090000102",
           "labels":{"en":{"language":"en","value":"Velvet Ossuary"}},
           "sitelinks":{},
           "claims":{"P31":[{"mainsnak":{"snaktype":"value","datavalue":{"value":{"id":"Q215380"}}}}]}
@@ -45,9 +45,9 @@ class WikidataFactsTest {
       stub.enqueueBody(TWO_ENTITIES);
       WikidataFacts facts = new WikidataFacts(new WikidataClient(stub.baseUri()));
 
-      Map<String, CandidateFacts> byQid = facts.factsFor(List.of("Q90000101", "Q90000102"));
+      Map<String, CandidateFacts> byQid = facts.factsFor(List.of("Q090000101", "Q090000102"));
 
-      CandidateFacts person = byQid.get("Q90000101");
+      CandidateFacts person = byQid.get("Q090000101");
       assertThat(person.label()).isEqualTo("Marguerite Vale");
       assertThat(person.description()).isEqualTo("guitarist");
       assertThat(person.aliases()).containsExactly("Maggie Vale");
@@ -55,7 +55,7 @@ class WikidataFactsTest {
       assertThat(person.kind()).isEqualTo(NodeKind.PERSON);
       assertThat(person.occupations()).containsExactly("Q855091", "Q639669");
 
-      CandidateFacts band = byQid.get("Q90000102");
+      CandidateFacts band = byQid.get("Q090000102");
       assertThat(band.kind()).isEqualTo(NodeKind.GROUP);
       assertThat(band.sitelinks()).isZero();
       assertThat(band.occupations()).isEmpty();
@@ -67,10 +67,10 @@ class WikidataFactsTest {
   @DisplayName("an entity Wikidata does not have is simply absent")
   void missingEntitiesAreAbsent() {
     try (StubWikidataServer stub = new StubWikidataServer()) {
-      stub.enqueueBody("{\"entities\":{\"Q90000103\":{\"missing\":\"\"}}}");
+      stub.enqueueBody("{\"entities\":{\"Q090000103\":{\"missing\":\"\"}}}");
       WikidataFacts facts = new WikidataFacts(new WikidataClient(stub.baseUri()));
 
-      assertThat(facts.factsFor(List.of("Q90000103"))).isEmpty();
+      assertThat(facts.factsFor(List.of("Q090000103"))).isEmpty();
     }
   }
 
@@ -110,9 +110,9 @@ class WikidataFactsTest {
       stub.enqueueBody(TWO_ENTITIES);
       WikidataFacts facts = new WikidataFacts(new WikidataClient(stub.baseUri()));
 
-      facts.factsFor(List.of("Q90000101", "Q90000101", "Q90000102"));
+      facts.factsFor(List.of("Q090000101", "Q090000101", "Q090000102"));
 
-      assertThat(stub.lastQuery()).contains("Q90000101%7CQ90000102");
+      assertThat(stub.lastQuery()).contains("Q090000101%7CQ090000102");
     }
   }
 }

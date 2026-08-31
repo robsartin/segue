@@ -13,10 +13,10 @@ class MusicBrainzIdentityTest {
   @Test
   @DisplayName("should drop a neighbour with no QID when the mapping does not know it")
   void shouldDropANeighbourWithNoQidWhenTheMappingDoesNotKnowIt() {
-    MusicBrainzIdentity identity = StubIdentity.of(Map.of("mbid-known", "Q900001"));
+    MusicBrainzIdentity identity = StubIdentity.of(Map.of("mbid-known", "Q0900001"));
 
     Map<String, String> resolved = identity.qidsFor(List.of("mbid-known", "mbid-unknown"));
 
-    assertThat(resolved).containsExactly(entry("mbid-known", "Q900001"));
+    assertThat(resolved).containsExactly(entry("mbid-known", "Q0900001"));
   }
 }

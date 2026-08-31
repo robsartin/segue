@@ -105,8 +105,8 @@ class SeedFilesTest {
   @DisplayName("the first write creates a header and the second does not repeat it")
   void appendsUnderOneHeader() throws IOException {
     Path out = dir.resolve("mapping.csv");
-    SeedFiles.append(out, List.of(row("Velvet Ossuary", "Q90000201")));
-    SeedFiles.append(out, List.of(row("Ashgrove", "Q90000202")));
+    SeedFiles.append(out, List.of(row("Velvet Ossuary", "Q090000201")));
+    SeedFiles.append(out, List.of(row("Ashgrove", "Q090000202")));
 
     assertThat(Files.readAllLines(out))
         .hasSize(3)
@@ -125,7 +125,7 @@ class SeedFilesTest {
                 "Bramble, Vale & Ashgrove",
                 "musician",
                 "APPROVED",
-                "Q90000203",
+                "Q090000203",
                 "Bramble \"Vale\" Ashgrove",
                 Outcome.ACCEPTED,
                 "name, kind and occupation agree")));
@@ -145,7 +145,7 @@ class SeedFilesTest {
   void resumesFromBothOutputFiles() throws IOException {
     Path mapping = dir.resolve("mapping.csv");
     Path review = dir.resolve("review.csv");
-    SeedFiles.append(mapping, List.of(row("The Velvet Ossuary", "Q90000204")));
+    SeedFiles.append(mapping, List.of(row("The Velvet Ossuary", "Q090000204")));
     SeedFiles.append(review, List.of(row("Ashgrove", null)));
 
     var done = SeedFiles.alreadyResolved(List.of(mapping, review));

@@ -28,8 +28,9 @@ import org.junit.jupiter.api.Test;
  * three MBIDs, two of which Wikidata knows and one of which it does not.
  *
  * <p>The MBIDs are the committed MusicBrainz fixture's own, which {@code MusicBrainzClientTest}'s
- * javadoc argues as a reproducible API probe. The QIDs are this repository's {@code Q9000xx} test
- * range.
+ * javadoc argues as a reproducible API probe. The QIDs are the fixture's unallocatable stand-ins: a
+ * leading zero, which Wikidata's item-id grammar refuses, so the mapping asserted here cannot tie a
+ * real MBID to a real QID (ADR 58).
  */
 class WikidataMusicBrainzIdentityTest {
 
@@ -37,8 +38,8 @@ class WikidataMusicBrainzIdentityTest {
   private static final String MEMBER_MBID = "9afdcb99-d4ba-41b4-b4b2-467a712bd9fa";
   private static final String UNKNOWN_MBID = "11111111-1111-1111-1111-111111111111";
 
-  private static final String QUINTET_QID = "Q900001";
-  private static final String MEMBER_QID = "Q900002";
+  private static final String QUINTET_QID = "Q0900001";
+  private static final String MEMBER_QID = "Q0900002";
 
   /**
    * {@code application.yaml}'s shipped {@code segue.expand.max-new-edges}. {@code

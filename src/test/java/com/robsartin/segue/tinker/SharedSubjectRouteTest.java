@@ -25,9 +25,14 @@ import org.junit.jupiter.api.Test;
  * same argument made about {@code RECEIVED_AWARD}, and the general note in CLAUDE.md about
  * comparing full result sets rather than trusting the first thing that comes back.
  *
- * <p>QIDs are placeholders in the {@code Q9000xx} range (CLAUDE.md, "The QIDs in {@code Fixture}
- * are placeholders"), picked outside {@code Fixture}'s own range so the two fixtures cannot collide
- * if ever combined.
+ * <p><b>The QIDs here are stand-ins that do denote something, and have not been fixed yet.</b> They
+ * were picked outside {@code Fixture}'s own family so the two fixtures cannot collide if ever
+ * combined, and were described as being in the {@code Q9000xx} range; they are not, and neither
+ * that range nor this one was ever free. Issue #141 moved {@code Fixture} to ids Wikibase's item-id
+ * grammar refuses (ADR 58) and left this family alone deliberately: {@code Q9001xx} is shared
+ * across roughly twenty unrelated files, so moving three of them here would split the convention
+ * rather than mend it. Tracked as <a href="https://github.com/robsartin/segue/issues/171">issue
+ * #171</a>. Nothing below depends on what any of these ids denotes.
  */
 class SharedSubjectRouteTest {
 

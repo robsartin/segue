@@ -12,8 +12,8 @@ import java.util.List;
  * A source backed by the Nick Cave fixture, with no network.
  *
  * <p>Exists so the SPI has a second implementation and so everything downstream of it can be tested
- * deterministically. Lives in test sources: its QIDs are placeholders and must never reach a real
- * store (ADR 22).
+ * deterministically. Lives in test sources: its QIDs are {@link Fixture}'s unallocatable stand-ins
+ * and must never reach a real store (ADR 22, ADR 58).
  */
 public final class FixtureSourceAdapter implements SourceAdapter {
 

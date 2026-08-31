@@ -13,33 +13,33 @@ class KnownListTest {
   @Test
   @DisplayName("an entity rated at or above the threshold joins the list")
   void promotesAHighRating() {
-    assertThat(KnownList.promoted(List.of("Q900001"), Map.of("Q900002", 5)))
-        .containsExactlyInAnyOrder("Q900001", "Q900002");
+    assertThat(KnownList.promoted(List.of("Q0900001"), Map.of("Q0900002", 5)))
+        .containsExactlyInAnyOrder("Q0900001", "Q0900002");
   }
 
   @Test
   @DisplayName("a rating below the threshold does not join, and 3 is below it")
   void leavesTheRestAlone() {
-    assertThat(KnownList.promoted(List.of("Q900001"), Map.of("Q900002", 3, "Q900003", 1)))
-        .containsExactly("Q900001");
+    assertThat(KnownList.promoted(List.of("Q0900001"), Map.of("Q0900002", 3, "Q0900003", 1)))
+        .containsExactly("Q0900001");
   }
 
   @Test
   @DisplayName("an entity already on the file is not duplicated by its own rating")
   void doesNotDuplicate() {
-    assertThat(KnownList.promoted(List.of("Q900001"), Map.of("Q900001", 5)))
-        .containsExactly("Q900001");
+    assertThat(KnownList.promoted(List.of("Q0900001"), Map.of("Q0900001", 5)))
+        .containsExactly("Q0900001");
   }
 
   @Test
   @DisplayName("the file's order is preserved and promotions follow, so two runs agree")
   void isDeterministic() {
     List<String> first =
-        KnownList.promoted(List.of("Q900002", "Q900001"), Map.of("Q900003", 5, "Q900004", 4));
+        KnownList.promoted(List.of("Q0900002", "Q0900001"), Map.of("Q0900003", 5, "Q0900004", 4));
     List<String> second =
-        KnownList.promoted(List.of("Q900002", "Q900001"), Map.of("Q900004", 4, "Q900003", 5));
+        KnownList.promoted(List.of("Q0900002", "Q0900001"), Map.of("Q0900004", 4, "Q0900003", 5));
 
-    assertThat(first).startsWith("Q900002", "Q900001");
+    assertThat(first).startsWith("Q0900002", "Q0900001");
     assertThat(first).isEqualTo(second);
   }
 
@@ -54,15 +54,15 @@ class KnownListTest {
     // was observed to pass by luck on every sampled JVM salt. This is the test that would actually
     // catch a missing .sort(...).
     List<String> result =
-        KnownList.promoted(List.of(), Map.of("Q900050", 5, "Q900010", 4, "Q900030", 5));
+        KnownList.promoted(List.of(), Map.of("Q0900050", 5, "Q0900010", 4, "Q0900030", 5));
 
-    assertThat(result).containsExactly("Q900010", "Q900030", "Q900050");
+    assertThat(result).containsExactly("Q0900010", "Q0900030", "Q0900050");
   }
 
   @Test
   @DisplayName("a rating at the suppression threshold is suppressed")
   void suppressesARatingAtTheThreshold() {
-    assertThat(KnownList.suppressed(Map.of("Q900001", 2))).containsExactly("Q900001");
+    assertThat(KnownList.suppressed(Map.of("Q0900001", 2))).containsExactly("Q0900001");
   }
 
   @Test
@@ -73,26 +73,28 @@ class KnownListTest {
     // The boundary in the other direction: regardFor treats 3 (NEUTRAL_RATING) as exactly
     // neutral, identical to unrated. Suppressing it would silently remove every neutral rating
     // from future recommendations, not just the rejected ones.
-    assertThat(KnownList.suppressed(Map.of("Q900001", 3))).isEmpty();
+    assertThat(KnownList.suppressed(Map.of("Q0900001", 3))).isEmpty();
   }
 
   @Test
   @DisplayName("a rating below the threshold is also suppressed")
   void suppressesARatingBelowTheThreshold() {
-    assertThat(KnownList.suppressed(Map.of("Q900001", 1))).containsExactly("Q900001");
+    assertThat(KnownList.suppressed(Map.of("Q0900001", 1))).containsExactly("Q0900001");
   }
 
   @Test
   @DisplayName("a high rating is never suppressed")
   void doesNotSuppressAHighRating() {
-    assertThat(KnownList.suppressed(Map.of("Q900001", 4, "Q900002", 5))).isEmpty();
+    assertThat(KnownList.suppressed(Map.of("Q0900001", 4, "Q0900002", 5))).isEmpty();
   }
 
   @Test
   @DisplayName("suppression is a Set: unrelated entities are unaffected and order cannot matter")
   void suppressedIsASetOfOnlyTheRejected() {
-    assertThat(KnownList.suppressed(Map.of("Q900001", 2, "Q900002", 5, "Q900003", 3, "Q900004", 1)))
-        .containsExactlyInAnyOrder("Q900001", "Q900004");
+    assertThat(
+            KnownList.suppressed(
+                Map.of("Q0900001", 2, "Q0900002", 5, "Q0900003", 3, "Q0900004", 1)))
+        .containsExactlyInAnyOrder("Q0900001", "Q0900004");
   }
 
   @Test
@@ -106,8 +108,9 @@ class KnownListTest {
   void revisitableUnionsKnownAndSuppressed() {
     assertThat(
             KnownList.revisitable(
-                List.of("Q900001"), Map.of("Q900001", 3, "Q900002", KnownList.SUPPRESSION_RATING)))
-        .containsExactlyInAnyOrder("Q900001", "Q900002");
+                List.of("Q0900001"),
+                Map.of("Q0900001", 3, "Q0900002", KnownList.SUPPRESSION_RATING)))
+        .containsExactlyInAnyOrder("Q0900001", "Q0900002");
   }
 
   @Test
@@ -115,8 +118,8 @@ class KnownListTest {
   void revisitableExcludesTheNeutralOffListCase() {
     // The exact case reviseCountsOnlyWhatItCanDeal in RateRunTest depends on: a rating of 3 is
     // neutral (not suppressed) and the qid is off the known list, so it must not appear.
-    assertThat(KnownList.revisitable(List.of("Q900001"), Map.of("Q900001", 3, "Q900009", 3)))
-        .containsExactly("Q900001");
+    assertThat(KnownList.revisitable(List.of("Q0900001"), Map.of("Q0900001", 3, "Q0900009", 3)))
+        .containsExactly("Q0900001");
   }
 
   @Test
@@ -124,8 +127,8 @@ class KnownListTest {
   void revisitableDeduplicatesOverlap() {
     assertThat(
             KnownList.revisitable(
-                List.of("Q900001"), Map.of("Q900001", KnownList.SUPPRESSION_RATING)))
-        .containsExactly("Q900001");
+                List.of("Q0900001"), Map.of("Q0900001", KnownList.SUPPRESSION_RATING)))
+        .containsExactly("Q0900001");
   }
 
   @Test

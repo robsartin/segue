@@ -174,6 +174,11 @@ Two real bugs were found by running it, neither caught by inspection:
 The SPARQL was independently replayed against an equivalent rdflib dataset
 (`verification/`) and agrees with the Java in every case.
 
-**The QIDs in `Fixture` are placeholders** in the Q9000xx range, not real
-Wikidata identifiers. Slice 1 replaces them via `wbsearchentities`; nothing
-depends on their values.
+**The QIDs in `Fixture` are stand-ins that cannot denote anything**, and nothing
+here depends on their values. They carried a `Q9000xx` range when this
+experiment was run, described then as "not real Wikidata identifiers"; that was
+untrue — every one of them resolved — and they now carry a leading zero, which
+Wikibase's item-id grammar refuses outright. See
+[ADR 58](adr/0058-stand-in-identifiers-cannot-be-allocatable.md). The queries and
+results below are unaffected: they turn on the shape of the graph, not on what
+any id denotes.

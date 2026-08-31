@@ -85,11 +85,11 @@ class GraphProjectorTest {
         TinkerGraphStore store = new TinkerGraphStore()) {
       log.append(
           new NodeAssertion(
-              "Q900001", NodeKind.CONCEPT, "Ninebark Sermon", List.of("Q56816954"), WIKIDATA));
+              "Q0900001", NodeKind.CONCEPT, "Ninebark Sermon", List.of("Q56816954"), WIKIDATA));
 
       GraphProjector.project(log, store);
 
-      assertThat(store.node("Q900001").orElseThrow().kind()).isEqualTo(NodeKind.GROUP);
+      assertThat(store.node("Q0900001").orElseThrow().kind()).isEqualTo(NodeKind.GROUP);
       // The log itself is untouched: it still says what the source said and what we made of
       // it at the time. Re-derivation is the projection's job, not a rewrite of history.
       assertThat(log.readAll())
@@ -111,11 +111,11 @@ class GraphProjectorTest {
         TinkerGraphStore store = new TinkerGraphStore()) {
       log.append(
           new NodeAssertion(
-              "Q900002", NodeKind.PERSON, "Marisol Kettleby", List.of("Q999999999"), WIKIDATA));
+              "Q0900002", NodeKind.PERSON, "Marisol Kettleby", List.of("Q999999999"), WIKIDATA));
 
       GraphProjector.project(log, store);
 
-      assertThat(store.node("Q900002").orElseThrow().kind()).isEqualTo(NodeKind.CONCEPT);
+      assertThat(store.node("Q0900002").orElseThrow().kind()).isEqualTo(NodeKind.CONCEPT);
     }
   }
 
@@ -127,11 +127,11 @@ class GraphProjectorTest {
     // is the best answer available rather than a gap to fill with CONCEPT.
     try (AssertionLog log = SqliteAssertionLog.inMemory();
         TinkerGraphStore store = new TinkerGraphStore()) {
-      log.append(new NodeAssertion("Q900003", NodeKind.PERSON, "Marisol Kettleby", WIKIDATA));
+      log.append(new NodeAssertion("Q0900003", NodeKind.PERSON, "Marisol Kettleby", WIKIDATA));
 
       GraphProjector.project(log, store);
 
-      assertThat(store.node("Q900003").orElseThrow().kind()).isEqualTo(NodeKind.PERSON);
+      assertThat(store.node("Q0900003").orElseThrow().kind()).isEqualTo(NodeKind.PERSON);
     }
   }
 

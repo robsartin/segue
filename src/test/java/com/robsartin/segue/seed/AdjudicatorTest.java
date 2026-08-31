@@ -44,10 +44,10 @@ class AdjudicatorTest {
         decide(
             "Velvet Ossuary",
             "musician",
-            List.of(group("Q90000001", "Velvet Ossuary", 30), group("Q90000002", "Bramble", 90)));
+            List.of(group("Q090000001", "Velvet Ossuary", 30), group("Q090000002", "Bramble", 90)));
 
     assertThat(decision.outcome()).isEqualTo(Outcome.ACCEPTED);
-    assertThat(decision.qid()).isEqualTo("Q90000001");
+    assertThat(decision.qid()).isEqualTo("Q090000001");
     assertThat(decision.label()).isEqualTo("Velvet Ossuary");
   }
 
@@ -55,7 +55,7 @@ class AdjudicatorTest {
   @DisplayName("case and punctuation do not stop an exact name match")
   void nameMatchIsFolded() {
     Decision decision =
-        decide("The Go‑Ahead’s", "musician", List.of(group("Q90000003", "The Go-Ahead's", 12)));
+        decide("The Go‑Ahead’s", "musician", List.of(group("Q090000003", "The Go-Ahead's", 12)));
 
     assertThat(decision.outcome()).isEqualTo(Outcome.ACCEPTED);
   }
@@ -67,7 +67,7 @@ class AdjudicatorTest {
     // being resolved is recorded as an alias. That is Wikidata's own claim about identity.
     CandidateFacts duo =
         new CandidateFacts(
-            "Q90000004",
+            "Q090000004",
             "Ashgrove & Vale",
             "folk duo",
             List.of("The Tin Lanterns"),
@@ -78,7 +78,7 @@ class AdjudicatorTest {
     Decision decision = decide("The Tin Lanterns", "musician", List.of(duo));
 
     assertThat(decision.outcome()).isEqualTo(Outcome.ACCEPTED);
-    assertThat(decision.qid()).isEqualTo("Q90000004");
+    assertThat(decision.qid()).isEqualTo("Q090000004");
   }
 
   @Test
@@ -91,7 +91,7 @@ class AdjudicatorTest {
     // allowed to overrule it.
     CandidateFacts theFamousOne =
         new CandidateFacts(
-            "Q90000019",
+            "Q090000019",
             "Ashgrove Vale",
             "very famous singer",
             List.of("Marguerite Vale"),
@@ -103,9 +103,9 @@ class AdjudicatorTest {
         decide(
             "Marguerite Vale",
             "musician",
-            List.of(theFamousOne, person("Q90000020", "Marguerite Vale", 6, MUSICIAN)));
+            List.of(theFamousOne, person("Q090000020", "Marguerite Vale", 6, MUSICIAN)));
 
-    assertThat(decision.qid()).isEqualTo("Q90000020");
+    assertThat(decision.qid()).isEqualTo("Q090000020");
     assertThat(decision.outcome()).isEqualTo(Outcome.ACCEPTED);
   }
 
@@ -118,7 +118,7 @@ class AdjudicatorTest {
     // enough for "this is also called that" to mean anything, so it goes to review.
     CandidateFacts theFamousOne =
         new CandidateFacts(
-            "Q90000021",
+            "Q090000021",
             "Ashgrove Vale",
             "very famous singer",
             List.of("V"),
@@ -139,19 +139,19 @@ class AdjudicatorTest {
         decide(
             "Marguerite Vale",
             "musician",
-            List.of(person("Q90000005", "Marguerite Vale", 25, FOOTBALLER)));
+            List.of(person("Q090000005", "Marguerite Vale", 25, FOOTBALLER)));
 
     assertThat(decision.outcome()).isEqualTo(Outcome.REVIEW);
     assertThat(decision.reason()).contains("occupation");
     // The candidate is still reported, so a human can accept or correct it in one look.
-    assertThat(decision.qid()).isEqualTo("Q90000005");
+    assertThat(decision.qid()).isEqualTo("Q090000005");
   }
 
   @Test
   @DisplayName("a human with no stated occupation is a question, not an answer")
   void aHumanWithNoOccupationIsReviewed() {
     Decision decision =
-        decide("Marguerite Vale", "musician", List.of(person("Q90000006", "Marguerite Vale", 4)));
+        decide("Marguerite Vale", "musician", List.of(person("Q090000006", "Marguerite Vale", 4)));
 
     assertThat(decision.outcome()).isEqualTo(Outcome.REVIEW);
   }
@@ -160,7 +160,7 @@ class AdjudicatorTest {
   @DisplayName("a group is never asked for an occupation")
   void aGroupIsNotAskedForAnOccupation() {
     Decision decision =
-        decide("Velvet Ossuary", "musician", List.of(group("Q90000007", "Velvet Ossuary", 8)));
+        decide("Velvet Ossuary", "musician", List.of(group("Q090000007", "Velvet Ossuary", 8)));
 
     assertThat(decision.outcome()).isEqualTo(Outcome.ACCEPTED);
   }
@@ -170,14 +170,14 @@ class AdjudicatorTest {
   void theWrongKindIsSkipped() {
     CandidateFacts film =
         new CandidateFacts(
-            "Q90000008", "Velvet Ossuary", "1974 film", List.of(), NodeKind.WORK, List.of(), 300);
+            "Q090000008", "Velvet Ossuary", "1974 film", List.of(), NodeKind.WORK, List.of(), 300);
 
     Decision decision =
         decide(
-            "Velvet Ossuary", "musician", List.of(film, group("Q90000009", "Velvet Ossuary", 11)));
+            "Velvet Ossuary", "musician", List.of(film, group("Q090000009", "Velvet Ossuary", 11)));
 
     assertThat(decision.outcome()).isEqualTo(Outcome.ACCEPTED);
-    assertThat(decision.qid()).isEqualTo("Q90000009");
+    assertThat(decision.qid()).isEqualTo("Q090000009");
   }
 
   @Test
@@ -185,7 +185,7 @@ class AdjudicatorTest {
   void everyNameMatchTheWrongKind() {
     CandidateFacts film =
         new CandidateFacts(
-            "Q90000010", "Velvet Ossuary", "1974 film", List.of(), NodeKind.WORK, List.of(), 300);
+            "Q090000010", "Velvet Ossuary", "1974 film", List.of(), NodeKind.WORK, List.of(), 300);
 
     Decision decision = decide("Velvet Ossuary", "musician", List.of(film));
 
@@ -200,7 +200,7 @@ class AdjudicatorTest {
         decide(
             "Ashgrove",
             "musician",
-            List.of(group("Q90000011", "Ashgrove", 20), group("Q90000012", "Ashgrove", 17)));
+            List.of(group("Q090000011", "Ashgrove", 20), group("Q090000012", "Ashgrove", 17)));
 
     assertThat(decision.outcome()).isEqualTo(Outcome.REVIEW);
     assertThat(decision.reason()).contains("margin");
@@ -213,10 +213,10 @@ class AdjudicatorTest {
         decide(
             "Ashgrove",
             "musician",
-            List.of(group("Q90000013", "Ashgrove", 3), group("Q90000014", "Ashgrove", 60)));
+            List.of(group("Q090000013", "Ashgrove", 3), group("Q090000014", "Ashgrove", 60)));
 
     assertThat(decision.outcome()).isEqualTo(Outcome.ACCEPTED);
-    assertThat(decision.qid()).isEqualTo("Q90000014");
+    assertThat(decision.qid()).isEqualTo("Q090000014");
   }
 
   @Test
@@ -226,7 +226,7 @@ class AdjudicatorTest {
         decide(
             "Ashgrove",
             "musician",
-            List.of(group("Q90000015", "Ashgrove", 0), group("Q90000016", "Ashgrove", 0)));
+            List.of(group("Q090000015", "Ashgrove", 0), group("Q090000016", "Ashgrove", 0)));
 
     assertThat(decision.outcome()).isEqualTo(Outcome.REVIEW);
   }
@@ -235,11 +235,11 @@ class AdjudicatorTest {
   @DisplayName("no name matches at all, but the closest hit is still reported")
   void noNameMatchStillReportsTheClosest() {
     Decision decision =
-        decide("Velvet Ossuary", "musician", List.of(group("Q90000017", "Bramble", 90)));
+        decide("Velvet Ossuary", "musician", List.of(group("Q090000017", "Bramble", 90)));
 
     assertThat(decision.outcome()).isEqualTo(Outcome.REVIEW);
     assertThat(decision.reason()).contains("name");
-    assertThat(decision.qid()).isEqualTo("Q90000017");
+    assertThat(decision.qid()).isEqualTo("Q090000017");
   }
 
   @Test
@@ -249,7 +249,7 @@ class AdjudicatorTest {
         decide(
             "Marguerite Vale",
             "musician",
-            List.of(person("Q90000018", "Marguerite Vale", 22, MUSICIAN)));
+            List.of(person("Q090000018", "Marguerite Vale", 22, MUSICIAN)));
 
     assertThat(decision.outcome()).isEqualTo(Outcome.ACCEPTED);
     assertThat(decision.reason()).isNotBlank();

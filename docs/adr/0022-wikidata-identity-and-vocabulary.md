@@ -62,3 +62,14 @@ every time a new domain arrives.
   stating creative relations on the work.
 - The QIDs currently in `Fixture` are placeholders in the `Q9000xx` range, not real identifiers.
   Wikidata ingest retires them; nothing depends on their values.
+
+**Amendment (2026-08-31, issue #141 — the bullet above is false, and was false when written.**
+Every `Q9000xx` id in `Fixture` resolves to a real Wikidata entity, as does every one of the 37
+`Q90000xxx` ids the seed tests use; of the 258 distinct `Q\d+` literals in `src/test`, 244 resolve.
+The range was picked on the assumption that a high number would be free, which is what inventing an
+external identifier looks like when it is done in good faith. The consequence is retained above
+because an ADR records what was decided, not what turned out to be true.
+[ADR 58](0058-stand-in-identifiers-cannot-be-allocatable.md) supersedes this bullet: a stand-in QID
+now carries a leading zero, which Wikibase's item-id grammar refuses outright, so it is
+unallocatable rather than merely unallocated. The rest of this ADR — anchoring identity to Wikidata
+QIDs — is unaffected.

@@ -7,6 +7,7 @@ import com.robsartin.segue.domain.Candidate;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
+import com.robsartin.segue.fixture.Fixture;
 import com.robsartin.segue.port.ExpandContext;
 import com.robsartin.segue.port.ExpandResult;
 import java.time.Clock;
@@ -42,8 +43,8 @@ class WikidataLiveSmokeTest {
    *
    * <p>The stub-backed fixtures in this package (proposition-claims.json et al.) originally used a
    * different, real-but-unrelated QID here — see CLAUDE.md's gotchas section — rather than a
-   * deliberately invalid placeholder like {@code Fixture}'s {@code Q9000xx} range. A fixture about
-   * a real entity should be true about it, so the fixtures now use this same id.
+   * deliberately unallocatable stand-in like {@code Fixture}'s. A fixture about a real entity
+   * should be true about it, so the fixtures now use this same id.
    */
   private static final String PROPOSITION = "Q180337";
 
@@ -230,5 +231,37 @@ class WikidataLiveSmokeTest {
             });
     assertThat(found.neighbors()).isNotEmpty();
     assertThat(found.neighbors()).allSatisfy(n -> assertThat(n.qid()).matches("Q\\d+"));
+  }
+
+  /**
+   * The negative control for the test fixture's identifiers, and the test that would have caught
+   * issue #141 the day the fixture was written.
+   *
+   * <p>The fixture ids were picked in the {@code Q9000xx} range on the assumption that a high
+   * number would be unused. Every one of them resolved. The fixture therefore told the suite that a
+   * real Wikidata entity is a musician, a band or a film — and the offline tests, which never call
+   * Wikidata, could not notice. That is this repository's own rule turned on itself: never invent
+   * an external identifier, because a fixture confirms the error forever and only a live test
+   * catches it.
+   *
+   * <p>The fixture now uses ids with a leading zero, which Wikibase's item-id grammar refuses
+   * outright — it reads {@code Q[1-9]} followed by up to nine more digits — so there is no number
+   * Wikidata can reach that would make one of them denote something. {@code
+   * FixtureQidsDenoteNothingTest} pins that grammar offline; this test is the standing check that
+   * Wikidata still agrees.
+   */
+  @Test
+  @DisplayName("no Fixture qid resolves to a real Wikidata entity")
+  void shouldResolveNothingWhenAskedForAFixtureQid() {
+    assertThat(Fixture.nodes())
+        .isNotEmpty()
+        .allSatisfy(
+            node ->
+                assertThat(resolver.fetch(node.qid()))
+                    .as(
+                        "%s is a real Wikidata entity, so the fixture is asserting things about"
+                            + " something that exists",
+                        node.qid())
+                    .isEmpty());
   }
 }

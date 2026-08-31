@@ -73,11 +73,12 @@ class StdioPurityTest {
   private static final Duration STARTUP_TIMEOUT = Duration.ofSeconds(30);
   private static final Duration RESPONSE_TIMEOUT = Duration.ofSeconds(15);
 
-  // Placeholder QIDs in the same Q9000xx range the test fixture uses, and for the same reason:
-  // they cannot collide with a real Wikidata identifier. See Fixture's Javadoc.
-  private static final String CAVE = "Q900001";
-  private static final String PROPOSITION = "Q900009";
-  private static final String HILLCOAT = "Q900010";
+  // Stand-in QIDs of the same unallocatable shape the test fixture uses, and for the same reason:
+  // a leading zero is not a well-formed Wikidata item id, so these cannot collide with a real one
+  // (ADR 58). See Fixture's Javadoc.
+  private static final String CAVE = "Q0900001";
+  private static final String PROPOSITION = "Q0900009";
+  private static final String HILLCOAT = "Q0900010";
 
   /** Fixed, so the round-tripped timestamp can be compared rather than merely shape-checked. */
   private static final Instant SEEDED_AT = Instant.parse("2026-08-01T09:00:00.123456Z");

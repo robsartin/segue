@@ -23,11 +23,11 @@ class RatingsTableTest {
   private static final Instant LATE = Instant.parse("2026-05-06T11:00:00Z");
 
   private static final AffinityRow LOVED =
-      new AffinityRow("Q900001", "The Invented Quartet", 5, "heard it in a made-up shop", MIDDLE);
+      new AffinityRow("Q0900001", "The Invented Quartet", 5, "heard it in a made-up shop", MIDDLE);
   private static final AffinityRow FINE =
-      new AffinityRow("Q900002", "A Placeholder Novel", 3, null, LATE);
+      new AffinityRow("Q0900002", "A Placeholder Novel", 3, null, LATE);
   private static final AffinityRow NOT_FOR_ME =
-      new AffinityRow("Q900003", "Imaginary Film", 1, "not for me, invented", EARLY);
+      new AffinityRow("Q0900003", "Imaginary Film", 1, "not for me, invented", EARLY);
 
   private static String render(SortOrder sort, AffinityRow... rows) {
     StringWriter out = new StringWriter();
@@ -70,7 +70,7 @@ class RatingsTableTest {
     assertThat(rendered)
         .contains("The Invented Quartet")
         .contains("heard it in a made-up shop")
-        .contains("Q900001")
+        .contains("Q0900001")
         .contains(MIDDLE.toString());
   }
 
@@ -101,9 +101,9 @@ class RatingsTableTest {
   @Test
   @DisplayName("equal ratings fall back to recency, then to qid, so two runs agree")
   void breaksTiesDeterministically() {
-    AffinityRow older = new AffinityRow("Q900010", "Alpha Invention", 4, null, EARLY);
-    AffinityRow newer = new AffinityRow("Q900011", "Beta Invention", 4, null, LATE);
-    AffinityRow sameInstant = new AffinityRow("Q900009", "Gamma Invention", 4, null, LATE);
+    AffinityRow older = new AffinityRow("Q0900010", "Alpha Invention", 4, null, EARLY);
+    AffinityRow newer = new AffinityRow("Q0900011", "Beta Invention", 4, null, LATE);
+    AffinityRow sameInstant = new AffinityRow("Q0900009", "Gamma Invention", 4, null, LATE);
 
     assertThat(ratedLines(render(SortOrder.RATING, older, newer, sameInstant)))
         .satisfiesExactly(
@@ -124,7 +124,7 @@ class RatingsTableTest {
   @DisplayName("a note with line breaks stays on its own row rather than breaking the table")
   void flattensANoteThatSpansLines() {
     AffinityRow multiline =
-        new AffinityRow("Q900004", "Invented Play", 4, "first line\nsecond line", MIDDLE);
+        new AffinityRow("Q0900004", "Invented Play", 4, "first line\nsecond line", MIDDLE);
 
     String rendered = render(SortOrder.RATING, multiline);
 
@@ -135,23 +135,23 @@ class RatingsTableTest {
   @Test
   @DisplayName("a rating whose entity is not in the graph says so rather than showing an empty gap")
   void saysWhenTheGraphHasNoLabel() {
-    AffinityRow unlabelled = new AffinityRow("Q900005", null, 2, "invented note", MIDDLE);
+    AffinityRow unlabelled = new AffinityRow("Q0900005", null, 2, "invented note", MIDDLE);
 
     String rendered = render(SortOrder.RATING, unlabelled);
 
-    assertThat(rendered).contains(AffinityRow.NO_LABEL).contains("Q900005");
+    assertThat(rendered).contains(AffinityRow.NO_LABEL).contains("Q0900005");
   }
 
   @Test
   @DisplayName("columns line up: the widest label sets the width for every row")
   void alignsTheColumns() {
     AffinityRow wide =
-        new AffinityRow("Q900006", "A Considerably Longer Invented Title", 5, null, MIDDLE);
+        new AffinityRow("Q0900006", "A Considerably Longer Invented Title", 5, null, MIDDLE);
 
     List<String> rows = ratedLines(render(SortOrder.RATING, wide, NOT_FOR_ME));
 
     assertThat(rows).hasSize(2);
-    assertThat(rows.get(0).indexOf("Q900006")).isEqualTo(rows.get(1).indexOf("Q900003"));
+    assertThat(rows.get(0).indexOf("Q0900006")).isEqualTo(rows.get(1).indexOf("Q0900003"));
   }
 
   @Test

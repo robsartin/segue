@@ -71,7 +71,7 @@ class RateServerTest {
   @BeforeEach
   void start() throws Exception {
     affinity = new RecordingAffinity();
-    Card card = Card.known(new NodeRecord("Q900001", NodeKind.GROUP, "Test Band", List.of()), 42);
+    Card card = Card.known(new NodeRecord("Q0900001", NodeKind.GROUP, "Test Band", List.of()), 42);
     server = new RateServer(List.of(card), affinity, 0);
     server.start();
     client = HttpClient.newHttpClient();
@@ -125,7 +125,7 @@ class RateServerTest {
       "a card built with Card.rated (issue #109) serialises the rating it already has, exactly")
   void revisionCardSerialisesItsExistingRating() throws Exception {
     Card revision =
-        Card.rated(new NodeRecord("Q900002", NodeKind.GROUP, "Rated Band", List.of()), 7, 3);
+        Card.rated(new NodeRecord("Q0900002", NodeKind.GROUP, "Rated Band", List.of()), 7, 3);
     RateServer revisionServer = new RateServer(List.of(revision), affinity, 0);
     revisionServer.start();
     try {
@@ -153,13 +153,13 @@ class RateServerTest {
         client.send(
             request("/api/rate")
                 .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString("{\"qid\":\"Q900001\",\"rating\":2}"))
+                .POST(HttpRequest.BodyPublishers.ofString("{\"qid\":\"Q0900001\",\"rating\":2}"))
                 .build(),
             HttpResponse.BodyHandlers.ofString());
 
     assertThat(response.statusCode()).isEqualTo(204);
     assertThat(affinity.written).hasSize(1);
-    assertThat(affinity.written.get(0).qid()).isEqualTo("Q900001");
+    assertThat(affinity.written.get(0).qid()).isEqualTo("Q0900001");
     assertThat(affinity.written.get(0).rating()).isEqualTo(2);
     assertThat(affinity.written.get(0).note()).isNull();
   }
@@ -197,7 +197,7 @@ class RateServerTest {
         client.send(
             request("/api/rate")
                 .header("Origin", "https://evil.example.com")
-                .POST(HttpRequest.BodyPublishers.ofString("{\"qid\":\"Q900001\",\"rating\":5}"))
+                .POST(HttpRequest.BodyPublishers.ofString("{\"qid\":\"Q0900001\",\"rating\":5}"))
                 .build(),
             HttpResponse.BodyHandlers.ofString());
 
@@ -226,7 +226,7 @@ class RateServerTest {
     HttpResponse<String> response =
         client.send(
             request("/api/rate")
-                .POST(HttpRequest.BodyPublishers.ofString("{\"qid\":\"Q900001\",\"rating\":9}"))
+                .POST(HttpRequest.BodyPublishers.ofString("{\"qid\":\"Q0900001\",\"rating\":9}"))
                 .build(),
             HttpResponse.BodyHandlers.ofString());
 
@@ -245,7 +245,7 @@ class RateServerTest {
     // emit literally: \n (a JSON control character), \t (another), and \u0001 (a raw C0 control
     // character with no dedicated JSON shorthand, so it needs the generic \\uXXXX form).
     String weirdLabel = "Weird\nLabel\tWith\u0001Control";
-    NodeRecord weird = new NodeRecord("Q900099", NodeKind.GROUP, weirdLabel, List.of());
+    NodeRecord weird = new NodeRecord("Q0900099", NodeKind.GROUP, weirdLabel, List.of());
     RateServer weirdServer = new RateServer(List.of(Card.known(weird, 3)), affinity, 0);
     weirdServer.start();
     try {
@@ -280,7 +280,7 @@ class RateServerTest {
     HttpResponse<String> response =
         client.send(
             request("/api/rate")
-                .POST(HttpRequest.BodyPublishers.ofString("{\"qid\":\"Q900001"))
+                .POST(HttpRequest.BodyPublishers.ofString("{\"qid\":\"Q0900001"))
                 .build(),
             HttpResponse.BodyHandlers.ofString());
 
@@ -309,7 +309,7 @@ class RateServerTest {
     HttpResponse<String> response =
         client.send(
             request("/api/rate")
-                .POST(HttpRequest.BodyPublishers.ofString("{\"qid\":\"Q900001\",\"rating\":4.7}"))
+                .POST(HttpRequest.BodyPublishers.ofString("{\"qid\":\"Q0900001\",\"rating\":4.7}"))
                 .build(),
             HttpResponse.BodyHandlers.ofString());
 
@@ -327,7 +327,8 @@ class RateServerTest {
     HttpResponse<String> response =
         client.send(
             request("/api/rate")
-                .POST(HttpRequest.BodyPublishers.ofString("{\"qid\":\"Q900001\",\"rating\":\"4\"}"))
+                .POST(
+                    HttpRequest.BodyPublishers.ofString("{\"qid\":\"Q0900001\",\"rating\":\"4\"}"))
                 .build(),
             HttpResponse.BodyHandlers.ofString());
 
@@ -344,7 +345,7 @@ class RateServerTest {
     HttpResponse<String> response =
         client.send(
             request("/api/rate")
-                .POST(HttpRequest.BodyPublishers.ofString("{\"qid\":\"Q900001\",\"rating\":04}"))
+                .POST(HttpRequest.BodyPublishers.ofString("{\"qid\":\"Q0900001\",\"rating\":04}"))
                 .build(),
             HttpResponse.BodyHandlers.ofString());
 
@@ -362,7 +363,7 @@ class RateServerTest {
         client.send(
             request("/api/rate")
                 .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString("{\"qid\":\"Q900001\",\"rating\":4}"))
+                .POST(HttpRequest.BodyPublishers.ofString("{\"qid\":\"Q0900001\",\"rating\":4}"))
                 .build(),
             HttpResponse.BodyHandlers.ofString());
 
@@ -381,7 +382,7 @@ class RateServerTest {
         client.send(
             request("/api/rate")
                 .header("Origin", "http://[::1]:" + server.port())
-                .POST(HttpRequest.BodyPublishers.ofString("{\"qid\":\"Q900001\",\"rating\":3}"))
+                .POST(HttpRequest.BodyPublishers.ofString("{\"qid\":\"Q0900001\",\"rating\":3}"))
                 .build(),
             HttpResponse.BodyHandlers.ofString());
 
@@ -403,9 +404,9 @@ class RateServerTest {
     try (SqliteAffinityStore store = SqliteAffinityStore.inMemory()) {
       store.put(
           new AffinityRecord(
-              "Q900001", 3, "invented note, never Rob's", Instant.parse("2026-01-01T00:00:00Z")));
+              "Q0900001", 3, "invented note, never Rob's", Instant.parse("2026-01-01T00:00:00Z")));
       Card card =
-          Card.rated(new NodeRecord("Q900001", NodeKind.GROUP, "Test Band", List.of()), 42, 3);
+          Card.rated(new NodeRecord("Q0900001", NodeKind.GROUP, "Test Band", List.of()), 42, 3);
       RateServer revising = new RateServer(List.of(card), store, 0);
       revising.start();
       try {
@@ -414,14 +415,15 @@ class RateServerTest {
                 HttpRequest.newBuilder(
                         URI.create("http://127.0.0.1:" + revising.port() + "/api/rate"))
                     .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString("{\"qid\":\"Q900001\",\"rating\":2}"))
+                    .POST(
+                        HttpRequest.BodyPublishers.ofString("{\"qid\":\"Q0900001\",\"rating\":2}"))
                     .build(),
                 HttpResponse.BodyHandlers.ofString());
 
         assertThat(response.statusCode()).isEqualTo(204);
-        assertThat(store.find("Q900001")).isPresent();
-        assertThat(store.find("Q900001").orElseThrow().rating()).isEqualTo(2);
-        assertThat(store.find("Q900001").orElseThrow().note())
+        assertThat(store.find("Q0900001")).isPresent();
+        assertThat(store.find("Q0900001").orElseThrow().rating()).isEqualTo(2);
+        assertThat(store.find("Q0900001").orElseThrow().note())
             .as("the affinity table is the one thing in segue with no source to regenerate it from")
             .isEqualTo("invented note, never Rob's");
       } finally {

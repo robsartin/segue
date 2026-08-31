@@ -17,13 +17,13 @@ class HopRenderingTest {
 
   private static final Instant WHEN = Instant.parse("2026-08-01T09:00:00Z");
 
-  private static final NodeRecord CAVE = new NodeRecord("Q900001", NodeKind.PERSON, "Nick Cave");
+  private static final NodeRecord CAVE = new NodeRecord("Q0900001", NodeKind.PERSON, "Nick Cave");
   private static final NodeRecord MCCARTHY =
-      new NodeRecord("Q900013", NodeKind.PERSON, "Cormac McCarthy");
+      new NodeRecord("Q0900013", NodeKind.PERSON, "Cormac McCarthy");
   private static final NodeRecord HILLCOAT =
-      new NodeRecord("Q900010", NodeKind.PERSON, "John Hillcoat");
+      new NodeRecord("Q0900010", NodeKind.PERSON, "John Hillcoat");
   private static final NodeRecord PROPOSITION =
-      new NodeRecord("Q900009", NodeKind.WORK, "The Proposition");
+      new NodeRecord("Q0900009", NodeKind.WORK, "The Proposition");
 
   @Test
   @DisplayName("a forward hop renders from -[TYPE]-> to, with a bracketed citation")
