@@ -145,6 +145,9 @@ class RecommendationReportTest {
         .contains(
             "of the 1 ranked, median degree 80, 0 sit exactly on the floor and 0 have every edge"
                 + " already counted as evidence");
+    // The caveat travels with the figure. A median read across two floors differs for a reason
+    // that is arithmetic, and the header is where somebody actually compares two runs.
+    assertThat(written).contains("comparable with a later run at this floor, not across floors");
   }
 
   @Test

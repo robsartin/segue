@@ -1,7 +1,9 @@
 package com.robsartin.segue.recommend;
 
 import static com.robsartin.segue.recommend.InventedWorld.ANCESTOR;
+import static com.robsartin.segue.recommend.InventedWorld.A_THIN_BAND;
 import static com.robsartin.segue.recommend.InventedWorld.INSTITUTIONS;
+import static com.robsartin.segue.recommend.InventedWorld.JUST_DISCOVERED;
 import static com.robsartin.segue.recommend.InventedWorld.KNOWN_ONE;
 import static com.robsartin.segue.recommend.InventedWorld.KNOWN_TWO;
 import static com.robsartin.segue.recommend.InventedWorld.SHARED_ARTIST;
@@ -120,6 +122,28 @@ class RecommendRunTest {
     assertThat(beforeTheFile).anyMatch(note -> note.contains("2 entity(ies)"));
     assertThat(beforeTheFile).anyMatch(note -> note.contains("cleared the floor of"));
     assertThat(beforeTheFile).anyMatch(note -> note.contains("held out"));
+  }
+
+  @Test
+  @DisplayName("the floor reading's notes carry the sweep's two counts in their own places")
+  void theFloorReadingNotesCarryTheSweepsCounts() throws IOException {
+    // Two entities below the floor, exactly one of them at a single edge, so that the two counts
+    // differ. They were both asserted only through "contains" before, which left the wiring
+    // ungated: swapping heldOutByFloor for heldOutAtDegreeOne kept the whole suite green.
+    node(graph, JUST_DISCOVERED, NodeKind.GROUP, "one edge to its name");
+    node(graph, A_THIN_BAND, NodeKind.GROUP, "two edges to its name");
+    edge(graph, SHARED_ARTIST, JUST_DISCOVERED, EdgeTypes.INFLUENCED_BY.code());
+    edge(graph, SHARED_ARTIST, A_THIN_BAND, EdgeTypes.INFLUENCED_BY.code());
+    padDegreeTo(graph, A_THIN_BAND, 2);
+
+    run(options(KNOWN_ONE, KNOWN_TWO));
+
+    assertThat(notes)
+        .contains(
+            "1 candidate(s) cleared the floor of 4 at median degree 4; 1 of the 1 ranked sit"
+                + " exactly on it")
+        .contains(
+            "the floor held out 2 entity(ies), 1 of them at a single edge (issues #134, #135)");
   }
 
   @Test

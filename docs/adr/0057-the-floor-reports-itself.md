@@ -59,15 +59,14 @@ floors this project has shipped were chosen the same way: run two floors, open t
 read them side by side. A diagnostic that lived only in the terminal would be gone by the time that
 comparison happened.
 
-**It changes no score and reorders nothing.** Every figure is counted from candidates that have
-already been scored and ranked, plus two counts of what the sweep discarded. Three independent
-lines of evidence that the ranking is unchanged, rather than an assurance:
-
-- The degree test moved out of `CandidateSweep.couldBeExplored` to its caller with the same
-  comparison against the same number, so the admitted set is defined by the same predicate.
-- Every pre-existing test still passes.
-- The two runs below reproduce, exactly, the figures ADR 45's amendment computed by hand on `main`
-  before this branch existed.
+**It changes no score and reorders nothing, and that was checked directly rather than argued.**
+`main` and this branch were each run against the same copy of the graph and the outputs diffed:
+**the ranked body is byte-identical, md5 `bb429ddc…` on both sides**, the only difference being the
+two header lines this change adds. Three weaker lines of evidence agree with it — the degree test
+moved out of `CandidateSweep.couldBeExplored` to its caller with the same comparison against the
+same number, every pre-existing test still passes, and the two runs below reproduce exactly the
+figures ADR 45's amendment computed by hand — but the diff is the one that settles it, and it is
+recorded here so that nobody has to re-derive the conclusion from the proxies.
 
 #### The reading, on the graph of 2026-08-30
 
@@ -96,7 +95,9 @@ for any floor above one.
 **The pool's median degree is comparable across runs at one floor and not across floors.** Raising
 a floor removes low-degree members and so raises the median of what remains, mechanically; the 38
 against the 19 above is that effect and is not evidence of anything. Only a later run *at floor 5*
-may be compared against the 19.
+may be compared against the 19. **That caveat is carried on `FloorReading.poolMedianDegree` and on
+the emitted header line as well as here**, because the comparison happens where the figure is read
+and not where this document is.
 
 #### What re-opens the question, stated so a procedure catches the drift rather than a person
 
@@ -162,16 +163,26 @@ and 147,460 carry a reverse-lookup ref, with none carrying neither, and 3,737 di
 derivable as expanded. **But an expansion that produced no mappable claim writes no edge assertion
 at all, and the node assertion it writes is byte-identical in shape to the one written for a
 neighbour that was merely discovered** — `WikidataEntityResolver` and `ReverseClaims` construct the
-same `Provenance` for both. So the derivable flag means "expanded and productive", and it conflates
+same `Provenance` for both, and the copy bears that out exhaustively: **all 152,714 node assertions
+carry `source_ref == qid`, with zero variation**, so a node assertion carries no expansion signal at
+all rather than a weak one. So the derivable flag means "expanded and productive", and it conflates
 *never expanded* with *expanded and found nothing*. **Those are exactly the two cases the proposal
 exists to separate**, and for a thin node they are the whole question. The size of that blind spot
 is not measurable from the log, which is itself the finding.
 
 **Where the graph is well connected the flag is a function of degree, and buys nothing.** Over the
-19,166 `PERSON`/`GROUP` nodes in the copy, the share that is derivably expanded rises monotonically
-with degree: 3.0% at degree 1 (388 of 12,733), 42.0% at degree 5 (162 of 386), 40 of 40 at degree
-20, and **860 of 860 at degree 50 and above**. Above roughly degree 20 the flag is determined, and
-a determined quantity separates nothing.
+19,166 `PERSON`/`GROUP` nodes in the copy, the share that is derivably expanded is 3.0% at degree 1
+(388 of 12,733) and 42.0% at degree 5 (162 of 386), and **at every degree of 20 or more it is 100%:
+1,531 nodes, 1,531 of them expanded, with no exception.** Above that point the flag is *determined*,
+and a determined quantity separates nothing.
+
+**The per-degree series below 20 is not monotone, and an earlier draft of this sentence said it
+was.** It falls at four places — 53.4% at degree 7 to 46.9% at degree 8, 80.9% at 10 to 75.7% at 11,
+100% at 13 to 88.6% at 14, and 100% at 18 to 97.2% at 19. The four points that draft cited happened
+to be monotone, so the claim read true against the evidence printed beside it, which is the failure
+mode this project keeps recording: a sentence about a *set* generalised from the shape of a sample.
+The exhaustive form above is both true and the stronger argument, because a threshold above which
+the flag is *constant* refutes the proposal more directly than a trend would.
 
 **Where it is informative, nothing chooses the sign of the adjustment.** At degree 5 — where the
 floor cuts — 162 of 386 nodes are derivably expanded and 224 are not, a split no function of degree
@@ -183,10 +194,13 @@ floor-5 decision was taken to admit and that produced ADR 50's 72-below-neutral 
 rewarding them makes the ranking depend *more* on ingest history, which is the defect issue #117
 was filed about. An adjustment whose sign is undetermined is not a remedy.
 
-**And the moment for a source-format derivation has passed.** [ADR 54](0054-musicbrainz-as-the-second-source.md)
-took MusicBrainz as a second source three days ago. Parsing a Wikidata statement id is
-Wikidata-specific and would report "never expanded" for an entity whose edges came from
-MusicBrainz — silently, and in the direction that looks like a finding. A flag that spanned sources
+**And the moment for a source-format derivation has passed. This reason is anticipatory, and is the
+only one here that is** — the measured graph carries **318,116 assertions, every one of them
+`source_id = wikidata` and none from MusicBrainz**, so the defect below does not bite today.
+[ADR 54](0054-musicbrainz-as-the-second-source.md) took MusicBrainz as a second source on
+2026-08-30, and parsing a Wikidata statement id is Wikidata-specific: once MusicBrainz edges exist
+it would report "never expanded" for an entity whose edges came from there — silently, and in the
+direction that looks like a finding. A flag that spanned sources
 would have to be recorded rather than derived, which is a schema change to the assertion log, and
 issue #117's own words for that are "more machinery than the problem may deserve".
 
@@ -230,7 +244,11 @@ does.
 ## Consequences
 
 - **Every recommendation file gains two header lines, and every run two notes.** The output format
-  changes; nothing that reads it programmatically exists in this repository.
+  changes. Nothing in this repository parses a recommendation file — that was checked, not assumed —
+  but the exposed party is not this repository: the output is written outside the working tree by
+  design, and the owner's own scripts over those files are where a format change would land. They
+  are not visible from here, so this is a change to warn about rather than one that can be verified
+  safe.
 - **`RecommendationReport.write` takes a `FloorReading` where it took an `int minDegree`.** Two
   arguments that had to agree are one, and the floor is now carried by the thing that was measured
   against it.

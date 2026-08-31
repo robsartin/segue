@@ -27,7 +27,10 @@ import java.util.Objects;
  * @param pool how many candidates cleared the floor — the population the ranking chose from
  * @param poolMedianDegree the pool's median degree. <b>The drift number.</b> The floor is an
  *     absolute count and degree grows with ingest, so the distance between this and {@code floor}
- *     is how far the population has moved away from the cut
+ *     is how far the population has moved away from the cut. <b>Comparable across runs at one
+ *     floor, and never across floors:</b> raising a floor removes low-degree members and so raises
+ *     the median of what remains, mechanically, so two floors' medians differ for a reason that is
+ *     arithmetic rather than evidence of anything
  * @param heldOut how many distinct entities the floor discarded on degree alone — entities that
  *     passed every other candidate test. The one filter in {@code CandidateSweep} whose bite was
  *     reported by nothing

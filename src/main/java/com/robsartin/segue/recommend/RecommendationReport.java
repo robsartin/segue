@@ -141,7 +141,8 @@ public final class RecommendationReport {
         + reading.headOnTheFloor()
         + " sit exactly on the floor and "
         + reading.headEveryEdgeCounted()
-        + " have every edge already counted as evidence.\n"
+        + " have every edge already counted as evidence."
+        + " The pool's median is comparable with a later run at this floor, not across floors.\n"
         + "# the floor held out "
         + reading.heldOut()
         + " entity(ies) that passed every other candidate test, "
