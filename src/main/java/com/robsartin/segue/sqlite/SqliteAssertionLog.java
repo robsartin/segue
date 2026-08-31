@@ -32,8 +32,10 @@ import java.util.List;
  * the validity dates, and a retraction (ADR 44) fills {@code qid} and {@code reason} alone. The
  * owner's three first-person claims (#92) reuse those same columns rather than adding any: {@code
  * LOCAL} fills a node claim's, while {@code OWNER_EDGE} and {@code SAME_AS} put their two ends in
- * {@code qid} and {@code to_qid}. The two sourced claims carry their provenance; the retraction has
- * none, and {@code asserted_at} carries the one time dimension it does have. Sequence order is the
+ * {@code qid} and {@code to_qid}. Five of the six kinds write real provenance columns - the two
+ * sourced claims carry their source's, and the owner's three carry the reserved owner id (#92).
+ * Only {@code RETRACT} has none, and its two are the padding {@link #RETRACTION_SOURCE} describes;
+ * {@code asserted_at} carries the one time dimension it does have. Sequence order is the
  * autoincrement primary key, which is exactly the replay order {@code GraphProjector} needs, and it
  * is also what orders a retraction against the claims it reaches. The instant is stored as an
  * ISO-8601 string so sub-second precision survives - the truncation the Gremlin {@code
@@ -87,8 +89,9 @@ public final class SqliteAssertionLog implements AssertionLog {
           + " (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
   private static final String SELECT_ALL =
-      "SELECT kind, qid, to_qid, type_code, node_kind, instance_of, label, valid_from, valid_to,"
-          + " source_id, source_ref, asserted_at, confidence, reason FROM assertion ORDER BY seq";
+      "SELECT seq, kind, qid, to_qid, type_code, node_kind, instance_of, label, valid_from,"
+          + " valid_to, source_id, source_ref, asserted_at, confidence, reason FROM assertion"
+          + " ORDER BY seq";
 
   /**
    * What goes in {@code source_id} and {@code confidence} for a retraction row.
@@ -263,7 +266,16 @@ public final class SqliteAssertionLog implements AssertionLog {
     try (PreparedStatement ps = conn.prepareStatement(SELECT_ALL);
         ResultSet rs = ps.executeQuery()) {
       while (rs.next()) {
-        out.add(readRow(rs));
+        try {
+          out.add(readRow(rs));
+        } catch (RuntimeException e) {
+          // A domain record refusing a row it was handed is not an SQLException, so it would
+          // otherwise escape past the catch below as a bare "qid must look like Q12345" with
+          // nothing to say it came from the log at all. Naming the sequence gives the operator
+          // the one row to look at, in a file ADR 19 forbids deleting a row from.
+          throw new IllegalStateException(
+              "cannot decode assertion log row at sequence " + rs.getInt("seq"), e);
+        }
       }
     } catch (SQLException e) {
       throw new IllegalStateException("cannot read assertion log", e);

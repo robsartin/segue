@@ -1,6 +1,7 @@
 package com.robsartin.segue.sqlite;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.LoggedAssertion;
@@ -163,6 +164,46 @@ class SqliteAssertionLogTest {
     }
     try (SqliteAssertionLog reopened = new SqliteAssertionLog(db)) {
       assertThat(reopened.readAll()).hasSize(1);
+    }
+  }
+
+  @Test
+  @DisplayName(
+      "a row that will not decode is refused by sequence, not by a bare validation message")
+  void aRowThatWillNotDecodeIsRefusedBySequenceNotByABareValidationMessage(@TempDir Path dir) {
+    // A domain record refusing a row throws IllegalArgumentException, which is not an
+    // SQLException and so escapes readAll's own catch unwrapped. The operator would get "qid
+    // must look like Q12345" with nothing saying it came from the log, in a file ADR 19 forbids
+    // deleting a row from. Driven from a genuinely corrupt row rather than a mock.
+    Path db = dir.resolve("segue.db");
+    try (SqliteAssertionLog log = new SqliteAssertionLog(db)) {
+      log.append(new NodeAssertion("Q5593", NodeKind.PERSON, "Pablo Picasso", WIKIDATA));
+    }
+    // A LOCAL row on an id Wikidata could allocate - what a hand-edited file, or a bug in a
+    // future writer, would leave behind. LocalEntity refuses it on every path, by design.
+    insertRawRow(db, "LOCAL", "Q42");
+
+    try (SqliteAssertionLog reopened = new SqliteAssertionLog(db)) {
+      assertThatThrownBy(reopened::readAll)
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("sequence 2")
+          .hasRootCauseInstanceOf(IllegalArgumentException.class);
+    }
+  }
+
+  /** Write a row straight past the adapter, the way a hand-edited file or an older build would. */
+  private static void insertRawRow(Path db, String kind, String qid) {
+    try (java.sql.Connection conn = java.sql.DriverManager.getConnection("jdbc:sqlite:" + db);
+        java.sql.Statement st = conn.createStatement()) {
+      st.execute(
+          "INSERT INTO assertion (kind, qid, node_kind, label, source_id, asserted_at, confidence)"
+              + " VALUES ('"
+              + kind
+              + "', '"
+              + qid
+              + "', 'PERSON', 'x', 'wikidata', '2026-08-31T09:00:00Z', 1.0)");
+    } catch (java.sql.SQLException e) {
+      throw new IllegalStateException("cannot plant a raw row", e);
     }
   }
 

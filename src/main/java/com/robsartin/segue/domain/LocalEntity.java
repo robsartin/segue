@@ -49,12 +49,46 @@ public record LocalEntity(String qid, NodeKind kind, String label, Instant minte
    */
   private static final Pattern LOCAL_SHAPE = Pattern.compile("Q00\\d+");
 
+  /**
+   * Rebuilds a minted entity, checking only what Wikidata's own grammar fixes.
+   *
+   * <p><b>The convention check is deliberately NOT here</b> - see {@link #minted}. This constructor
+   * is also the path {@code SqliteAssertionLog.readRow} rebuilds a logged row through, and the log
+   * is append-only (ADR 19): a row written last week has to stay decodable after the convention
+   * moves, which it already has once ({@code c837265}). Re-running today's convention against a row
+   * written under yesterday's is re-litigating history, and it would make one old row take out boot
+   * replay, {@code rate}, {@code recommend}, {@code exportGraph}, {@code retractEntity} and {@code
+   * listRatings} at once, on a row nothing may delete.
+   *
+   * <p>What remains is only what cannot be re-tightened by this project: {@code Q\d+}, and ADR 58's
+   * grammar fact that Wikidata never allocates a leading zero. Borrowing an id Wikidata could hand
+   * to something else is a collision rather than a convention, so it is refused on every path,
+   * reconstruction included.
+   */
   public LocalEntity {
     Objects.requireNonNull(qid, "qid");
     Objects.requireNonNull(kind, "kind");
     Objects.requireNonNull(label, "label");
     Objects.requireNonNull(mintedAt, "mintedAt");
-    checkLocalBand(qid);
+    checkUnallocatable(qid);
+  }
+
+  /**
+   * Mint a local entity - the moment of claiming, and where the convention is enforced.
+   *
+   * <p>Everything that <b>makes</b> a claim comes through here, so nothing malformed is ever
+   * written. Only reconstruction uses the constructor directly.
+   *
+   * <p><b>Why a factory rather than a stricter constructor.</b> A record cannot offer a trusting
+   * construction path: every constructor must delegate to the canonical one, and a public record's
+   * canonical constructor cannot be narrowed (javac: "attempting to assign stronger access
+   * privileges; was public"). So a static factory cannot be the trusting half either - it would run
+   * the compact constructor too. The only place trust can live is the canonical constructor, which
+   * is why the strict half is the factory and not the other way round.
+   */
+  public static LocalEntity minted(String qid, NodeKind kind, String label, Instant mintedAt) {
+    checkLocalShape(qid);
+    return new LocalEntity(qid, kind, label, mintedAt);
   }
 
   /** The projection's view of this claim - no {@code instanceOf}, because no source stated any. */
@@ -63,16 +97,26 @@ public record LocalEntity(String qid, NodeKind kind, String label, Instant minte
   }
 
   /**
-   * Refuse anything Wikidata could allocate, and anything it could not that still is not shaped
-   * like a local entity (most likely one of ADR 58's single-leading-zero stand-ins). Shared with
+   * Refuse anything Wikidata could allocate. A grammar fact (ADR 58), not a convention: it cannot
+   * be re-tightened by this project, so it is safe to enforce on reconstruction too. Shared with
    * {@link SameAs}, whose local side is the same claim by a different name.
    */
-  static void checkLocalBand(String qid) {
+  static void checkUnallocatable(String qid) {
     Qid.check(qid);
     if (Qid.isAllocatable(qid)) {
       throw new IllegalArgumentException(
           "a local entity's qid must not be allocatable by Wikidata, got: " + qid);
     }
+  }
+
+  /**
+   * Refuse anything unallocatable that still is not shaped like a local entity (most likely one of
+   * ADR 58's single-leading-zero stand-ins). This project's own convention, enforced at the moment
+   * of claiming only - it moved once already and may move again, and rows written before it moved
+   * still have to be readable.
+   */
+  static void checkLocalShape(String qid) {
+    checkUnallocatable(qid);
     if (!LOCAL_SHAPE.matcher(qid).matches()) {
       throw new IllegalArgumentException(
           "a local entity's qid must have two leading zeros (Q00..., ADR 58 issue #141) to stay"

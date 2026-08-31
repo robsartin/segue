@@ -26,11 +26,24 @@ import java.util.Objects;
 public record SameAs(String localQid, String canonicalQid, Instant assertedAt)
     implements LoggedAssertion {
 
+  /**
+   * Rebuilds a merge, checking only Wikidata's own grammar on each side - the local side
+   * unallocatable, the canonical side allocatable. Those are the two facts that make the sides
+   * non-interchangeable, and neither can be re-tightened by this project, so both are safe on the
+   * reconstruction path {@code SqliteAssertionLog.readRow} uses. The local-entity <em>shape</em> is
+   * a convention and is checked by {@link #declared} instead; see {@link LocalEntity#minted}.
+   */
   public SameAs {
     Objects.requireNonNull(localQid, "localQid");
     Objects.requireNonNull(canonicalQid, "canonicalQid");
     Objects.requireNonNull(assertedAt, "assertedAt");
-    LocalEntity.checkLocalBand(localQid);
+    LocalEntity.checkUnallocatable(localQid);
     Qid.checkAllocatable(canonicalQid);
+  }
+
+  /** Declare a merge - the moment of claiming, and where the local-entity shape is enforced. */
+  public static SameAs declared(String localQid, String canonicalQid, Instant assertedAt) {
+    LocalEntity.checkLocalShape(localQid);
+    return new SameAs(localQid, canonicalQid, assertedAt);
   }
 }

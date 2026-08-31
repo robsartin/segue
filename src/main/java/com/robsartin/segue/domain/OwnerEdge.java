@@ -25,6 +25,16 @@ import java.util.Objects;
 public record OwnerEdge(String fromQid, String toQid, String typeCode, Instant assertedAt)
     implements LoggedAssertion {
 
+  /**
+   * Rebuilds an owner edge, checking only what cannot be re-tightened.
+   *
+   * <p><b>The vocabulary check is deliberately NOT here</b> - see {@link #claimed}. {@link
+   * EdgeTypes} is a mutable registry, and {@code SqliteAssertionLog.readRow} rebuilds logged rows
+   * through this constructor: retiring or renaming a code would otherwise make every row that used
+   * it undecodable, taking every reader of the log down with it, on rows ADR 19 forbids deleting. A
+   * log records what was claimed; whether the vocabulary still registers that type is a question
+   * for the moment of claiming, not the moment of reading.
+   */
   public OwnerEdge {
     Objects.requireNonNull(fromQid, "fromQid");
     Objects.requireNonNull(toQid, "toQid");
@@ -32,9 +42,20 @@ public record OwnerEdge(String fromQid, String toQid, String typeCode, Instant a
     Objects.requireNonNull(assertedAt, "assertedAt");
     Qid.check(fromQid);
     Qid.check(toQid);
+  }
+
+  /**
+   * Claim a relationship - the moment of claiming, and where ADR 22 clause 3 is enforced. Every
+   * caller that <b>makes</b> an owner edge comes through here; only reconstruction uses the
+   * constructor. See {@link LocalEntity#minted} for why the strict half has to be the factory.
+   */
+  public static OwnerEdge claimed(
+      String fromQid, String toQid, String typeCode, Instant assertedAt) {
+    Objects.requireNonNull(typeCode, "typeCode");
     if (EdgeTypes.byCode(typeCode).isEmpty()) {
       throw new IllegalArgumentException("no registered edge type for code: " + typeCode);
     }
+    return new OwnerEdge(fromQid, toQid, typeCode, assertedAt);
   }
 
   /**

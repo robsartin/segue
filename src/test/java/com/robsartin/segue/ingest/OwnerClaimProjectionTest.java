@@ -49,6 +49,9 @@ class OwnerClaimProjectionTest {
 
   private static final String OTHER_MINTED = "Q00900043";
 
+  /** A real, allocatable Wikidata id - the only thing a merge's canonical side may be. */
+  private static final String CANONICAL = "Q42";
+
   private AssertionLog log;
   private GraphStore graph;
   private IngestService ingest;
@@ -69,7 +72,7 @@ class OwnerClaimProjectionTest {
   @Test
   @DisplayName("should put a minted entity in the graph with no classes")
   void shouldPutAMintedEntityInTheGraphWithNoClasses() {
-    ingest.record(new LocalEntity(MINTED, NodeKind.PERSON, "a minted person", NOW));
+    ingest.record(LocalEntity.minted(MINTED, NodeKind.PERSON, "a minted person", NOW));
 
     assertThat(graph.node(MINTED)).isPresent();
     assertThat(graph.node(MINTED).orElseThrow().instanceOf()).isEmpty();
@@ -78,9 +81,9 @@ class OwnerClaimProjectionTest {
   @Test
   @DisplayName("should record an owner edge as the owner's claim, not a model's guess")
   void shouldRecordAnOwnerEdgeAsTheOwnersClaimNotAModelsGuess() {
-    ingest.record(new LocalEntity(MINTED, NodeKind.PERSON, "a minted person", NOW));
-    ingest.record(new LocalEntity(OTHER_MINTED, NodeKind.PERSON, "another minted person", NOW));
-    ingest.record(new OwnerEdge(MINTED, OTHER_MINTED, "INFLUENCED_BY", NOW));
+    ingest.record(LocalEntity.minted(MINTED, NodeKind.PERSON, "a minted person", NOW));
+    ingest.record(LocalEntity.minted(OTHER_MINTED, NodeKind.PERSON, "another minted person", NOW));
+    ingest.record(OwnerEdge.claimed(MINTED, OTHER_MINTED, "INFLUENCED_BY", NOW));
 
     EdgeRecord edge = onlyEdgeFrom(MINTED);
     assertThat(edge.sources()).singleElement().matches(Provenance::isOwner);
@@ -92,10 +95,10 @@ class OwnerClaimProjectionTest {
   @Test
   @DisplayName("should read every owner claim back out of the real log unchanged")
   void shouldReadEveryOwnerClaimBackOutOfTheRealLogUnchanged() {
-    LocalEntity minted = new LocalEntity(MINTED, NodeKind.WORK, "a minted work", NOW);
-    LocalEntity other = new LocalEntity(OTHER_MINTED, NodeKind.PERSON, "another minted", NOW);
-    OwnerEdge owned = new OwnerEdge(MINTED, OTHER_MINTED, "INFLUENCED_BY", NOW);
-    SameAs merge = new SameAs(MINTED, "Q42", NOW);
+    LocalEntity minted = LocalEntity.minted(MINTED, NodeKind.WORK, "a minted work", NOW);
+    LocalEntity other = LocalEntity.minted(OTHER_MINTED, NodeKind.PERSON, "another minted", NOW);
+    OwnerEdge owned = OwnerEdge.claimed(MINTED, OTHER_MINTED, "INFLUENCED_BY", NOW);
+    SameAs merge = SameAs.declared(MINTED, "Q42", NOW);
 
     ingest.recordAll(List.of(minted, other, owned, merge));
 
@@ -107,9 +110,9 @@ class OwnerClaimProjectionTest {
   void shouldRebuildTheOwnersClaimsIntoTheGraphWhenTheLogIsReplayedAtBoot() {
     ingest.recordAll(
         List.of(
-            new LocalEntity(MINTED, NodeKind.PERSON, "a minted person", NOW),
-            new LocalEntity(OTHER_MINTED, NodeKind.PERSON, "another minted person", NOW),
-            new OwnerEdge(MINTED, OTHER_MINTED, "INFLUENCED_BY", NOW)));
+            LocalEntity.minted(MINTED, NodeKind.PERSON, "a minted person", NOW),
+            LocalEntity.minted(OTHER_MINTED, NodeKind.PERSON, "another minted person", NOW),
+            OwnerEdge.claimed(MINTED, OTHER_MINTED, "INFLUENCED_BY", NOW)));
 
     try (GraphStore rebuilt = new TinkerGraphStore()) {
       assertThat(GraphProjector.project(log, rebuilt)).isEqualTo(3);
@@ -123,9 +126,9 @@ class OwnerClaimProjectionTest {
   void shouldStopProjectingTheOwnersClaimsARetractionReaches() {
     ingest.recordAll(
         List.of(
-            new LocalEntity(MINTED, NodeKind.PERSON, "a minted person", NOW),
-            new LocalEntity(OTHER_MINTED, NodeKind.PERSON, "another minted person", NOW),
-            new OwnerEdge(MINTED, OTHER_MINTED, "INFLUENCED_BY", NOW)));
+            LocalEntity.minted(MINTED, NodeKind.PERSON, "a minted person", NOW),
+            LocalEntity.minted(OTHER_MINTED, NodeKind.PERSON, "another minted person", NOW),
+            OwnerEdge.claimed(MINTED, OTHER_MINTED, "INFLUENCED_BY", NOW)));
     IngestService.retract(log, new Retraction(MINTED, "minted the wrong thing", NOW));
 
     try (GraphStore rebuilt = new TinkerGraphStore()) {
@@ -142,9 +145,9 @@ class OwnerClaimProjectionTest {
   void shouldFoldTheOwnersClaimsIntoTheExportProjection() {
     ingest.recordAll(
         List.of(
-            new LocalEntity(MINTED, NodeKind.PERSON, "a minted person", NOW),
-            new LocalEntity(OTHER_MINTED, NodeKind.PERSON, "another minted person", NOW),
-            new OwnerEdge(MINTED, OTHER_MINTED, "INFLUENCED_BY", NOW)));
+            LocalEntity.minted(MINTED, NodeKind.PERSON, "a minted person", NOW),
+            LocalEntity.minted(OTHER_MINTED, NodeKind.PERSON, "another minted person", NOW),
+            OwnerEdge.claimed(MINTED, OTHER_MINTED, "INFLUENCED_BY", NOW)));
 
     LogProjection projection = LogProjection.of(log);
 
@@ -164,19 +167,114 @@ class OwnerClaimProjectionTest {
   void shouldCountTheOwnersClaimsInTheEffectARetractionReports() {
     ingest.recordAll(
         List.of(
-            new LocalEntity(MINTED, NodeKind.PERSON, "a minted person", NOW),
-            new LocalEntity(OTHER_MINTED, NodeKind.PERSON, "another minted person", NOW),
-            new OwnerEdge(MINTED, OTHER_MINTED, "INFLUENCED_BY", NOW)));
+            LocalEntity.minted(MINTED, NodeKind.PERSON, "a minted person", NOW),
+            LocalEntity.minted(OTHER_MINTED, NodeKind.PERSON, "another minted person", NOW),
+            OwnerEdge.claimed(MINTED, OTHER_MINTED, "INFLUENCED_BY", NOW)));
 
-    RetractRun.Effect effect =
-        new RetractRun(log, Clock.fixed(NOW, ZoneOffset.UTC))
-            .run(
-                new RetractCli.Options(Path.of("unused"), MINTED, "minted the wrong thing", true),
-                new ArrayList<String>()::add);
+    RetractRun.Effect effect = measureEffectOn(MINTED);
 
     assertThat(effect.label()).isEqualTo("a minted person");
     assertThat(effect.nodeClaims()).isEqualTo(1);
     assertThat(effect.edgeClaims()).isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("should read back a row whose shape the local-entity convention no longer accepts")
+  void shouldReadBackARowWhoseShapeTheLocalEntityConventionNoLongerAccepts() {
+    // A row written before c837265 tightened the local shape from a numeric floor to two leading
+    // zeros - one leading zero was a valid local id that week. The log is append-only (ADR 19),
+    // so the row is still there and every reader still has to decode it.
+    LocalEntity legacy =
+        new LocalEntity("Q0900042", NodeKind.PERSON, "minted before the shape moved", NOW);
+
+    log.append(legacy);
+
+    assertThat(log.readAll()).containsExactly(legacy);
+  }
+
+  @Test
+  @DisplayName("should read back a row whose edge type the vocabulary no longer registers")
+  void shouldReadBackARowWhoseEdgeTypeTheVocabularyNoLongerRegisters() {
+    // The same hazard from the other direction: EdgeTypes is a mutable vocabulary, and retiring
+    // or renaming a code must not make the rows that used it undecodable.
+    OwnerEdge legacy = new OwnerEdge(MINTED, OTHER_MINTED, "RETIRED_TYPE", NOW);
+
+    log.append(legacy);
+
+    assertThat(log.readAll()).containsExactly(legacy);
+  }
+
+  @Test
+  @DisplayName("should count a merge among the claims a retraction will reach")
+  void shouldCountAMergeAmongTheClaimsARetractionWillReach() {
+    ingest.recordAll(
+        List.of(
+            LocalEntity.minted(MINTED, NodeKind.PERSON, "a minted person", NOW),
+            SameAs.declared(MINTED, CANONICAL, NOW)));
+
+    RetractRun.Effect effect = measureEffectOn(MINTED);
+
+    assertThat(effect.nodeClaims()).isEqualTo(1);
+    assertThat(effect.edgeClaims())
+        .as("an entity known only through a merge has to be retractable")
+        .isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("should stop counting a merge whose canonical end was retracted after it")
+  void shouldStopCountingAMergeWhoseCanonicalEndWasRetractedAfterIt() {
+    ingest.recordAll(
+        List.of(
+            LocalEntity.minted(MINTED, NodeKind.PERSON, "a minted person", NOW),
+            SameAs.declared(MINTED, CANONICAL, NOW)));
+    IngestService.retract(log, new Retraction(CANONICAL, "resolved to the wrong item", NOW));
+
+    RetractRun.Effect effect = measureEffectOn(MINTED);
+
+    assertThat(effect.nodeClaims()).as("the minted entity itself was not retracted").isEqualTo(1);
+    assertThat(effect.edgeClaims())
+        .as("a merge is dropped when either end is retracted, on the edge rule")
+        .isZero();
+  }
+
+  @Test
+  @DisplayName("should fold a log holding a merge without drawing the merge as an edge")
+  void shouldFoldALogHoldingAMergeWithoutDrawingTheMergeAsAnEdge() {
+    ingest.recordAll(
+        List.of(
+            LocalEntity.minted(MINTED, NodeKind.PERSON, "a minted person", NOW),
+            SameAs.declared(MINTED, CANONICAL, NOW)));
+
+    LogProjection projection = LogProjection.of(log);
+
+    assertThat(projection.nodes()).containsOnlyKeys(MINTED);
+    assertThat(projection.edges())
+        .as("a merge is a statement about identity; find_paths cannot route along it")
+        .isEmpty();
+    assertThat(projection.danglingEdges()).isZero();
+  }
+
+  @Test
+  @DisplayName("should count a merge among the rows replay reports as applied")
+  void shouldCountAMergeAmongTheRowsReplayReportsAsApplied() {
+    ingest.recordAll(
+        List.of(
+            LocalEntity.minted(MINTED, NodeKind.PERSON, "a minted person", NOW),
+            SameAs.declared(MINTED, CANONICAL, NOW)));
+
+    try (GraphStore rebuilt = new TinkerGraphStore()) {
+      assertThat(GraphProjector.project(log, rebuilt))
+          .as("the count is rows the projection consumed, and #92 Task 4 gives a merge an effect")
+          .isEqualTo(2);
+    }
+  }
+
+  /** Report what a retraction of {@code qid} would reach, without appending one. */
+  private RetractRun.Effect measureEffectOn(String qid) {
+    return new RetractRun(log, Clock.fixed(NOW, ZoneOffset.UTC))
+        .run(
+            new RetractCli.Options(Path.of("unused"), qid, "a reason", true),
+            new ArrayList<String>()::add);
   }
 
   private EdgeRecord onlyEdgeFrom(String qid) {
