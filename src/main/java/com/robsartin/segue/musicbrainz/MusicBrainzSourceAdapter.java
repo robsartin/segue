@@ -60,11 +60,17 @@ import java.util.regex.Pattern;
  * <b>Skipping is normal operation here, not an error</b>, which is why nothing is flagged when it
  * happens.
  *
- * <p><b>{@code subgroup} is absent too, and for a plainer reason: nothing justifies a mapping
- * yet.</b> It is how MusicBrainz relates one act to another it is part of — {@code member of band}
- * is not used for that — so it is the relation a group-in-group edge would come from. P361 is
- * registered as {@code PART_OF}, but whether {@code subgroup} means that is a judgement nobody here
- * has made, and ADR 38 admits one property at a time. Worth its own issue; not decided by omission.
+ * <p><b>{@code subgroup} is absent too, and that is now a decision with a record rather than an
+ * omission: ADR 55, on a count</b> (<a href="https://github.com/robsartin/segue/issues/142">issue
+ * #142</a>). It is how MusicBrainz relates one act to another it is part of — {@code member of
+ * band} is not used for that — so it is the only relation this source has that could produce a
+ * group-in-group edge. A probe over a sample of the real graph's {@code PERSON} and {@code GROUP}
+ * nodes found it <b>twice in 959 relations</b>, on one seed, of which one target resolved to a QID:
+ * the whole vocabulary decision would have bought one edge. Both candidate codes — {@link
+ * EdgeTypes#MEMBER_OF} (P463) and {@link EdgeTypes#PART_OF} (P361) — are already in use between two
+ * groups in this graph, stated by Wikidata, which splits them; MusicBrainz says only {@code
+ * subgroup} and draws no such distinction. ADR 55 is the authority on the figures and on why each
+ * candidate lost.
  *
  * <p><b>{@code collaboration} is deliberately absent.</b> MusicBrainz states it as a first-class
  * artist relation, and {@code EdgeTypes.COLLABORATED_WITH} exists — but it is registered {@code
@@ -113,20 +119,20 @@ import java.util.regex.Pattern;
  * <p><b>Both halves of that are measured rather than argued, and the saving is smaller than #143
  * assumed.</b> A dev-side probe drove this adapter and the shipped bridge over a sample of the real
  * graph's {@code PERSON} and {@code GROUP} nodes and ran the production Wikidata adapter beside it,
- * on 2026-08-30; the figures are recorded in issue #143. Of the neighbours this adapter resolved,
- * 44% were already in the graph — where the fetch is not spent at all, because it is gated on
- * {@code isNew} — and a further tenth were described by Wikidata's own reverse pass in the same
- * call. Fewer than half were fetches a {@code neighbors()} would actually have saved, at a median
- * of one per expansion, against nodes losing or never gaining their classes at a greater rate than
- * that.
+ * on 2026-08-30; the figures are in ADR 55 and in issue #143. Of the neighbours this adapter
+ * resolved, 44% were already in the graph — where the fetch is not spent at all, because it is
+ * gated on {@code isNew} — and a further tenth were described by Wikidata's own reverse pass in the
+ * same call. Fewer than half were fetches a {@code neighbors()} would actually have saved, at a
+ * median of one per expansion, against nodes losing or never gaining their classes at a greater
+ * rate than that.
  *
  * <p><b>The route that collects the saving without the cost is a bridge that returns classes
  * alongside QIDs</b> — one batched Query Service round trip per 100 neighbours, which is the shape
  * {@code ReverseClaims} already uses for Wikidata's own neighbours, rather than one fetch each.
  * That widens {@link MusicBrainzIdentity} and the {@code app} class behind it, so it is a change of
- * its own and not a line here. {@code MusicBrainzNeighbourIdentityTest} holds the decision: it was
- * watched red against an adapter that did emit neighbours, and it is what stops that coming back by
- * accident.
+ * its own and not a line here. ADR 55 records the decision and {@code
+ * MusicBrainzNeighbourIdentityTest} holds it: those tests were watched red against an adapter that
+ * did emit neighbours, and they are what stops that coming back by accident.
  *
  * <p><b>No stated classes, so {@code instanceOf} stays empty.</b> MusicBrainz classifies an artist
  * as {@code Person} or {@code Group} without stating Wikidata classes, which is exactly the case
