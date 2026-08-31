@@ -135,15 +135,24 @@ public final class CandidateSweep {
     }
 
     Map<String, List<SharedIntermediate>> evidence = new LinkedHashMap<>();
+    // Keyed by qid rather than counted, because one entity is reached once per intermediate and
+    // "how many entities the floor held out" is a count of entities (issue #135).
+    Map<String, Integer> heldOutByFloor = new LinkedHashMap<>();
     for (Map.Entry<String, Map<String, Double>> entry : reachers.entrySet()) {
       String via = entry.getKey();
       int viaDegree = degree(via);
       for (Map.Entry<String, Double> candidate :
           bestPerNeighbour(via, Weighing.AS_EVIDENCE_ABOUT_THE_NEIGHBOUR).entrySet()) {
         String qid = candidate.getKey();
-        if (knownSet.contains(qid)
-            || suppressed.contains(qid)
-            || !couldBeExplored(qid, minDegree)) {
+        if (knownSet.contains(qid) || suppressed.contains(qid) || !couldBeExplored(qid)) {
+          continue;
+        }
+        // Separated from the tests above so that what the FLOOR held out is countable apart from
+        // what the kind rules refused. A record and a learned society are not candidates at any
+        // floor; a thin band is a candidate at a lower one, and only the second is drift.
+        int candidateDegree = degree(qid);
+        if (candidateDegree < minDegree) {
+          heldOutByFloor.put(qid, candidateDegree);
           continue;
         }
         for (Map.Entry<String, Double> reacher : entry.getValue().entrySet()) {
@@ -167,7 +176,13 @@ public final class CandidateSweep {
           new Recommendation(
               entity, scorer.score(entry.getValue(), degree), degree, entry.getValue()));
     }
-    return new Sweep(candidates, found, missing, hubs);
+    return new Sweep(
+        candidates,
+        found,
+        missing,
+        hubs,
+        heldOutByFloor.size(),
+        (int) heldOutByFloor.values().stream().filter(degree -> degree == 1).count());
   }
 
   /**
@@ -237,10 +252,15 @@ public final class CandidateSweep {
    * <p>A {@code PERSON} or a {@code GROUP}: a record, a prize or a city is a fact about a
    * connection rather than something to listen to next. Not an institution, for the reason the hub
    * rule excludes one as an intermediate — a recommender without this filter suggests joining a
-   * learned society. And above the degree floor, because the normalised score rewards a small
-   * denominator and without a floor the answer is whatever is smallest.
+   * learned society.
+   *
+   * <p><b>The degree floor is deliberately not asked here.</b> It used to be, and it is now applied
+   * by the caller, so that an entity refused for its kind and an entity refused for its size are
+   * distinguishable — {@code Sweep.heldOutByFloor} counts only the second. The floor is the one
+   * filter whose number has been re-decided twice (ADR 45 and its 2026-08-29 amendment), and a
+   * count that mixed in records and learned societies would not be a reading of it.
    */
-  private boolean couldBeExplored(String qid, int minDegree) {
+  private boolean couldBeExplored(String qid) {
     Optional<NodeRecord> node = graph.node(qid);
     if (node.isEmpty()) {
       return false;
@@ -249,10 +269,7 @@ public final class CandidateSweep {
     if (kind != NodeKind.PERSON && kind != NodeKind.GROUP) {
       return false;
     }
-    if (node.get().instanceOf().stream().anyMatch(recognitionInstitutionClass)) {
-      return false;
-    }
-    return degree(qid) >= minDegree;
+    return node.get().instanceOf().stream().noneMatch(recognitionInstitutionClass);
   }
 
   private int degree(String qid) {
