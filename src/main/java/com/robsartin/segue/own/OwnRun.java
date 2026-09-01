@@ -1,6 +1,7 @@
 package com.robsartin.segue.own;
 
 import com.robsartin.segue.domain.AssertionRecord;
+import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
@@ -41,7 +42,9 @@ import java.util.function.Consumer;
  *
  * <p><b>"Present" means present in the projection this invocation replays</b>, not "somewhere in
  * the log". An endpoint an earlier retraction reached is absent, because the shared {@link
- * Retractions} fold says so - the same rule both graph projections and the exporter apply. A local
+ * Retractions} fold says so - the same rule both graph projections and the exporter apply; an
+ * endpoint the owner has merged away is absent too, and the id it was merged into is present, on
+ * the shared {@link Equivalences} fold and {@code IngestService.carry}'s node rule. A local
  * entity minted by an <em>earlier</em> invocation is present, because it projects through {@code
  * LocalEntity.toNode()}. Minting and asserting in one run is deliberately not supported: one
  * operation per run, as {@code retractEntity} does one retraction per run.
@@ -110,9 +113,10 @@ public final class OwnRun {
   /** Claim a relationship, refusing an endpoint the projection does not hold. */
   private LoggedAssertion assertEdge(
       List<LoggedAssertion> logged, Assert edge, Consumer<String> n) {
-    Map<String, String> present = labelsInTheProjection(logged);
-    String from = labelOrRefuse(present, edge.fromQid());
-    String to = labelOrRefuse(present, edge.toQid());
+    Equivalences merges = Equivalences.in(logged);
+    Map<String, String> present = labelsInTheProjection(logged, merges);
+    String from = labelOrRefuse(present, merges, edge.fromQid());
+    String to = labelOrRefuse(present, merges, edge.toQid());
     n.accept(
         "claiming "
             + edge.fromQid()
@@ -152,12 +156,38 @@ public final class OwnRun {
     n.accept(
         "nothing is deleted — the local id stays resolvable, and its edges and rating are carried"
             + " onto the canonical id (ADR 19, ADR 44)");
+    // Said, not refused. A second merge of one local id is how a wrong merge is corrected -
+    // Equivalences' rule is that the last surviving merge wins - so the operator who means it
+    // keeps his correction, and the operator who has forgotten sees it before the log is touched.
+    String already = Equivalences.in(logged).canonicalByLocal().get(merge.localQid());
+    if (already != null) {
+      n.accept(
+          merge.localQid()
+              + " was already merged into "
+              + already
+              + " — the last merge wins for the rating; the graph keeps both carries");
+    }
     return SameAs.declared(merge.localQid(), merge.canonicalQid(), clock.instant());
   }
 
-  private static String labelOrRefuse(Map<String, String> present, String qid) {
+  private static String labelOrRefuse(
+      Map<String, String> present, Equivalences merges, String qid) {
     String label = present.get(qid);
     if (label == null) {
+      // A merged local id is refused by name rather than as an absence. It IS still in the graph -
+      // nothing is deleted - so "mint or seed it first" would be false and useless advice; and an
+      // edge claimed against it now would stay on the retired id forever, because carry() reads
+      // the graph as it stood when the merge was applied.
+      String canonical = merges.canonicalByLocal().get(qid);
+      if (canonical != null) {
+        throw new IllegalArgumentException(
+            qid
+                + " was merged into "
+                + canonical
+                + " — claim this against "
+                + canonical
+                + ", which is the id the merge retired it in favour of (#92)");
+      }
       throw new IllegalArgumentException(
           "nothing in the projection is "
               + qid
@@ -175,8 +205,16 @@ public final class OwnRun {
    * #92 is a route that starts or ends on something Wikidata does not model. Last claim wins,
    * matching {@code upsertNode} and both folds, so the label reported is the one the projection is
    * showing right now.
+   *
+   * <p><b>Merges move the offer, in both directions</b>, through the shared {@link Equivalences}
+   * exactly as retraction goes through the shared {@link Retractions}. A merged local id is no
+   * longer offered - an edge claimed against it would land on the id the owner retired and never
+   * be carried, because {@code carry} reads the graph as it stood when the merge was applied. The
+   * canonical id is offered, carrying the merged entity's label, because the merge put a node
+   * under it. Asking retraction alone got both halves wrong at once.
    */
-  private static Map<String, String> labelsInTheProjection(List<LoggedAssertion> logged) {
+  private static Map<String, String> labelsInTheProjection(
+      List<LoggedAssertion> logged, Equivalences merges) {
     Map<String, String> labels = new LinkedHashMap<>();
     Retractions retractions = Retractions.in(logged);
     for (int i = 0; i < logged.size(); i++) {
@@ -188,8 +226,21 @@ public final class OwnRun {
         labels.put(node.qid(), node.label());
       } else if (assertion instanceof LocalEntity minted) {
         labels.put(minted.qid(), minted.label());
+      } else if (assertion instanceof SameAs merge && !labels.containsKey(merge.canonicalQid())) {
+        // The node carry, the same rule IngestService.carry and both folds apply: the canonical id
+        // gains a node carrying the merged entity's label where nothing has claimed one. It is in
+        // the projection, so this tool has to offer it - and it is usually the id the owner wants
+        // next, since a merge is normally declared the moment Wikidata catches up.
+        String local = labels.get(merge.localQid());
+        if (local != null) {
+          labels.put(merge.canonicalQid(), local);
+        }
       }
     }
+    // A merged local id stops being offered as an endpoint, the shared rule saying which ids those
+    // are. Retraction alone was not enough: the id stays resolvable and stays in the graph, so
+    // nothing here refused it, and the edge landed on the id the owner had just retired.
+    labels.keySet().removeAll(merges.merged());
     return labels;
   }
 

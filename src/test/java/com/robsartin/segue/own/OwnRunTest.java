@@ -43,6 +43,7 @@ class OwnRunTest {
   private static final String SOURCED = "Q0900101";
   private static final String OTHER_SOURCED = "Q0900102";
   private static final String CANONICAL = "Q900";
+  private static final String OTHER_CANONICAL = "Q901";
   private static final String NEVER_CLAIMED = "Q0900999";
 
   private AssertionLog log;
@@ -160,6 +161,39 @@ class OwnRunTest {
   }
 
   @Test
+  @DisplayName("should refuse when an endpoint of an assertion is a local id already merged")
+  void shouldRefuseWhenAnEndpointOfAnAssertionIsALocalIdAlreadyMerged() {
+    // A claim made now would land on the retired id and never be carried: carry() reads the graph
+    // as it stood when the merge was applied, so anything appended after it stays where it was.
+    seedASourcedEntity(SOURCED, "Ines Marlow");
+    String minted = mintOne("A Self-Pressed Record");
+    run.run(merge(minted, false), notes::add);
+
+    assertThatThrownBy(() -> run.run(claim(SOURCED, minted, false), notes::add))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining(minted)
+        .hasMessageContaining(CANONICAL);
+  }
+
+  @Test
+  @DisplayName("should accept the canonical id of a merge as an endpoint though no source claimed it")
+  void shouldAcceptTheCanonicalIdOfAMergeAsAnEndpointWhenNoSourceHasClaimedIt() {
+    // The merge put a node under it - carry() creates the canonical node when nothing has claimed
+    // one - so it IS in the projection this invocation replays, and refusing it would be false.
+    seedASourcedEntity(SOURCED, "Ines Marlow");
+    String minted = mintOne("A Self-Pressed Record");
+    run.run(merge(minted, false), notes::add);
+    notes.clear();
+
+    LoggedAssertion appended = run.run(claim(SOURCED, CANONICAL, false), notes::add);
+
+    assertThat(appended).isEqualTo(new OwnerEdge(SOURCED, CANONICAL, "INFLUENCED_BY", NOW));
+    assertThat(notes)
+        .as("the label it was carried, so the operator sees which entity he is claiming against")
+        .anyMatch(note -> note.contains("A Self-Pressed Record"));
+  }
+
+  @Test
   @DisplayName("should append the edge and name both labels when both endpoints are present")
   void shouldAppendTheEdgeAndNameBothLabelsWhenBothEndpointsArePresent() {
     seedASourcedEntity(SOURCED, "Ines Marlow");
@@ -212,6 +246,23 @@ class OwnRunTest {
 
     assertThat(appended).isEqualTo(new SameAs(minted, CANONICAL, NOW));
     assertThat(log.readAll()).last().isEqualTo(appended);
+  }
+
+  @Test
+  @DisplayName("should say what a local id was already merged into when merging it again")
+  void shouldSayWhatALocalIdWasAlreadyMergedIntoWhenMergingItAgain() {
+    // Not refused: Equivalences' documented rule is that the last surviving merge for a local id
+    // wins, which is how a wrong merge gets corrected. The operator is told, before the append.
+    String minted = mintOne("A Self-Pressed Record");
+    run.run(merge(minted, false), notes::add);
+    notes.clear();
+
+    run.run(new OwnCli.Merge(UNUSED, minted, OTHER_CANONICAL, false), notes::add);
+
+    assertThat(notes)
+        .as("a second merge of one local id is a correction, and the operator has to see it as one")
+        .anyMatch(note -> note.contains("already merged into " + CANONICAL));
+    assertThat(log.readAll()).last().isEqualTo(new SameAs(minted, OTHER_CANONICAL, NOW));
   }
 
   @Test
