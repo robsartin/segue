@@ -252,7 +252,7 @@ graph TD
   musicbrainz["musicbrainz<br/>MusicBrainzClient, adapter, MusicBrainzIdentity"]
   port["port<br/>GraphStore, AssertionLog, AffinityStore, SourceAdapter, EntityResolver"]
   domain["domain<br/>records + EdgeTypes"]
-  support["support<br/>UuidV7, QidList, ClassLabels"]
+  support["support<br/>UuidV7, QidList, ClassLabels, DefaultDatabase"]
   seed["seed<br/>SeedCli, SeedResolver, Adjudicator"]
   export["export<br/>ViewSelector, DotWriter, GraphMlWriter"]
   ratings["ratings<br/>RatingsCli, RatingsRun, RatingsTable"]
@@ -301,6 +301,7 @@ graph TD
   ratings --> port
   ratings --> domain
   ratings --> sqlite
+  ratings --> support
   retract --> port
   retract --> domain
   retract --> ingest
@@ -338,9 +339,12 @@ one that had to declare its identity seam rather than import the adapter that co
 `KindMapper.rederive`, which is what makes a mapper improvement reach nodes the graph already holds
 ([ADR 42](adr/0042-store-p31-and-rederive-kind.md)). `mcp` depends on `ingest`, `port`, `domain`
 and `support`, plus its own dotted edge to `wikidata` (explained below). `app` depends on almost
-everything, because wiring is its job. `support` depends on nothing, and four packages use it:
-`mcp` (`UuidV7`), `export` and `rate` (`ClassLabels`), and `export`, `recommend` and `rate`
-(`QidList`). One thing a reader might expect and will not find: `app` does not import `jena` at
+everything, because wiring is its job. `support` depends on nothing, and five packages use it:
+`mcp` (`UuidV7`), `export` and `rate` (`ClassLabels`), `export`, `recommend` and `rate`
+(`QidList`), and `export`, `ratings`, `recommend` and `rate` (`DefaultDatabase` — issue #179's one
+resolution for the four dev tools that keep a default; `retract` and `own` each still carry their
+own copy of the same rule rather than depend on it). One thing a reader might expect and will
+not find: `app` does not import `jena` at
 all — the reference engine is reachable only from tests. **This paragraph used to name a second,
 that `app` imports nothing from `domain`; that stopped being true in ADR 54**, because
 `WikidataMusicBrainzIdentity` validates a seed QID with `Qid.looksLikeAQid` before putting it in a
@@ -394,12 +398,12 @@ view, and ADR 44 a fourth rather than a mode of one of them.
 | `wikidata` | The first source: resolution, expansion, and the two mapping passes. Plain Java, no Spring. | `port`, `domain` |
 | `musicbrainz` | The second source ([ADR 54](adr/0054-musicbrainz-as-the-second-source.md)): `MusicBrainzClient` over `ws/2`, `MusicBrainzSourceAdapter`, and `MusicBrainzIdentity` — the MBID-to-QID seam it declares and may not implement, because an adapter may not import another adapter. Expansion only; no `EntityResolver`. Plain Java, no Spring. | `port`, `domain` |
 | `ingest` | `IngestService` (the only write path) and `GraphProjector` (boot replay). | `port`, `domain`, `wikidata` (`KindMapper` only, [ADR 42](adr/0042-store-p31-and-rederive-kind.md)) |
-| `support` | Cross-cutting plain-Java helpers with no project dependencies — `UuidV7` (request correlation), `QidList` (the QID-file reader `export`, `recommend` and `rate` share), and `ClassLabels` (the offline `P31` label table `export` and `rate` share; it moved here from `export` when `rate` needed it). | nothing |
+| `support` | Cross-cutting plain-Java helpers with no project dependencies — `UuidV7` (request correlation), `QidList` (the QID-file reader `export`, `recommend` and `rate` share), `ClassLabels` (the offline `P31` label table `export` and `rate` share; it moved here from `export` when `rate` needed it), and `DefaultDatabase` (the one `--db`/`SEGUE_DB`/`${user.home}` resolution `export`, `ratings`, `recommend` and `rate` share — issue #179; `retract` and `own` each still carry their own copy of the same rule). | nothing |
 | `mcp` | The tool classes, `SegueService`, the view records, `CorrelationId`. Spring-aware. | `ingest`, `port`, `domain`, `support` |
 | `app` | Entry point, all bean wiring, `application.yaml`, transport profiles, and `WikidataMusicBrainzIdentity` — the P434 bridge that implements `musicbrainz`'s identity seam, placed here because it is the only package ADR 32 lets see two adapters at once. Spring-aware. | everything it wires |
 | `seed` | The bulk seeding tool ([ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)): a name list to `name → QID`, run as `./gradlew resolveNames`. Plain Java, never opens a store. | `port`, `domain`, `wikidata` |
 | `export` | The graph exporter ([ADR 41](adr/0041-graph-exporter-views-and-formats.md)): `ViewSelector` and the two writers, run as `./gradlew exportGraph`. Plain Java, read-only. | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `support` |
-| `ratings` | The taste-layer reader ([ADR 43](adr/0043-listing-your-own-ratings.md)): every rating with its label, note and `updated_at`, run as `./gradlew listRatings`. Plain Java, read-only, offline. | `port`, `domain`, `sqlite` |
+| `ratings` | The taste-layer reader ([ADR 43](adr/0043-listing-your-own-ratings.md)): every rating with its label, note and `updated_at`, run as `./gradlew listRatings`. Plain Java, read-only, offline. | `port`, `domain`, `sqlite`, `support` |
 | `retract` | The retraction tool ([ADR 44](adr/0044-retraction-as-a-new-claim.md)): appends one `Retraction` claim so the projection stops showing an entity and its edges, run as `./gradlew retractEntity`. Plain Java, offline, and the only dev tool that writes a world-fact claim. | `port`, `domain`, `ingest`, `sqlite` |
 | `recommend` | The recommender ([ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md)): ranks entities absent from the known-list by how much more of that list reaches them than their size predicts, and explains each with real routes. Run as `./gradlew recommend`. The list is the supplied `--known` file plus everything rated 4 or 5 that the file does not name, through `KnownList.promoted` ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)) — so a highly rated entity stops being offered back — and since [ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md) the sweep also takes `KnownList.suppressed` as a separate set, so an entity rated 2 or below stops being offered back too. Plain Java, read-only, offline, and since issue #85 it weights every candidate by the owner's ratings — `Recommendations.regardFor` over `AffinityStore.readRatings`, the note-free half of the taste layer. (This row said it "cannot see the taste layer at all" until the final review of issue #101; that was already false on `main`.) | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `support` |
 | `own` | The owner-claim tool (issue [#92](https://github.com/robsartin/segue/issues/92)): mints a local entity Wikidata does not model, asserts an edge between two ids, or merges a local id into the QID it turned out to be — one operation per run, as `./gradlew ownClaim`. Plain Java, offline, and the second dev tool that writes a world-fact claim; it appends through `IngestService.claim` and holds no graph, so the projection catches up at the next boot. Deliberately not an MCP tool: an owner claim is exempt from the corroboration count, so a model must not be able to make one. | `port`, `domain`, `ingest`, `sqlite` |
