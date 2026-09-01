@@ -139,7 +139,7 @@ class KnownListTest {
 
   @Test
   @DisplayName("what the sweep may not offer is the rejections and the merged local ids together")
-  void notOfferedUnionsSuppressionWithTheMergedLocalIds() {
+  void shouldUnionTheRejectionsWithTheMergedLocalIdsWhenAskedWhatIsNotOffered() {
     Equivalences merges = new Equivalences(Map.of("Q00900042", "Q900"));
 
     assertThat(KnownList.notOffered(Map.of("Q0900001", 2, "Q0900002", 5), merges))
@@ -148,7 +148,7 @@ class KnownListTest {
 
   @Test
   @DisplayName("a merged local id is not revisable: its rating now reads under the canonical id")
-  void aMergedLocalIdIsNotRevisable() {
+  void shouldNotBeRevisableWhenALocalIdHasBeenMerged() {
     // Equivalences.resolve has already moved the rating, so the local id is absent from the map
     // by the time revisitable is asked. Written down because it is a decision, not an oversight:
     // dealing the local id for revision would write a second live row and rebuild the defect.

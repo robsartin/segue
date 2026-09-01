@@ -170,7 +170,7 @@ class SqliteAssertionLogTest {
   @Test
   @DisplayName(
       "a row that will not decode is refused by sequence, not by a bare validation message")
-  void aRowThatWillNotDecodeIsRefusedBySequenceNotByABareValidationMessage(@TempDir Path dir) {
+  void shouldRefuseARowBySequenceWhenItWillNotDecode(@TempDir Path dir) {
     // A domain record refusing a row throws IllegalArgumentException, which is not an
     // SQLException and so escapes readAll's own catch unwrapped. The operator would get "qid
     // must look like Q12345" with nothing saying it came from the log, in a file ADR 19 forbids

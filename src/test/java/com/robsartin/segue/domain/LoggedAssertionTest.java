@@ -33,7 +33,7 @@ class LoggedAssertionTest {
   @Test
   @DisplayName(
       "the sealed hierarchy permits the two sourced claim kinds and the four first-person acts")
-  void permitsExactlySix() {
+  void shouldPermitExactlySixSubtypesWhenTheHierarchyIsSealed() {
     assertThat(LoggedAssertion.class.getPermittedSubclasses())
         .containsExactlyInAnyOrder(
             NodeAssertion.class,

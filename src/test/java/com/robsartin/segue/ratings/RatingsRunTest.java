@@ -84,7 +84,7 @@ class RatingsRunTest {
   @Test
   @DisplayName(
       "an entity the owner minted reads as a name too, because the owner's claim is a claim")
-  void namesAnEntityTheOwnerMinted() throws IOException {
+  void shouldNameAnEntityWhenTheOwnerMintedItHimself() throws IOException {
     FakeAffinityStore ratings = new FakeAffinityStore().rated(MINTED, 4, null, EARLY);
     FakeAssertionLog log = new FakeAssertionLog().with(minted(MINTED, MINTED_LABEL));
 

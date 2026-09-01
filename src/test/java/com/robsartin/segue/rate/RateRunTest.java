@@ -251,7 +251,7 @@ class RateRunTest {
   @DisplayName(
       "a local id the owner has merged is never mixed into the deck as a candidate, because the"
           + " deck would be offering him the thing he minted and then resolved (#92)")
-  void aMergedLocalIdIsNotMixedIntoTheDeck() throws Exception {
+  void shouldNotMixALocalIdIntoTheDeckWhenTheOwnerHasMergedIt() throws Exception {
     // The same fixture, with the candidate a LOCAL id the owner has since merged. The count from
     // CandidateSweep is the assertion that proves the wiring, for the reason the test above gives:
     // Deck.deal would drop an already-rated qid anyway, and a merged local id is not rated here.

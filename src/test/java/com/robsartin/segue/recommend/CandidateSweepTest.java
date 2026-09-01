@@ -253,7 +253,7 @@ class CandidateSweepTest {
 
   @Test
   @DisplayName("an edge sourced only by the owner still counts toward the candidate's degree floor")
-  void anOwnerEdgeCountsTowardTheDegreeFloor() {
+  void shouldCountAnOwnerEdgeTowardTheDegreeFloorWhenSweeping() {
     // The open question the plan handed this task rather than assuming: does CandidateSweep's
     // degree floor count an owner edge? #degree(String) is graph.edges(qid).size() with no
     // provenance filter, so every filler edge here is owner-sourced and nothing else touches
