@@ -81,8 +81,22 @@ wrong merge is correctable but not free, so the default is the owner saying whic
 evidence later argues for more, that is its own decision.
 
 **A merged local id stays resolvable** — old log entries must keep meaning what they meant — but
-stops being offered anywhere, the way ADR 50's suppressed candidate stays reachable through
-`--revise` and is never dealt.
+stops being offered anywhere.
+
+*Corrected 2026-08-31, after Task 4b's review.* This sentence originally added "the way ADR 50's
+suppressed candidate stays reachable through `--revise` and is never dealt", and that analogy is
+wrong. ADR 50's stated reason for keeping `--revise` reachable is that **no owner judgement should
+become permanent and unappealable** — and `--revise` is the only mechanism available there, because
+the rating lives on that qid, there is no delete, and no other id names the thing.
+
+A merge breaks that last precondition by construction: another id now names the same thing. Two
+appeal routes remain — re-rate the canonical id, which the deck does deal, or retract the merge,
+which `Equivalences.in` honours through `Retractions.survives`. Dealing the local id anyway would be
+**actively harmful**: `Equivalences.resolve` uses `putIfAbsent`, so a rating written on a dealt local
+id is silently discarded when the canonical already holds one. The owner would rate a card and
+observe no effect, which is worse than the unappealability ADR 50 guards against.
+
+So the principle carries over and the mechanism does not.
 
 ## Routing, recommendation and expansion
 
