@@ -11,7 +11,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The entry point, run from Gradle: {@code ./gradlew retractEntity --args="--qid Q… --reason …"}.
+ * The entry point, run from Gradle: {@code ./gradlew retractEntity --args="--db ~/.segue/segue.db
+ * --qid Q… --reason …"}.
+ *
+ * <p><b>{@code --db} is required</b> (#179). Every other dev tool defaults to {@code SEGUE_DB} or
+ * {@code ${user.home}/.segue/segue.db}; this one refuses to run without being told which database
+ * to append to, because a retraction lands in a log ADR 19 forbids editing - it cannot be taken
+ * back, only appended over. {@code SEGUE_DB} does not satisfy the requirement: an agent's shell is
+ * initialised from the owner's profile and inherits it, so it cannot tell the owner apart from an
+ * agent running as the owner.
  *
  * <p><b>Deliberately not a seventh MCP tool.</b> ADR 26 pins the surface at six, and #5, ADR 40,
  * ADR 41 and ADR 43 each declined a seventh for lighter reasons than this one. Retraction is the
@@ -33,17 +41,18 @@ public final class RetractCli {
   private static final Pattern QID = Pattern.compile("Q\\d+");
 
   private static final String USAGE =
-      "usage: --qid <Q12345> --reason \"<why>\" [--dry-run] [--db <segue.db>]";
+      "usage: --db <segue.db> --qid <Q12345> --reason \"<why>\" [--dry-run]";
 
   private RetractCli() {}
 
   /**
    * Which entity, why, and whether to stop short of appending.
    *
-   * @param database the log to append to. Defaults exactly as the server's does: {@code SEGUE_DB}
-   *     if set, otherwise {@code ${user.home}/.segue/segue.db}. Stated here as well as in {@code
-   *     application.yaml} because this tool is plain Java and ADR 32 keeps Spring out of every
-   *     package but {@code app} and {@code mcp}
+   * @param database the log to append to. Required, and named by {@code --db} on every invocation:
+   *     this tool has no default, because the default was the hole in #179. An agent's shell is
+   *     initialised from the owner's profile, so {@code SEGUE_DB} is inherited and cannot stand in
+   *     for a flag that is typed each time. The other four dev tools still default, through {@code
+   *     support.DefaultDatabase}, which this package deliberately does not use
    * @param reason required. The value of keeping a retraction in an append-only log is that it
    *     records what we concluded and why; there is no editing one afterwards to add the why
    * @param dryRun report what the retraction would reach and append nothing. Not decoration: this
@@ -101,10 +110,10 @@ public final class RetractCli {
    * The refusal, naming the flag and the database it would once have defaulted to.
    *
    * <p>The path is in the message because a refusal that only says "--db is required" sends the
-   * owner to look up where their log lives; this one is a copy-paste. {@code SEGUE_DB} is read
-   * here and nowhere else in this tool: it is the path to quote back when it is set, and it is
-   * still not enough on its own - an agent's shell is initialised from the owner's profile and
-   * inherits it, so it cannot tell the owner apart from an agent running as the owner.
+   * owner to look up where their log lives; this one is a copy-paste. {@code SEGUE_DB} is read here
+   * and nowhere else in this tool: it is the path to quote back when it is set, and it is still not
+   * enough on its own - an agent's shell is initialised from the owner's profile and inherits it,
+   * so it cannot tell the owner apart from an agent running as the owner.
    */
   private static String missingDatabase(String envDatabase, String userHome) {
     Path wouldHaveUsed =

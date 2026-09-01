@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.DisplayName;
@@ -137,5 +138,54 @@ class RetractCliTest {
   @DisplayName("a flag with no value is refused rather than read past the end of the arguments")
   void refusesAMissingValue() {
     assertThatIllegalArgumentException().isThrownBy(() -> parse("--qid"));
+  }
+
+  @Test
+  @DisplayName("should refuse a database that is not there rather than creating one")
+  void shouldRefuseADatabaseThatIsNotThereRatherThanCreatingOne() {
+    // The refusal that was here before this branch, kept honest: the new --db check comes first
+    // and must not have displaced it. The two are distinguishable, because they are different
+    // mistakes - a flag nobody typed, and a path that does not name a database.
+    Path absent = dir.resolve("nothing.db");
+
+    assertThatThrownBy(
+            () ->
+                RetractCli.run(
+                    new String[] {"--db", absent.toString(), "--qid", "Q900101", "--reason", "why"},
+                    null,
+                    "/home/invented"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("no segue database")
+        .hasMessageNotContaining("--db is required");
+
+    assertThat(Files.exists(absent)).as("the database was not created").isFalse();
+  }
+
+  @Test
+  @DisplayName("should open the database and do its own work when --db names an existing one")
+  void shouldOpenTheDatabaseWhenTheOneNamedByDbExists() {
+    Path database = dir.resolve("segue.db");
+    try (SqliteAssertionLog created = new SqliteAssertionLog(database)) {
+      assertThat(created.readAll()).isEmpty();
+    }
+
+    // Past both refusals and into RetractRun, which reads the log and finds Q900101 is not in the
+    // projection. That message is only reachable from inside an opened database, so it is the
+    // proof that a named --db still gets through.
+    assertThatThrownBy(
+            () ->
+                RetractCli.run(
+                    new String[] {
+                      "--db",
+                      database.toString(),
+                      "--qid",
+                      "Q900101",
+                      "--reason",
+                      "why",
+                      "--dry-run"
+                    },
+                    null,
+                    "/home/invented"))
+        .hasMessageContaining("nothing about Q900101 is in the projection");
   }
 }

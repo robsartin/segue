@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -249,8 +250,31 @@ class OwnCliTest {
                       "mint", "--db", absent.toString(), "--kind", "WORK", "--label", "a book"
                     }))
         .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("no segue database");
+        .hasMessageContaining("no segue database")
+        // A different mistake from the one above, and it has to read as one: a path that does not
+        // name a database, rather than a flag nobody typed.
+        .hasMessageNotContaining("--db is required");
 
     assertThat(Files.exists(absent)).as("the database was not created").isFalse();
+  }
+
+  @Test
+  @DisplayName("should proceed when --db names an existing database")
+  void shouldProceedWhenTheOneNamedByDbExists() {
+    Path database = dir.resolve("segue.db");
+    try (SqliteAssertionLog created = new SqliteAssertionLog(database)) {
+      assertThat(created.readAll()).isEmpty();
+    }
+
+    OwnCli.run(
+        new String[] {
+          "mint", "--db", database.toString(), "--kind", "WORK", "--label", "a book", "--dry-run"
+        },
+        null,
+        "/home/invented");
+
+    try (SqliteAssertionLog after = new SqliteAssertionLog(database)) {
+      assertThat(after.readAll()).as("a dry run appends nothing").isEmpty();
+    }
   }
 }

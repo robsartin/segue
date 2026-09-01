@@ -13,12 +13,13 @@ import java.nio.file.Path;
  * class, and never call {@link #resolve}.</b> They append a first-person claim about the world, and
  * the default this class resolves is exactly the hole issue #179 closes — an agent's shell inherits
  * {@code SEGUE_DB} from the owner's profile, so the environment variable cannot stand in for a flag
- * typed per invocation. A later issue is expected to make {@code --db} required outright for those
- * two tools; as of this class, they have not changed and still carry their own copy of the same
- * default-resolution logic {@code resolve} replaces here. <b>No ArchUnit rule yet forbids {@code
- * retract} or {@code own} from depending on this class.</b> One is intended, to hold the absence of
- * a default in those two packages rather than merely intend it, but it does not exist today —
- * nothing currently stops a future edit from wiring {@link #resolve} into either package.
+ * typed per invocation. Those two tools now <b>require {@code --db}</b> and have no default left to
+ * resolve: neither carries a copy of this logic any more, and each reads {@code SEGUE_DB} for one
+ * purpose only, to quote the path it would once have used back in its refusal. <b>No ArchUnit rule
+ * yet forbids {@code retract} or {@code own} from depending on this class.</b> One is intended, to
+ * hold the absence of a default in those two packages rather than merely intend it, but it does not
+ * exist today — nothing currently stops a future edit from wiring {@link #resolve} into either
+ * package.
  *
  * <p><b>Pure.</b> No {@code System.getenv} and no {@code System.getProperty} inside it — the four
  * tools that still keep a default call {@link #resolve} exactly as they called their own copy of

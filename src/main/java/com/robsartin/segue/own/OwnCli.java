@@ -16,8 +16,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The entry point, run from Gradle: {@code ./gradlew ownClaim --args="mint --kind WORK --label 'A
- * Self-Pressed Record'"}.
+ * The entry point, run from Gradle: {@code ./gradlew ownClaim --args="mint --db ~/.segue/segue.db
+ * --kind WORK --label 'A Self-Pressed Record'"}.
+ *
+ * <p><b>{@code --db} is required</b> (#179). This tool has no default database at all, where every
+ * other dev tool falls back to {@code SEGUE_DB} or {@code ${user.home}/.segue/segue.db}. The
+ * default is what turned the mistake below into a permanent row. {@code SEGUE_DB} does not satisfy
+ * the requirement either: an agent's shell is initialised from the owner's profile and inherits it,
+ * so the variable cannot tell the owner apart from an agent running as the owner, and a flag typed
+ * per invocation can.
  *
  * <p><b>The task is {@code ownClaim}. This line said {@code own} - the package name - and that is
  * worse than a broken example.</b> Gradle matches abbreviated task names by camel-case hump, so
@@ -25,7 +32,9 @@ import org.slf4j.LoggerFactory;
  * DEFAULT database, because {@code --db} was not part of the copied line either. Verified against
  * this build: {@code ./gradlew own --args="mint …" --dry-run} prints {@code :ownClaim SKIPPED}. A
  * wrong invocation that errors costs a retype; this one appends a row to a log ADR 19 forbids
- * editing. Every example here names {@code ownClaim} in full, and passes {@code --db}.
+ * editing. Every example here names {@code ownClaim} in full, and passes {@code --db} - which this
+ * tool now requires outright: {@code ./gradlew own} still resolves to {@code :ownClaim}, and now
+ * refuses to do anything.
  *
  * <p><b>Dev-side, and deliberately never a seventh MCP tool.</b> ADR 26 held {@code assert_edge}
  * back until corroboration was visibly working and ADR 56 made it work - but the reason for holding
@@ -57,7 +66,7 @@ public final class OwnCli {
           + "> --label \"<name>\""
           + " | assert --from <Q…> --to <Q…> --type <CODE>"
           + " | merge --local <Q00…> --canonical <Q…>"
-          + " [--dry-run] [--db <segue.db>]";
+          + " --db <segue.db> [--dry-run]";
 
   private OwnCli() {}
 
@@ -72,10 +81,12 @@ public final class OwnCli {
    * OwnRun}'s switch is exhaustive and a fourth operation cannot be added without deciding what it
    * does.
    *
-   * @param database the log to append to. Defaults exactly as the server's does: {@code SEGUE_DB}
-   *     if set, otherwise {@code ${user.home}/.segue/segue.db}. Stated here as well as in {@code
-   *     application.yaml} because this tool is plain Java and ADR 32 keeps Spring out of every
-   *     package but {@code app} and {@code mcp}
+   * @param database the log to append to. Required, and named by {@code --db} on every invocation:
+   *     this tool has no default, because the default is what turned {@code ./gradlew own} into a
+   *     row in the owner's real log (#179). {@code SEGUE_DB} does not satisfy it - an agent's shell
+   *     is initialised from the owner's profile and inherits it. The other four dev tools still
+   *     default, through {@code support.DefaultDatabase}, which this package deliberately does not
+   *     use
    * @param dryRun report what would be claimed and append nothing. Not decoration: every operation
    *     here appends a row to a log that is never edited, and two of the three name qids by hand
    */
@@ -249,13 +260,13 @@ public final class OwnCli {
    * The refusal, naming the flag and the database it would once have defaulted to.
    *
    * <p>The path is in the message because a refusal that only says "--db is required" sends the
-   * owner to look up where their log lives; this one is a copy-paste. {@code SEGUE_DB} is read
-   * here and nowhere else in this tool: it is the path to quote back when it is set, and it is
-   * still not enough on its own - an agent's shell is initialised from the owner's profile and
-   * inherits it, so it cannot tell the owner apart from an agent running as the owner. Written
-   * out here rather than
-   * shared with {@code RetractCli}: the two claim tools have no default to resolve, and a shared
-   * helper for the sentence would be one import away from a shared helper for the resolution.
+   * owner to look up where their log lives; this one is a copy-paste. {@code SEGUE_DB} is read here
+   * and nowhere else in this tool: it is the path to quote back when it is set, and it is still not
+   * enough on its own - an agent's shell is initialised from the owner's profile and inherits it,
+   * so it cannot tell the owner apart from an agent running as the owner. Written out here rather
+   * than shared with {@code RetractCli}: the two claim tools have no default to resolve, and a
+   * shared helper for the sentence would be one import away from a shared helper for the
+   * resolution.
    */
   private static String missingDatabase(String envDatabase, String userHome) {
     Path wouldHaveUsed =
