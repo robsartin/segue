@@ -393,9 +393,11 @@ view, and ADR 44 a fourth rather than a mode of one of them.
 ### The two claim tools require `--db`, and `./gradlew own` will not say "task not found"
 
 `retractEntity` and `ownClaim` refuse to run unless `--db` names a database
-([ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md)). The other five dev tools keep
-their default — `SEGUE_DB` if set, otherwise `${user.home}/.segue/segue.db`, resolved in one place
-by `support.DefaultDatabase`. These two have no default left to resolve.
+([ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md)). The dev tools that do keep a
+default — `SEGUE_DB` if set, otherwise `${user.home}/.segue/segue.db` — are exactly the callers of
+`support.DefaultDatabase.resolve`, which is one grep rather than a count anybody has to maintain
+here; `hoverableSvg` and `seed` are not among them because neither has a `--db` at all. These two
+have no default left to resolve.
 
 **Why these two and not the rest.** They are the tools that append a **first-person claim about the
 world** to a log [ADR 19](adr/0019-assertion-log-source-of-truth.md) forbids editing. A wrong row
@@ -441,7 +443,7 @@ there would restore the default without the first rule ever noticing.
 | `wikidata` | The first source: resolution, expansion, and the two mapping passes. Plain Java, no Spring. | `port`, `domain` |
 | `musicbrainz` | The second source ([ADR 54](adr/0054-musicbrainz-as-the-second-source.md)): `MusicBrainzClient` over `ws/2`, `MusicBrainzSourceAdapter`, and `MusicBrainzIdentity` — the MBID-to-QID seam it declares and may not implement, because an adapter may not import another adapter. Expansion only; no `EntityResolver`. Plain Java, no Spring. | `port`, `domain` |
 | `ingest` | `IngestService` (the only write path) and `GraphProjector` (boot replay). | `port`, `domain`, `wikidata` (`KindMapper` only, [ADR 42](adr/0042-store-p31-and-rederive-kind.md)) |
-| `support` | Cross-cutting plain-Java helpers with no project dependencies — `UuidV7` (request correlation), `QidList` (the QID-file reader `export`, `recommend` and `rate` share), `ClassLabels` (the offline `P31` label table `export` and `rate` share; it moved here from `export` when `rate` needed it), `DefaultDatabase` (the one `--db`/`SEGUE_DB`/`${user.home}` resolution `export`, `ratings`, `recommend` and `rate` share — issue #179), and `RequiredDatabase` (the refusal `retract` and `own` give when `--db` was not typed; it calls `DefaultDatabase` for the path it quotes back and hands out a `String`, never a `Path`, so neither claim tool can take a default from it). | nothing |
+| `support` | Cross-cutting plain-Java helpers with no project dependencies — `UuidV7` (request correlation), `QidList` (the QID-file reader `export`, `recommend` and `rate` share), `ClassLabels` (the offline `P31` label table `export` and `rate` share; it moved here from `export` when `rate` needed it), `DefaultDatabase` (the one `--db`/`SEGUE_DB`/`${user.home}` resolution `export`, `ratings`, `recommend` and `rate` share — issue #179; the live list is whoever calls `resolve`, so grep rather than trust these four names), and `RequiredDatabase` (the refusal `retract` and `own` give when `--db` was not typed; it calls `DefaultDatabase` for the path it quotes back and hands out a `String`, never a `Path`, so neither claim tool can take a default from it). | nothing |
 | `mcp` | The tool classes, `SegueService`, the view records, `CorrelationId`. Spring-aware. | `ingest`, `port`, `domain`, `support` |
 | `app` | Entry point, all bean wiring, `application.yaml`, transport profiles, and `WikidataMusicBrainzIdentity` — the P434 bridge that implements `musicbrainz`'s identity seam, placed here because it is the only package ADR 32 lets see two adapters at once. Spring-aware. | everything it wires |
 | `seed` | The bulk seeding tool ([ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)): a name list to `name → QID`, run as `./gradlew resolveNames`. Plain Java, never opens a store. | `port`, `domain`, `wikidata` |

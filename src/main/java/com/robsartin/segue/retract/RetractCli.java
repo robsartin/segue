@@ -58,11 +58,12 @@ public final class RetractCli {
    * @param database the log to append to. Required, and named by {@code --db} on every invocation:
    *     this tool has no default, because the default was the hole in #179. An agent's shell is
    *     initialised from the owner's profile, so {@code SEGUE_DB} is inherited and cannot stand in
-   *     for a flag that is typed each time. The other four dev tools still default, through {@code
-   *     support.DefaultDatabase}, which this package deliberately does not use. It uses {@code
+   *     for a flag that is typed each time. Every dev tool that does still default goes through
+   *     {@code support.DefaultDatabase.resolve}, so grepping for that call is what says which ones
+   *     they are; this package deliberately does not use it. It uses {@code
    *     support.RequiredDatabase} instead, which owns the refusal sentence and calls {@code
-   *     resolve} itself: the rule stays in one place, and this package stays clear of the class the
-   *     intended ArchUnit fence names
+   *     resolve} itself: the rule stays in one place, and this package stays clear of the class
+   *     {@code ArchitectureTest.theClaimToolsHaveNoDefaultDatabase} names
    * @param reason required. The value of keeping a retraction in an append-only log is that it
    *     records what we concluded and why; there is no editing one afterwards to add the why
    * @param dryRun report what the retraction would reach and append nothing. Not decoration: this

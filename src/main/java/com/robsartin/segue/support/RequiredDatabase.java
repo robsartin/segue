@@ -25,8 +25,17 @@ import java.nio.file.Path;
  * hold. The copies slipped past the design because the fence names {@code DefaultDatabase}
  * literally, and re-implementing a rule never touches the class that owns it. So the resolution
  * happens here, once, by calling {@link DefaultDatabase#resolve} - and the two tools depend on this
- * class instead, not on {@code DefaultDatabase}, which leaves the intended ArchUnit fence exactly
- * as strong as it was.
+ * class instead, not on {@code DefaultDatabase}, which leaves {@code
+ * ArchitectureTest.theClaimToolsHaveNoDefaultDatabase} exactly as strong as it was.
+ *
+ * <p><b>If you are about to add a helper here that hands a claim tool the default path, read this
+ * first.</b> A {@link Path} is refused by the build. A {@link String} is not, and that is a known
+ * limit rather than an opening: the fence can only see the type, and this class necessarily returns
+ * the path as text inside its sentence, so no predicate can tell a sentence from a path spelled
+ * out. A {@code String}-returning {@code defaultPath()} used from {@code retract} or {@code own}
+ * restores exactly the default #179 removed, with every architecture test green. What stands
+ * between that and the codebase is this paragraph and a reviewer, so put it in {@code
+ * DefaultDatabase} and let the four tools that keep a default use it there.
  *
  * <p><b>Pure</b>, like its neighbour: no {@code System.getenv} and no {@code System.getProperty}
  * inside it. The caller passes both in.

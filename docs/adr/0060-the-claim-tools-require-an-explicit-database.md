@@ -134,11 +134,16 @@ bytecode edge, and a control that planted only a comment would have passed while
   The developer guide and the `ownClaim` task description both say so in as many words, because the
   next person to expect `Task 'own' not found` deserves to be told it will not happen.
 
-- **Nothing here protects the four reading tools, and they do not need it.** `exportGraph`,
-  `hoverableSvg`, `listRatings` and `recommend` keep the default; the worst a wrong database costs
-  them is a wrong answer, discarded by running again. `rate` keeps it too, on the argument above. The
-  fences are scoped to `retract` and `own` by package name, so a future dev tool inherits nothing —
-  a deliberate cost, and the reason a third claim tool would have to be added to both rules by hand.
+- **Nothing here protects the tools that keep a default, and they do not need it.** Which tools
+  those are is not a list to keep in prose: they are exactly the callers of
+  `support.DefaultDatabase.resolve`, which one grep answers and which
+  `theClaimToolsHaveNoDefaultDatabase` keeps true by making the two claim tools' absence from that
+  set enforceable. Every one of them either reads (a wrong database costs a wrong answer, discarded
+  by running again) or writes a rating, recoverable by re-rating, on the argument above. A hand-copied
+  membership list is what an earlier draft of this line got wrong: it counted `hoverableSvg` in, and
+  `hoverableSvg` has no `--db` and opens no store at all. The fences are scoped to `retract` and
+  `own` by package name, so a future dev tool inherits nothing — a deliberate cost, and the reason a
+  third claim tool would have to be added to both rules by hand.
 
 - **The `String`/`Path` line is where the fence can be drawn, and it is not the whole capability.** A
   `support` helper returning the default as a `String` for the caller to parse would pass both rules.

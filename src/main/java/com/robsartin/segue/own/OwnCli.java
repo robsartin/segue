@@ -91,11 +91,12 @@ public final class OwnCli {
    * @param database the log to append to. Required, and named by {@code --db} on every invocation:
    *     this tool has no default, because the default is what turned {@code ./gradlew own} into a
    *     row in the owner's real log (#179). {@code SEGUE_DB} does not satisfy it - an agent's shell
-   *     is initialised from the owner's profile and inherits it. The other four dev tools still
-   *     default, through {@code support.DefaultDatabase}, which this package deliberately does not
-   *     use. It uses {@code support.RequiredDatabase} instead, which owns the refusal sentence and
-   *     calls {@code resolve} itself: the rule stays in one place, and this package stays clear of
-   *     the class the intended ArchUnit fence names
+   *     is initialised from the owner's profile and inherits it. Every dev tool that does still
+   *     default goes through {@code support.DefaultDatabase.resolve}, so grepping for that call is
+   *     what says which ones they are; this package deliberately does not use it. It uses {@code
+   *     support.RequiredDatabase} instead, which owns the refusal sentence and calls {@code
+   *     resolve} itself: the rule stays in one place, and this package stays clear of the class
+   *     {@code ArchitectureTest.theClaimToolsHaveNoDefaultDatabase} names
    * @param dryRun report what would be claimed and append nothing. Not decoration: every operation
    *     here appends a row to a log that is never edited, and two of the three name qids by hand
    */
