@@ -1,5 +1,7 @@
 package com.robsartin.segue.ratings;
 
+import static com.robsartin.segue.ratings.InventedRatings.CANONICAL;
+import static com.robsartin.segue.ratings.InventedRatings.CANONICAL_LABEL;
 import static com.robsartin.segue.ratings.InventedRatings.EARLY;
 import static com.robsartin.segue.ratings.InventedRatings.LATE;
 import static com.robsartin.segue.ratings.InventedRatings.MINTED;
@@ -11,6 +13,7 @@ import static com.robsartin.segue.ratings.InventedRatings.QUARTET;
 import static com.robsartin.segue.ratings.InventedRatings.QUARTET_LABEL;
 import static com.robsartin.segue.ratings.InventedRatings.QUARTET_NOTE;
 import static com.robsartin.segue.ratings.InventedRatings.VANISHED;
+import static com.robsartin.segue.ratings.InventedRatings.merged;
 import static com.robsartin.segue.ratings.InventedRatings.minted;
 import static com.robsartin.segue.ratings.InventedRatings.node;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -92,6 +95,58 @@ class RatingsRunTest {
         .extracting(AffinityRow::label, AffinityRow::displayLabel)
         .as("a minted entity IS in the graph, so the listing must not say it is not")
         .containsExactly(MINTED_LABEL, MINTED_LABEL);
+  }
+
+  @Test
+  @DisplayName("should name the canonical id when a merge has carried the rating onto it")
+  void shouldNameTheCanonicalIdWhenAMergeHasCarriedTheRatingOntoIt() throws IOException {
+    FakeAffinityStore ratings =
+        new FakeAffinityStore().rated(MINTED, 5, null, EARLY).rated(CANONICAL, 5, null, LATE);
+    FakeAssertionLog log =
+        new FakeAssertionLog().with(minted(MINTED, MINTED_LABEL), merged(MINTED, CANONICAL));
+
+    List<AffinityRow> rows = run(ratings, log, SortOrder.RATING);
+
+    assertThat(rows)
+        .extracting(AffinityRow::qid, AffinityRow::displayLabel)
+        .as("the merge put a node under the canonical id, so the listing must not say it is not"
+            + " in the graph")
+        .containsExactlyInAnyOrder(
+            org.assertj.core.groups.Tuple.tuple(MINTED, MINTED_LABEL),
+            org.assertj.core.groups.Tuple.tuple(CANONICAL, MINTED_LABEL));
+  }
+
+  @Test
+  @DisplayName("should keep the source's name for a canonical id a source had already claimed")
+  void shouldKeepTheSourcesNameWhenASourceHadAlreadyClaimedTheCanonicalId() throws IOException {
+    FakeAffinityStore ratings =
+        new FakeAffinityStore().rated(MINTED, 5, null, EARLY).rated(CANONICAL, 4, null, LATE);
+    FakeAssertionLog log =
+        new FakeAssertionLog()
+            .with(
+                node(CANONICAL, CANONICAL_LABEL),
+                minted(MINTED, MINTED_LABEL),
+                merged(MINTED, CANONICAL));
+
+    assertThat(run(ratings, log, SortOrder.RATING))
+        .extracting(AffinityRow::qid, AffinityRow::label)
+        .as("carry stands in only where nothing has claimed the canonical node; a source wins")
+        .containsExactlyInAnyOrder(
+            org.assertj.core.groups.Tuple.tuple(MINTED, MINTED_LABEL),
+            org.assertj.core.groups.Tuple.tuple(CANONICAL, CANONICAL_LABEL));
+  }
+
+  @Test
+  @DisplayName("should name a canonical id from what was merged into it when only it is rated")
+  void shouldNameACanonicalIdFromWhatWasMergedIntoItWhenOnlyItIsRated() throws IOException {
+    FakeAffinityStore ratings = new FakeAffinityStore().rated(CANONICAL, 4, null, LATE);
+    FakeAssertionLog log =
+        new FakeAssertionLog().with(minted(MINTED, MINTED_LABEL), merged(MINTED, CANONICAL));
+
+    assertThat(run(ratings, log, SortOrder.RATING))
+        .extracting(AffinityRow::qid, AffinityRow::displayLabel)
+        .as("the only name this node has ever had is the one the merge carried onto it")
+        .containsExactly(org.assertj.core.groups.Tuple.tuple(CANONICAL, MINTED_LABEL));
   }
 
   @Test

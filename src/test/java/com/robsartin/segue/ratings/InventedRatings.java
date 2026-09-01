@@ -6,6 +6,7 @@ import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.Provenance;
+import com.robsartin.segue.domain.SameAs;
 import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
 import java.time.Instant;
@@ -41,6 +42,15 @@ final class InventedRatings {
    */
   static final String MINTED = "Q00900042";
 
+  /**
+   * The id Wikidata turned out to have for {@link #MINTED} (#92). No leading zero at all: a merge's
+   * canonical side is an id Wikidata could really allocate, and {@code Qid.checkAllocatable}
+   * enforces it.
+   */
+  static final String CANONICAL = "Q900042";
+
+  static final String CANONICAL_LABEL = "The Name A Source Gave It";
+
   static final String QUARTET_LABEL = "The Invented Quartet";
   static final String NOVEL_LABEL = "A Placeholder Novel";
   static final String MINTED_LABEL = "A Book No Source Knows";
@@ -60,6 +70,11 @@ final class InventedRatings {
   /** The owner's own claim that something exists, the way the log holds one (#92). */
   static LocalEntity minted(String qid, String label) {
     return LocalEntity.minted(qid, NodeKind.WORK, label, EARLY);
+  }
+
+  /** The owner saying the thing he minted turned out to be a Wikidata item (#92). */
+  static SameAs merged(String localQid, String canonicalQid) {
+    return SameAs.declared(localQid, canonicalQid, LATE);
   }
 
   /** A log that answers {@code readAll} from a list and counts how often it is asked. */
