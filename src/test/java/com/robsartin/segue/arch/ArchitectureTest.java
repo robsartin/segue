@@ -17,6 +17,7 @@ import com.robsartin.segue.ingest.IngestService;
 import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.GraphStore;
+import com.robsartin.segue.support.DefaultDatabase;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.Dependency;
 import com.tngtech.archunit.core.domain.JavaAccess;
@@ -1235,6 +1236,47 @@ class ArchitectureTest {
                   + " boot — the tool holds no graph, never reaches the taste layer a merge"
                   + " carries, borrows no sibling's fence, and cannot become an MCP tool by"
                   + " accident");
+
+  /**
+   * #179: the two claim tools have no default database, and cannot quietly grow one back.
+   *
+   * <p>Every other dev tool resolves {@code --db}, then {@code SEGUE_DB}, then {@code
+   * ${user.home}/.segue/segue.db}, through the one copy of that rule in {@link DefaultDatabase}.
+   * {@code retract} and {@code own} require {@code --db} outright, because they append a
+   * first-person claim to a log ADR 19 forbids editing, and because an agent's shell is initialised
+   * from the owner's profile and inherits {@code SEGUE_DB} — a variable cannot tell the owner apart
+   * from an agent running as the owner.
+   *
+   * <p><b>The absence of a default is the safety property, and an absence is exactly what no test
+   * of behaviour can hold.</b> Every refusal test in {@code RetractCliTest} and {@code OwnCliTest}
+   * would still pass if a later edit wired {@link DefaultDatabase#resolve} in behind the refusal;
+   * the tool would refuse when asked to refuse and default the rest of the time. So this rule holds
+   * what those tests cannot: not "it refuses", but "there is nothing here to fall back to".
+   *
+   * <p>{@code dependOnClassesThat} rather than {@code callMethodWhere}, deliberately. A dependency
+   * is any constant-pool reference — a call, a method reference, a field of that type, a signature
+   * — so the rule does not have to anticipate the shape the reintroduction takes. {@code
+   * callConstructorWhere} would have missed a {@code DefaultDatabase::resolve} method reference
+   * entirely, which is the trap issue #105 already recorded in {@link #callTo}.
+   *
+   * <p><b>Prose does not count, and that is why this rule needs a control that plants real
+   * code.</b> Both CLIs name {@code DefaultDatabase} inside {@code &#123;@code …&#125;} javadoc to
+   * say they do not use it, and javadoc leaves no bytecode edge: {@code javap -v} finds zero
+   * references to it in {@code RetractCli}, {@code OwnCli} and all their nested classes, against
+   * four in each class that really does call {@code resolve}. A control that planted only a comment
+   * would pass while testing nothing.
+   */
+  @ArchTest
+  static final ArchRule theClaimToolsHaveNoDefaultDatabase =
+      noClasses()
+          .that()
+          .resideInAnyPackage("..retract..", "..own..")
+          .should()
+          .dependOnClassesThat(JavaClass.Predicates.equivalentTo(DefaultDatabase.class))
+          .because(
+              "#179: retraction and owner-claim append a permanent first-person claim, so the"
+                  + " database is named per invocation and there is no default here to fall back"
+                  + " to — SEGUE_DB is inherited by any shell started from the owner's profile");
 
   /**
    * The taste layer, by type rather than by package.
