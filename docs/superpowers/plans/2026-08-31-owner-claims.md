@@ -382,6 +382,16 @@ the fence must arrive with it rather than one task later.)*
 
 ---
 
+> **Amended 2026-08-31, after Task 4b's fix round.** The new ADR must also record two
+> decisions Task 4b made that no existing ADR covers. First, **`Equivalences` resolves at read
+> time** — the log stores what the owner asserted, and the merge is applied on the way out, so
+> a merge is retractable and old entries keep meaning what they meant. Second, the
+> **collision rule**: when two local ids merge into one canonical id and both carry ratings,
+> the winner is the one earliest in log order — arbitrary by design, but deterministic, because
+> `KnownList.promoted` sorts for byte-identical output and an unspecified map order broke that.
+> ADR 50's dated amendment covers only `--revise` and the renamed sweep parameter; these two are
+> this ADR's to carry.
+
 ### Task 6: Refuse expansion out loud, fence the package, record the decision
 
 **Files:**
