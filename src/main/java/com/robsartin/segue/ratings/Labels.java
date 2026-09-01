@@ -24,8 +24,12 @@ import java.util.Set;
  * dev-side tools.
  *
  * <p><b>Last claim wins</b>, matching {@code GraphStore.upsertNode} and the boot replay, so a label
- * here is the label {@code get_entity} would return. The kind is deliberately not re-derived: ADR
- * 42's {@code KindMapper.rederive} matters to a picture that colours by kind, and this is a list of
+ * here is the label {@code get_entity} would return - retraction included. A retracted entity's
+ * claims are folded out by the same {@link Retractions} rule {@code GraphProjector.project} applies
+ * before replaying a row (ADR 44): {@code retractions.survives(i, assertion)}, decided once per row
+ * before this method asks what the row names, so a claim before the entity's last retraction never
+ * reaches a label and a claim after it does. The kind is deliberately not re-derived: ADR 42's
+ * {@code KindMapper.rederive} matters to a picture that colours by kind, and this is a list of
  * names.
  *
  * <p><b>A merge is folded here too, and that invariant is why</b> (#92). {@code
@@ -81,6 +85,13 @@ final class Labels {
     }
     for (int i = 0; i < logged.size(); i++) {
       LoggedAssertion assertion = logged.get(i);
+      // Retractions are honoured here on GraphProjector's own precedent (ADR 44): one rule decides
+      // what the log means, in every reading of it. A retracted claim is skipped before it can name
+      // or rename anything, the same way GraphProjector.project skips it before IngestService.apply
+      // ever sees it.
+      if (!retractions.survives(i, assertion)) {
+        continue;
+      }
       // Two claim types name an entity, not one (#92). A source states a NodeAssertion; the owner
       // mints a LocalEntity, which is a first-person claim and deliberately not a NodeAssertion -
       // it carries no Provenance, because the owner minting it IS the source. Both put a node in
@@ -105,8 +116,9 @@ final class Labels {
       // A merge names an entity too, at one remove: IngestService.carry puts a node under the
       // canonical id carrying the label of the entity that was merged into it, so this fold has to
       // do the same or the invariant above is false. It was: a carried canonical row listed as
-      // "(not in the graph)" while the node was in the graph.
-      if (assertion instanceof SameAs merge && retractions.survives(i, merge)) {
+      // "(not in the graph)" while the node was in the graph. The retraction check above already
+      // covers this row - a SameAs naming a retracted entity on either side never reaches here.
+      if (assertion instanceof SameAs merge) {
         String local = labels.get(merge.localQid());
         // Only where nothing has claimed the canonical entity, which is carry()'s own guard: a
         // source that HAS named it wins, because overwriting its label with the owner's working
