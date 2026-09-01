@@ -82,4 +82,44 @@ class EquivalencesTest {
     assertThat(Equivalences.NONE.resolve(Map.of("Q0900001", 5, "Q0900002", 2)))
         .containsExactlyInAnyOrderEntriesOf(Map.of("Q0900001", 5, "Q0900002", 2));
   }
+
+  @Test
+  @DisplayName(
+      "two rated local ids merged into one canonical id collapse to one rating, and the first"
+          + " merge in the log is the one that wins")
+  void shouldCollapseTwoRatedLocalIdsMergedIntoTheSameCanonicalId() {
+    Equivalences merges =
+        Equivalences.in(
+            List.of(
+                SameAs.declared(MINTED, CANONICAL, WHEN),
+                SameAs.declared(OTHER_MINTED, CANONICAL, WHEN)));
+
+    // Arbitrary, and said so in resolve()'s javadoc: neither rating has a better claim, and
+    // readRatings carries no timestamp to ask "which is later" with. Pinned because the ARBITRARY
+    // choice still has to be the SAME one on every run — which is why Equivalences keeps log
+    // order instead of letting Map.copyOf's per-JVM salt decide.
+    assertThat(merges.resolve(Map.of(MINTED, 2, OTHER_MINTED, 5)))
+        .containsExactly(Map.entry(CANONICAL, 2));
+  }
+
+  @Test
+  @DisplayName(
+      "the merges iterate in log order, which is the property a collision's answer rests on")
+  void shouldIterateInLogOrder() {
+    // Five, and in an order that is neither the natural order of the ids nor the order Map.copyOf
+    // would be likely to reproduce: this is the test that actually catches the copy losing the
+    // order, the same argument KnownListTest.promotedPortionIsSortedStructurally makes about
+    // Map.of's own hashing. Measured against a Map.copyOf implementation across separate JVM
+    // launches, it failed 20 times out of 20.
+    List<LoggedAssertion> log =
+        List.of(
+            SameAs.declared("Q00900050", "Q905", WHEN),
+            SameAs.declared("Q00900010", "Q901", WHEN),
+            SameAs.declared("Q00900040", "Q904", WHEN),
+            SameAs.declared("Q00900020", "Q902", WHEN),
+            SameAs.declared("Q00900030", "Q903", WHEN));
+
+    assertThat(Equivalences.in(log).canonicalByLocal().keySet())
+        .containsExactly("Q00900050", "Q00900010", "Q00900040", "Q00900020", "Q00900030");
+  }
 }

@@ -1,5 +1,6 @@
 package com.robsartin.segue.domain;
 
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,17 +42,25 @@ import java.util.Set;
  * and it stays. This type resolves the two rows into one <em>view</em> at read time, which is the
  * same shape {@link Retractions} uses to drop a row from a fold without touching the log.
  *
- * <p><b>There are no chains to follow.</b> {@code SameAs.declared} requires the local side to carry
- * {@link LocalEntity}'s two leading zeros and the canonical side to be an id Wikidata could
- * allocate, and those two shapes are disjoint — so a canonical id can never itself be the local
- * side of another merge, and one hop is the whole of the resolution. That is a property of the
- * record's validation rather than an assumption made here; if it were false, {@link #resolve} would
- * leave a rating stranded on an intermediate id.
+ * <p><b>There are no chains to follow, and the check that guarantees it is the one that actually
+ * runs here.</b> One hop is the whole of the resolution because a canonical id can never itself be
+ * the local side of another merge — but the reason is <em>not</em> {@code SameAs.declared}'s
+ * two-leading-zeros convention, which this class never sees: {@link #in} is fed {@code
+ * AssertionLog.readAll}, the reconstruction path, where the factory is not called and only the
+ * canonical constructor runs. What runs there is the pair that cannot be re-tightened by this
+ * project — {@link LocalEntity#checkUnallocatable} on the local side and {@link
+ * Qid#checkAllocatable} on the canonical side — and allocatable and unallocatable are complementary
+ * by construction, so no id can sit on both sides of the relation whatever the convention does
+ * next. If that were false, {@link #resolve} would leave a rating stranded on an intermediate id.
  *
- * @param canonicalByLocal each merged local id, and the id it turned out to be. Last claim wins
- *     when a local id was merged twice, by position in the log — the same "what had we already been
- *     told" reading {@link Retractions} takes, and the only one that lets a wrong merge be
- *     corrected by a later one
+ * @param canonicalByLocal each merged local id, and the id it turned out to be, <b>in log
+ *     order</b>. Last claim wins when one local id was merged twice — the same "what had we already
+ *     been told" reading {@link Retractions} takes, and the only one that lets a wrong merge be
+ *     corrected by a later one. The order is preserved rather than copied away by {@code
+ *     Map.copyOf}, whose iteration order is unspecified and salted per JVM: {@link #resolve}
+ *     iterates this map, so an unordered copy would let two runs over one unchanged log disagree
+ *     about which of two collided ratings survives. That is the byte-identical-output argument
+ *     {@code KnownList.promoted} makes for its own sort, crediting ADR 43
  */
 public record Equivalences(Map<String, String> canonicalByLocal) {
 
@@ -59,7 +68,9 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
   public static final Equivalences NONE = new Equivalences(Map.of());
 
   public Equivalences {
-    canonicalByLocal = Map.copyOf(Objects.requireNonNull(canonicalByLocal, "canonicalByLocal"));
+    canonicalByLocal =
+        Collections.unmodifiableMap(
+            new LinkedHashMap<>(Objects.requireNonNull(canonicalByLocal, "canonicalByLocal")));
   }
 
   /**
@@ -106,6 +117,16 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
    * rule: {@code recommend} and {@code rate} replay with {@code IdentityMerge.NONE}, so a merge
    * logged since the last boot has had nothing carry its rating yet, and without this the owner's
    * rating would simply vanish from the run.
+   *
+   * <p><b>Two rated local ids merged into one canonical id: the first merge in the log wins, and
+   * that is arbitrary rather than reasoned.</b> Collapsing them to one is the right answer — it is
+   * what the owner said they are — but neither rating has a better claim than the other and there
+   * is nothing here to choose between them with: {@code readRatings} carries no timestamps, so "the
+   * later one" cannot be asked, and "the higher one" would be this class inventing an opinion about
+   * taste. What <em>is</em> guaranteed is that the choice is the same on every run, which is the
+   * whole reason this map keeps log order. The case is also narrow: it arises only where the
+   * canonical id has no stored rating at all, and {@code IdentityMerge.carryingRatings} has already
+   * settled it by {@code updatedAt} for every merge a boot has carried.
    *
    * @param ratings qid to a rating from 1 to 5 — {@code AffinityStore.readRatings}, note-free by
    *     construction, which is what keeps this method in {@code domain}

@@ -2,9 +2,11 @@ package com.robsartin.segue.rate;
 
 import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.KnownList;
+import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.RatingScale;
 import com.robsartin.segue.domain.Recommendations;
 import com.robsartin.segue.ingest.GraphProjector;
+import com.robsartin.segue.port.GraphStore;
 import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
@@ -18,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.OptionalInt;
+import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -199,27 +202,10 @@ public final class RateCli {
 
       // A second pass over the log, for the merges (#92): they are not on the graph — a merge is
       // deliberately not drawn there as an edge — and project() returns a count. RecommendCli
-      // reads them the same way, for the same reason.
-      Equivalences merges = Equivalences.in(assertions.readAll());
-
-      // A count, never a qid and never a score (ADR 33).
-      //
-      // Resolved through the merges first (#92 task 4b): after a merge two affinity rows name one
-      // thing, and promoting both would put the same entity on the known list twice — here that
-      // shows up as the deck weighting one opinion twice when it picks candidates.
-      Map<String, Integer> rated = merges.resolve(affinity.readRatings());
-      log.info("{} entity(ies) already rated", rated.size());
-
+      // reads them the same way, for the same reason, and carries the measurement of what it
+      // costs: about an eighth of the replay it already performs.
       List<Card> deck =
-          RateRun.buildDeck(
-              graph,
-              known(options.known(), rated),
-              rated,
-              merges,
-              DEFAULT_CANDIDATES,
-              options.minDegree(),
-              options.revise(),
-              RateCli::note);
+          deck(graph, assertions.readAll(), affinity.readRatings(), options, RateCli::note);
 
       RateServer server = new RateServer(deck, affinity, options.port());
       server.start();
@@ -231,6 +217,51 @@ public final class RateCli {
     } catch (IOException e) {
       throw new UncheckedIOException("could not serve the deck", e);
     }
+  }
+
+  /**
+   * Everything between the two stores being read and the server being started: fold the merges out
+   * of the log, resolve the ratings through them, compose the known-list, deal the deck.
+   *
+   * <p><b>A seam for the reason {@link #known} is one, and it was added because the gap it closes
+   * was measured.</b> The review of #92 task 4b reverted the {@code Equivalences.resolve} call in
+   * this class alone and the entire 950-test suite stayed green: {@code main} starts a blocking
+   * HTTP server, so nothing drives it, and the {@code RateRun} tests enter below this point. A
+   * one-line deletion silently restored the defect in the tool the owner uses most. Everything
+   * {@code main} decides now lives here, where a test can run it.
+   *
+   * <p><b>The count is logged here rather than in {@code main}</b> so that the number reported is
+   * the one the deck was actually built from — the resolved map, one row per thing. A count, never
+   * a qid and never a score (ADR 33).
+   *
+   * @param logged the log as {@code AssertionLog.readAll} returns it, for {@code Equivalences.in}
+   * @param asStored the affinity table as it stands, before any equivalence is applied. Resolved
+   *     here and nowhere else, so the known-list, the weighting and the already-rated filter are
+   *     one view of the taste layer rather than three
+   */
+  static List<Card> deck(
+      GraphStore graph,
+      List<LoggedAssertion> logged,
+      Map<String, Integer> asStored,
+      Options options,
+      Consumer<String> notes) {
+    Equivalences merges = Equivalences.in(logged);
+
+    // After a merge two affinity rows name one thing, and promoting both would put the same
+    // entity on the known list twice — here that shows up as the deck weighting one opinion
+    // twice when it picks candidates, and as the canonical id being offered back as a discovery.
+    Map<String, Integer> rated = merges.resolve(asStored);
+    log.info("{} entity(ies) already rated", rated.size());
+
+    return RateRun.buildDeck(
+        graph,
+        known(options.known(), rated),
+        rated,
+        merges,
+        DEFAULT_CANDIDATES,
+        options.minDegree(),
+        options.revise(),
+        notes);
   }
 
   /**
