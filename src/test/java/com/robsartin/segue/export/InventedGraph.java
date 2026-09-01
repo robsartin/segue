@@ -1,10 +1,13 @@
 package com.robsartin.segue.export;
 
 import com.robsartin.segue.domain.AssertionRecord;
+import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.domain.OwnerEdge;
 import com.robsartin.segue.domain.Provenance;
+import com.robsartin.segue.domain.SameAs;
 import com.robsartin.segue.port.AssertionLog;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -34,6 +37,21 @@ final class InventedGraph {
   static final String MARLOW = "Q900104";
   static final String PRIZE = "Q900105";
 
+  /**
+   * The id Wikidata turned out to have for something the owner had already minted (#92). Allocatable
+   * shape, from the same invented family as the ids above and carrying the same issue #171 debt.
+   */
+  static final String PRESSING = "Q900106";
+
+  /**
+   * Two ids the owner minted. Two leading zeros, which Wikibase's item-id grammar can never
+   * allocate (ADR 58, ADR 59) - so these are deliberately not from the {@code Q900xxx} family, and
+   * issue #171 does not reach them.
+   */
+  static final String ALMANAC = "Q001";
+
+  static final String DEMO = "Q002";
+
   private static final Instant WHEN = Instant.parse("2026-01-01T00:00:00Z");
 
   private InventedGraph() {}
@@ -57,6 +75,21 @@ final class InventedGraph {
   /** A node claim that also recorded the classes its kind was derived from (issue #60). */
   static NodeAssertion node(String qid, NodeKind kind, String label, List<String> instanceOf) {
     return new NodeAssertion(qid, kind, label, instanceOf, sourced());
+  }
+
+  /** An entity the owner minted: no provenance, because the owner minting it is the source. */
+  static LocalEntity minted(String qid, NodeKind kind, String label) {
+    return LocalEntity.minted(qid, kind, label, WHEN);
+  }
+
+  /** A relationship the owner asserted himself. */
+  static OwnerEdge owned(String from, String to, String type) {
+    return OwnerEdge.claimed(from, to, type, WHEN);
+  }
+
+  /** The owner saying the thing he minted turned out to be a Wikidata item. */
+  static SameAs merged(String localQid, String canonicalQid) {
+    return SameAs.declared(localQid, canonicalQid, WHEN);
   }
 
   static AssertionRecord edge(String from, String to, String type) {
