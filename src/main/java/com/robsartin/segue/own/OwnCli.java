@@ -163,7 +163,11 @@ public final class OwnCli {
       }
     }
 
-    Path resolved = defaultDatabase(values.remove("--db"), envDatabase, userHome);
+    String given = values.remove("--db");
+    if (given == null) {
+      throw usage(missingDatabase(userHome));
+    }
+    Path resolved = Path.of(given);
     return switch (operation) {
       case "mint" -> mint(resolved, values, dryRun);
       case "assert" -> assertion(resolved, values, dryRun);
@@ -241,13 +245,19 @@ public final class OwnCli {
     return Stream.of(NodeKind.values()).map(Enum::name).collect(Collectors.joining("|"));
   }
 
-  private static Path defaultDatabase(String given, String envDatabase, String userHome) {
-    if (given != null) {
-      return Path.of(given);
-    }
-    return envDatabase != null && !envDatabase.isBlank()
-        ? Path.of(envDatabase)
-        : Path.of(userHome, ".segue", "segue.db");
+  /**
+   * The refusal, naming the flag and the database it would once have defaulted to.
+   *
+   * <p>The path is in the message because a refusal that only says "--db is required" sends the
+   * owner to look up where their log lives; this one is a copy-paste. Written out here rather than
+   * shared with {@code RetractCli}: the two claim tools have no default to resolve, and a shared
+   * helper for the sentence would be one import away from a shared helper for the resolution.
+   */
+  private static String missingDatabase(String userHome) {
+    Path wouldHaveUsed = Path.of(userHome, ".segue", "segue.db");
+    return "--db is required — pass --db "
+        + wouldHaveUsed
+        + " to name the database this would once have defaulted to";
   }
 
   private static String valueOf(String[] args, int i, String flag) {
