@@ -86,7 +86,7 @@ class MergedIdIsOfferedOnceTest {
 
   @Test
   @DisplayName("a merged entity's rating counts once, not twice, so the score does not move")
-  void aMergedEntitysRatingCountsOnce() throws IOException {
+  void shouldCountAMergedEntitysRatingOnceWhenBothIdsAreInTheGraph() throws IOException {
     Path db = graphOnDisk();
     rate(db, MINTED);
 
@@ -103,7 +103,7 @@ class MergedIdIsOfferedOnceTest {
   @Test
   @DisplayName(
       "a merged local id is not offered back as a candidate when the canonical id is rated")
-  void aMergedLocalIdIsNotOfferedBack() throws IOException {
+  void shouldNotOfferBackAMergedLocalIdWhenTheCanonicalIdIsRated() throws IOException {
     Path db = graphOnDisk();
     appendMerge(db);
     rate(db, CANONICAL);

@@ -59,7 +59,7 @@ class MergeWiringTest {
 
   @Test
   @DisplayName("the application's own ingest service carries a rating through a merge")
-  void theApplicationsOwnIngestServiceCarriesARatingThroughAMerge() {
+  void shouldCarryARatingThroughAMergeWhenTheApplicationWiresItsOwnIngestService() {
     IdentityMerge merges = configuration.identityMerge(affinity);
     try (GraphStore graph = configuration.graphStore(log, merges)) {
       IngestService ingest = configuration.ingestService(log, graph, merges);
@@ -76,7 +76,7 @@ class MergeWiringTest {
 
   @Test
   @DisplayName("the application's boot replay repairs a merge nothing carried at the time")
-  void theApplicationsBootReplayRepairsAMergeNothingCarriedAtTheTime() {
+  void shouldRepairAMergeNothingCarriedWhenTheApplicationBootReplaysTheLog() {
     IdentityMerge merges = configuration.identityMerge(affinity);
     try (GraphStore first = configuration.graphStore(log, merges)) {
       new IngestService(log, first, IdentityMerge.NONE)

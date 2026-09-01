@@ -66,7 +66,7 @@ class MergedIdIsNotDealtTest {
 
   @Test
   @DisplayName("the deck does not offer back the canonical id of something the owner merged")
-  void theDeckDoesNotOfferBackWhatTheOwnerMerged() throws IOException {
+  void shouldNotDealTheCanonicalIdWhenTheOwnerHasMergedSomethingIntoIt() throws IOException {
     List<String> notes = new ArrayList<>();
 
     List<Card> deck = deckFor(Map.of(MINTED, 5), notes);
@@ -80,7 +80,7 @@ class MergedIdIsNotDealtTest {
 
   @Test
   @DisplayName("a merged local id is not dealt either, at any rating the owner has given it")
-  void theMergedLocalIdIsNotDealt() throws IOException {
+  void shouldNotDealAMergedLocalIdWhateverRatingItCarries() throws IOException {
     List<Card> deck = deckFor(Map.of(MINTED, 5), new ArrayList<>());
 
     assertThat(deck).extracting(Card::qid).doesNotContain(MINTED);
