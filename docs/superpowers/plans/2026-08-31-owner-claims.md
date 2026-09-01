@@ -363,7 +363,7 @@ Cover, each as its own test: `mint` appends exactly one claim and returns the id
 
 - [ ] **Step 3: Implement**, then register the Gradle task beside `retractEntity` — same `group`, a description that says it needs no network, and the sqlite native-library grant `retractEntity` already carries.
 
-- [ ] **Step 2a: Fence the claim constructors.** *Added 2026-08-31 after Task 2's review.* Task 2
+- [ ] **Step 3a: Fence the claim constructors.** *Added 2026-08-31 after Task 2's review.* Task 2
 inverted the validation split: the canonical constructors of `LocalEntity`, `OwnerEdge` and `SameAs`
 enforce only Wikidata's immutable grammar, while the mutable conventions live in the static factories
 `minted()`, `claimed()` and `declared()`. That is what keeps the log readable when a convention
@@ -376,7 +376,8 @@ everything else goes through the factories. Positive control required: call a co
 watch the rule go red naming itself, revert, quote the message.
 
 *(Moved here from Task 6 on 2026-08-31: this task lands the first writer, so
-the fence must arrive with it rather than one task later.)*
+the fence must arrive with it rather than one task later. Numbered 3a, not 2a: the positive
+control calls a constructor from `own`, so the `own` package must exist first.)*
 
 - [ ] **Step 4: Run the gate and commit**
 
