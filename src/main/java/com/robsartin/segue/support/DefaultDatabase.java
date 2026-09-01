@@ -15,11 +15,13 @@ import java.nio.file.Path;
  * {@code SEGUE_DB} from the owner's profile, so the environment variable cannot stand in for a flag
  * typed per invocation. Those two tools now <b>require {@code --db}</b> and have no default left to
  * resolve: neither carries a copy of this logic any more, and each reads {@code SEGUE_DB} for one
- * purpose only, to quote the path it would once have used back in its refusal. <b>No ArchUnit rule
- * yet forbids {@code retract} or {@code own} from depending on this class.</b> One is intended, to
- * hold the absence of a default in those two packages rather than merely intend it, but it does not
- * exist today — nothing currently stops a future edit from wiring {@link #resolve} into either
- * package.
+ * purpose only, to quote the path it would once have used back in its refusal. <b>Two ArchUnit
+ * rules now hold that absence rather than intend it</b>: {@code
+ * ArchitectureTest.theClaimToolsHaveNoDefaultDatabase} forbids either package from depending on
+ * this class at all, and {@code ArchitectureTest.theClaimToolsTakeTheirDatabaseFromTheFlagAlone}
+ * forbids taking a {@link Path} out of {@code support} by any route — including through {@link
+ * RequiredDatabase}, which does call {@link #resolve} and which both tools do depend on. See ADR
+ * 60.
  *
  * <p><b>Pure.</b> No {@code System.getenv} and no {@code System.getProperty} inside it — the four
  * tools that still keep a default call {@link #resolve} exactly as they called their own copy of

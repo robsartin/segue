@@ -390,6 +390,45 @@ Tools with opposite relationships to the store cannot share a package and keep a
 meaningful, which is why ADR 41 made the first two siblings, ADR 43 added a third rather than a
 view, and ADR 44 a fourth rather than a mode of one of them.
 
+### The two claim tools require `--db`, and `./gradlew own` will not say "task not found"
+
+`retractEntity` and `ownClaim` refuse to run unless `--db` names a database
+([ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md)). The other five dev tools keep
+their default — `SEGUE_DB` if set, otherwise `${user.home}/.segue/segue.db`, resolved in one place
+by `support.DefaultDatabase`. These two have no default left to resolve.
+
+**Why these two and not the rest.** They are the tools that append a **first-person claim about the
+world** to a log [ADR 19](adr/0019-assertion-log-source-of-truth.md) forbids editing. A wrong row
+cannot be taken back, only appended over. `rate` writes too, and deliberately keeps its default: it
+writes a rating, which is recoverable by re-rating, and it is the tool the owner uses most.
+
+**`SEGUE_DB` does not satisfy the requirement**, and that is the clause worth reading twice. An
+agent's shell is initialised from the owner's profile, so it inherits the variable. An environment
+variable cannot tell the owner apart from an agent running as the owner; a flag typed per
+invocation can. `--dry-run` does not exempt either tool either — the refusal fires before any
+database is opened, so there is no second path to reason about and no invocation anyone has to
+remember as exempt.
+
+**`./gradlew own` resolves to `:ownClaim` and runs. It does not report an unknown task, and it never
+will.** Gradle matches abbreviated task names by camel-case hump, and there is no per-project switch
+to turn that off. That is exactly how issue #179 happened: an agent typed `./gradlew own
+--args="mint --kind WORK --label x"` expecting `Task 'own' not found`, and instead minted a row in
+the owner's real database, because `--db` was absent and the default was the owner's. If you are
+about to expect that error, you will not get it. What you will get now is the refusal, which names
+`--db` and the path the tool would once have used, so the corrected command is a copy-paste.
+
+**Write `$HOME`, not `~`.** A tilde does not expand inside double quotes in either zsh or bash, so
+`--args="--db ~/.segue/segue.db"` arrives as a literal tilde and the tool dies with `no segue
+database at ~/.segue/segue.db`. Every example in this guide and in both task descriptions uses
+`$HOME`.
+
+Two ArchUnit rules hold the absence rather than trusting it, because no test of a refusal can:
+`theClaimToolsHaveNoDefaultDatabase` forbids either package from depending on
+`support.DefaultDatabase` at all, and `theClaimToolsTakeTheirDatabaseFromTheFlagAlone` forbids
+taking a `java.nio.file.Path` out of `support` by any route — the second because both tools do
+depend on `support.RequiredDatabase` for the refusal sentence, and a `Path`-returning method added
+there would restore the default without the first rule ever noticing.
+
 ### What each package is for
 
 | Package | Contents | Depends on |
@@ -408,9 +447,9 @@ view, and ADR 44 a fourth rather than a mode of one of them.
 | `seed` | The bulk seeding tool ([ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)): a name list to `name → QID`, run as `./gradlew resolveNames`. Plain Java, never opens a store. | `port`, `domain`, `wikidata` |
 | `export` | The graph exporter ([ADR 41](adr/0041-graph-exporter-views-and-formats.md)): `ViewSelector` and the two writers, run as `./gradlew exportGraph`. Plain Java, read-only. | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `support` |
 | `ratings` | The taste-layer reader ([ADR 43](adr/0043-listing-your-own-ratings.md)): every rating with its label, note and `updated_at`, run as `./gradlew listRatings`. Plain Java, read-only, offline. | `port`, `domain`, `sqlite`, `support` |
-| `retract` | The retraction tool ([ADR 44](adr/0044-retraction-as-a-new-claim.md)): appends one `Retraction` claim so the projection stops showing an entity and its edges, run as `./gradlew retractEntity`. Plain Java, offline, and the only dev tool that writes a world-fact claim. Since #179 it has no default database: `--db` is required, and `SEGUE_DB` does not satisfy it. | `port`, `domain`, `ingest`, `sqlite`, `support` |
+| `retract` | The retraction tool ([ADR 44](adr/0044-retraction-as-a-new-claim.md)): appends one `Retraction` claim so the projection stops showing an entity and its edges, run as `./gradlew retractEntity`. Plain Java, offline, and the only dev tool that writes a world-fact claim. Since #179 it has no default database: `--db` is required, and `SEGUE_DB` does not satisfy it ([ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md)). | `port`, `domain`, `ingest`, `sqlite`, `support` |
 | `recommend` | The recommender ([ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md)): ranks entities absent from the known-list by how much more of that list reaches them than their size predicts, and explains each with real routes. Run as `./gradlew recommend`. The list is the supplied `--known` file plus everything rated 4 or 5 that the file does not name, through `KnownList.promoted` ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)) — so a highly rated entity stops being offered back — and since [ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md) the sweep also takes `KnownList.suppressed` as a separate set, so an entity rated 2 or below stops being offered back too. Plain Java, read-only, offline, and since issue #85 it weights every candidate by the owner's ratings — `Recommendations.regardFor` over `AffinityStore.readRatings`, the note-free half of the taste layer. (This row said it "cannot see the taste layer at all" until the final review of issue #101; that was already false on `main`.) | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `support` |
-| `own` | The owner-claim tool (issue [#92](https://github.com/robsartin/segue/issues/92)): mints a local entity Wikidata does not model, asserts an edge between two ids, or merges a local id into the QID it turned out to be — one operation per run, as `./gradlew ownClaim`. Plain Java, offline, and the second dev tool that writes a world-fact claim; it appends through `IngestService.claim` and holds no graph, so the projection catches up at the next boot. Deliberately not an MCP tool: an owner claim is exempt from the corroboration count, so a model must not be able to make one. | `port`, `domain`, `ingest`, `sqlite`, `support` |
+| `own` | The owner-claim tool (issue [#92](https://github.com/robsartin/segue/issues/92)): mints a local entity Wikidata does not model, asserts an edge between two ids, or merges a local id into the QID it turned out to be — one operation per run, as `./gradlew ownClaim`. Plain Java, offline, and the second dev tool that writes a world-fact claim; it appends through `IngestService.claim` and holds no graph, so the projection catches up at the next boot. Deliberately not an MCP tool: an owner claim is exempt from the corroboration count, so a model must not be able to make one. Since #179 it has no default database: `--db` is required, `SEGUE_DB` does not satisfy it, and `./gradlew own` still resolves to `:ownClaim` — it refuses rather than reporting an unknown task ([ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md)). | `port`, `domain`, `ingest`, `sqlite`, `support` |
 | `rate` | The rating deck ([ADR 46](adr/0046-the-rating-deck.md)): a loopback page on 127.0.0.1:8090 dealing one unrated entity per keystroke, run as `./gradlew rate`. Plain Java, offline, and the only dev tool that writes a rating. Composes its known list through the same `KnownList.promoted` `recommend` does ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)), passes the same `KnownList.suppressed` to its sweep, and deals revisions over `KnownList.revisitable` ([ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md)). | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `recommend`, `support` |
 
 ### Which rules a machine enforces
@@ -1463,10 +1502,10 @@ names say which side of that line each one is on — rename either and the build
 
 ```bash
 # what would this remove? Nothing is written.
-./gradlew retractEntity --args="--qid Q12345 --reason 'resolved to the painters, not the band' --dry-run"
+./gradlew retractEntity --args="--db $HOME/.segue/segue.db --qid Q12345 --reason 'resolved to the painters, not the band' --dry-run"
 
 # do it
-./gradlew retractEntity --args="--qid Q12345 --reason 'resolved to the painters, not the band'"
+./gradlew retractEntity --args="--db $HOME/.segue/segue.db --qid Q12345 --reason 'resolved to the painters, not the band'"
 ```
 
 ### It is a claim, not a deletion
@@ -1812,8 +1851,10 @@ another's instead of only reading about the difference — the method ADR 45 use
 ```
 
 `--db` defaults to `SEGUE_DB` if it is set and
-`${user.home}/.segue/segue.db` otherwise, which is what `export`, `ratings`, `retract` and
-`recommend` do too (`seed` has no `--db`: it never opens a store).
+`${user.home}/.segue/segue.db` otherwise, which is what `export`, `ratings` and `recommend` do too
+(`seed` has no `--db`: it never opens a store). `retract` and `own` are the exceptions and require
+the flag ([ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md)); this sentence named
+`retract` among the defaulting tools until issue #179 changed that.
 `--port` defaults to `RateCli.DEFAULT_PORT`, 8090 rather than 8080, so the deck and a running MCP
 server never address each other by accident; `--port 0` asks the OS to pick one, and the tool logs
 which. Open the printed address in a browser: `1`–`5` rates and advances, `s` or space skips

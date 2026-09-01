@@ -10,6 +10,14 @@ import java.nio.file.Path;
  * there is nothing here either tool could use as a database even by mistake, which is what keeps
  * that boundary meaningful rather than merely literal.
  *
+ * <p><b>That is enforced, not merely stated.</b> {@code
+ * ArchitectureTest.theClaimToolsTakeTheirDatabaseFromTheFlagAlone} fails the build if {@code
+ * retract} or {@code own} takes a {@link Path} out of any {@code support} class — a method's return
+ * or a field's type. The rule exists because of this class: it is the one bridge those two packages
+ * have into {@code support}, so a {@code Path}-returning method added here would restore the
+ * default they gave up while never naming {@link DefaultDatabase}, which is all the sibling rule
+ * forbids. Planted exactly that way, the sibling rule stayed green (ADR 60).
+ *
  * <p><b>Why it exists at all.</b> The refusal has to name the database the tool would once have
  * defaulted to, or the owner's next command is a lookup rather than a copy-paste - and naming it
  * means resolving it. The first cut of #179 did that with a private copy of the env-or-home rule in
