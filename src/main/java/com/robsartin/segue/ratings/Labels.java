@@ -24,13 +24,10 @@ import java.util.Set;
  * dev-side tools.
  *
  * <p><b>Last claim wins</b>, matching {@code GraphStore.upsertNode} and the boot replay, so a label
- * here is the label {@code get_entity} would return - retraction included. A retracted entity's
- * claims are folded out by the same {@link Retractions} rule {@code GraphProjector.project} applies
- * before replaying a row (ADR 44): {@code retractions.survives(i, assertion)}, decided once per row
- * before this method asks what the row names, so a claim before the entity's last retraction never
- * reaches a label and a claim after it does. The kind is deliberately not re-derived: ADR 42's
- * {@code KindMapper.rederive} matters to a picture that colours by kind, and this is a list of
- * names.
+ * here is the label {@code get_entity} would return - retraction included, on the same {@link
+ * Retractions} rule {@code GraphProjector.project} applies before replaying a row (ADR 44); see
+ * where {@code forQids} calls it, below. The kind is deliberately not re-derived: ADR 42's {@code
+ * KindMapper.rederive} matters to a picture that colours by kind, and this is a list of names.
  *
  * <p><b>A merge is folded here too, and that invariant is why</b> (#92). {@code
  * IngestService.carry} puts a node under the canonical id carrying the label of the entity merged
@@ -75,11 +72,20 @@ final class Labels {
     // item - and the only name that node has ever had is the one the merge carried onto it. One
     // hop is the whole of it, for Equivalences' reason: allocatable and unallocatable are
     // complementary, so a canonical id can never itself be the local side of another merge.
+    //
+    // Not gated by retractions.survives here, deliberately: adding localQid to wanted only has an
+    // effect if some SameAs row's carry step later reads labels.get(localQid), and that read only
+    // happens for the SAME row, inside the main loop below, behind the identical
+    // retractions.survives(i, merge) call. A localQid this loop adds for a row that does not
+    // survive is therefore never read - the main loop's own guard already excludes that row from
+    // the carry step - and it is stripped from the result regardless by retainAll(qids) below if
+    // it was never one of the qids asked for. Checked, not assumed: constructed the case a second,
+    // surviving merge of the same localQid to a different requested canonical would need to expose
+    // a difference, and it collapses the same way, because that second merge's own row already adds
+    // localQid on its own account.
     Set<String> wanted = new HashSet<>(qids);
     for (int i = 0; i < logged.size(); i++) {
-      if (logged.get(i) instanceof SameAs merge
-          && retractions.survives(i, merge)
-          && qids.contains(merge.canonicalQid())) {
+      if (logged.get(i) instanceof SameAs merge && qids.contains(merge.canonicalQid())) {
         wanted.add(merge.localQid());
       }
     }

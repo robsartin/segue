@@ -59,7 +59,13 @@ rarer never-claimed case. One string with one meaning is worth more than the dis
 - **Both rows still list after a merge.** `IdentityMerge.carryingRatings` moves the score and never
   the note, so the owner's own words survive only on the local row, and `listRatings` is the one tool
   that reads a note (ADR 43). That is settled and is not what this issue is about.
-- **The merge fold's own retraction check** stays where it is.
+- **The merge fold's own retraction check moves, not stays.** *Corrected 2026-09-01, after Task 1's
+  review.* This bullet originally said the check "stays where it is." It does not: the top-of-loop
+  guard makes the same `retractions.survives(i, merge)` call, on the same row, before the merge fold
+  ever runs — so a per-branch repeat of that call would be a second application of the one-rule
+  argument three paragraphs up, not an exception to it. The check was removed from the branch and
+  the comment there now says why. Nothing about *what* is checked changed, only *where*: once per
+  row, at the top, for every assertion kind including `SameAs`, not once more per branch.
 - **The kind is still not re-derived** (ADR 42).
 - **No new ADR.** This restores an invariant the code already claims; it decides nothing new. ADR 44
   governs retraction, ADR 41 the read-from-the-log choice, ADR 43 the note. The `Labels` javadoc,
