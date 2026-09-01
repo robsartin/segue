@@ -104,6 +104,29 @@ class OwnCliTest {
   }
 
   @Test
+  @DisplayName("should refuse before opening any database when --dry-run is given without --db")
+  void shouldRefuseBeforeOpeningAnyDatabaseWhenDryRunIsGivenWithoutTheDatabase() {
+    // RetractCliTest's rule, and for the same reason: the property is an ORDER. If the refusal
+    // came after the Files.exists check the operator would be told "no segue database at …",
+    // which reads as a missing file rather than a missing flag.
+    Path home = dir.resolve("home");
+
+    assertThatThrownBy(
+            () ->
+                OwnCli.run(
+                    new String[] {"mint", "--kind", "WORK", "--label", "x", "--dry-run"},
+                    null,
+                    home.toString()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("--db")
+        .hasMessageNotContaining("no segue database");
+
+    assertThat(Files.exists(home.resolve(".segue").resolve("segue.db")))
+        .as("no database was opened, so none was created")
+        .isFalse();
+  }
+
+  @Test
   @DisplayName("should refuse when no operation is named")
   void shouldRefuseWhenNoOperationIsNamed() {
     // The message, not only the type. Every refusal in this class is an IllegalArgumentException,

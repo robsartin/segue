@@ -123,7 +123,21 @@ public final class RetractCli {
   }
 
   public static void main(String[] args) {
-    Options options = parse(args, System.getenv("SEGUE_DB"), System.getProperty("user.home"));
+    run(args, System.getenv("SEGUE_DB"), System.getProperty("user.home"));
+  }
+
+  /**
+   * {@code main}, with the two environment reads passed in.
+   *
+   * <p>A seam, and not a decorative one: the order of the two refusals below is the behaviour. The
+   * missing {@code --db} has to be refused by {@link #parse} before {@code Files.exists} is
+   * reached, or the operator is told "no segue database at …" - which reads as a missing file
+   * rather than a missing flag, and names a path they never typed. A test can only hold that order
+   * if it can supply a home directory of its own; through {@code main} it would have to reach the
+   * real one.
+   */
+  static void run(String[] args, String envDatabase, String userHome) {
+    Options options = parse(args, envDatabase, userHome);
 
     // Refuse a database that is not there rather than creating an empty one and retracting
     // nothing: SqliteAssertionLog's constructor creates the file and its schema if absent, which
