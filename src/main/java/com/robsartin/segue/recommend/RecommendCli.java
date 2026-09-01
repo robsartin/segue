@@ -7,6 +7,7 @@ import com.robsartin.segue.ingest.GraphProjector;
 import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
+import com.robsartin.segue.support.DefaultDatabase;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import com.robsartin.segue.wikidata.RecognitionInstitutions;
 import java.io.IOException;
@@ -94,10 +95,9 @@ public final class RecommendCli {
    *     lives outside this repository, and nothing on the MCP surface can see it
    * @param out no default, on purpose — a tool that picks a path for you is a tool that quietly
    *     writes personal data into the repository (ADR 41's argument, ADR 43's second use of it)
-   * @param database the assertion log to replay. Defaults exactly as the server's does: {@code
-   *     SEGUE_DB} if set, otherwise {@code ${user.home}/.segue/segue.db}. Stated here as well as in
-   *     {@code application.yaml} because this tool is plain Java and ADR 32 keeps Spring out of
-   *     every package but {@code app} and {@code mcp}
+   * @param database the assertion log to replay. Defaults per {@link DefaultDatabase#resolve} — one
+   *     rule shared with {@code ExportCli}, {@code RatingsCli} and {@code RateCli} (issue #179) —
+   *     rather than a copy of it stated here.
    */
   public record Options(
       Path database, Path known, Path out, Scorer scorer, int minDegree, int top) {
@@ -112,7 +112,7 @@ public final class RecommendCli {
 
   /** Parse and validate, refusing anything that could not work before a store is opened. */
   static Options parse(String[] args, String envDatabase, String userHome) {
-    Path database = null;
+    String db = null;
     Path known = null;
     Path out = null;
     Scorer scorer = Scorer.LIFT;
@@ -124,7 +124,7 @@ public final class RecommendCli {
       String value = valueOf(args, i, flag);
       i++;
       switch (flag) {
-        case "--db" -> database = Path.of(value);
+        case "--db" -> db = value;
         case "--known" -> known = Path.of(value);
         case "--out" -> out = Path.of(value);
         case "--scorer" -> scorer = Scorer.parse(value);
@@ -150,12 +150,7 @@ public final class RecommendCli {
       throw usage("--top must be at least 1");
     }
     return new Options(
-        database != null ? database : defaultDatabase(envDatabase, userHome),
-        known,
-        out,
-        scorer,
-        minDegree,
-        top);
+        DefaultDatabase.resolve(db, envDatabase, userHome), known, out, scorer, minDegree, top);
   }
 
   private static int number(String flag, String value) {
@@ -164,12 +159,6 @@ public final class RecommendCli {
     } catch (NumberFormatException e) {
       throw usage(flag + " takes a whole number, got " + value);
     }
-  }
-
-  private static Path defaultDatabase(String envDatabase, String userHome) {
-    return envDatabase != null && !envDatabase.isBlank()
-        ? Path.of(envDatabase)
-        : Path.of(userHome, ".segue", "segue.db");
   }
 
   private static String valueOf(String[] args, int i, String flag) {
