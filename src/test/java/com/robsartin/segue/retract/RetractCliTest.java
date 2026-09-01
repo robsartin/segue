@@ -10,37 +10,51 @@ import org.junit.jupiter.api.Test;
 /** Everything that can be refused is refused before a database is opened. */
 class RetractCliTest {
 
+  private static final String DATABASE = "/graphs/some.db";
+
+  /** Every valid invocation now names --db, so every test of anything else has to name it too. */
   private static RetractCli.Options parse(String... args) {
-    return RetractCli.parse(args, null, "/home/invented");
+    String[] withDatabase = new String[args.length + 2];
+    withDatabase[0] = "--db";
+    withDatabase[1] = DATABASE;
+    System.arraycopy(args, 0, withDatabase, 2, args.length);
+    return RetractCli.parse(withDatabase, null, "/home/invented");
   }
 
   @Test
-  @DisplayName("qid and reason are both read, and the database defaults like the server's")
+  @DisplayName("qid, reason and the database named by --db are all read")
   void parsesTheRequiredArguments() {
     RetractCli.Options options = parse("--qid", "Q900101", "--reason", "wrong entity");
 
     assertThat(options.qid()).isEqualTo("Q900101");
     assertThat(options.reason()).isEqualTo("wrong entity");
     assertThat(options.dryRun()).isFalse();
-    assertThat(options.database()).isEqualTo(Path.of("/home/invented", ".segue", "segue.db"));
-  }
-
-  @Test
-  @DisplayName("SEGUE_DB wins over the home-directory default, exactly as the server reads it")
-  void readsTheEnvironmentOverride() {
-    RetractCli.Options options =
-        RetractCli.parse(
-            new String[] {"--qid", "Q900101", "--reason", "why"},
-            "/elsewhere/segue.db",
-            "/home/invented");
-
-    assertThat(options.database()).isEqualTo(Path.of("/elsewhere/segue.db"));
+    assertThat(options.database()).isEqualTo(Path.of(DATABASE));
   }
 
   @Test
   @DisplayName("--dry-run takes no value")
   void parsesDryRun() {
     assertThat(parse("--qid", "Q900101", "--reason", "why", "--dry-run").dryRun()).isTrue();
+  }
+
+  @Test
+  @DisplayName(
+      "should refuse when --db is not given, naming the flag and the path it would have used")
+  void shouldRefuseWhenTheDatabaseIsNotNamed() {
+    // Issue #179: `./gradlew own --args="mint …"` appended to the owner's real log because the
+    // database defaulted. A retraction is worse - the log is append-only, so a retraction of the
+    // wrong entity cannot be taken back, only appended over. The message has to name the flag AND
+    // the path it would have used, so the owner's next command is a copy-paste, not a lookup.
+    assertThatIllegalArgumentException()
+        .isThrownBy(
+            () ->
+                RetractCli.parse(
+                    new String[] {"--qid", "Q900101", "--reason", "wrong entity"},
+                    null,
+                    "/home/invented"))
+        .withMessageContaining("--db")
+        .withMessageContaining(Path.of("/home/invented", ".segue", "segue.db").toString());
   }
 
   @Test

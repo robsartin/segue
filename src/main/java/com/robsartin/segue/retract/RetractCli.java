@@ -82,6 +82,9 @@ public final class RetractCli {
       }
     }
 
+    if (database == null) {
+      throw usage(missingDatabase(userHome));
+    }
     if (qid == null) {
       throw usage("--qid is required");
     }
@@ -91,14 +94,20 @@ public final class RetractCli {
     if (reason == null || reason.isBlank()) {
       throw usage("--reason is required — the log records why, and is never edited afterwards");
     }
-    return new Options(
-        database != null ? database : defaultDatabase(envDatabase, userHome), qid, reason, dryRun);
+    return new Options(database, qid, reason, dryRun);
   }
 
-  private static Path defaultDatabase(String envDatabase, String userHome) {
-    return envDatabase != null && !envDatabase.isBlank()
-        ? Path.of(envDatabase)
-        : Path.of(userHome, ".segue", "segue.db");
+  /**
+   * The refusal, naming the flag and the database it would once have defaulted to.
+   *
+   * <p>The path is in the message because a refusal that only says "--db is required" sends the
+   * owner to look up where their log lives; this one is a copy-paste.
+   */
+  private static String missingDatabase(String userHome) {
+    Path wouldHaveUsed = Path.of(userHome, ".segue", "segue.db");
+    return "--db is required — pass --db "
+        + wouldHaveUsed
+        + " to name the database this would once have defaulted to";
   }
 
   private static String valueOf(String[] args, int i, String flag) {
