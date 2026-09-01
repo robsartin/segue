@@ -90,7 +90,7 @@ class AdrIndexTest {
   @Test
   @DisplayName("No ADR number is claimed twice, in the index or on disk")
   void shouldClaimEachNumberOnceWhenTheIndexAndTheDirectoryAreRead() {
-    assertThat(claimedMoreThanOnce(ROWS.stream().map(Row::number).map(String::valueOf).toList()))
+    assertThat(claimedMoreThanOnce(ROWS.stream().map(r -> "%04d".formatted(r.number())).toList()))
         .as("ADR numbers claimed by more than one row in docs/adr/README.md")
         .isEmpty();
 
@@ -124,8 +124,9 @@ class AdrIndexTest {
         .as(
             "rows out of ascending order within their own section of docs/adr/README.md — a"
                 + " conflict resolved in marker order interleaves numbers here. The index is"
-                + " sectioned, and the order is per section: Language ends at 34, which is not a"
-                + " descent.")
+                + " sectioned and the order is per section, so a section may end at any number"
+                + " and the next section may start below it; only two rows sharing a section are"
+                + " compared.")
         .isEmpty();
   }
 
