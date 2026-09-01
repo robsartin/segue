@@ -2,6 +2,7 @@ package com.robsartin.segue.retract;
 
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
+import com.robsartin.segue.support.RequiredDatabase;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -11,8 +12,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The entry point, run from Gradle: {@code ./gradlew retractEntity --args="--db ~/.segue/segue.db
- * --qid Q… --reason …"}.
+ * The entry point, run from Gradle: {@code ./gradlew retractEntity --args="--db
+ * $HOME/.segue/segue.db --qid Q… --reason …"}.
+ *
+ * <p><b>{@code $HOME} and not {@code ~} in that example, and it is not a style choice.</b> A tilde
+ * does not expand inside double quotes in either zsh or bash, so {@code --args="--db ~/.segue/…"}
+ * arrives as the literal four characters {@code ~/.s…} and the tool dies with {@code no segue
+ * database at ~/.segue/segue.db}. An example that cannot be pasted is the failure this class's next
+ * paragraph is about.
  *
  * <p><b>{@code --db} is required</b> (#179). Every other dev tool defaults to {@code SEGUE_DB} or
  * {@code ${user.home}/.segue/segue.db}; this one refuses to run without being told which database
@@ -52,7 +59,10 @@ public final class RetractCli {
    *     this tool has no default, because the default was the hole in #179. An agent's shell is
    *     initialised from the owner's profile, so {@code SEGUE_DB} is inherited and cannot stand in
    *     for a flag that is typed each time. The other four dev tools still default, through {@code
-   *     support.DefaultDatabase}, which this package deliberately does not use
+   *     support.DefaultDatabase}, which this package deliberately does not use. It uses {@code
+   *     support.RequiredDatabase} instead, which owns the refusal sentence and calls {@code
+   *     resolve} itself: the rule stays in one place, and this package stays clear of the class the
+   *     intended ArchUnit fence names
    * @param reason required. The value of keeping a retraction in an append-only log is that it
    *     records what we concluded and why; there is no editing one afterwards to add the why
    * @param dryRun report what the retraction would reach and append nothing. Not decoration: this
@@ -92,7 +102,7 @@ public final class RetractCli {
     }
 
     if (database == null) {
-      throw usage(missingDatabase(envDatabase, userHome));
+      throw usage(RequiredDatabase.refusal(envDatabase, userHome));
     }
     if (qid == null) {
       throw usage("--qid is required");
@@ -104,27 +114,6 @@ public final class RetractCli {
       throw usage("--reason is required — the log records why, and is never edited afterwards");
     }
     return new Options(database, qid, reason, dryRun);
-  }
-
-  /**
-   * The refusal, naming the flag and the database it would once have defaulted to.
-   *
-   * <p>The path is in the message because a refusal that only says "--db is required" sends the
-   * owner to look up where their log lives; this one is a copy-paste. {@code SEGUE_DB} is read here
-   * and nowhere else in this tool: it is the path to quote back when it is set, and it is still not
-   * enough on its own - an agent's shell is initialised from the owner's profile and inherits it,
-   * so it cannot tell the owner apart from an agent running as the owner.
-   */
-  private static String missingDatabase(String envDatabase, String userHome) {
-    Path wouldHaveUsed =
-        envDatabase != null && !envDatabase.isBlank()
-            ? Path.of(envDatabase)
-            : Path.of(userHome, ".segue", "segue.db");
-    return "--db is required — pass --db "
-        + wouldHaveUsed
-        + " to name the database this would once have defaulted to."
-        + " SEGUE_DB is inherited by any shell started from the owner's profile, so it cannot"
-        + " stand in for a flag typed per invocation";
   }
 
   private static String valueOf(String[] args, int i, String flag) {

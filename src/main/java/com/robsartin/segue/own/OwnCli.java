@@ -4,6 +4,7 @@ import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.Qid;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
+import com.robsartin.segue.support.RequiredDatabase;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -16,8 +17,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The entry point, run from Gradle: {@code ./gradlew ownClaim --args="mint --db ~/.segue/segue.db
- * --kind WORK --label 'A Self-Pressed Record'"}.
+ * The entry point, run from Gradle: {@code ./gradlew ownClaim --args="mint --db
+ * $HOME/.segue/segue.db --kind WORK --label 'A Self-Pressed Record'"}.
+ *
+ * <p><b>{@code $HOME} and not {@code ~}.</b> A tilde does not expand inside double quotes in either
+ * zsh or bash, so {@code --args="mint --db ~/.segue/…"} arrives as a literal {@code ~} and the tool
+ * dies with {@code no segue database at ~/.segue/segue.db}. This class already argues that a broken
+ * example is worse than a broken task name; a pastable one has to survive the quotes it is pasted
+ * inside.
  *
  * <p><b>{@code --db} is required</b> (#179). This tool has no default database at all, where every
  * other dev tool falls back to {@code SEGUE_DB} or {@code ${user.home}/.segue/segue.db}. The
@@ -86,7 +93,9 @@ public final class OwnCli {
    *     row in the owner's real log (#179). {@code SEGUE_DB} does not satisfy it - an agent's shell
    *     is initialised from the owner's profile and inherits it. The other four dev tools still
    *     default, through {@code support.DefaultDatabase}, which this package deliberately does not
-   *     use
+   *     use. It uses {@code support.RequiredDatabase} instead, which owns the refusal sentence and
+   *     calls {@code resolve} itself: the rule stays in one place, and this package stays clear of
+   *     the class the intended ArchUnit fence names
    * @param dryRun report what would be claimed and append nothing. Not decoration: every operation
    *     here appends a row to a log that is never edited, and two of the three name qids by hand
    */
@@ -176,7 +185,7 @@ public final class OwnCli {
 
     String given = values.remove("--db");
     if (given == null) {
-      throw usage(missingDatabase(envDatabase, userHome));
+      throw usage(RequiredDatabase.refusal(envDatabase, userHome));
     }
     Path resolved = Path.of(given);
     return switch (operation) {
@@ -254,30 +263,6 @@ public final class OwnCli {
 
   private static String kinds() {
     return Stream.of(NodeKind.values()).map(Enum::name).collect(Collectors.joining("|"));
-  }
-
-  /**
-   * The refusal, naming the flag and the database it would once have defaulted to.
-   *
-   * <p>The path is in the message because a refusal that only says "--db is required" sends the
-   * owner to look up where their log lives; this one is a copy-paste. {@code SEGUE_DB} is read here
-   * and nowhere else in this tool: it is the path to quote back when it is set, and it is still not
-   * enough on its own - an agent's shell is initialised from the owner's profile and inherits it,
-   * so it cannot tell the owner apart from an agent running as the owner. Written out here rather
-   * than shared with {@code RetractCli}: the two claim tools have no default to resolve, and a
-   * shared helper for the sentence would be one import away from a shared helper for the
-   * resolution.
-   */
-  private static String missingDatabase(String envDatabase, String userHome) {
-    Path wouldHaveUsed =
-        envDatabase != null && !envDatabase.isBlank()
-            ? Path.of(envDatabase)
-            : Path.of(userHome, ".segue", "segue.db");
-    return "--db is required — pass --db "
-        + wouldHaveUsed
-        + " to name the database this would once have defaulted to."
-        + " SEGUE_DB is inherited by any shell started from the owner's profile, so it cannot"
-        + " stand in for a flag typed per invocation";
   }
 
   private static String valueOf(String[] args, int i, String flag) {

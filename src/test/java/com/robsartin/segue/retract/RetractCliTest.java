@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
+import com.robsartin.segue.support.RequiredDatabase;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.DisplayName;
@@ -28,8 +29,8 @@ class RetractCliTest {
   }
 
   @Test
-  @DisplayName("qid, reason and the database named by --db are all read")
-  void parsesTheRequiredArguments() {
+  @DisplayName("should read the qid, the reason and the database when --db names one")
+  void shouldReadTheQidTheReasonAndTheDatabaseWhenDbNamesOne() {
     RetractCli.Options options = parse("--qid", "Q900101", "--reason", "wrong entity");
 
     assertThat(options.qid()).isEqualTo("Q900101");
@@ -59,8 +60,9 @@ class RetractCliTest {
                     new String[] {"--qid", "Q900101", "--reason", "wrong entity"},
                     null,
                     "/home/invented"))
-        .withMessageContaining("--db")
-        .withMessageContaining(Path.of("/home/invented", ".segue", "segue.db").toString());
+        // The whole sentence, from the one class that owns it, so this tool cannot drift away
+        // from its sibling's wording or from the env-or-home rule behind the path.
+        .withMessageContaining(RequiredDatabase.refusal(null, "/home/invented"));
   }
 
   @Test
@@ -77,7 +79,7 @@ class RetractCliTest {
                     "/elsewhere/segue.db",
                     "/home/invented"))
         .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("--db")
+        .hasMessageContaining(RequiredDatabase.refusal("/elsewhere/segue.db", "/home/invented"))
         .hasMessageContaining("/elsewhere/segue.db")
         .hasMessageNotContaining("/home/invented");
   }

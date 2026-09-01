@@ -4,8 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
+import com.robsartin.segue.support.RequiredDatabase;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -100,8 +102,9 @@ class OwnCliTest {
                     new String[] {"mint", "--kind", "WORK", "--label", "x"},
                     null,
                     "/home/invented"))
-        .withMessageContaining("--db")
-        .withMessageContaining(Path.of("/home/invented", ".segue", "segue.db").toString());
+        // The whole sentence, from the one class that owns it: RetractCliTest asserts the same
+        // string, so the two tools are held to one refusal rather than two that look alike today.
+        .withMessageContaining(RequiredDatabase.refusal(null, "/home/invented"));
   }
 
   @Test
@@ -117,7 +120,7 @@ class OwnCliTest {
                     "/elsewhere/segue.db",
                     "/home/invented"))
         .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("--db")
+        .hasMessageContaining(RequiredDatabase.refusal("/elsewhere/segue.db", "/home/invented"))
         .hasMessageContaining("/elsewhere/segue.db")
         .hasMessageNotContaining("/home/invented");
   }
@@ -275,6 +278,34 @@ class OwnCliTest {
 
     try (SqliteAssertionLog after = new SqliteAssertionLog(database)) {
       assertThat(after.readAll()).as("a dry run appends nothing").isEmpty();
+    }
+  }
+
+  @Test
+  @DisplayName("should append the minted entity when the run is not a dry run")
+  void shouldAppendTheMintedEntityWhenTheRunIsNotADryRun() {
+    // The only test that takes this tool all the way through the write. Everything else about
+    // --db is a refusal or a dry run, so without this the non-dry-run path - the one the whole
+    // fence exists to guard - would be covered by nothing at the command-line level.
+    Path database = dir.resolve("segue.db");
+    try (SqliteAssertionLog created = new SqliteAssertionLog(database)) {
+      assertThat(created.readAll()).isEmpty();
+    }
+
+    OwnCli.run(
+        new String[] {"mint", "--db", database.toString(), "--kind", "WORK", "--label", "a book"},
+        null,
+        "/home/invented");
+
+    try (SqliteAssertionLog after = new SqliteAssertionLog(database)) {
+      assertThat(after.readAll())
+          .singleElement()
+          .isInstanceOfSatisfying(
+              LocalEntity.class,
+              minted -> {
+                assertThat(minted.kind()).isEqualTo(NodeKind.WORK);
+                assertThat(minted.label()).isEqualTo("a book");
+              });
     }
   }
 }
