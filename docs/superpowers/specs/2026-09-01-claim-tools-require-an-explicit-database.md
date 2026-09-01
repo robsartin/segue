@@ -26,8 +26,9 @@ only appendable-over.
 ## The decision
 
 **`retractEntity` and `ownClaim` refuse to run unless `--db` explicitly names a database.** Every
-other tool — `exportGraph`, `hoverableSvg`, `listRatings`, `recommend`, `rate`, `resolveNames` —
-keeps today's default unchanged.
+tool that has a default keeps it unchanged — the callers of `support.DefaultDatabase.resolve`, which
+is a grep rather than a list. (This sentence originally named `hoverableSvg` and `resolveNames`
+among them; neither has a `--db` at all, and neither opens a store.)
 
 The friction lands where the consequence is permanent and the use is rare. `retractEntity` and
 `ownClaim` are the two tools that append a **first-person claim about the world**; each invocation

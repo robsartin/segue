@@ -341,7 +341,10 @@ one that had to declare its identity seam rather than import the adapter that co
 `KindMapper.rederive`, which is what makes a mapper improvement reach nodes the graph already holds
 ([ADR 42](adr/0042-store-p31-and-rederive-kind.md)). `mcp` depends on `ingest`, `port`, `domain`
 and `support`, plus its own dotted edge to `wikidata` (explained below). `app` depends on almost
-everything, because wiring is its job. `support` depends on nothing, and seven packages use it:
+everything, because wiring is its job. `support` depends on nothing, and the packages that use it
+are the ones the diagram below draws an edge to it from — that half is derivation-checked by
+`DeveloperGuideEnumerationsTest.shouldDrawEveryImportEdgeWhenTheGuideDiagramsTheLayering`, so read
+the edges rather than a count in this sentence, which nothing checks. Today they are:
 `mcp` (`UuidV7`), `export` and `rate` (`ClassLabels`), `export`, `recommend` and `rate`
 (`QidList`), `export`, `ratings`, `recommend` and `rate` (`DefaultDatabase` — issue #179's one
 resolution for the four dev tools that keep a default), and `retract` and `own`
@@ -424,12 +427,22 @@ about to expect that error, you will not get it. What you will get now is the re
 database at ~/.segue/segue.db`. Every example in this guide and in both task descriptions uses
 `$HOME`.
 
-Two ArchUnit rules hold the absence rather than trusting it, because no test of a refusal can:
-`theClaimToolsHaveNoDefaultDatabase` forbids either package from depending on
-`support.DefaultDatabase` at all, and `theClaimToolsTakeTheirDatabaseFromTheFlagAlone` forbids
-taking a `java.nio.file.Path` out of `support` by any route — the second because both tools do
-depend on `support.RequiredDatabase` for the refusal sentence, and a `Path`-returning method added
-there would restore the default without the first rule ever noticing.
+**What catches a default coming back, in order.** The refusal tests in `RetractCliTest` and
+`OwnCliTest` are the first line and the effective one: three of them red per tool against every
+reintroduction that has been tried. Two ArchUnit rules are the second line, and they earn their
+place by surviving what the tests cannot — an edit that wires the default in *and updates the tests
+to match*, which is how a guard usually dies. `theClaimToolsHaveNoDefaultDatabase` forbids either
+package from depending on `support.DefaultDatabase` at all;
+`theClaimToolsTakeTheirDatabaseFromTheFlagAlone` forbids taking a `java.nio.file.Path` out of
+`support` by any route, because both tools do depend on `support.RequiredDatabase` for the refusal
+sentence and a `Path`-returning method added there would restore the default without the first rule
+noticing.
+
+Both rules are scoped to one package and one class name, so three routes pass them — the rule
+re-implemented inline, a `String`-returning helper, or a `Path`-returning helper in any other
+package. All three were planted and measured; all three are caught by the refusal tests. See
+[ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md) for what that costs and why the
+line is drawn there.
 
 ### What each package is for
 
@@ -488,7 +501,7 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `theRatingDeckLogsNoRating` | any class in `rate` depending on `AffinityRecord` as a type, **with no exception** — the deck writes through `AffinityStore.updateRating`, which builds no record, so nothing here may hold a rating to log | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 46](adr/0046-the-rating-deck.md) |
 | `theRatingDeckOpensNothingElse` | `rate` depending on `jena`, `mcp`, `app` or every other dev tool bar one. `recommend` is deliberately allowed (the candidate sweep) and so is `java.net` — this is the one dev tool that is an HTTP server, fenced instead by the loopback bind and the `Origin` allowlist | [ADR 46](adr/0046-the-rating-deck.md) |
 | `theOwnerClaimToolOpensNothingElse` | `own` depending on `GraphStore` **as a type**, on `AffinityStore`, or on `tinker`, `jena`, `mcp`, `app`, `java.net`, `javax.net` or every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`, so a new tool joins every fence at once) — an owner claim *does* have a graph half, unlike a retraction, but this tool has no running graph to apply it to, so the projection catches up at the next boot. The `AffinityStore` clause is what keeps the merge subcommand away from the ratings it carries at read time | [ADR 59](adr/0059-owner-claims-as-a-third-layer.md) |
-| `theClaimToolsHaveNoDefaultDatabase` | `retract` or `own` depending on `support.DefaultDatabase` at all — the two tools that append a first-person claim require `--db` and have no default left to resolve, and this holds that *absence*, which no test of a refusal can. `dependOnClassesThat` rather than a call predicate, so a method reference (`DefaultDatabase::resolve`, reported as *references*) or a field of that type is caught as readily as a call; javadoc naming the class in prose is not a dependency and is deliberately still allowed | issue [#179](https://github.com/robsartin/segue/issues/179) |
+| `theClaimToolsHaveNoDefaultDatabase` | `retract` or `own` depending on `support.DefaultDatabase` at all — the two tools that append a first-person claim require `--db` and have no default left to resolve. Second line of defence, not first: the refusal tests red three-per-tool against every reintroduction tried, and this holds when those tests are edited to match. `dependOnClassesThat` rather than a call predicate, so a method reference (`DefaultDatabase::resolve`, reported as *references*) or a field of that type is caught as readily as a call; javadoc naming the class in prose is not a dependency and is deliberately still allowed | issue [#179](https://github.com/robsartin/segue/issues/179) |
 | `theClaimToolsTakeTheirDatabaseFromTheFlagAlone` | `retract` or `own` calling any `support` method that returns a `java.nio.file.Path`, or reading any `support` field of that type. The sibling rule forbids a *name*; this forbids the *capability*, and the gap between them was measured — a `Path`-returning method added to `support.RequiredDatabase` (which both tools already use for the refusal sentence) and wired in restores the default while leaving `theClaimToolsHaveNoDefaultDatabase` green. `Path` is the line because a `String` has to be parsed back by a line a reviewer can see, which is why `RequiredDatabase.refusal` returns one | issue [#179](https://github.com/robsartin/segue/issues/179) |
 | `ownerClaimsAreMadeThroughTheirFactories` | calling — or referencing — the constructor of `LocalEntity`, `OwnerEdge` or `SameAs` from outside `domain` and `sqlite`. Those constructors enforce only what Wikidata's grammar fixes, so that an append-only row stays decodable after a convention moves; the conventions themselves (two leading zeros, the controlled relation vocabulary) live in `minted()`, `claimed()` and `declared()`. This rule is what makes every *maker* of a claim go through them, with no second copy of a rule to fall out of date. `sqlite` is exempt because `readRow` reconstructs rather than claims | [ADR 22](adr/0022-wikidata-identity-and-vocabulary.md), [ADR 19](adr/0019-assertion-log-source-of-truth.md), [ADR 58](adr/0058-stand-in-identifiers-cannot-be-allocatable.md) |
 | `nothingWritesToStandardOut` | reading `System.out` anywhere except the one named exception, `SegueApplication` | [ADR 28](adr/0028-mcp-transports.md) |

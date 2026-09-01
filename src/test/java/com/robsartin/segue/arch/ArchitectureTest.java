@@ -1242,18 +1242,28 @@ class ArchitectureTest {
   /**
    * #179: the two claim tools have no default database, and cannot quietly grow one back.
    *
-   * <p>Every other dev tool resolves {@code --db}, then {@code SEGUE_DB}, then {@code
-   * ${user.home}/.segue/segue.db}, through the one copy of that rule in {@link DefaultDatabase}.
-   * {@code retract} and {@code own} require {@code --db} outright, because they append a
-   * first-person claim to a log ADR 19 forbids editing, and because an agent's shell is initialised
-   * from the owner's profile and inherits {@code SEGUE_DB} — a variable cannot tell the owner apart
-   * from an agent running as the owner.
+   * <p>The dev tools that resolve {@code --db}, then {@code SEGUE_DB}, then {@code
+   * ${user.home}/.segue/segue.db} do it through the one copy of that rule in {@link
+   * DefaultDatabase} — so they are exactly its callers, which is a grep rather than a list anybody
+   * has to keep correct here. {@code retract} and {@code own} require {@code --db} outright,
+   * because they append a first-person claim to a log ADR 19 forbids editing, and because an
+   * agent's shell is initialised from the owner's profile and inherits {@code SEGUE_DB} — a
+   * variable cannot tell the owner apart from an agent running as the owner.
    *
-   * <p><b>The absence of a default is the safety property, and an absence is exactly what no test
-   * of behaviour can hold.</b> Every refusal test in {@code RetractCliTest} and {@code OwnCliTest}
-   * would still pass if a later edit wired {@link DefaultDatabase#resolve} in behind the refusal;
-   * the tool would refuse when asked to refuse and default the rest of the time. So this rule holds
-   * what those tests cannot: not "it refuses", but "there is nothing here to fall back to".
+   * <p><b>This rule is the second line of defence, not the first, and an earlier draft of this
+   * javadoc had that backwards.</b> It claimed the refusal tests would still pass if a later edit
+   * wired the default in behind the refusal. They do not. Measured against three separate plants —
+   * a call to {@link DefaultDatabase#resolve}, the env-or-home rule re-implemented inline, and the
+   * same rule in a class outside {@code support} — each one reds <b>three</b> tests in {@code
+   * RetractCliTest} or {@code OwnCliTest}: the refusal, the {@code --dry-run} refusal and the
+   * {@code SEGUE_DB}-only refusal, each of which also asserts that no database was created under
+   * the test's own home. Those tests are what catches a default coming back.
+   *
+   * <p>What this rule adds is what a behaviour test cannot survive: it still holds when the tests
+   * are <em>edited to match</em>, which is the ordinary way a guard dies — someone wires the
+   * default in, three tests go red, and the cheapest way back to green is to change what they
+   * expect. This rule has to be deleted deliberately instead, and it states the decision at the
+   * boundary rather than inside a test's expectations.
    *
    * <p>{@code dependOnClassesThat} rather than {@code callMethodWhere}, deliberately. A dependency
    * is any constant-pool reference — a call, a method reference, a field of that type, a signature
@@ -1335,11 +1345,15 @@ class ArchitectureTest {
    * #105 derived them. The claim tools call nothing in {@code support} but {@code refusal} today,
    * so the whole surface can be fenced at no cost to anything that exists.
    *
-   * <p>What it does not reach: a {@code Path} obtained anywhere but {@code support} — {@code
-   * Path.of} on the flag's own value is what both tools do and must keep doing — and a helper that
-   * returns the default as a {@code String} for the caller to parse. The second is a real hole and
-   * deliberately left open, because the refusal sentence itself carries that string and no
-   * predicate can tell a sentence from a path spelled out.
+   * <p><b>Three routes leave every rule in this class green</b>, all three measured rather than
+   * reasoned about, and all three caught by the refusal tests instead: the env-or-home rule
+   * re-implemented inline in either CLI (the mistake this branch already made once); a {@code
+   * support} helper returning the default as a {@code String} for the caller to parse; and the same
+   * helper returning a {@code Path} from <b>any package that is not {@code support}</b> — a new
+   * {@code com.robsartin.segue.dbpath.DbPath} wired into {@code OwnCli} passed both #179 rules and
+   * {@link #theOwnerClaimToolOpensNothingElse} together. The fence is scoped to one package and one
+   * class name, so a path handed out from elsewhere is outside it by construction. {@code Path.of}
+   * on the flag's own value is of course what both tools do and must keep doing.
    */
   @ArchTest
   static final ArchRule theClaimToolsTakeTheirDatabaseFromTheFlagAlone =

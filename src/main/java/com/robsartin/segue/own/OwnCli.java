@@ -26,12 +26,14 @@ import org.slf4j.LoggerFactory;
  * example is worse than a broken task name; a pastable one has to survive the quotes it is pasted
  * inside.
  *
- * <p><b>{@code --db} is required</b> (#179). This tool has no default database at all, where every
- * other dev tool falls back to {@code SEGUE_DB} or {@code ${user.home}/.segue/segue.db}. The
- * default is what turned the mistake below into a permanent row. {@code SEGUE_DB} does not satisfy
- * the requirement either: an agent's shell is initialised from the owner's profile and inherits it,
- * so the variable cannot tell the owner apart from an agent running as the owner, and a flag typed
- * per invocation can.
+ * <p><b>{@code --db} is required</b> (#179). This tool has no default database at all, where the
+ * tools that do fall back to {@code SEGUE_DB} or {@code ${user.home}/.segue/segue.db} are exactly
+ * the callers of {@code support.DefaultDatabase.resolve} - grep for it rather than trust a list
+ * here, and note that {@code resolveNames} and {@code hoverableSvg} have no {@code --db} at all.
+ * The default is what turned the mistake below into a permanent row. {@code SEGUE_DB} does not
+ * satisfy the requirement either: an agent's shell is initialised from the owner's profile and
+ * inherits it, so the variable cannot tell the owner apart from an agent running as the owner, and
+ * a flag typed per invocation can.
  *
  * <p><b>The task is {@code ownClaim}. This line said {@code own} - the package name - and that is
  * worse than a broken example.</b> Gradle matches abbreviated task names by camel-case hump, so

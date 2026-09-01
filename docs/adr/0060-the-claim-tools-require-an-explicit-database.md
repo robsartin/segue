@@ -40,7 +40,9 @@ operator's behalf, and these two tools are the ones where nobody should be makin
 ## Decision
 
 **`retractEntity` and `ownClaim` refuse to run unless `--db` explicitly names a database.** Every
-other dev tool keeps today's default, unchanged.
+dev tool that has a default keeps it, unchanged — and which those are is a grep, not a list: they
+are the callers of `support.DefaultDatabase.resolve`. (`resolveNames` and `hoverableSvg` have no
+`--db` at all, so they are not in that set and never were.)
 
 The friction lands where the consequence is permanent and the use is rare. These two are the tools
 that append a **first-person claim about the world** — a retraction ([ADR 44](0044-retraction-as-a-new-claim.md))
@@ -76,12 +78,21 @@ to quote it, so it calls `support.DefaultDatabase` — but what it hands back is
 something either tool could open. A `String` has to be parsed back into a `Path` by a line somebody
 writes and a reviewer can see; a `Path` does not.
 
-### The absence of a default is the safety property, so a rule holds it
+### The refusal tests are the first line; two ArchUnit rules are the second
 
-No test of behaviour can hold an absence. Every refusal test here would still pass if a later edit
-wired the default in behind the refusal — the tool would refuse when asked to refuse, and default
-the rest of the time. So two ArchUnit rules in `ArchitectureTest` hold what the tests cannot, and
-that file is the authority for exactly what they say:
+**The refusal tests catch a default coming back, and an earlier draft of this ADR said they would
+not.** That was wrong, and it understated the suite. Three separate reintroductions were planted and
+measured: a call to `DefaultDatabase.resolve`, the env-or-home rule re-implemented inline, and the
+same rule in a class outside `support`. Each reds **three** tests in `RetractCliTest` or
+`OwnCliTest` — the refusal, the `--dry-run` refusal and the `SEGUE_DB`-only refusal, each of which
+also asserts that no database was created under the test's own home. No wiring was found that leaves
+them green.
+
+**What the rules add is what a behaviour test cannot survive.** They still hold when the tests are
+*edited to match*, which is the ordinary way a guard dies: someone wires the default in, three tests
+go red, and the cheapest route back to green is to change what they expect. A rule has to be deleted
+deliberately, and it states the decision at the package boundary rather than inside a test's
+expectations. `ArchitectureTest` is the authority for exactly what they say:
 `theClaimToolsHaveNoDefaultDatabase` and `theClaimToolsTakeTheirDatabaseFromTheFlagAlone`.
 
 **Two rules, because the first forbids a name and the second forbids the capability, and the gap
@@ -145,11 +156,18 @@ bytecode edge, and a control that planted only a comment would have passed while
   `own` by package name, so a future dev tool inherits nothing — a deliberate cost, and the reason a
   third claim tool would have to be added to both rules by hand.
 
-- **The `String`/`Path` line is where the fence can be drawn, and it is not the whole capability.** A
-  `support` helper returning the default as a `String` for the caller to parse would pass both rules.
-  That hole is left open knowingly: the refusal sentence itself carries that path as text, and no
-  predicate can tell a sentence from a path spelled out. What the rules buy is that reintroducing the
-  default now requires writing the parse in the claim tool, in the open.
+- **The rules are scoped to one package and one class name, and three routes go round them.** All
+  three were planted and measured, and all three are caught by the refusal tests instead — which is
+  the honest statement of what each guard is for. (1) The env-or-home rule **re-implemented inline**
+  in either CLI: it names no fenced class, and it is the mistake this very branch made once already.
+  (2) A `support` helper returning the default as a **`String`** for the caller to parse: the fence
+  can only see the type, and this class necessarily returns the path as text inside its refusal
+  sentence, so no predicate can tell a sentence from a path spelled out. (3) A **`Path`-returning
+  helper in any package that is not `support`** — a `com.robsartin.segue.dbpath.DbPath` wired into
+  `OwnCli` passed both rules and `theOwnerClaimToolOpensNothingElse` together. What the rules buy is
+  not completeness: it is that the shortest, most natural reintroduction — importing the class that
+  already holds the rule — is refused outright, and every remaining route requires writing new code
+  in the open that a reviewer can see is a second copy of `DefaultDatabase`.
 
 - **Six copies of the resolution became one.** `support.DefaultDatabase` holds it for the four tools
   that still default; the two that do not have nothing left to hold. The consolidation was pinned

@@ -21,12 +21,14 @@ import org.slf4j.LoggerFactory;
  * database at ~/.segue/segue.db}. An example that cannot be pasted is the failure this class's next
  * paragraph is about.
  *
- * <p><b>{@code --db} is required</b> (#179). Every other dev tool defaults to {@code SEGUE_DB} or
- * {@code ${user.home}/.segue/segue.db}; this one refuses to run without being told which database
- * to append to, because a retraction lands in a log ADR 19 forbids editing - it cannot be taken
- * back, only appended over. {@code SEGUE_DB} does not satisfy the requirement: an agent's shell is
- * initialised from the owner's profile and inherits it, so it cannot tell the owner apart from an
- * agent running as the owner.
+ * <p><b>{@code --db} is required</b> (#179). The dev tools that do default to {@code SEGUE_DB} or
+ * {@code ${user.home}/.segue/segue.db} are exactly the callers of {@code
+ * support.DefaultDatabase.resolve} - grep for it rather than trust a list here, and note that
+ * {@code resolveNames} and {@code hoverableSvg} have no {@code --db} at all. This one refuses to
+ * run without being told which database to append to, because a retraction lands in a log ADR 19
+ * forbids editing - it cannot be taken back, only appended over. {@code SEGUE_DB} does not satisfy
+ * the requirement: an agent's shell is initialised from the owner's profile and inherits it, so it
+ * cannot tell the owner apart from an agent running as the owner.
  *
  * <p><b>Deliberately not a seventh MCP tool.</b> ADR 26 pins the surface at six, and #5, ADR 40,
  * ADR 41 and ADR 43 each declined a seventh for lighter reasons than this one. Retraction is the
