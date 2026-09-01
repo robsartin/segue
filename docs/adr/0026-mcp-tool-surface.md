@@ -122,3 +122,27 @@ in the same commit.
   not a defect to design around in advance.
 - Nothing in the surface can currently retract a claim; retraction is expressible
   against the log but deliberately unexposed.
+
+**Amendment (2026-08-31, issue #92): the condition this ADR set for `assert_edge` has been met, and
+the tool has arrived somewhere this ADR did not anticipate.**
+
+The decision above holds `assert_edge` back *"until corroboration is visibly working"* and says that
+*"when it arrives its assertions carry the `llm:` prefix of ADR 23."* Corroboration is now visibly
+working — [ADR 56](0056-attribute-a-shortfall-to-its-source.md) made a shortfall attributable to the
+source it belongs to, which was the last piece — so the stated condition is satisfied and this
+amendment records that rather than leaving the condition to be re-argued.
+
+**The tool arrives dev-side, and the reason for holding it back is what put it there.** The claim
+being asserted is the *owner's*, not a model's, so the `llm:` prefix this ADR anticipated does not
+apply and [ADR 59](0059-owner-claims-as-a-third-layer.md) excludes owner claims from the
+corroboration count altogether: they route, and they do not vouch. That exclusion is exactly what
+makes an MCP `assert_edge` worse now than it was when this ADR declined it. On the MCP surface a
+*model* is the caller, and a model that could make an owner claim could launder model-generated
+structure into the one tier that skips the quarantine
+[ADR 23](0023-quarantine-model-generated-assertions.md) exists to impose. The tool is therefore the
+seventh dev-side tool, in the shape of `rate`, `recommend` and `listRatings`.
+
+**The surface is still six tools**, and `ToolSurfaceTest` still counts them. Nothing above is
+withdrawn; what has changed is that the first bullet's condition can no longer be cited as a reason
+the tool does not exist, because it does — just not here. Whether `assert_edge` should ever reach
+this surface is left open in ADR 59, which declines it on a different ground than this ADR did.

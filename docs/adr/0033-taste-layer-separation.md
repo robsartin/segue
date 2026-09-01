@@ -178,3 +178,31 @@ data into a structure whose whole purpose is to be traversed and cited.
   ordering behaviour is arithmetic and will hold; whether a 5/3 weighting is the *right* strength
   on a real taste layer is unmeasured, and the honest way to find out is to rate forty things and
   run the two lists side by side, the way ADR 45 chose its floor.
+
+**Amendment (2026-08-31, issue #92): "Two layers, two stores" is now three layers and two stores.**
+
+The first bullet of the decision above draws the boundary at *sourced, corroboratable, projected to
+the graph* — world facts are all three and affinity is none of them. A third kind of claim now
+exists that is neither:
+[ADR 59](0059-owner-claims-as-a-third-layer.md) admits **owner claims** — a minted local entity, an
+owner-asserted edge, and an asserted equivalence — which have this layer's epistemology and the
+world layer's destination. Like affinity they carry no `Provenance`, have no source, and cannot be
+corroborated. Unlike affinity they **do** project to the graph, because a claim that cannot be
+traversed or cited is not in the graph at all.
+
+**What the third layer may touch, and what it may not.** It writes to the world-fact store, through
+the assertion log and `IngestService`, and it is fenced out of this layer's store entirely: the
+ArchUnit rule `theOwnerClaimToolOpensNothingElse` bans `AffinityStore` as a *type* in the tool's
+package, which forbids both taste-layer writes and both taste-layer reads at once. So **`note_affinity`
+remains the only writer of affinity, and `IngestService` still never sees a rating** — the second
+bullet above is untouched as written. What has changed is that it no longer describes the whole
+first-person surface: it is now the rule for one of the two first-person layers rather than for all
+of them.
+
+**One place the layers do meet, and it is deliberate.** A merge carries the owner's ratings from a
+local id onto the canonical one. It does so at *read* time, through `Equivalences` and the
+`IdentityMerge` port, on the machine that holds both stores — never by the claim-making tool, and
+never by writing a rating from the world-fact side. `affinityNeverTouchesTheWorldFactLayer` and
+`theWorldFactLayerNeverTouchesAffinity` are both unchanged and both still pass.
+
+Nothing above is edited and no decision is withdrawn.

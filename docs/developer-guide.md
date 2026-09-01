@@ -360,7 +360,7 @@ has a different relationship with the data and a different fence to match.
 - **`ratings` reaches `sqlite` and nothing else**, because it needs the least: a bulk read of the
   `affinity` table and the node claims in the log, no traversal and no projection
   ([ADR 43](adr/0043-listing-your-own-ratings.md)).
-- **`retract` reaches `sqlite` and `ingest`, and is the only one that writes a world-fact claim.**
+- **`retract` reaches `sqlite` and `ingest`, and was the first to write a world-fact claim.**
   It appends one `Retraction` through `IngestService` and may not hold a `GraphStore` at all — a
   retraction has no graph half ([ADR 44](adr/0044-retraction-as-a-new-claim.md)).
 - **`recommend` reaches `sqlite`, `tinker`, `ingest` and `wikidata`**, because it replays the log
@@ -375,8 +375,8 @@ has a different relationship with the data and a different fence to match.
   `IngestService.claim`, and holds no `GraphStore`: those claims do have a graph half, but a
   dev-side tool has no running graph to apply it to, so the projection catches up at the next boot
   the way it does after a retraction ([ADR 24](adr/0024-sqlite-assertion-log.md)). Its sibling
-  fence, and the ADR that records the decision, are still to come — issue
-  [#92](https://github.com/robsartin/segue/issues/92) is the branch that adds it.
+  fence is `theOwnerClaimToolOpensNothingElse`, and the decision is recorded in
+  [ADR 59](adr/0059-owner-claims-as-a-third-layer.md).
 
 Tools with opposite relationships to the store cannot share a package and keep any fence
 meaningful, which is why ADR 41 made the first two siblings, ADR 43 added a third rather than a
@@ -438,6 +438,7 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `theRatingDeckNeverReadsANote` | `rate` calling `AffinityRecord.note()` — it writes the score and must not be able to display the note | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 46](adr/0046-the-rating-deck.md) |
 | `theRatingDeckLogsNoRating` | any class in `rate` depending on `AffinityRecord` as a type, **with no exception** — the deck writes through `AffinityStore.updateRating`, which builds no record, so nothing here may hold a rating to log | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 46](adr/0046-the-rating-deck.md) |
 | `theRatingDeckOpensNothingElse` | `rate` depending on `jena`, `mcp`, `app` or every other dev tool bar one. `recommend` is deliberately allowed (the candidate sweep) and so is `java.net` — this is the one dev tool that is an HTTP server, fenced instead by the loopback bind and the `Origin` allowlist | [ADR 46](adr/0046-the-rating-deck.md) |
+| `theOwnerClaimToolOpensNothingElse` | `own` depending on `GraphStore` **as a type**, on `AffinityStore`, or on `tinker`, `jena`, `mcp`, `app`, `java.net`, `javax.net` or every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`, so a new tool joins every fence at once) — an owner claim *does* have a graph half, unlike a retraction, but this tool has no running graph to apply it to, so the projection catches up at the next boot. The `AffinityStore` clause is what keeps the merge subcommand away from the ratings it carries at read time | [ADR 59](adr/0059-owner-claims-as-a-third-layer.md) |
 | `ownerClaimsAreMadeThroughTheirFactories` | calling — or referencing — the constructor of `LocalEntity`, `OwnerEdge` or `SameAs` from outside `domain` and `sqlite`. Those constructors enforce only what Wikidata's grammar fixes, so that an append-only row stays decodable after a convention moves; the conventions themselves (two leading zeros, the controlled relation vocabulary) live in `minted()`, `claimed()` and `declared()`. This rule is what makes every *maker* of a claim go through them, with no second copy of a rule to fall out of date. `sqlite` is exempt because `readRow` reconstructs rather than claims | [ADR 22](adr/0022-wikidata-identity-and-vocabulary.md), [ADR 19](adr/0019-assertion-log-source-of-truth.md), [ADR 58](adr/0058-stand-in-identifiers-cannot-be-allocatable.md) |
 | `nothingWritesToStandardOut` | reading `System.out` anywhere except the one named exception, `SegueApplication` | [ADR 28](adr/0028-mcp-transports.md) |
 | `nothingWritesToStandardError`, `noPrintStackTrace`, `noJavaUtilLogging` | bypassing SLF4J | [ADR 30](adr/0030-structured-logging.md) |

@@ -127,7 +127,7 @@ class ArchitectureTest {
    * fence exists it forbids the return edge, so no cycle can form.
    */
   static final List<String> DEV_TOOL_PACKAGES =
-      List.of("export", "rate", "ratings", "recommend", "retract", "seed");
+      List.of("export", "own", "rate", "ratings", "recommend", "retract", "seed");
 
   /**
    * Every dev-tool package except the ones named, as {@code ..x..} patterns, then {@code
@@ -1178,6 +1178,63 @@ class ArchitectureTest {
           .because(
               "ADR 44: retraction is a decision about the log, made offline, from a tool that"
                   + " cannot hold a graph, a rating, an engine or a network connection");
+
+  /**
+   * #92: the owner-claim tool appends through {@code ingest} and opens nothing else.
+   *
+   * <p><b>The seventh dev-side tool, and the second that writes a world-fact claim.</b> Its fence
+   * is deliberately the same shape as {@link #theRetractionToolOpensNothingElse}'s, and the reason
+   * is not that the two tools are alike — it is that they are unalike in the one way that would
+   * have argued for a graph, and still do not get one. A retraction genuinely <em>has</em> no graph
+   * half. An owner claim does: {@code IngestService.apply} has a case for each of the three, and a
+   * minted entity becomes a node the moment the log is replayed. What both tools lack is a
+   * <em>running</em> graph to apply it to, so the projection catches up at the next boot (ADR 24)
+   * and neither tool has any business holding a {@link GraphStore}. Naming the type rather than the
+   * two write calls is what makes that unarguable: {@link #onlyIngestAppliesClaimsToTheGraph}
+   * already forbids the calls from here, and this forbids reaching the object they are made on.
+   *
+   * <p><b>{@link AffinityStore} as a type, and it is not decoration.</b> A merge carries the
+   * owner's ratings across — that is half of what {@code SameAs} is for — but it carries them
+   * through {@link com.robsartin.segue.port.IdentityMerge} at read time, on the machine that holds
+   * the graph, and never from this tool. A rating is the one thing in segue that cannot be
+   * regenerated from a source, and the tool whose merge subcommand is the most plausible reason
+   * anyone would reach for the affinity table must be unable to reach it at all. That single clause
+   * covers both taste-layer writes and both taste-layer reads at once, which is why this package
+   * needs no second rule in the shape of {@link #theRetractionToolWritesOnlyRetractions}.
+   *
+   * <p>The sibling half comes from {@link #DEV_TOOL_PACKAGES}, which {@code own} now joins — the
+   * first real exercise of the derived list since issue #105 built it, and the reason this rule
+   * only had to be written once rather than seven times. A dependency on a sibling would let this
+   * tool inherit that sibling's fence instead of its own: {@code rate} may write a rating and this
+   * may not, {@code export} may build a projection and this has no graph to project onto. {@code
+   * java.net} because a claim about the owner's own shelf is a pure function of one local file and
+   * nothing about it leaves the machine — the same clause every sibling but {@code rate} carries,
+   * and {@code rate} is exempt only because it <em>is</em> an HTTP server.
+   */
+  @ArchTest
+  static final ArchRule theOwnerClaimToolOpensNothingElse =
+      noClasses()
+          .that()
+          .resideInAPackage("..own..")
+          .should()
+          .dependOnClassesThat(
+              JavaClass.Predicates.equivalentTo(GraphStore.class)
+                  .or(JavaClass.Predicates.equivalentTo(AffinityStore.class))
+                  .or(
+                      JavaClass.Predicates.resideInAnyPackage(
+                          otherDevToolsAnd(
+                              List.of("own"),
+                              "..tinker..",
+                              "..jena..",
+                              "..mcp..",
+                              "..app..",
+                              "java.net..",
+                              "javax.net.."))))
+          .because(
+              "#92: an owner claim is appended through IngestService.claim and applied at the next"
+                  + " boot — the tool holds no graph, never reaches the taste layer a merge"
+                  + " carries, borrows no sibling's fence, and cannot become an MCP tool by"
+                  + " accident");
 
   /**
    * The taste layer, by type rather than by package.
