@@ -400,20 +400,44 @@ control calls a constructor from `own`, so the `own` package must exist first.)*
 - Create: an ADR (confirm the number with `ls docs/adr/ | tail -3`)
 - Modify: `docs/adr/README.md`, `docs/adr/0022-*.md`, `docs/adr/0026-*.md`, `docs/adr/0033-*.md`, `CLAUDE.md`, `docs/developer-guide.md`
 
+> **Amended 2026-08-31, after Task 5's review.** These steps originally batched two behaviours into
+> one red observation ("run both and watch them fail"). Task 5's review found the same shape at
+> larger scale — a single bulk compile failure standing in for 27 tests — and it contradicts
+> `CLAUDE.md`, which requires that non-trivial work loop red → green several times, **one small
+> behaviour per loop**. The standing instruction governs, not this plan. What follows is two
+> separate loops; run them in order and do not merge their red phases.
+
+**Loop A — the refusal.**
+
 - [ ] **Step 1: Write the failing test for the refusal**
 
 `expand_entity` on a local entity must say *this entity has no source to expand from*, distinctly. ADR 56 established that an empty `ExpandResult` already means both "found nothing" and "source unavailable"; a third meaning rebuilds the defect ADR 56 fixed. Assert on the message, not only on the emptiness.
 
+- [ ] **Step 2: Run it and watch it fail.** Quote the message.
 
-- [ ] **Step 2: Write the failing ArchUnit rule and add `own` to `DEV_TOOL_PACKAGES`**
+- [ ] **Step 3: Implement the refusal; run it green.**
 
-The sibling fences derive from that list (#105), so adding the package is most of the work. **Positive control required**: plant a violation from `own` to a sibling, watch the rule go red naming itself, revert, quote the message.
+**Loop B — the fence.** Do not begin until Loop A is green.
 
-- [ ] **Step 3: Run both and watch them fail.** Record the messages.
+- [ ] **Step 4: Write the failing ArchUnit rule and add `own` to `DEV_TOOL_PACKAGES`**
 
-- [ ] **Step 4: Implement.**
+The sibling fences derive from that list (#105), so adding the package is most of the work.
 
-- [ ] **Step 5: Write the ADR and the three amendments**
+- [ ] **Step 5: Run it and watch it fail.** Quote the message.
+
+- [ ] **Step 6: Implement, run green, then prove the fence with a positive control.**
+
+Plant a violation from `own` to a sibling, watch the rule go red **naming itself**, revert, quote the
+message. Task 5 established why the control is not optional: its fence needed `accessTargetWhere`
+because `callConstructorWhere` silently missed a method-reference violation. Establish which *forms*
+of violation your rule catches, not merely that one form fails.
+
+**Close what Task 5 deliberately left open**, both recorded in the ledger: `docs/developer-guide.md`
+carries a dated placeholder in its `own` bullet — "sibling fence still to come" — which Step 4 makes
+false, so replace it; and `own` sits outside `DEV_TOOL_PACKAGES` until Step 4, leaving it uncovered
+by the sibling fences until this task closes the window.
+
+- [ ] **Step 7: Write the ADR and the three amendments**
 
 The new ADR records the decision, the six alternatives from the spec with the reason each lost, and what it does not settle. Then, as **dated amendments, never edits** (ADR 1):
 
@@ -425,7 +449,7 @@ And correct `CLAUDE.md:183`, which says *"the two layers never meet below `Segue
 
 **Verify the ADR index sequence after editing** (#170): it is append-at-tail and has silently lost entries three times.
 
-- [ ] **Step 6: Run the gate and commit**
+- [ ] **Step 8: Run the gate and commit**
 
 ---
 
