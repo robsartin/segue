@@ -104,6 +104,24 @@ class OwnCliTest {
   }
 
   @Test
+  @DisplayName("should refuse when only SEGUE_DB is set, and name it as the path to pass to --db")
+  void shouldRefuseWhenOnlySegueDbIsSet() {
+    // RetractCliTest's reason, and it applies here first: the invocation in issue #179 was run by
+    // an agent in a shell started from the owner's profile. SEGUE_DB cannot distinguish the owner
+    // from an agent running as the owner; a flag typed per invocation can.
+    assertThatThrownBy(
+            () ->
+                OwnCli.parse(
+                    new String[] {"mint", "--kind", "WORK", "--label", "x"},
+                    "/elsewhere/segue.db",
+                    "/home/invented"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("--db")
+        .hasMessageContaining("/elsewhere/segue.db")
+        .hasMessageNotContaining("/home/invented");
+  }
+
+  @Test
   @DisplayName("should refuse before opening any database when --dry-run is given without --db")
   void shouldRefuseBeforeOpeningAnyDatabaseWhenDryRunIsGivenWithoutTheDatabase() {
     // RetractCliTest's rule, and for the same reason: the property is an ORDER. If the refusal

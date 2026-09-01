@@ -63,6 +63,25 @@ class RetractCliTest {
   }
 
   @Test
+  @DisplayName("should refuse when only SEGUE_DB is set, and name it as the path to pass to --db")
+  void shouldRefuseWhenOnlySegueDbIsSet() {
+    // The case that would silently re-open the hole. An agent's shell is initialised from the
+    // owner's profile, so it inherits SEGUE_DB; the variable cannot tell the owner apart from an
+    // agent running as the owner, and a flag typed per invocation can. It is still the path the
+    // refusal quotes back, because it is the database this would have used.
+    assertThatThrownBy(
+            () ->
+                RetractCli.parse(
+                    new String[] {"--qid", "Q900101", "--reason", "why"},
+                    "/elsewhere/segue.db",
+                    "/home/invented"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("--db")
+        .hasMessageContaining("/elsewhere/segue.db")
+        .hasMessageNotContaining("/home/invented");
+  }
+
+  @Test
   @DisplayName("should refuse before opening any database when --dry-run is given without --db")
   void shouldRefuseBeforeOpeningAnyDatabaseWhenDryRunIsGivenWithoutTheDatabase() {
     // A dry run appends nothing, so the narrow argument says exempt it. Uniformity is worth more:

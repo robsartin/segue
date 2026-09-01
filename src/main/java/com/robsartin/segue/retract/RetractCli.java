@@ -83,7 +83,7 @@ public final class RetractCli {
     }
 
     if (database == null) {
-      throw usage(missingDatabase(userHome));
+      throw usage(missingDatabase(envDatabase, userHome));
     }
     if (qid == null) {
       throw usage("--qid is required");
@@ -101,13 +101,21 @@ public final class RetractCli {
    * The refusal, naming the flag and the database it would once have defaulted to.
    *
    * <p>The path is in the message because a refusal that only says "--db is required" sends the
-   * owner to look up where their log lives; this one is a copy-paste.
+   * owner to look up where their log lives; this one is a copy-paste. {@code SEGUE_DB} is read
+   * here and nowhere else in this tool: it is the path to quote back when it is set, and it is
+   * still not enough on its own - an agent's shell is initialised from the owner's profile and
+   * inherits it, so it cannot tell the owner apart from an agent running as the owner.
    */
-  private static String missingDatabase(String userHome) {
-    Path wouldHaveUsed = Path.of(userHome, ".segue", "segue.db");
+  private static String missingDatabase(String envDatabase, String userHome) {
+    Path wouldHaveUsed =
+        envDatabase != null && !envDatabase.isBlank()
+            ? Path.of(envDatabase)
+            : Path.of(userHome, ".segue", "segue.db");
     return "--db is required — pass --db "
         + wouldHaveUsed
-        + " to name the database this would once have defaulted to";
+        + " to name the database this would once have defaulted to."
+        + " SEGUE_DB is inherited by any shell started from the owner's profile, so it cannot"
+        + " stand in for a flag typed per invocation";
   }
 
   private static String valueOf(String[] args, int i, String flag) {
