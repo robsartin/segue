@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.robsartin.segue.domain.AssertionRecord;
+import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
@@ -135,6 +136,57 @@ class IngestServiceTest {
         new Retraction("Q900101", "wrong entity", Instant.parse("2026-08-27T12:00:00Z"));
 
     assertThatThrownBy(() -> ingest.record(retraction))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("retract");
+
+    assertThat(log.readAll()).isEmpty();
+  }
+
+  @Test
+  @DisplayName("should append an owner claim and touch no graph when claim is called")
+  void shouldAppendAnOwnerClaimAndTouchNoGraphWhenClaimIsCalled() {
+    // The fourth write path, and the second that has no graph half at the moment of writing.
+    // The dev-side tool that makes owner claims (#92) must be able to append one without holding
+    // a GraphStore it would never legitimately touch - the argument IngestService.retract makes
+    // for being static, made again for the same reason. The graph catches up at the next boot
+    // (ADR 24), where GraphProjector applies exactly this row through apply().
+    LocalEntity minted =
+        LocalEntity.minted(
+            "Q00900042",
+            NodeKind.WORK,
+            "a self-pressed record",
+            Instant.parse("2026-08-31T20:00:00Z"));
+
+    IngestService.claim(log, minted);
+
+    assertThat(log.readAll()).containsExactly(minted);
+    assertThat(graph.node("Q00900042"))
+        .as("no graph half: the tool that appends this holds no graph at all")
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName(
+      "should refuse a sourced claim when claim is called, rather than skip its graph half")
+  void shouldRefuseASourcedClaimWhenClaimIsCalledRatherThanSkipItsGraphHalf() {
+    // A NodeAssertion appended here would be a claim that never reached the running graph, on a
+    // path whose caller cannot apply it. record() is the path with both halves.
+    NodeAssertion sourced = new NodeAssertion("Q0900101", NodeKind.PERSON, "Ines Marlow", WIKIDATA);
+
+    assertThatThrownBy(() -> IngestService.claim(log, sourced))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("record");
+
+    assertThat(log.readAll()).isEmpty();
+  }
+
+  @Test
+  @DisplayName("should refuse a retraction when claim is called, because retract already owns it")
+  void shouldRefuseARetractionWhenClaimIsCalledBecauseRetractAlreadyOwnsIt() {
+    Retraction retraction =
+        new Retraction("Q0900101", "wrong entity", Instant.parse("2026-08-31T20:00:00Z"));
+
+    assertThatThrownBy(() -> IngestService.claim(log, retraction))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("retract");
 

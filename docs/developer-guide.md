@@ -259,6 +259,7 @@ graph TD
   retract["retract<br/>RetractCli, RetractRun"]
   recommend["recommend<br/>RecommendCli, CandidateSweep, Routes"]
   rate["rate<br/>RateCli, RateRun, Deck, RateServer, Card"]
+  own["own<br/>OwnCli, OwnRun"]
 
   app --> mcp
   app --> ingest
@@ -319,6 +320,10 @@ graph TD
   rate --> wikidata
   rate --> support
   rate ==>|"the one dev-tool dependency"| recommend
+  own --> port
+  own --> domain
+  own --> ingest
+  own --> sqlite
 ```
 
 **What the diagram shows.** Dependencies point downward and never back up. `domain` sits at the
@@ -341,7 +346,7 @@ that `app` imports nothing from `domain`; that stopped being true in ADR 54**, b
 `WikidataMusicBrainzIdentity` validates a seed QID with `Qid.looksLikeAQid` before putting it in a
 SPARQL query, so the bridge in `app` holds one `domain` type.
 
-`seed`, `export`, `ratings`, `retract`, `recommend` and `rate` are the six dev-side tools. None is
+`seed`, `export`, `ratings`, `retract`, `recommend`, `rate` and `own` are the seven dev-side tools. None is
 reachable from the application — nothing imports any of them, and each is entered through its own
 `main` behind a Gradle `JavaExec` task — and their arrows are the interesting part, because each
 has a different relationship with the data and a different fence to match.
@@ -365,6 +370,13 @@ has a different relationship with the data and a different fence to match.
   tools, for the candidate half of the deck. It is the other tool that writes — to the taste layer
   only, through `AffinityStore.updateRating`, never through `IngestService`
   ([ADR 46](adr/0046-the-rating-deck.md)).
+- **`own` reaches `sqlite` and `ingest`, and is the second that writes a world-fact claim.** It
+  appends one of the owner's own claims — a minted entity, an owner edge, or a merge — through
+  `IngestService.claim`, and holds no `GraphStore`: those claims do have a graph half, but a
+  dev-side tool has no running graph to apply it to, so the projection catches up at the next boot
+  the way it does after a retraction ([ADR 24](adr/0024-sqlite-assertion-log.md)). Its sibling
+  fence, and the ADR that records the decision, are still to come — issue
+  [#92](https://github.com/robsartin/segue/issues/92) is the branch that adds it.
 
 Tools with opposite relationships to the store cannot share a package and keep any fence
 meaningful, which is why ADR 41 made the first two siblings, ADR 43 added a third rather than a
@@ -390,6 +402,7 @@ view, and ADR 44 a fourth rather than a mode of one of them.
 | `ratings` | The taste-layer reader ([ADR 43](adr/0043-listing-your-own-ratings.md)): every rating with its label, note and `updated_at`, run as `./gradlew listRatings`. Plain Java, read-only, offline. | `port`, `domain`, `sqlite` |
 | `retract` | The retraction tool ([ADR 44](adr/0044-retraction-as-a-new-claim.md)): appends one `Retraction` claim so the projection stops showing an entity and its edges, run as `./gradlew retractEntity`. Plain Java, offline, and the only dev tool that writes a world-fact claim. | `port`, `domain`, `ingest`, `sqlite` |
 | `recommend` | The recommender ([ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md)): ranks entities absent from the known-list by how much more of that list reaches them than their size predicts, and explains each with real routes. Run as `./gradlew recommend`. The list is the supplied `--known` file plus everything rated 4 or 5 that the file does not name, through `KnownList.promoted` ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)) — so a highly rated entity stops being offered back — and since [ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md) the sweep also takes `KnownList.suppressed` as a separate set, so an entity rated 2 or below stops being offered back too. Plain Java, read-only, offline, and since issue #85 it weights every candidate by the owner's ratings — `Recommendations.regardFor` over `AffinityStore.readRatings`, the note-free half of the taste layer. (This row said it "cannot see the taste layer at all" until the final review of issue #101; that was already false on `main`.) | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `support` |
+| `own` | The owner-claim tool (issue [#92](https://github.com/robsartin/segue/issues/92)): mints a local entity Wikidata does not model, asserts an edge between two ids, or merges a local id into the QID it turned out to be — one operation per run, as `./gradlew ownClaim`. Plain Java, offline, and the second dev tool that writes a world-fact claim; it appends through `IngestService.claim` and holds no graph, so the projection catches up at the next boot. Deliberately not an MCP tool: an owner claim is exempt from the corroboration count, so a model must not be able to make one. | `port`, `domain`, `ingest`, `sqlite` |
 | `rate` | The rating deck ([ADR 46](adr/0046-the-rating-deck.md)): a loopback page on 127.0.0.1:8090 dealing one unrated entity per keystroke, run as `./gradlew rate`. Plain Java, offline, and the only dev tool that writes a rating. Composes its known list through the same `KnownList.promoted` `recommend` does ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)), passes the same `KnownList.suppressed` to its sweep, and deals revisions over `KnownList.revisitable` ([ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md)). | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `recommend`, `support` |
 
 ### Which rules a machine enforces
@@ -425,6 +438,7 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `theRatingDeckNeverReadsANote` | `rate` calling `AffinityRecord.note()` — it writes the score and must not be able to display the note | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 46](adr/0046-the-rating-deck.md) |
 | `theRatingDeckLogsNoRating` | any class in `rate` depending on `AffinityRecord` as a type, **with no exception** — the deck writes through `AffinityStore.updateRating`, which builds no record, so nothing here may hold a rating to log | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 46](adr/0046-the-rating-deck.md) |
 | `theRatingDeckOpensNothingElse` | `rate` depending on `jena`, `mcp`, `app` or every other dev tool bar one. `recommend` is deliberately allowed (the candidate sweep) and so is `java.net` — this is the one dev tool that is an HTTP server, fenced instead by the loopback bind and the `Origin` allowlist | [ADR 46](adr/0046-the-rating-deck.md) |
+| `ownerClaimsAreMadeThroughTheirFactories` | calling — or referencing — the constructor of `LocalEntity`, `OwnerEdge` or `SameAs` from outside `domain` and `sqlite`. Those constructors enforce only what Wikidata's grammar fixes, so that an append-only row stays decodable after a convention moves; the conventions themselves (two leading zeros, the controlled relation vocabulary) live in `minted()`, `claimed()` and `declared()`. This rule is what makes every *maker* of a claim go through them, with no second copy of a rule to fall out of date. `sqlite` is exempt because `readRow` reconstructs rather than claims | [ADR 22](adr/0022-wikidata-identity-and-vocabulary.md), [ADR 19](adr/0019-assertion-log-source-of-truth.md), [ADR 58](adr/0058-stand-in-identifiers-cannot-be-allocatable.md) |
 | `nothingWritesToStandardOut` | reading `System.out` anywhere except the one named exception, `SegueApplication` | [ADR 28](adr/0028-mcp-transports.md) |
 | `nothingWritesToStandardError`, `noPrintStackTrace`, `noJavaUtilLogging` | bypassing SLF4J | [ADR 30](adr/0030-structured-logging.md) |
 | `affinityNeverTouchesTheWorldFactLayer` | a taste-layer type depending on the log, the graph, `IngestService` or the claim records | [ADR 33](adr/0033-taste-layer-separation.md) |

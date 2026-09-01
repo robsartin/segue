@@ -80,6 +80,46 @@ public final class IngestService {
     log.append(retraction);
   }
 
+  /**
+   * Append one of the owner's own claims (#92). The fourth write path, and the second with no graph
+   * half at the moment of writing.
+   *
+   * <p><b>Static, and taking the log, for {@link #retract}'s reason exactly.</b> A minted entity,
+   * an owner edge and a merge all <em>do</em> project to the graph - {@link #apply} has a case for
+   * each - but the thing that makes them is a dev-side tool with no running graph to apply them to.
+   * Requiring an {@code IngestService} instance would mean handing that tool a {@link GraphStore}
+   * it must never touch, purely so a constructor could be satisfied, which is the opposite of the
+   * fence it needs. The graph catches up the way ADR 24 already says it does: rebuilt from the log
+   * at the next boot, through {@link GraphProjector}, through this class's own {@code apply}.
+   *
+   * <p>The append still happens inside {@code ingest}, so {@code onlyIngestAppliesClaimsToTheGraph}
+   * holds unchanged and the tool can be forbidden a graph outright.
+   *
+   * <p><b>Only the owner's three.</b> A sourced claim has a graph half that this path cannot
+   * perform, so appending one here would put a row in the log that never reached the running graph
+   * - {@link #record} is the path with both halves. A retraction belongs to {@link #retract}. The
+   * switch is over the sealed interface rather than an {@code instanceof} chain, so a fourth claim
+   * type cannot be added without deciding which of the three paths writes it.
+   */
+  public static void claim(AssertionLog log, LoggedAssertion claim) {
+    Objects.requireNonNull(log, "log");
+    Objects.requireNonNull(claim, "claim");
+    switch (claim) {
+      case LocalEntity ignored -> {}
+      case OwnerEdge ignored -> {}
+      case SameAs ignored -> {}
+      case NodeAssertion ignored ->
+          throw new IllegalArgumentException(
+              "a sourced claim is appended and applied by record(), not claim()");
+      case AssertionRecord ignored ->
+          throw new IllegalArgumentException(
+              "a sourced claim is appended and applied by record(), not claim()");
+      case Retraction ignored ->
+          throw new IllegalArgumentException("a retraction is appended by retract(), not claim()");
+    }
+    log.append(claim);
+  }
+
   /** Record a batch in order; each claim is logged and applied before the next is considered. */
   public void recordAll(List<LoggedAssertion> assertions) {
     Objects.requireNonNull(assertions, "assertions");

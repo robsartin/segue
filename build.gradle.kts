@@ -248,6 +248,23 @@ tasks.register<JavaExec>("retractEntity") {
     outputs.upToDateWhen { false }
 }
 
+tasks.register<JavaExec>("ownClaim") {
+    group = "application"
+    description =
+        "Records one claim of your own: mint a local entity Wikidata does not model, assert an " +
+            "edge between two ids, or merge a local id into the QID it turned out to be. " +
+            "Appends to the log and writes nothing else — the graph is rebuilt from it at the " +
+            "next boot. Deliberately not an MCP tool: an owner claim skips the corroboration " +
+            "count, so a model must not be able to make one. Needs no network. Example: " +
+            "./gradlew ownClaim --args=\"mint --kind WORK --label 'A Self-Pressed Record'\""
+    mainClass.set("com.robsartin.segue.own.OwnCli")
+    classpath = sourceSets["main"].runtimeClasspath
+    // sqlite-jdbc loads a native library, the same grant tasks.test makes.
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
+    // Never up-to-date: the log changes under it, and re-running it is a deliberate act.
+    outputs.upToDateWhen { false }
+}
+
 spotless {
     java {
         googleJavaFormat(libs.versions.googleJavaFormat.get())
