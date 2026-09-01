@@ -1066,4 +1066,7 @@ Captured on 2026-08-26 against the jar built from this branch by `./gradlew boot
 - `docs/developer-guide.md` — building, testing and extending segue.
 - [The engine bake-off](engine-bake-off.md) — the two-engine comparison that chose the graph
   database underneath all of this.
+- [The retry-precondition measurement](retry-precondition-evidence.md) — the sixty-run trace study
+  behind ADR 46's retry precondition, and what the rating deck's browser test has to establish
+  before it can assert anything.
 - [The project README](../README.md) — the short version of everything above.

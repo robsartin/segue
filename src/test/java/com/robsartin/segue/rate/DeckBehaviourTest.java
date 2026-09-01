@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import com.sun.net.httpserver.Filter;
+import com.sun.net.httpserver.HttpContext;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
@@ -18,6 +20,9 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterEach;
@@ -92,6 +97,13 @@ class DeckBehaviourTest {
   private volatile Answer answer = Answer.ACCEPT;
   private final List<String> posts = Collections.synchronizedList(new ArrayList<>());
 
+  /** How many exchanges the stub is serving right now, and when the most recent one arrived. */
+  private final AtomicInteger inFlight = new AtomicInteger();
+
+  private final AtomicLong lastArrived = new AtomicLong(System.nanoTime());
+
+  private final AtomicReference<String> lastPath = new AtomicReference<>("nothing yet");
+
   @BeforeAll
   static void requireBrowser() {
     if (Boolean.getBoolean("segue.requireBrowser") && !HeadlessChrome.available()) {
@@ -113,9 +125,15 @@ class DeckBehaviourTest {
       page = in.readAllBytes();
     }
     server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
-    server.createContext("/api/card", this::card);
-    server.createContext("/api/rate", this::rate);
-    server.createContext("/", exchange -> send(exchange, 200, "text/html; charset=utf-8", page));
+    List<HttpContext> contexts = new ArrayList<>();
+    contexts.add(server.createContext("/api/card", this::card));
+    contexts.add(server.createContext("/api/rate", this::rate));
+    contexts.add(
+        server.createContext(
+            "/", exchange -> send(exchange, 200, "text/html; charset=utf-8", page)));
+    for (HttpContext context : contexts) {
+      context.getFilters().add(accounting());
+    }
     // A real executor, because two answers here stall deliberately and the JDK's default one
     // serves every request on the single thread start() creates. On that default a stalling
     // handler blocks the whole server, so what `posts` records is the order the server got round
@@ -127,6 +145,13 @@ class DeckBehaviourTest {
     chrome = HeadlessChrome.launch();
     chrome.open("http://127.0.0.1:" + server.getAddress().getPort() + "/");
     chrome.until("document.querySelector('#card h1')", "the first card to be dealt");
+    // A card on screen is not a loaded page, and the difference is what issue #169 was. `open`
+    // waits on `readyState` too, but it does so straight after `Page.navigate`, when the document
+    // it asks may still be the `about:blank` the harness started on — so this is the first point
+    // at which the answer is about the deck. Chrome issues `GET /favicon.ico` off this document's
+    // load, which the stub's "/" context happily answers, and nothing on the page reflects it.
+    chrome.until("document.readyState === 'complete'", "the deck page itself to finish loading");
+    untilQuiet();
   }
 
   @AfterEach
@@ -140,6 +165,35 @@ class DeckBehaviourTest {
     if (handlers != null) {
       handlers.shutdownNow();
     }
+  }
+
+  /**
+   * Counts what the stub is serving, so a test can wait for it to be serving nothing.
+   *
+   * <p>This is not diagnostics. {@code aRetriedRatingCannotOverwriteAReRating}'s positive control
+   * depends on Chrome having a socket in its pool when the rating POST goes out, and Chrome only
+   * has one when nothing else is holding it — so "the page has finished asking for things" is a
+   * precondition of that test, and one this file used to assume rather than establish.
+   */
+  private Filter accounting() {
+    return new Filter() {
+      @Override
+      public void doFilter(HttpExchange exchange, Chain chain) throws IOException {
+        inFlight.incrementAndGet();
+        lastArrived.set(System.nanoTime());
+        lastPath.set(exchange.getRequestURI().getPath());
+        try {
+          chain.doFilter(exchange);
+        } finally {
+          inFlight.decrementAndGet();
+        }
+      }
+
+      @Override
+      public String description() {
+        return "counts the exchanges in flight";
+      }
+    };
   }
 
   private void card(HttpExchange exchange) throws IOException {
@@ -256,6 +310,82 @@ class DeckBehaviourTest {
             + rating
             + " ever reached the server, so nothing anchors what did not: "
             + posts);
+  }
+
+  /**
+   * How long the stub must go without a new request before the page counts as loaded.
+   *
+   * <p>A bound on <em>issuance</em> latency, not a settle: the favicon request is Chrome's own and
+   * the page says nothing about it, so there is no condition to wait on — only a length of silence
+   * after which one has certainly gone out. Measured on this machine, the favicon reaches the stub
+   * 6–14 ms after {@code /api/card} does, and nothing else arrives in the 1500 ms after it; over
+   * the 59 traced runs in {@code docs/retry-precondition-evidence.md} the same gap was 6–20 ms,
+   * under a load average between 6 and 30 on 28 cores. This is ten times that measured worst case,
+   * and comfortably above {@link #untilQuiet()}'s own 20 ms polling granularity.
+   *
+   * <p><strong>If that bound is ever wrong, nothing goes red.</strong> A browser that issued the
+   * favicon — or anything else — more than this long after load would slip past the wait and go
+   * straight back to racing the POST for the pooled socket, which is a flake and not a failure: the
+   * first anyone would know is the positive control failing again, intermittently, saying something
+   * untrue about the browser. The ten-fold margin is the only thing holding that off, and it is why
+   * a real condition would be worth having if one ever became observable.
+   */
+  private static final long QUIET_MILLIS = 200;
+
+  /**
+   * Waits until the stub is serving nothing and has been asked for nothing recently.
+   *
+   * <p>This is a precondition of {@code aRetriedRatingCannotOverwriteAReRating}, not tidiness.
+   * Chrome resends a POST whose connection died only when it had a socket <em>already in its
+   * pool</em> to give that attempt; a socket the pool had to connect for the request is never
+   * resent on. So the number of attempts is one plus the number of pooled sockets free when the key
+   * is pressed, and if an unfinished request is holding them all, the count is one and that test's
+   * positive control goes red having found nothing wrong with the page (issue #169; the measurement
+   * is in {@code docs/retry-precondition-evidence.md}, §6 of which forces that failure on demand,
+   * and the rule it establishes is in ADR 46's 2026-09-01 amendment).
+   *
+   * <p>The request that used to do the holding is Chrome's {@code GET /favicon.ico}: it lands only
+   * a few milliseconds before the POST, because waiting for {@code #card h1} waits for {@code
+   * /api/card} and for nothing else. This waits for it, and for anything else the page or the
+   * browser has started, to be finished and back in the pool.
+   *
+   * <p><strong>The limit of this instrument: it counts exchanges, not sockets.</strong> Chrome
+   * keeps a socket checked out until the response body has been <em>read</em>, so a response the
+   * page never drains leaves the socket held long after the exchange here has ended and the count
+   * has gone back to zero — this wait would report quiet and be wrong, with no assertion to fire.
+   * That is not hypothetical: {@code deck.html} returns on {@code !response.ok} without reading the
+   * body, on both its card path and its rating path, and the stub answers 403 and 404 with a body.
+   * The precondition holds today only because nothing issues such a response before this wait
+   * returns — every refusal in this file is set up after {@code start()} has finished. A test that
+   * made the stub refuse during load would break it silently, and the fix would be to drain in the
+   * page rather than to lengthen anything here.
+   *
+   * <p>A condition with a deadline rather than a sleep, for {@link #untilSent(int)}'s reason: a
+   * fixed sleep that turned out to be too short would go quietly back to being the same flake.
+   */
+  private void untilQuiet() {
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
+    long quiet = TimeUnit.MILLISECONDS.toNanos(QUIET_MILLIS);
+    while (System.nanoTime() < deadline) {
+      if (inFlight.get() == 0 && System.nanoTime() - lastArrived.get() >= quiet) {
+        return;
+      }
+      HeadlessChrome.sleep(20);
+    }
+    // Both halves of the condition, because "0 still in flight" on its own explains nothing: it
+    // is the other half — a request arriving every few milliseconds, so the quiet window never
+    // completes — and only the elapsed time and the path say which of the two happened.
+    throw new AssertionError(
+        "the page never stopped asking the stub for things, so no test here can assume a socket is"
+            + " free: "
+            + inFlight.get()
+            + " still in flight, last request "
+            + (System.nanoTime() - lastArrived.get()) / 1_000_000
+            + " ms ago ("
+            + lastPath.get()
+            + "), needing "
+            + QUIET_MILLIS
+            + " ms of silence");
   }
 
   @Test
@@ -516,13 +646,20 @@ class DeckBehaviourTest {
     // The positive control, and it is the reason this test is not vacuous: an ordering assertion
     // over a sequence with nothing to reorder passes by having had no work to do. Chrome's retry
     // is what puts a second 1 in this list, so if a future browser stops retrying, this fails
-    // saying the hazard it guards no longer exists — which is a fact worth being told, not a
-    // flake. Counted by value rather than by size, because the re-rating is in this list too.
+    // saying the hazard it guards no longer exists. Counted by value rather than by size, because
+    // the re-rating is in this list too.
+    //
+    // What this control needs from the fixture, and what issue #169 was: Chrome resends only on a
+    // socket already in its pool, so it resends nothing if some other request is holding them all
+    // when the key is pressed. `start()` now waits for the stub to go quiet (see `untilQuiet`),
+    // which is what makes the message below true — before that wait existed, this assertion could
+    // fail because Chrome's favicon request had got there first, and it did, seven times.
     assertThat(order.stream().filter(rating -> rating == 1).count())
         .as(
             "the abandoned rating must actually have been retried, or there is nothing to order —"
-                + " a failure here is that fact and not a flake, and ADR 46's 2026-08-30 amendment"
-                + " says what it would mean")
+                + " and the stub was quiet before the keypress, so Chrome had an idle pooled socket"
+                + " to resend on and did not use it: this browser no longer retries a POST whose"
+                + " connection died, which ADR 46's 2026-09-01 amendment says how to read")
         .isGreaterThan(1);
 
     // The finding. Every attempt at the abandoned rating reached the server before the re-rating
