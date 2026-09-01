@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.EdgeTypes;
+import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.KnownList;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
@@ -71,6 +72,7 @@ class RateRunTest {
               graph,
               List.of(KNOWN_ONE, KNOWN_TWO),
               Map.of(KNOWN_TWO, 4),
+              Equivalences.NONE,
               0,
               MIN_CANDIDATE_DEGREE,
               OptionalInt.empty(),
@@ -95,6 +97,7 @@ class RateRunTest {
               graph,
               List.of("Q0900001", "Q0900002"),
               Map.of("Q0900001", 3, "Q0900002", 5),
+              Equivalences.NONE,
               0,
               MIN_CANDIDATE_DEGREE,
               OptionalInt.of(3),
@@ -125,6 +128,7 @@ class RateRunTest {
               graph,
               List.of("Q0900001"),
               Map.of("Q0900001", 3, "Q0900009", 3),
+              Equivalences.NONE,
               0,
               MIN_CANDIDATE_DEGREE,
               OptionalInt.of(3),
@@ -161,6 +165,7 @@ class RateRunTest {
               Map.of(
                   "Q0900001", KnownList.SUPPRESSION_RATING,
                   "Q0900009", KnownList.SUPPRESSION_RATING),
+              Equivalences.NONE,
               0,
               MIN_CANDIDATE_DEGREE,
               OptionalInt.of(KnownList.SUPPRESSION_RATING),
@@ -189,6 +194,7 @@ class RateRunTest {
               graph,
               List.of(KNOWN_ONE),
               Map.of(),
+              Equivalences.NONE,
               10,
               MIN_CANDIDATE_DEGREE,
               OptionalInt.empty(),
@@ -229,12 +235,48 @@ class RateRunTest {
               graph,
               List.of(KNOWN_ONE),
               Map.of(ANCESTOR, KnownList.SUPPRESSION_RATING),
+              Equivalences.NONE,
               10,
               MIN_CANDIDATE_DEGREE,
               OptionalInt.empty(),
               notes::add);
 
       assertThat(deck).extracting(Card::qid).doesNotContain(ANCESTOR);
+      assertThat(notes).anyMatch(n -> n.contains("0 candidate(s) mixed in"));
+      assertThat(notes).noneMatch(n -> n.contains("1 candidate(s) mixed in"));
+    }
+  }
+
+  @Test
+  @DisplayName(
+      "a local id the owner has merged is never mixed into the deck as a candidate, because the"
+          + " deck would be offering him the thing he minted and then resolved (#92)")
+  void aMergedLocalIdIsNotMixedIntoTheDeck() throws Exception {
+    // The same fixture, with the candidate a LOCAL id the owner has since merged. The count from
+    // CandidateSweep is the assertion that proves the wiring, for the reason the test above gives:
+    // Deck.deal would drop an already-rated qid anyway, and a merged local id is not rated here.
+    String minted = "Q00900042";
+    try (TinkerGraphStore graph = new TinkerGraphStore()) {
+      node(graph, KNOWN_ONE, NodeKind.GROUP, "one you know");
+      node(graph, SHARED_ARTIST, NodeKind.PERSON, "the artist you cite");
+      node(graph, minted, NodeKind.GROUP, "a band no source knows");
+      edge(graph, KNOWN_ONE, SHARED_ARTIST, EdgeTypes.INFLUENCED_BY.code());
+      edge(graph, SHARED_ARTIST, minted, EdgeTypes.INFLUENCED_BY.code());
+      padDegreeTo(graph, minted, MIN_CANDIDATE_DEGREE);
+      List<String> notes = new ArrayList<>();
+
+      List<Card> deck =
+          RateRun.buildDeck(
+              graph,
+              List.of(KNOWN_ONE),
+              Map.of(),
+              new Equivalences(Map.of(minted, "Q900")),
+              10,
+              MIN_CANDIDATE_DEGREE,
+              OptionalInt.empty(),
+              notes::add);
+
+      assertThat(deck).extracting(Card::qid).doesNotContain(minted);
       assertThat(notes).anyMatch(n -> n.contains("0 candidate(s) mixed in"));
       assertThat(notes).noneMatch(n -> n.contains("1 candidate(s) mixed in"));
     }
@@ -260,6 +302,7 @@ class RateRunTest {
               graph,
               List.of(KNOWN_ONE),
               Map.of(),
+              Equivalences.NONE,
               10,
               MIN_CANDIDATE_DEGREE,
               OptionalInt.empty(),
@@ -271,6 +314,7 @@ class RateRunTest {
               graph,
               List.of(KNOWN_ONE),
               Map.of(),
+              Equivalences.NONE,
               10,
               loweredFloor,
               OptionalInt.empty(),
@@ -301,6 +345,7 @@ class RateRunTest {
               graph,
               everything,
               Map.of(),
+              Equivalences.NONE,
               1,
               MIN_CANDIDATE_DEGREE,
               OptionalInt.empty(),
@@ -313,6 +358,7 @@ class RateRunTest {
               graph,
               everything,
               ratings(),
+              Equivalences.NONE,
               1,
               MIN_CANDIDATE_DEGREE,
               OptionalInt.empty(),

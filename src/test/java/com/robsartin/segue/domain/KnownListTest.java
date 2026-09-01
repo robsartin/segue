@@ -136,4 +136,26 @@ class KnownListTest {
   void revisitableIsEmptyWhenBothInputsAreEmpty() {
     assertThat(KnownList.revisitable(List.of(), Map.of())).isEmpty();
   }
+
+  @Test
+  @DisplayName("what the sweep may not offer is the rejections and the merged local ids together")
+  void notOfferedUnionsSuppressionWithTheMergedLocalIds() {
+    Equivalences merges = new Equivalences(Map.of("Q00900042", "Q900"));
+
+    assertThat(KnownList.notOffered(Map.of("Q0900001", 2, "Q0900002", 5), merges))
+        .containsExactlyInAnyOrder("Q0900001", "Q00900042");
+  }
+
+  @Test
+  @DisplayName("a merged local id is not revisable: its rating now reads under the canonical id")
+  void aMergedLocalIdIsNotRevisable() {
+    // Equivalences.resolve has already moved the rating, so the local id is absent from the map
+    // by the time revisitable is asked. Written down because it is a decision, not an oversight:
+    // dealing the local id for revision would write a second live row and rebuild the defect.
+    Equivalences merges = new Equivalences(Map.of("Q00900042", "Q900"));
+    Map<String, Integer> resolved = merges.resolve(Map.of("Q00900042", 5));
+
+    assertThat(KnownList.revisitable(KnownList.promoted(List.of(), resolved), resolved))
+        .containsExactly("Q900");
+  }
 }

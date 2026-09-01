@@ -1,5 +1,6 @@
 package com.robsartin.segue.recommend;
 
+import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.Recommendations;
 import com.robsartin.segue.domain.Scorer;
 import com.robsartin.segue.ingest.GraphProjector;
@@ -215,17 +216,30 @@ public final class RecommendCli {
       long applied = GraphProjector.project(assertions, graph, IdentityMerge.NONE);
       log.info("replayed {} assertion(s) from {}", applied, options.database());
 
+      // A second pass over the log, and the cheaper shapes are worse (#92). The merges could be
+      // returned by project() instead, but three of its four callers have no use for them and the
+      // return type is a count today; and they cannot be read off the graph at all, because a
+      // merge is deliberately not drawn there as an edge. So: read the log again, and say so.
+      Equivalences merges = Equivalences.in(assertions.readAll());
+
       // The one line in this tool that reads the taste layer, and it reads half of it (issue #85).
       // A count, never a qid and never a score: how much somebody has rated is a fact about them,
       // and ADR 33 keeps all of it out of every log line.
-      Map<String, Integer> ratings = affinity.readRatings();
+      //
+      // Resolved through the merges before anything downstream sees it, and that is the whole of
+      // the first half of #92 task 4b: a merge leaves two affinity rows naming one thing, and
+      // KnownList.promoted promotes both, so the owner's one opinion seeds the sweep twice and
+      // very nearly doubles the score of everything it reaches. Resolving here rather than inside
+      // RecommendRun is what keeps regardFor and the known-list reading the same map.
+      Map<String, Integer> ratings = merges.resolve(affinity.readRatings());
       log.info("weighting by {} rating(s)", ratings.size());
 
       new RecommendRun(
               graph,
               RecognitionInstitutions::isRecognitionInstitution,
               Recommendations.regardFor(ratings),
-              ratings)
+              ratings,
+              merges)
           .run(options, RecommendCli::note);
     } catch (IOException e) {
       throw new UncheckedIOException("could not write " + options.out(), e);

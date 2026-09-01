@@ -1,5 +1,6 @@
 package com.robsartin.segue.rate;
 
+import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.KnownList;
 import com.robsartin.segue.domain.Recommendation;
 import com.robsartin.segue.domain.Recommendations;
@@ -51,7 +52,14 @@ public final class RateRun {
    *     rated. The deck exists to collect the ratings; showing candidates chosen as though none had
    *     been collected is the one thing it must not do. Also passed to {@code KnownList.suppressed}
    *     to keep a rejected entity out of the candidate sweep in the first place (issue #106) — the
-   *     same map, read a third way
+   *     same map, read a third way. Expected already resolved through {@code merges}, which {@code
+   *     RateCli} does once so that this selection and the weighting are the same view of the taste
+   *     layer
+   * @param merges what the owner has merged (#92), for {@code KnownList.notOffered}: a local id the
+   *     owner has said is really something else is never mixed into the deck as a candidate, or the
+   *     deck would offer him the thing he minted and then resolved. Required rather than defaulted,
+   *     on {@code IdentityMerge.NONE}'s argument — {@code Equivalences.NONE} says out loud that a
+   *     caller holds no merges
    * @param minDegree the candidate sweep's floor, passed straight to {@code CandidateSweep.over}.
    *     {@code RateCli} defaults this to {@code Recommendations.MIN_CANDIDATE_DEGREE} by reference
    *     — the same constant {@code RecommendCli} defaults to — rather than this class holding a
@@ -67,6 +75,7 @@ public final class RateRun {
       GraphStore graph,
       List<String> known,
       Map<String, Integer> ratings,
+      Equivalences merges,
       int candidateCount,
       int minDegree,
       OptionalInt reviseRating,
@@ -74,6 +83,7 @@ public final class RateRun {
     Objects.requireNonNull(graph, "graph");
     Objects.requireNonNull(known, "known");
     Objects.requireNonNull(ratings, "ratings");
+    Objects.requireNonNull(merges, "merges");
     Objects.requireNonNull(reviseRating, "reviseRating");
     Objects.requireNonNull(notes, "notes");
 
@@ -114,7 +124,7 @@ public final class RateRun {
           new CandidateSweep(graph, RecognitionInstitutions::isRecognitionInstitution)
               .over(
                   known,
-                  KnownList.suppressed(ratings),
+                  KnownList.notOffered(ratings, merges),
                   Scorer.LIFT,
                   minDegree,
                   Recommendations.regardFor(ratings));

@@ -1,5 +1,6 @@
 package com.robsartin.segue.rate;
 
+import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.KnownList;
 import com.robsartin.segue.domain.RatingScale;
 import com.robsartin.segue.domain.Recommendations;
@@ -196,8 +197,17 @@ public final class RateCli {
       long applied = GraphProjector.project(assertions, graph, IdentityMerge.NONE);
       log.info("replayed {} assertion(s) from {}", applied, options.database());
 
+      // A second pass over the log, for the merges (#92): they are not on the graph — a merge is
+      // deliberately not drawn there as an edge — and project() returns a count. RecommendCli
+      // reads them the same way, for the same reason.
+      Equivalences merges = Equivalences.in(assertions.readAll());
+
       // A count, never a qid and never a score (ADR 33).
-      Map<String, Integer> rated = affinity.readRatings();
+      //
+      // Resolved through the merges first (#92 task 4b): after a merge two affinity rows name one
+      // thing, and promoting both would put the same entity on the known list twice — here that
+      // shows up as the deck weighting one opinion twice when it picks candidates.
+      Map<String, Integer> rated = merges.resolve(affinity.readRatings());
       log.info("{} entity(ies) already rated", rated.size());
 
       List<Card> deck =
@@ -205,6 +215,7 @@ public final class RateCli {
               graph,
               known(options.known(), rated),
               rated,
+              merges,
               DEFAULT_CANDIDATES,
               options.minDegree(),
               options.revise(),

@@ -42,8 +42,9 @@ import java.util.function.ToIntFunction;
  *       RecommendationWeights.asEvidenceAbout}). The hop out of your own entities deliberately is
  *       not: see {@link Weighing}.
  *   <li><b>Keep the candidates that could be things to explore</b>: a {@code PERSON} or a {@code
- *       GROUP}, absent from the known-list, not an institution, not suppressed (issue #106 —
- *       already looked at and rejected), and carrying at least {@code minDegree} edges.
+ *       GROUP}, absent from the known-list, not an institution, not held back by {@code
+ *       KnownList.notOffered} — already looked at and rejected (issue #106), or merged into an id
+ *       the owner already has (#92) — and carrying at least {@code minDegree} edges.
  * </ol>
  *
  * <p><b>Why the second pass is keyed on the intermediate.</b> Written the obvious way — for each
@@ -77,14 +78,15 @@ public final class CandidateSweep {
    *
    * @param known the entities you already have — the membership oracle, and the whole reason a
    *     well-connected node absent from it means something
-   * @param suppressed entities to exclude from the candidate pool outright (issue #106) — {@code
-   *     KnownList.suppressed} over the ratings, typically. <b>Deliberately a separate set from
-   *     {@code known}, never unioned into it</b>: {@code knownFound} and {@code knownMissing}
-   *     describe the known-list alone, and folding a rejection in would corrupt what those two
-   *     counts report. Excluded at the same point the known-list check already is, so a suppressed
-   *     entity is invisible as a final candidate; it is not filtered out of the walk as an
-   *     intermediate, and it is not filtered out of {@code known} itself — those are two separate
-   *     questions this parameter does not answer
+   * @param notOffered entities to exclude from the candidate pool outright — {@code
+   *     KnownList.notOffered}, which is issue #106's suppressed set plus the local ids #92's merges
+   *     have retired. <b>Deliberately a separate set from {@code known}, never unioned into it</b>:
+   *     {@code knownFound} and {@code knownMissing} describe the known-list alone, and folding
+   *     either population in would corrupt what those two counts report. Nothing is reported over
+   *     <em>this</em> set, which is why the two may share it. Excluded at the same point the
+   *     known-list check already is, so an excluded entity is invisible as a final candidate; it is
+   *     not filtered out of the walk as an intermediate, and it is not filtered out of {@code
+   *     known} itself — those are two separate questions this parameter does not answer
    * @param scorer where on the raw-to-lift spectrum to sit
    * @param minDegree the floor below which a candidate is not ranked. Required under a normalised
    *     scorer; see {@code Recommendations.MIN_CANDIDATE_DEGREE}
@@ -93,12 +95,12 @@ public final class CandidateSweep {
    */
   public Sweep over(
       Collection<String> known,
-      Set<String> suppressed,
+      Set<String> notOffered,
       Scorer scorer,
       int minDegree,
       ToDoubleFunction<String> regard) {
     Objects.requireNonNull(known, "known");
-    Objects.requireNonNull(suppressed, "suppressed");
+    Objects.requireNonNull(notOffered, "notOffered");
     Objects.requireNonNull(scorer, "scorer");
     Objects.requireNonNull(regard, "regard");
     Set<String> knownSet = new LinkedHashSet<>(known);
@@ -144,7 +146,7 @@ public final class CandidateSweep {
       for (Map.Entry<String, Double> candidate :
           bestPerNeighbour(via, Weighing.AS_EVIDENCE_ABOUT_THE_NEIGHBOUR).entrySet()) {
         String qid = candidate.getKey();
-        if (knownSet.contains(qid) || suppressed.contains(qid) || !couldBeExplored(qid)) {
+        if (knownSet.contains(qid) || notOffered.contains(qid) || !couldBeExplored(qid)) {
           continue;
         }
         // Separated from the tests above so that what the FLOOR held out is countable apart from

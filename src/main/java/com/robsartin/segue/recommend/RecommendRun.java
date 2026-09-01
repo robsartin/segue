@@ -1,5 +1,6 @@
 package com.robsartin.segue.recommend;
 
+import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.FloorReading;
 import com.robsartin.segue.domain.KnownList;
 import com.robsartin.segue.domain.Recommendation;
@@ -62,6 +63,7 @@ public final class RecommendRun {
   private final Predicate<String> recognitionInstitutionClass;
   private final ToDoubleFunction<String> regard;
   private final Map<String, Integer> ratings;
+  private final Equivalences merges;
 
   /**
    * @param regard what one known entity's connections count for. Still a function and not a store
@@ -73,18 +75,28 @@ public final class RecommendRun {
    *     for a different reason: issue #106's {@link KnownList#promoted} needs the raw map to decide
    *     which qids join the known-list, which a {@code ToDoubleFunction} cannot enumerate. A rating
    *     of 4 or 5 for an entity absent from the file makes it known, so {@code CandidateSweep}
-   *     stops offering it back
+   *     stops offering it back. Expected already resolved through {@code merges} — see that
+   *     parameter
+   * @param merges what the owner has merged (#92). Held for one purpose, {@code
+   *     KnownList.notOffered}: a local id the owner has said is really something else must stop
+   *     being offered back to him. It is <b>not</b> applied to {@code ratings} here, because {@code
+   *     regard} was built from the same map by the caller and the two must be the same view of the
+   *     taste layer; {@code RecommendCli} resolves once and hands both down. Required rather than
+   *     defaulted, on {@code IdentityMerge.NONE}'s argument — {@code Equivalences.NONE} says out
+   *     loud that a caller holds no merges
    */
   public RecommendRun(
       GraphStore graph,
       Predicate<String> recognitionInstitutionClass,
       ToDoubleFunction<String> regard,
-      Map<String, Integer> ratings) {
+      Map<String, Integer> ratings,
+      Equivalences merges) {
     this.graph = Objects.requireNonNull(graph, "graph");
     this.recognitionInstitutionClass =
         Objects.requireNonNull(recognitionInstitutionClass, "recognitionInstitutionClass");
     this.regard = Objects.requireNonNull(regard, "regard");
     this.ratings = Objects.requireNonNull(ratings, "ratings");
+    this.merges = Objects.requireNonNull(merges, "merges");
   }
 
   /**
@@ -110,7 +122,7 @@ public final class RecommendRun {
         new CandidateSweep(graph, recognitionInstitutionClass)
             .over(
                 known,
-                KnownList.suppressed(ratings),
+                KnownList.notOffered(ratings, merges),
                 options.scorer(),
                 options.minDegree(),
                 regard);
