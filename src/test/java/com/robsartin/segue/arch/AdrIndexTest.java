@@ -46,6 +46,13 @@ class AdrIndexTest {
   /** {@code ## Universal} — the heading a run of rows belongs to. */
   private static final Pattern SECTION = Pattern.compile("^## (.+)$");
 
+  /** {@code # 41. Export bounded views…}, the ADR's own heading. */
+  private static final Pattern HEADING = Pattern.compile("^# (\\d+)\\. (.+)$", Pattern.MULTILINE);
+
+  /** {@code status: Accepted} or {@code status: "Superseded by 0034"}, in the YAML front matter. */
+  private static final Pattern STATUS =
+      Pattern.compile("^status: *\"?(.*?)\"? *$", Pattern.MULTILINE);
+
   /** Every file in {@code docs/adr/} except the index itself. */
   private static final Pattern ADR_FILE = Pattern.compile("^(\\d{4})-[a-z0-9-]+\\.md$");
 
@@ -119,6 +126,56 @@ class AdrIndexTest {
                 + " conflict resolved in marker order interleaves numbers here. The index is"
                 + " sectioned, and the order is per section: Language ends at 34, which is not a"
                 + " descent.")
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("Each row agrees with its file on number, title and status")
+  void shouldAgreeWithTheFileOnEveryFieldWhenARowIsComparedToIt() {
+    List<String> disagreements = new ArrayList<>();
+    for (Row row : ROWS) {
+      Path file = ADR.resolve(row.file());
+      if (!Files.exists(file)) {
+        continue; // already reported, by name, as a row that outlived its file
+      }
+      String text = RepositoryTree.read(file);
+      int inFilename = Integer.parseInt(row.file().substring(0, 4));
+      if (inFilename != row.number()) {
+        disagreements.add(
+            "%s: number %d in the filename, %d in the row"
+                .formatted(row.file(), inFilename, row.number()));
+      }
+      Matcher heading = HEADING.matcher(text);
+      if (!heading.find()) {
+        disagreements.add(
+            "%s: no `# N. Title` heading to compare the row to".formatted(row.file()));
+      } else {
+        if (Integer.parseInt(heading.group(1)) != row.number()) {
+          disagreements.add(
+              "%s: number %s in the heading, %d in the row"
+                  .formatted(row.file(), heading.group(1), row.number()));
+        }
+        if (!heading.group(2).equals(row.title())) {
+          disagreements.add(
+              "%s: title \"%s\" in the heading, \"%s\" in the row"
+                  .formatted(row.file(), heading.group(2), row.title()));
+        }
+      }
+      Matcher status = STATUS.matcher(text);
+      if (!status.find()) {
+        disagreements.add("%s: no `status:` in the front matter".formatted(row.file()));
+      } else if (!status.group(1).equals(row.status())) {
+        disagreements.add(
+            "%s: status \"%s\" in the front matter, \"%s\" in the row"
+                .formatted(row.file(), status.group(1), row.status()));
+      }
+    }
+
+    assertThat(disagreements)
+        .as(
+            "index rows disagreeing with the file they point at. The file is the source and the"
+                + " row is the projection, so the row is what gets corrected. Titles are compared"
+                + " exactly, backticks included: a retyped title is the drift this catches.")
         .isEmpty();
   }
 
