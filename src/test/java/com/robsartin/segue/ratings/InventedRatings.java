@@ -6,6 +6,7 @@ import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.Provenance;
+import com.robsartin.segue.domain.Retraction;
 import com.robsartin.segue.domain.SameAs;
 import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
@@ -75,6 +76,15 @@ final class InventedRatings {
   /** The owner saying the thing he minted turned out to be a Wikidata item (#92). */
   static SameAs merged(String localQid, String canonicalQid) {
     return SameAs.declared(localQid, canonicalQid, LATE);
+  }
+
+  /**
+   * The owner taking a claim back, the way the log holds one (ADR 44). {@code retractedAt} plays no
+   * part in {@link com.robsartin.segue.domain.Retractions} - it reasons about log position, not
+   * timestamps - so every test retraction can share this instant.
+   */
+  static Retraction retract(String qid) {
+    return new Retraction(qid, "an invented reason, unlike anything a real one would say", LATE);
   }
 
   /** A log that answers {@code readAll} from a list and counts how often it is asked. */

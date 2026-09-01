@@ -16,6 +16,7 @@ import static com.robsartin.segue.ratings.InventedRatings.VANISHED;
 import static com.robsartin.segue.ratings.InventedRatings.merged;
 import static com.robsartin.segue.ratings.InventedRatings.minted;
 import static com.robsartin.segue.ratings.InventedRatings.node;
+import static com.robsartin.segue.ratings.InventedRatings.retract;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.ratings.InventedRatings.FakeAffinityStore;
@@ -179,6 +180,109 @@ class RatingsRunTest {
         .extracting(AffinityRow::label)
         .isNull();
     assertThat(notes).anyMatch(line -> line.contains("1 rating(s) name an entity"));
+  }
+
+  @Test
+  @DisplayName(
+      "a rating on a retracted entity lists as \"(not in the graph)\", because get_entity would"
+          + " report it gone too")
+  void shouldNotLabelARatingWhenTheEntityWasRetracted() throws IOException {
+    FakeAffinityStore ratings = new FakeAffinityStore().rated(QUARTET, 5, null, EARLY);
+    FakeAssertionLog log =
+        new FakeAssertionLog().with(node(QUARTET, QUARTET_LABEL), retract(QUARTET));
+
+    List<AffinityRow> rows = run(ratings, log, SortOrder.RATING);
+
+    assertThat(rows)
+        .singleElement()
+        .extracting(AffinityRow::label, AffinityRow::displayLabel)
+        .as("Labels' own javadoc: a label here must be the label get_entity would return")
+        .containsExactly(null, AffinityRow.NO_LABEL);
+  }
+
+  @Test
+  @DisplayName(
+      "a retracted LocalEntity is folded too, because both claim types name an entity (#92)")
+  void shouldNotLabelARatingWhenTheOwnersMintedEntityWasRetracted() throws IOException {
+    FakeAffinityStore ratings = new FakeAffinityStore().rated(MINTED, 4, null, EARLY);
+    FakeAssertionLog log =
+        new FakeAssertionLog().with(minted(MINTED, MINTED_LABEL), retract(MINTED));
+
+    List<AffinityRow> rows = run(ratings, log, SortOrder.RATING);
+
+    assertThat(rows)
+        .singleElement()
+        .extracting(AffinityRow::label, AffinityRow::displayLabel)
+        .as("a fold that honours retraction only for NodeAssertion is a silent half-fix")
+        .containsExactly(null, AffinityRow.NO_LABEL);
+  }
+
+  @Test
+  @DisplayName(
+      "a claim made after the retraction still counts, the way re-adding an entity comes back"
+          + " naturally (ADR 44)")
+  void shouldLabelARatingWhenTheClaimCameAfterTheRetraction() throws IOException {
+    FakeAffinityStore ratings = new FakeAffinityStore().rated(QUARTET, 5, null, EARLY);
+    FakeAssertionLog log =
+        new FakeAssertionLog()
+            .with(
+                node(QUARTET, "An Earlier Invented Name"),
+                retract(QUARTET),
+                node(QUARTET, QUARTET_LABEL));
+
+    List<AffinityRow> rows = run(ratings, log, SortOrder.RATING);
+
+    assertThat(rows)
+        .singleElement()
+        .extracting(AffinityRow::label)
+        .as("survives compares the claim's position to the last retraction of that qid")
+        .isEqualTo(QUARTET_LABEL);
+  }
+
+  @Test
+  @DisplayName(
+      "an entity that was never retracted is unaffected, even when the log holds a retraction of"
+          + " something else")
+  void shouldLabelARatingWhenTheEntityWasNeverRetracted() throws IOException {
+    FakeAffinityStore ratings =
+        new FakeAffinityStore().rated(QUARTET, 5, null, EARLY).rated(NOVEL, 3, null, LATE);
+    FakeAssertionLog log =
+        new FakeAssertionLog()
+            .with(node(QUARTET, QUARTET_LABEL), node(NOVEL, NOVEL_LABEL), retract(VANISHED));
+
+    List<AffinityRow> rows = run(ratings, log, SortOrder.RATING);
+
+    assertThat(rows)
+        .extracting(AffinityRow::qid, AffinityRow::label)
+        .as("the fold must be scoped to the retracted qid, not the presence of any retraction")
+        .containsExactlyInAnyOrder(
+            org.assertj.core.groups.Tuple.tuple(QUARTET, QUARTET_LABEL),
+            org.assertj.core.groups.Tuple.tuple(NOVEL, NOVEL_LABEL));
+  }
+
+  @Test
+  @DisplayName(
+      "a retracted merge still carries no label onto the canonical id, and this is #92's own"
+          + " behaviour, not new")
+  void shouldNotLabelTheCanonicalIdWhenTheMergeWasRetracted() throws IOException {
+    // MINTED is rated directly too (not only CANONICAL), on
+    // shouldNameTheCanonicalIdWhenAMergeHasCarriedTheRatingOntoIt's precedent: this is what makes
+    // MINTED's label reach labels regardless of the merge, so the assertion below tests the merge
+    // branch's own retraction guard rather than the earlier wanted-qid gate that also blocks it.
+    FakeAffinityStore ratings =
+        new FakeAffinityStore().rated(MINTED, 5, null, EARLY).rated(CANONICAL, 5, null, LATE);
+    FakeAssertionLog log =
+        new FakeAssertionLog()
+            .with(minted(MINTED, MINTED_LABEL), merged(MINTED, CANONICAL), retract(CANONICAL));
+
+    List<AffinityRow> rows = run(ratings, log, SortOrder.RATING);
+
+    assertThat(rows)
+        .extracting(AffinityRow::qid, AffinityRow::label)
+        .as("a SameAs naming a retracted entity on either side must not carry a label onto it")
+        .containsExactlyInAnyOrder(
+            org.assertj.core.groups.Tuple.tuple(MINTED, MINTED_LABEL),
+            org.assertj.core.groups.Tuple.tuple(CANONICAL, null));
   }
 
   @Test
