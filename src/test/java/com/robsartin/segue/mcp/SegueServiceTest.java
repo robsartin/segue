@@ -6,6 +6,7 @@ import com.robsartin.segue.domain.AffinityRecord;
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.Candidate;
 import com.robsartin.segue.domain.ExpansionBounds;
+import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
@@ -59,6 +60,11 @@ class SegueServiceTest {
   private static final Instant RATED_AT = Instant.parse("2026-08-25T12:00:00Z");
 
   private static final Instant RE_RATED_AT = Instant.parse("2026-09-01T08:30:00Z");
+
+  /** A local entity of the owner's, in the two-leading-zero band issue #141 settled. */
+  private static final String MINTED = "Q00900042";
+
+  private static final Instant MINTED_AT = Instant.parse("2026-08-31T10:00:00Z");
 
   private AssertionLog log;
   private GraphStore graph;
@@ -178,6 +184,27 @@ class SegueServiceTest {
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.ERROR);
     assertThat(result.detail()).contains("Q999999");
+  }
+
+  @Test
+  @DisplayName("should refuse with no source to expand from when the seed is a local entity")
+  void shouldRefuseWithNoSourceToExpandFromWhenTheSeedIsALocalEntity() {
+    // #92: no source knows a local entity, and ADR 56 has just finished separating the two
+    // meanings an empty ExpandResult already carries — "found nothing" and "the source was
+    // unavailable". A third meaning would rebuild the defect ADR 56 fixed, so the refusal is
+    // said out loud instead. The adapter here returns the "found nothing" shape: without the
+    // refusal this call succeeds with a truthful-looking "0 edge(s), 0 new node(s)".
+    ingest.record(LocalEntity.minted(MINTED, NodeKind.WORK, "a book no source indexes", MINTED_AT));
+    SourceAdapter findsNothing = new StubSourceAdapter("wikidata", ExpandResult.of(List.of()));
+
+    ToolResult<SegueService.ExpansionSummary> result =
+        service(findsNothing).expandEntity(MINTED, 10);
+
+    assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.ERROR);
+    assertThat(result.detail()).contains(MINTED).contains("no source to expand from");
+    // Distinctly: not the shortfall vocabulary the other two meanings arrive under.
+    assertThat(result.detail()).doesNotContainIgnoringCase("unavailable");
+    assertThat(result.payload()).isNull();
   }
 
   @Test

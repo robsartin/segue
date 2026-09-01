@@ -110,6 +110,22 @@ public record LocalEntity(String qid, NodeKind kind, String label, Instant minte
   }
 
   /**
+   * Whether this id is shaped like one of the owner's own entities, for callers that ask rather
+   * than refuse - the counterpart of {@link Qid#isAllocatable} on the other side of ADR 58's
+   * leading-zero space.
+   *
+   * <p><b>Shape, not membership in the log.</b> {@code SegueService} asks this to refuse an
+   * expansion (#92), and it holds a graph rather than a log: what it can see is the id. That is
+   * enough, because the shape <em>is</em> the identity decision - a {@code Q00} id is one no source
+   * can ever have allocated, so no source can ever know it, whoever minted it and whenever. A
+   * leading-zero stand-in is deliberately not matched: it stands in for a real Wikidata entity, and
+   * an adapter that has been handed one is entitled to answer for it.
+   */
+  public static boolean isLocal(String qid) {
+    return qid != null && LOCAL_SHAPE.matcher(qid).matches();
+  }
+
+  /**
    * Refuse anything unallocatable that still is not shaped like a local entity (most likely one of
    * ADR 58's single-leading-zero stand-ins). This project's own convention, enforced at the moment
    * of claiming only - it moved once already and may move again, and rows written before it moved
@@ -117,7 +133,7 @@ public record LocalEntity(String qid, NodeKind kind, String label, Instant minte
    */
   static void checkLocalShape(String qid) {
     checkUnallocatable(qid);
-    if (!LOCAL_SHAPE.matcher(qid).matches()) {
+    if (!isLocal(qid)) {
       throw new IllegalArgumentException(
           "a local entity's qid must have two leading zeros (Q00..., ADR 58 issue #141) to stay"
               + " distinct from a single-leading-zero stand-in, got: "
