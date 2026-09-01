@@ -99,3 +99,28 @@ the next reader does not re-file the issue's misreading.
   If drift keeps appearing after the check exists, that is the time to generate.
 - **Checking the description and `Related:` lines.** Prose; the same reason
   `DeveloperGuideEnumerationsTest` declines to check the guide's prose.
+
+## Correction (2026-09-01, during Task 1's review) — the index has a generator, and it would not reproduce today's file
+
+"Generating the index … needs a script the repository does not have" was wrong in one respect and
+right in a stronger one. The adr-toolkit that scaffolded `docs/adr/` (#1) carries `build_index`,
+which produced this file's exact shape at baseline: groups in a fixed axis order (project,
+universal, language, framework, app-shape, ui-tech, library, concern, interaction), ADRs in
+**filename order within a group** — the very invariant assertion 4 enforces — and an
+`Uncategorized` bucket for anything without a recognised axis, "so nothing silently vanishes".
+
+Its rule for the axis is `tags[0]`. The seventeen baseline ADRs carry an axis word first
+(`universal`, `language`, …), which is how the sections came to be. **The index has not been
+regenerated since**: every ADR from 18 on was appended by hand into Uncategorized, and **42 of
+those 43 carry `project` as their first tag** — the axis `build_index` renders first, as a
+"Project" section the hand-maintained file does not have — so regenerating today would move all
+42 out of Uncategorized. The 43rd is ADR 34, whose first tag is `language`, which is why a hand
+filed it under Language: the tag, not an accident. The
+generator lives outside this repository, would have to be vendored, and would re-file entries as
+a side effect of checking them.
+
+The decision stands, for a sharper reason: **the test asserts the file as it is maintained, not as
+the generator would render it.** What the generator settles is the authority for the section set:
+every `## ` heading must be one of the toolkit's display names or `Uncategorized`, which the test
+may assert citing `adr_toolkit.index._AXIS_DISPLAY_NAMES` rather than a hand-written list. Whether
+to regenerate — and so re-file — is a taxonomy decision for a later issue.
