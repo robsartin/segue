@@ -193,16 +193,33 @@ traversed or cited is not in the graph at all.
 **What the third layer may touch, and what it may not.** It writes to the world-fact store, through
 the assertion log and `IngestService`, and it is fenced out of this layer's store entirely: the
 ArchUnit rule `theOwnerClaimToolOpensNothingElse` bans `AffinityStore` as a *type* in the tool's
-package, which forbids both taste-layer writes and both taste-layer reads at once. So **`note_affinity`
-remains the only writer of affinity, and `IngestService` still never sees a rating** — the second
-bullet above is untouched as written. What has changed is that it no longer describes the whole
-first-person surface: it is now the rule for one of the two first-person layers rather than for all
-of them.
+package, which forbids both taste-layer writes and both taste-layer reads at once. So the tool that
+makes owner claims writes no affinity, and **`IngestService` still never sees a rating**: the port it
+is handed carries two qids and no taste-layer type, so it can read neither a score nor a note. That
+half of the second bullet stands.
 
-**One place the layers do meet, and it is deliberate.** A merge carries the owner's ratings from a
-local id onto the canonical one. It does so at *read* time, through `Equivalences` and the
-`IdentityMerge` port, on the machine that holds both stores — never by the claim-making tool, and
-never by writing a rating from the world-fact side. `affinityNeverTouchesTheWorldFactLayer` and
-`theWorldFactLayerNeverTouchesAffinity` are both unchanged and both still pass.
+**The other half of that bullet does not, and correcting it is the point of this paragraph.**
+**`note_affinity` is no longer the only writer of affinity.** Declaring a merge carries the owner's
+rating from the local id onto the canonical one, and the carry is a *write*: `IdentityMerge`'s
+carrying implementation calls `AffinityStore.updateRating`, whose SQLite statement upserts — so a
+merge can create an affinity row for an id nothing has ever rated. `SegueConfiguration` is where
+that is wired into the running application, and those two classes are the authority for what the
+write does. It is bounded in ways that matter — it moves a score and never a note, and it never
+overwrites a rating stamped later than the one it carries — and none of that makes it not a write.
+A first draft of this amendment claimed the bullet was untouched as written; the code this branch
+adds says otherwise, and the code is what runs.
 
-Nothing above is edited and no decision is withdrawn.
+**One place the layers do meet, and it is deliberate.** A merge carries the owner's rating from a
+local id onto the canonical one, on the machine that holds both stores, and never by the
+claim-making tool — which cannot name `AffinityStore` at all. It happens when the merge is ingested
+and again on every boot replay of the log, through the `IdentityMerge` port: an **ingest-time
+write**, not a read-time view. The read-time view is a second, separate mechanism with a separate
+job — `Equivalences` collapses two rows into one for a single run of `recommend` or `rate`, which
+replay with no carry wired and so may meet a merge nothing has carried yet. Describing the write as
+happening at read time conflated the two, and that is corrected here as well.
+`affinityNeverTouchesTheWorldFactLayer` and `theWorldFactLayerNeverTouchesAffinity` are both
+unchanged and both still pass — neither one has ever been what stopped a rating being written from
+this side.
+
+Nothing in the decision above is edited. Its second bullet is corrected here, in an amendment,
+rather than rewritten where it stands.

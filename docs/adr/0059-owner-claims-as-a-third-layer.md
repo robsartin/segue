@@ -81,12 +81,19 @@ projected to the graph like a world fact, and excluded from corroboration entire
   through what they asserted, and gets **recommendations** from it only once it is connected enough
   to earn them.
 
-- **A merge is an appended equivalence resolved at read time, never an edit.** The log stores what
-  the owner asserted; the merge applies on the way out, through `Equivalences`. That is what makes a
-  wrong merge retractable by the ordinary mechanism of
+- **A merge is an appended equivalence, never an edit.** The log stores what the owner asserted, and
+  nothing already written is rewritten or deleted: the local id keeps its node, its edges and its
+  affinity row. That is what makes a wrong merge retractable by the ordinary mechanism of
   [ADR 44](0044-retraction-as-a-new-claim.md) and what keeps every earlier entry meaning what it
   meant when it was written, which [ADR 19](0019-assertion-log-source-of-truth.md) requires. An
   in-place rewrite would have been simpler to read and would have destroyed both properties.
+  **It applies in two places, and they are not the same time.** Ingest and every boot replay
+  *carry* it — `IngestService` copies the node and the edges onto the canonical id, and the
+  `IdentityMerge` port carries the rating — while `Equivalences` *resolves* it at read time, for a
+  single run of `recommend` or `rate`, which replay with no carry wired and so may meet a merge
+  nothing has carried yet. Each of those classes is the authority for its own half. An earlier
+  draft of this bullet said the merge applies only "on the way out", which described the read-time
+  half and left the writes out.
 
 - **When two ids merge into one canonical id and both carry ratings, the earliest in log order
   wins.** The choice between them is arbitrary; that it is *deterministic* is not. `KnownList.promoted`
@@ -159,9 +166,14 @@ projected to the graph like a world fact, and excluded from corroboration entire
   Wikidata QID" stops being true, and a reader who assumed it must now read the id's shape. The
   mitigation is that the shape is unallocatable, so the two populations can never collide, and no
   code outside `LocalEntity` and `SameAs` has to know.
-- ADR 33's *"Two layers, two stores"* becomes three layers and two stores. The third layer writes to
-  the world-fact store and is fenced out of the taste layer's, so `note_affinity` remains the only
-  writer of affinity — but that sentence no longer describes the whole first-person surface.
+- ADR 33's *"Two layers, two stores"* becomes three layers and two stores. The third layer's tool
+  writes to the world-fact store and is fenced out of the taste layer's — but **`note_affinity`
+  stops being the only writer of affinity**, which is a real change to ADR 33's second bullet and
+  not a re-reading of it. Declaring a merge carries the owner's rating onto the canonical id, and
+  the carry is a write through `AffinityStore.updateRating`, wired into the running application by
+  `SegueConfiguration`; the statement behind it upserts, so a merge can create a row for an id
+  nothing has ever rated. It is bounded to a score, never a note, and it never overwrites a rating
+  stamped later than the one it carries. ADR 33's amendment records the correction.
 - ADR 26's six-tool surface is unchanged, and the reason it is unchanged has been replaced.
 - A first-person claim can now reach the graph, so the sentence in `CLAUDE.md` about the two layers
   never meeting below `SegueService` has been corrected rather than amended: it is not an ADR.

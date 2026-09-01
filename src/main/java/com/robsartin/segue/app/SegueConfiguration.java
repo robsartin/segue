@@ -158,8 +158,10 @@ public class SegueConfiguration {
    * qids and no taste-layer type, so ADR 33's fence — {@code
    * ArchitectureTest.theWorldFactLayerNeverTouchesAffinity} — stands unchanged, and {@code ingest}
    * can neither read a score nor reach a note. That a world-fact claim may now trigger an effect in
-   * the taste layer at all is the widening ADR 33's amendment (#92 Task 6) has to record, along
-   * with the decision bullet it also breaks: {@code note_affinity} is no longer the only writer.
+   * the taste layer at all is the widening ADR 33's amendment (#92) records, along with the
+   * decision bullet it breaks: {@code note_affinity} is no longer the only writer of affinity,
+   * because {@link IdentityMerge#carryingRatings} writes one through {@code
+   * AffinityStore.updateRating}, which upserts.
    */
   @Bean
   IdentityMerge identityMerge(AffinityStore affinityStore) {
