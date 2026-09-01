@@ -418,7 +418,8 @@ withdrawn.**
 The amendment above read *"the attempt count is fixed at three across a five-hundred-fold range"*
 as a property of Chrome. It is not. **Three was the size of Chrome's socket pool for the stub's
 origin, and the stall length simply had no bearing on it.** The rule, measured over 59 traced runs
-and three forced failures and recorded in `.superpowers/sdd/169-evidence.md` (2026-09-01, Chrome
+and three forced failures and recorded in
+[the retry-precondition measurement](../retry-precondition-evidence.md) (2026-09-01, Chrome
 152.0.7977.65, macOS 26.6.2, loopback):
 
 > Chrome resends a POST whose connection died **iff** that attempt was bound to a socket **already
@@ -448,6 +449,16 @@ to wait on, only a length of silence after which one has certainly gone out. 200
 20 ms worst case in the traces. **This is the file's definition of loaded, not one test's**, because
 the definition is what was wrong.
 
+**What that instrument cannot see, stated because a true conclusion resting on a false reason is
+how this comes back.** The stub counts exchanges; Chrome holds a socket until the response body has
+been *read*. A response the page never drains therefore keeps a socket checked out after the
+exchange has ended and the count has returned to zero, and the wait would report quiet and be wrong
+with no assertion to fire. `deck.html` does leave bodies undrained — it returns on `!response.ok`
+without reading them, on both the card path and the rating path, and the stub answers 403 and 404
+with a body. The precondition holds today only because no such response is issued before the wait
+returns: every refusal in that file is set up after the fixture has finished. A test that made the
+stub refuse *during* load would break it silently.
+
 **What a red positive control means now.** The stub was quiet before the keypress, so Chrome had an
 idle pooled socket to resend on and did not: the browser has stopped retrying a POST whose
 connection died, and the hazard this section guards no longer exists. The assertion's message was
@@ -469,9 +480,11 @@ the test passed three times in four. A stall would trade one flake for another w
 length to every test in the file. Emptying the pool outright takes concurrent page-issued fetches —
 which is how the failure was forced, and is not traffic the deck would ever generate.
 
-**The numbers above are a dated measurement.** `.superpowers/sdd/169-evidence.md` is not in the
-repository and nothing regenerates it, exactly as the 2026-08-30 figures are not regenerated. What
-is enforced in the build is the precondition, not the count. Nothing else above this amendment is
+**The numbers above are a dated measurement.** They are kept at
+[docs/retry-precondition-evidence.md](../retry-precondition-evidence.md), the way the engine
+bake-off is; the raw traces and NetLogs behind them were not retained, and nothing regenerates
+them, exactly as the 2026-08-30 figures are not regenerated. What is enforced in the build is the
+precondition, not the count. Nothing else above this amendment is
 withdrawn: the ordering finding, the reason a `fetch` timeout is a constraint on this page, and the
 limit stated about the wording all stand, and none of them depended on the attempt count being
 three.

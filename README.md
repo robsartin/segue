@@ -160,6 +160,7 @@ covers building, testing and extending segue in detail.
 | `docs/developer-guide.md` | Building, testing and extending it |
 | [Architecture decision records](docs/adr/README.md) | Every design choice, with its alternatives and consequences |
 | [The engine bake-off](docs/engine-bake-off.md) | The two-engine comparison that chose the graph database |
+| [The retry-precondition measurement](docs/retry-precondition-evidence.md) | The sixty-run trace study behind ADR 46's retry precondition |
 
 ### Why the bake-off has its own page
 
