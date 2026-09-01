@@ -252,7 +252,7 @@ graph TD
   musicbrainz["musicbrainz<br/>MusicBrainzClient, adapter, MusicBrainzIdentity"]
   port["port<br/>GraphStore, AssertionLog, AffinityStore, SourceAdapter, EntityResolver"]
   domain["domain<br/>records + EdgeTypes"]
-  support["support<br/>UuidV7, QidList, ClassLabels"]
+  support["support<br/>UuidV7, QidList, ClassLabels, DefaultDatabase, RequiredDatabase"]
   seed["seed<br/>SeedCli, SeedResolver, Adjudicator"]
   export["export<br/>ViewSelector, DotWriter, GraphMlWriter"]
   ratings["ratings<br/>RatingsCli, RatingsRun, RatingsTable"]
@@ -301,10 +301,12 @@ graph TD
   ratings --> port
   ratings --> domain
   ratings --> sqlite
+  ratings --> support
   retract --> port
   retract --> domain
   retract --> ingest
   retract --> sqlite
+  retract --> support
   recommend --> port
   recommend --> domain
   recommend --> ingest
@@ -324,6 +326,7 @@ graph TD
   own --> domain
   own --> ingest
   own --> sqlite
+  own --> support
 ```
 
 **What the diagram shows.** Dependencies point downward and never back up. `domain` sits at the
@@ -338,9 +341,17 @@ one that had to declare its identity seam rather than import the adapter that co
 `KindMapper.rederive`, which is what makes a mapper improvement reach nodes the graph already holds
 ([ADR 42](adr/0042-store-p31-and-rederive-kind.md)). `mcp` depends on `ingest`, `port`, `domain`
 and `support`, plus its own dotted edge to `wikidata` (explained below). `app` depends on almost
-everything, because wiring is its job. `support` depends on nothing, and four packages use it:
-`mcp` (`UuidV7`), `export` and `rate` (`ClassLabels`), and `export`, `recommend` and `rate`
-(`QidList`). One thing a reader might expect and will not find: `app` does not import `jena` at
+everything, because wiring is its job. `support` depends on nothing, and the packages that use it
+are the ones the diagram below draws an edge to it from — that half is derivation-checked by
+`DeveloperGuideEnumerationsTest.shouldDrawEveryImportEdgeWhenTheGuideDiagramsTheLayering`, so read
+the edges rather than a count in this sentence, which nothing checks. Today they are:
+`mcp` (`UuidV7`), `export` and `rate` (`ClassLabels`), `export`, `recommend` and `rate`
+(`QidList`), `export`, `ratings`, `recommend` and `rate` (`DefaultDatabase` — issue #179's one
+resolution for the four dev tools that keep a default), and `retract` and `own`
+(`RequiredDatabase` — the sentence those two refuse with, since #179 gave them no default at all;
+it resolves the path it quotes back by calling `DefaultDatabase` itself, so the rule has one home
+and the two claim tools depend on neither a default nor the class that computes one). One thing a reader might expect and will
+not find: `app` does not import `jena` at
 all — the reference engine is reachable only from tests. **This paragraph used to name a second,
 that `app` imports nothing from `domain`; that stopped being true in ADR 54**, because
 `WikidataMusicBrainzIdentity` validates a seed QID with `Qid.looksLikeAQid` before putting it in a
@@ -382,6 +393,57 @@ Tools with opposite relationships to the store cannot share a package and keep a
 meaningful, which is why ADR 41 made the first two siblings, ADR 43 added a third rather than a
 view, and ADR 44 a fourth rather than a mode of one of them.
 
+### The two claim tools require `--db`, and `./gradlew own` will not say "task not found"
+
+`retractEntity` and `ownClaim` refuse to run unless `--db` names a database
+([ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md)). The dev tools that do keep a
+default — `SEGUE_DB` if set, otherwise `${user.home}/.segue/segue.db` — are exactly the callers of
+`support.DefaultDatabase.resolve`, which is one grep rather than a count anybody has to maintain
+here; `hoverableSvg` and `seed` are not among them because neither has a `--db` at all. These two
+have no default left to resolve.
+
+**Why these two and not the rest.** They are the tools that append a **first-person claim about the
+world** to a log [ADR 19](adr/0019-assertion-log-source-of-truth.md) forbids editing. A wrong row
+cannot be taken back, only appended over. `rate` writes too, and deliberately keeps its default: it
+writes a rating, which is recoverable by re-rating, and it is the tool the owner uses most.
+
+**`SEGUE_DB` does not satisfy the requirement**, and that is the clause worth reading twice. An
+agent's shell is initialised from the owner's profile, so it inherits the variable. An environment
+variable cannot tell the owner apart from an agent running as the owner; a flag typed per
+invocation can. `--dry-run` does not exempt either tool either — the refusal fires before any
+database is opened, so there is no second path to reason about and no invocation anyone has to
+remember as exempt.
+
+**`./gradlew own` resolves to `:ownClaim` and runs. It does not report an unknown task, and it never
+will.** Gradle matches abbreviated task names by camel-case hump, and there is no per-project switch
+to turn that off. That is exactly how issue #179 happened: an agent typed `./gradlew own
+--args="mint --kind WORK --label x"` expecting `Task 'own' not found`, and instead minted a row in
+the owner's real database, because `--db` was absent and the default was the owner's. If you are
+about to expect that error, you will not get it. What you will get now is the refusal, which names
+`--db` and the path the tool would once have used, so the corrected command is a copy-paste.
+
+**Write `$HOME`, not `~`.** A tilde does not expand inside double quotes in either zsh or bash, so
+`--args="--db ~/.segue/segue.db"` arrives as a literal tilde and the tool dies with `no segue
+database at ~/.segue/segue.db`. Every example in this guide and in both task descriptions uses
+`$HOME`.
+
+**What catches a default coming back, in order.** The refusal tests in `RetractCliTest` and
+`OwnCliTest` are the first line and the effective one: three of them red per tool against every
+reintroduction that has been tried. Two ArchUnit rules are the second line, and they earn their
+place by surviving what the tests cannot — an edit that wires the default in *and updates the tests
+to match*, which is how a guard usually dies. `theClaimToolsHaveNoDefaultDatabase` forbids either
+package from depending on `support.DefaultDatabase` at all;
+`theClaimToolsTakeTheirDatabaseFromTheFlagAlone` forbids taking a `java.nio.file.Path` out of
+`support` by any route, because both tools do depend on `support.RequiredDatabase` for the refusal
+sentence and a `Path`-returning method added there would restore the default without the first rule
+noticing.
+
+Both rules are scoped to one package and one class name, so three routes pass them — the rule
+re-implemented inline, a `String`-returning helper, or a `Path`-returning helper in any other
+package. All three were planted and measured; all three are caught by the refusal tests. See
+[ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md) for what that costs and why the
+line is drawn there.
+
 ### What each package is for
 
 | Package | Contents | Depends on |
@@ -394,15 +456,15 @@ view, and ADR 44 a fourth rather than a mode of one of them.
 | `wikidata` | The first source: resolution, expansion, and the two mapping passes. Plain Java, no Spring. | `port`, `domain` |
 | `musicbrainz` | The second source ([ADR 54](adr/0054-musicbrainz-as-the-second-source.md)): `MusicBrainzClient` over `ws/2`, `MusicBrainzSourceAdapter`, and `MusicBrainzIdentity` — the MBID-to-QID seam it declares and may not implement, because an adapter may not import another adapter. Expansion only; no `EntityResolver`. Plain Java, no Spring. | `port`, `domain` |
 | `ingest` | `IngestService` (the only write path) and `GraphProjector` (boot replay). | `port`, `domain`, `wikidata` (`KindMapper` only, [ADR 42](adr/0042-store-p31-and-rederive-kind.md)) |
-| `support` | Cross-cutting plain-Java helpers with no project dependencies — `UuidV7` (request correlation), `QidList` (the QID-file reader `export`, `recommend` and `rate` share), and `ClassLabels` (the offline `P31` label table `export` and `rate` share; it moved here from `export` when `rate` needed it). | nothing |
+| `support` | Cross-cutting plain-Java helpers with no project dependencies — `UuidV7` (request correlation), `QidList` (the QID-file reader `export`, `recommend` and `rate` share), `ClassLabels` (the offline `P31` label table `export` and `rate` share; it moved here from `export` when `rate` needed it), `DefaultDatabase` (the one `--db`/`SEGUE_DB`/`${user.home}` resolution `export`, `ratings`, `recommend` and `rate` share — issue #179; the live list is whoever calls `resolve`, so grep rather than trust these four names), and `RequiredDatabase` (the refusal `retract` and `own` give when `--db` was not typed; it calls `DefaultDatabase` for the path it quotes back and hands out a `String`, never a `Path`, so neither claim tool can take a default from it). | nothing |
 | `mcp` | The tool classes, `SegueService`, the view records, `CorrelationId`. Spring-aware. | `ingest`, `port`, `domain`, `support` |
 | `app` | Entry point, all bean wiring, `application.yaml`, transport profiles, and `WikidataMusicBrainzIdentity` — the P434 bridge that implements `musicbrainz`'s identity seam, placed here because it is the only package ADR 32 lets see two adapters at once. Spring-aware. | everything it wires |
 | `seed` | The bulk seeding tool ([ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)): a name list to `name → QID`, run as `./gradlew resolveNames`. Plain Java, never opens a store. | `port`, `domain`, `wikidata` |
 | `export` | The graph exporter ([ADR 41](adr/0041-graph-exporter-views-and-formats.md)): `ViewSelector` and the two writers, run as `./gradlew exportGraph`. Plain Java, read-only. | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `support` |
-| `ratings` | The taste-layer reader ([ADR 43](adr/0043-listing-your-own-ratings.md)): every rating with its label, note and `updated_at`, run as `./gradlew listRatings`. Plain Java, read-only, offline. | `port`, `domain`, `sqlite` |
-| `retract` | The retraction tool ([ADR 44](adr/0044-retraction-as-a-new-claim.md)): appends one `Retraction` claim so the projection stops showing an entity and its edges, run as `./gradlew retractEntity`. Plain Java, offline, and the only dev tool that writes a world-fact claim. | `port`, `domain`, `ingest`, `sqlite` |
+| `ratings` | The taste-layer reader ([ADR 43](adr/0043-listing-your-own-ratings.md)): every rating with its label, note and `updated_at`, run as `./gradlew listRatings`. Plain Java, read-only, offline. | `port`, `domain`, `sqlite`, `support` |
+| `retract` | The retraction tool ([ADR 44](adr/0044-retraction-as-a-new-claim.md)): appends one `Retraction` claim so the projection stops showing an entity and its edges, run as `./gradlew retractEntity`. Plain Java, offline, and the only dev tool that writes a world-fact claim. Since #179 it has no default database: `--db` is required, and `SEGUE_DB` does not satisfy it ([ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md)). | `port`, `domain`, `ingest`, `sqlite`, `support` |
 | `recommend` | The recommender ([ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md)): ranks entities absent from the known-list by how much more of that list reaches them than their size predicts, and explains each with real routes. Run as `./gradlew recommend`. The list is the supplied `--known` file plus everything rated 4 or 5 that the file does not name, through `KnownList.promoted` ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)) — so a highly rated entity stops being offered back — and since [ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md) the sweep also takes `KnownList.suppressed` as a separate set, so an entity rated 2 or below stops being offered back too. Plain Java, read-only, offline, and since issue #85 it weights every candidate by the owner's ratings — `Recommendations.regardFor` over `AffinityStore.readRatings`, the note-free half of the taste layer. (This row said it "cannot see the taste layer at all" until the final review of issue #101; that was already false on `main`.) | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `support` |
-| `own` | The owner-claim tool (issue [#92](https://github.com/robsartin/segue/issues/92)): mints a local entity Wikidata does not model, asserts an edge between two ids, or merges a local id into the QID it turned out to be — one operation per run, as `./gradlew ownClaim`. Plain Java, offline, and the second dev tool that writes a world-fact claim; it appends through `IngestService.claim` and holds no graph, so the projection catches up at the next boot. Deliberately not an MCP tool: an owner claim is exempt from the corroboration count, so a model must not be able to make one. | `port`, `domain`, `ingest`, `sqlite` |
+| `own` | The owner-claim tool (issue [#92](https://github.com/robsartin/segue/issues/92)): mints a local entity Wikidata does not model, asserts an edge between two ids, or merges a local id into the QID it turned out to be — one operation per run, as `./gradlew ownClaim`. Plain Java, offline, and the second dev tool that writes a world-fact claim; it appends through `IngestService.claim` and holds no graph, so the projection catches up at the next boot. Deliberately not an MCP tool: an owner claim is exempt from the corroboration count, so a model must not be able to make one. Since #179 it has no default database: `--db` is required, `SEGUE_DB` does not satisfy it, and `./gradlew own` still resolves to `:ownClaim` — it refuses rather than reporting an unknown task ([ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md)). | `port`, `domain`, `ingest`, `sqlite`, `support` |
 | `rate` | The rating deck ([ADR 46](adr/0046-the-rating-deck.md)): a loopback page on 127.0.0.1:8090 dealing one unrated entity per keystroke, run as `./gradlew rate`. Plain Java, offline, and the only dev tool that writes a rating. Composes its known list through the same `KnownList.promoted` `recommend` does ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)), passes the same `KnownList.suppressed` to its sweep, and deals revisions over `KnownList.revisitable` ([ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md)). | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `recommend`, `support` |
 
 ### Which rules a machine enforces
@@ -439,6 +501,8 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `theRatingDeckLogsNoRating` | any class in `rate` depending on `AffinityRecord` as a type, **with no exception** — the deck writes through `AffinityStore.updateRating`, which builds no record, so nothing here may hold a rating to log | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 46](adr/0046-the-rating-deck.md) |
 | `theRatingDeckOpensNothingElse` | `rate` depending on `jena`, `mcp`, `app` or every other dev tool bar one. `recommend` is deliberately allowed (the candidate sweep) and so is `java.net` — this is the one dev tool that is an HTTP server, fenced instead by the loopback bind and the `Origin` allowlist | [ADR 46](adr/0046-the-rating-deck.md) |
 | `theOwnerClaimToolOpensNothingElse` | `own` depending on `GraphStore` **as a type**, on `AffinityStore`, or on `tinker`, `jena`, `mcp`, `app`, `java.net`, `javax.net` or every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`, so a new tool joins every fence at once) — an owner claim *does* have a graph half, unlike a retraction, but this tool has no running graph to apply it to, so the projection catches up at the next boot. The `AffinityStore` clause is what keeps the merge subcommand away from the ratings it carries at read time | [ADR 59](adr/0059-owner-claims-as-a-third-layer.md) |
+| `theClaimToolsHaveNoDefaultDatabase` | `retract` or `own` depending on `support.DefaultDatabase` at all — the two tools that append a first-person claim require `--db` and have no default left to resolve. Second line of defence, not first: the refusal tests red three-per-tool against every reintroduction tried, and this holds when those tests are edited to match. `dependOnClassesThat` rather than a call predicate, so a method reference (`DefaultDatabase::resolve`, reported as *references*) or a field of that type is caught as readily as a call; javadoc naming the class in prose is not a dependency and is deliberately still allowed | issue [#179](https://github.com/robsartin/segue/issues/179) |
+| `theClaimToolsTakeTheirDatabaseFromTheFlagAlone` | `retract` or `own` calling any `support` method that returns a `java.nio.file.Path`, or reading any `support` field of that type. The sibling rule forbids a *name*; this forbids the *capability*, and the gap between them was measured — a `Path`-returning method added to `support.RequiredDatabase` (which both tools already use for the refusal sentence) and wired in restores the default while leaving `theClaimToolsHaveNoDefaultDatabase` green. `Path` is the line because a `String` has to be parsed back by a line a reviewer can see, which is why `RequiredDatabase.refusal` returns one | issue [#179](https://github.com/robsartin/segue/issues/179) |
 | `ownerClaimsAreMadeThroughTheirFactories` | calling — or referencing — the constructor of `LocalEntity`, `OwnerEdge` or `SameAs` from outside `domain` and `sqlite`. Those constructors enforce only what Wikidata's grammar fixes, so that an append-only row stays decodable after a convention moves; the conventions themselves (two leading zeros, the controlled relation vocabulary) live in `minted()`, `claimed()` and `declared()`. This rule is what makes every *maker* of a claim go through them, with no second copy of a rule to fall out of date. `sqlite` is exempt because `readRow` reconstructs rather than claims | [ADR 22](adr/0022-wikidata-identity-and-vocabulary.md), [ADR 19](adr/0019-assertion-log-source-of-truth.md), [ADR 58](adr/0058-stand-in-identifiers-cannot-be-allocatable.md) |
 | `nothingWritesToStandardOut` | reading `System.out` anywhere except the one named exception, `SegueApplication` | [ADR 28](adr/0028-mcp-transports.md) |
 | `nothingWritesToStandardError`, `noPrintStackTrace`, `noJavaUtilLogging` | bypassing SLF4J | [ADR 30](adr/0030-structured-logging.md) |
@@ -1453,10 +1517,10 @@ names say which side of that line each one is on — rename either and the build
 
 ```bash
 # what would this remove? Nothing is written.
-./gradlew retractEntity --args="--qid Q12345 --reason 'resolved to the painters, not the band' --dry-run"
+./gradlew retractEntity --args="--db $HOME/.segue/segue.db --qid Q12345 --reason 'resolved to the painters, not the band' --dry-run"
 
 # do it
-./gradlew retractEntity --args="--qid Q12345 --reason 'resolved to the painters, not the band'"
+./gradlew retractEntity --args="--db $HOME/.segue/segue.db --qid Q12345 --reason 'resolved to the painters, not the band'"
 ```
 
 ### It is a claim, not a deletion
@@ -1802,8 +1866,10 @@ another's instead of only reading about the difference — the method ADR 45 use
 ```
 
 `--db` defaults to `SEGUE_DB` if it is set and
-`${user.home}/.segue/segue.db` otherwise, which is what `export`, `ratings`, `retract` and
-`recommend` do too (`seed` has no `--db`: it never opens a store).
+`${user.home}/.segue/segue.db` otherwise, which is what `export`, `ratings` and `recommend` do too
+(`seed` has no `--db`: it never opens a store). `retract` and `own` are the exceptions and require
+the flag ([ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md)); this sentence named
+`retract` among the defaulting tools until issue #179 changed that.
 `--port` defaults to `RateCli.DEFAULT_PORT`, 8090 rather than 8080, so the deck and a running MCP
 server never address each other by accident; `--port 0` asks the OS to pick one, and the tool logs
 which. Open the printed address in a browser: `1`–`5` rates and advances, `s` or space skips

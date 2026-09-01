@@ -4,6 +4,7 @@ import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
+import com.robsartin.segue.support.DefaultDatabase;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -49,10 +50,9 @@ public final class RatingsCli {
    * Where the listing goes, and in what order.
    *
    * @param database the taste layer and the log to read - the same file, per ADR 33's rejection of
-   *     a second database. Defaults exactly as the server's does: {@code SEGUE_DB} if set,
-   *     otherwise {@code ${user.home}/.segue/segue.db}. Stated here as well as in {@code
-   *     application.yaml} because this tool is plain Java and ADR 32 keeps Spring out of every
-   *     package but {@code app} and {@code mcp}
+   *     a second database. Defaults per {@link DefaultDatabase#resolve} - one rule shared with
+   *     {@code ExportCli}, {@code RateCli} and {@code RecommendCli} (issue #179) - rather than a
+   *     copy of it stated here.
    * @param out no default, on purpose - see this class's Javadoc
    */
   public record Options(Path database, Path out, SortOrder sort) {
@@ -66,7 +66,7 @@ public final class RatingsCli {
 
   /** Parse and validate, refusing anything that could not work before a store is opened. */
   static Options parse(String[] args, String envDatabase, String userHome) {
-    Path database = null;
+    String db = null;
     Path out = null;
     SortOrder sort = SortOrder.RATING;
 
@@ -75,7 +75,7 @@ public final class RatingsCli {
       String value = valueOf(args, i, flag);
       i++;
       switch (flag) {
-        case "--db" -> database = Path.of(value);
+        case "--db" -> db = value;
         case "--out" -> out = Path.of(value);
         case "--sort" -> sort = SortOrder.parse(value);
         default -> throw usage("unknown option " + flag);
@@ -85,14 +85,7 @@ public final class RatingsCli {
     if (out == null) {
       throw usage("--out is required");
     }
-    return new Options(
-        database != null ? database : defaultDatabase(envDatabase, userHome), out, sort);
-  }
-
-  private static Path defaultDatabase(String envDatabase, String userHome) {
-    return envDatabase != null && !envDatabase.isBlank()
-        ? Path.of(envDatabase)
-        : Path.of(userHome, ".segue", "segue.db");
+    return new Options(DefaultDatabase.resolve(db, envDatabase, userHome), out, sort);
   }
 
   private static String valueOf(String[] args, int i, String flag) {
