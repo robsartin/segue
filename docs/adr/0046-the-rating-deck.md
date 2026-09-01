@@ -410,6 +410,72 @@ one browser, one operating system, and loopback — which is the only place this
 since `RateServer` binds `127.0.0.1` and the `Origin` allowlist keeps it there. It is not a claim
 about every way an HTTP request can be delayed. Nothing above this amendment is withdrawn.
 
+**Amendment (2026-09-01, issue #169): the retry the amendment above measured is not a browser
+constant. It is a count of the sockets Chrome happened to have pooled, the test's own fixture was
+what supplied them, and the claim that a red positive control "is that fact and not a flake" is
+withdrawn.**
+
+The amendment above read *"the attempt count is fixed at three across a five-hundred-fold range"*
+as a property of Chrome. It is not. **Three was the size of Chrome's socket pool for the stub's
+origin, and the stall length simply had no bearing on it.** The rule, measured over 59 traced runs
+and three forced failures and recorded in `.superpowers/sdd/169-evidence.md` (2026-09-01, Chrome
+152.0.7977.65, macOS 26.6.2, loopback):
+
+> Chrome resends a POST whose connection died **iff** that attempt was bound to a socket **already
+> in the pool** — including a preconnected socket that has never carried a request. An attempt
+> bound to a socket the pool had to *connect for this request* is never resent on.
+
+So **attempts at the abandoned rating = 1 + the number of pooled sockets free when the key is
+pressed**. The measured distribution is exactly that: three attempts in 54 runs, two in five, and —
+when the pool is empty — **one**, which is a red positive control asserting nothing about the page.
+Note also what the error code is not: a pooled socket is resent on whether it reports
+`ERR_CONNECTION_CLOSED` or `ERR_EMPTY_RESPONSE`. The socket's provenance is the discriminator.
+
+**The defect was in what `DeckBehaviourTest.start()` meant by "loaded".** It waited for `#card h1`,
+which is `GET /api/card` answering, and for nothing else. Chrome then issues `GET /favicon.ico` off
+the same page load — which the stub's `"/"` context cheerfully answers with the deck page — and in
+the traces it arrives 6–20 ms before the POST. Two requests racing for the same pooled socket, with
+the test waiting on neither. That is the flake: seven sightings across two days and five branches,
+including an unmodified baseline, always green on the immediate rerun. Under load the race widens,
+which is why it was seen locally far more often than in CI.
+
+**The fix is a precondition, made explicit and enforced.** The stub now counts its own exchanges
+through a `Filter` on all three contexts, and `start()` waits — as a condition with a deadline, not
+a sleep — for `readyState === 'complete'` and then for the stub to be serving nothing and to have
+been asked for nothing for 200 ms. That window is a bound on *issuance* latency and not a settle:
+the favicon is Chrome's own request and the page reports nothing about it, so there is no condition
+to wait on, only a length of silence after which one has certainly gone out. 200 ms is ten times the
+20 ms worst case in the traces. **This is the file's definition of loaded, not one test's**, because
+the definition is what was wrong.
+
+**What a red positive control means now.** The stub was quiet before the keypress, so Chrome had an
+idle pooled socket to resend on and did not: the browser has stopped retrying a POST whose
+connection died, and the hazard this section guards no longer exists. The assertion's message was
+changed to say that. Its previous message asserted the same thing without the precondition holding,
+which made it false — it was a flake, seven times.
+
+**Rejected: remove the favicon request at source.** An inline `<link rel="icon" href="data:,">` in
+`deck.html` would stop Chrome asking, and it is one line. Refused on two grounds. It changes
+production markup to make a test deterministic — the page has no other reason to carry that tag —
+and, worse, it hides rather than states the dependency: the control's real requirement is that
+*something* be in Chrome's pool and *nothing* be holding it, and a page that happens not to request
+a favicon leaves that unwritten and unenforced, ready to break again the next time the fixture
+issues anything at all during load.
+
+**Rejected: keep a deliberate favicon stall in the stub permanently**, so that removing the wait
+fails loudly instead of flakily. Measured rather than assumed, and it does not do that: with the
+favicon held and nothing else occupying the pool, the preconnected spare socket is still there and
+the test passed three times in four. A stall would trade one flake for another while adding its
+length to every test in the file. Emptying the pool outright takes concurrent page-issued fetches —
+which is how the failure was forced, and is not traffic the deck would ever generate.
+
+**The numbers above are a dated measurement.** `.superpowers/sdd/169-evidence.md` is not in the
+repository and nothing regenerates it, exactly as the 2026-08-30 figures are not regenerated. What
+is enforced in the build is the precondition, not the count. Nothing else above this amendment is
+withdrawn: the ordering finding, the reason a `fetch` timeout is a constraint on this page, and the
+limit stated about the wording all stand, and none of them depended on the attempt count being
+three.
+
 ## Alternatives considered
 
 - **A controller in the Spring app** — the server and the port already exist. Refused because it
