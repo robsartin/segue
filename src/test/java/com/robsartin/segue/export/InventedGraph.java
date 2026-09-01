@@ -38,8 +38,9 @@ final class InventedGraph {
   static final String PRIZE = "Q900105";
 
   /**
-   * The id Wikidata turned out to have for something the owner had already minted (#92). Allocatable
-   * shape, from the same invented family as the ids above and carrying the same issue #171 debt.
+   * The id Wikidata turned out to have for something the owner had already minted (#92).
+   * Allocatable shape, from the same invented family as the ids above and carrying the same issue
+   * #171 debt.
    */
   static final String PRESSING = "Q900106";
 

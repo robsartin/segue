@@ -44,8 +44,8 @@ import java.util.function.Consumer;
  * the log". An endpoint an earlier retraction reached is absent, because the shared {@link
  * Retractions} fold says so - the same rule both graph projections and the exporter apply; an
  * endpoint the owner has merged away is absent too, and the id it was merged into is present, on
- * the shared {@link Equivalences} fold and {@code IngestService.carry}'s node rule. A local
- * entity minted by an <em>earlier</em> invocation is present, because it projects through {@code
+ * the shared {@link Equivalences} fold and {@code IngestService.carry}'s node rule. A local entity
+ * minted by an <em>earlier</em> invocation is present, because it projects through {@code
  * LocalEntity.toNode()}. Minting and asserting in one run is deliberately not supported: one
  * operation per run, as {@code retractEntity} does one retraction per run.
  */
@@ -208,10 +208,10 @@ public final class OwnRun {
    *
    * <p><b>Merges move the offer, in both directions</b>, through the shared {@link Equivalences}
    * exactly as retraction goes through the shared {@link Retractions}. A merged local id is no
-   * longer offered - an edge claimed against it would land on the id the owner retired and never
-   * be carried, because {@code carry} reads the graph as it stood when the merge was applied. The
-   * canonical id is offered, carrying the merged entity's label, because the merge put a node
-   * under it. Asking retraction alone got both halves wrong at once.
+   * longer offered - an edge claimed against it would land on the id the owner retired and never be
+   * carried, because {@code carry} reads the graph as it stood when the merge was applied. The
+   * canonical id is offered, carrying the merged entity's label, because the merge put a node under
+   * it. Asking retraction alone got both halves wrong at once.
    */
   private static Map<String, String> labelsInTheProjection(
       List<LoggedAssertion> logged, Equivalences merges) {

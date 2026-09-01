@@ -109,8 +109,9 @@ class RatingsRunTest {
 
     assertThat(rows)
         .extracting(AffinityRow::qid, AffinityRow::displayLabel)
-        .as("the merge put a node under the canonical id, so the listing must not say it is not"
-            + " in the graph")
+        .as(
+            "the merge put a node under the canonical id, so the listing must not say it is not"
+                + " in the graph")
         .containsExactlyInAnyOrder(
             org.assertj.core.groups.Tuple.tuple(MINTED, MINTED_LABEL),
             org.assertj.core.groups.Tuple.tuple(CANONICAL, MINTED_LABEL));

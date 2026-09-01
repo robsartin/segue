@@ -35,8 +35,8 @@ import java.util.Set;
  * creates: a carried canonical row was listed as {@link AffinityRow#NO_LABEL} - "(not in the
  * graph)" - while the node was in the graph. That string is for a rating that outlived its node,
  * which is the opposite situation, and it is what made the wrong output read as intended. The rule
- * is carry's, not a second one: the canonical id takes the merged entity's label only where
- * nothing has claimed it, and a claim after the merge still overwrites.
+ * is carry's, not a second one: the canonical id takes the merged entity's label only where nothing
+ * has claimed it, and a claim after the merge still overwrites.
  *
  * <p><b>Both rows stay, and that is not the same defect.</b> A merge carries the rating and leaves
  * the local row where it is, deliberately - {@code IdentityMerge.carryingRatings} moves the score

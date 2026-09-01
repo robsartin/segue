@@ -176,7 +176,8 @@ class OwnRunTest {
   }
 
   @Test
-  @DisplayName("should accept the canonical id of a merge as an endpoint though no source claimed it")
+  @DisplayName(
+      "should accept the canonical id of a merge as an endpoint though no source claimed it")
   void shouldAcceptTheCanonicalIdOfAMergeAsAnEndpointWhenNoSourceHasClaimedIt() {
     // The merge put a node under it - carry() creates the canonical node when nothing has claimed
     // one - so it IS in the projection this invocation replays, and refusing it would be false.
