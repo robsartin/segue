@@ -10,6 +10,7 @@ import com.robsartin.segue.port.GraphStore;
 import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
+import com.robsartin.segue.support.DefaultDatabase;
 import com.robsartin.segue.support.QidList;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import java.io.IOException;
@@ -60,10 +61,9 @@ public final class RateCli {
   /**
    * What to deal, and where to serve it.
    *
-   * @param database the assertion log to replay. Defaults exactly as {@code RecommendCli}'s does:
-   *     {@code SEGUE_DB} if set, otherwise {@code ${user.home}/.segue/segue.db} — stated here as
-   *     well as in {@code application.yaml} because this tool is plain Java and ADR 32 keeps Spring
-   *     out of every package but {@code app} and {@code mcp}
+   * @param database the assertion log to replay. Defaults per {@link DefaultDatabase#resolve} — one
+   *     rule shared with {@code ExportCli}, {@code RatingsCli} and {@code RecommendCli} (issue
+   *     #179) — rather than a copy of it stated here.
    * @param known the entities you already have. ADR 40's list, the same shape {@code RecommendCli}
    *     reads
    * @param port loopback only; 0 asks the OS to pick one, which the running server reports back
@@ -87,7 +87,7 @@ public final class RateCli {
 
   /** Parse and validate, refusing anything that could not work before a store is opened. */
   static Options parse(String[] args, String envDatabase, String userHome) {
-    Path database = null;
+    String db = null;
     Path known = null;
     int port = DEFAULT_PORT;
     int minDegree = Recommendations.MIN_CANDIDATE_DEGREE;
@@ -99,7 +99,7 @@ public final class RateCli {
       String value = valueOf(args, i, flag);
       i++;
       switch (flag) {
-        case "--db" -> database = Path.of(value);
+        case "--db" -> db = value;
         case "--known" -> known = Path.of(value);
         case "--port" -> port = number(flag, value);
         case "--min-degree" -> {
@@ -129,11 +129,7 @@ public final class RateCli {
               + " the other");
     }
     return new Options(
-        database != null ? database : defaultDatabase(envDatabase, userHome),
-        known,
-        port,
-        minDegree,
-        revise);
+        DefaultDatabase.resolve(db, envDatabase, userHome), known, port, minDegree, revise);
   }
 
   private static int revise(String value) {
@@ -155,12 +151,6 @@ public final class RateCli {
     } catch (NumberFormatException e) {
       throw usage(flag + " takes a whole number, got " + value);
     }
-  }
-
-  private static Path defaultDatabase(String envDatabase, String userHome) {
-    return envDatabase != null && !envDatabase.isBlank()
-        ? Path.of(envDatabase)
-        : Path.of(userHome, ".segue", "segue.db");
   }
 
   private static String valueOf(String[] args, int i, String flag) {
