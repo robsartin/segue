@@ -181,6 +181,22 @@ class IngestServiceTest {
   }
 
   @Test
+  @DisplayName("should refuse a sourced edge when claim is called, rather than skip its graph half")
+  void shouldRefuseASourcedEdgeWhenClaimIsCalledRatherThanSkipItsGraphHalf() {
+    // The AssertionRecord arm of the same guard the NodeAssertion test covers, and it needs its
+    // own test rather than the node's: an edge is the shape a caller reaching for claim() is
+    // most likely to be holding, because OwnerEdge.toAssertion() produces exactly this type.
+    AssertionRecord sourced =
+        new AssertionRecord("Q0900101", "Q0900102", "INFLUENCED_BY", null, null, WIKIDATA);
+
+    assertThatThrownBy(() -> IngestService.claim(log, sourced))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("record");
+
+    assertThat(log.readAll()).isEmpty();
+  }
+
+  @Test
   @DisplayName("should refuse a retraction when claim is called, because retract already owns it")
   void shouldRefuseARetractionWhenClaimIsCalledBecauseRetractAlreadyOwnsIt() {
     Retraction retraction =

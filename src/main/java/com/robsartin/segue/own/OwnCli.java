@@ -16,7 +16,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The entry point, run from Gradle: {@code ./gradlew own --args="mint --kind WORK --label …"}.
+ * The entry point, run from Gradle: {@code ./gradlew ownClaim --args="mint --kind WORK --label 'A
+ * Self-Pressed Record'"}.
+ *
+ * <p><b>The task is {@code ownClaim}. This line said {@code own} - the package name - and that is
+ * worse than a broken example.</b> Gradle matches abbreviated task names by camel-case hump, so
+ * {@code ./gradlew own} does not fail: it resolves to {@code :ownClaim} and runs, against the
+ * DEFAULT database, because {@code --db} was not part of the copied line either. Verified against
+ * this build: {@code ./gradlew own --args="mint …" --dry-run} prints {@code :ownClaim SKIPPED}. A
+ * wrong invocation that errors costs a retype; this one appends a row to a log ADR 19 forbids
+ * editing. Every example here names {@code ownClaim} in full, and passes {@code --db}.
  *
  * <p><b>Dev-side, and deliberately never a seventh MCP tool.</b> ADR 26 held {@code assert_edge}
  * back until corroboration was visibly working and ADR 56 made it work - but the reason for holding
@@ -134,7 +143,6 @@ public final class OwnCli {
     }
     String operation = args[0];
     Map<String, String> values = new LinkedHashMap<>();
-    Path database = null;
     boolean dryRun = false;
 
     for (int i = 1; i < args.length; i++) {
@@ -145,14 +153,17 @@ public final class OwnCli {
       }
       String value = valueOf(args, i, flag);
       i++;
-      if ("--db".equals(flag)) {
-        database = Path.of(value);
-      } else if (values.put(flag, value) != null) {
+      // --db goes in the same map as every other flag, and is taken out again below. It used to
+      // be a special case above this check, which meant `--db a --db b` silently took the last -
+      // on the one argument where last-wins is worst, because the operator reads back the first
+      // --db they typed and the claim lands in the second database. One check, no siblings to
+      // keep in step.
+      if (values.put(flag, value) != null) {
         throw usage(flag + " was given twice");
       }
     }
 
-    Path resolved = database != null ? database : defaultDatabase(envDatabase, userHome);
+    Path resolved = defaultDatabase(values.remove("--db"), envDatabase, userHome);
     return switch (operation) {
       case "mint" -> mint(resolved, values, dryRun);
       case "assert" -> assertion(resolved, values, dryRun);
@@ -230,7 +241,10 @@ public final class OwnCli {
     return Stream.of(NodeKind.values()).map(Enum::name).collect(Collectors.joining("|"));
   }
 
-  private static Path defaultDatabase(String envDatabase, String userHome) {
+  private static Path defaultDatabase(String given, String envDatabase, String userHome) {
+    if (given != null) {
+      return Path.of(given);
+    }
     return envDatabase != null && !envDatabase.isBlank()
         ? Path.of(envDatabase)
         : Path.of(userHome, ".segue", "segue.db");

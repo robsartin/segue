@@ -83,7 +83,12 @@ class OwnCliTest {
   @Test
   @DisplayName("should refuse when no operation is named")
   void shouldRefuseWhenNoOperationIsNamed() {
-    assertThatIllegalArgumentException().isThrownBy(OwnCliTest::parse);
+    // The message, not only the type. Every refusal in this class is an IllegalArgumentException,
+    // so a type-only assertion passes when the parse fails for some entirely unrelated reason -
+    // and then reports success for a refusal that never tested what it claims to.
+    assertThatIllegalArgumentException()
+        .isThrownBy(OwnCliTest::parse)
+        .withMessageContaining("an operation is required");
   }
 
   @Test
@@ -140,9 +145,29 @@ class OwnCliTest {
   }
 
   @Test
+  @DisplayName("should refuse when the database is given twice")
+  void shouldRefuseWhenTheDatabaseIsGivenTwice() {
+    // Every other flag is checked for a repeat; --db was not, so it took the last silently. A
+    // path argument is the worst one to resolve that way: the operator sees the first --db they
+    // typed and the claim lands in the second database.
+    assertThatIllegalArgumentException()
+        .isThrownBy(
+            () ->
+                parse(
+                    "mint", "--db", "/one.db", "--db", "/two.db", "--kind", "PERSON", "--label",
+                    "x"))
+        .withMessageContaining("--db");
+  }
+
+  @Test
   @DisplayName("should refuse when a flag has no value")
   void shouldRefuseWhenAFlagHasNoValue() {
-    assertThatIllegalArgumentException().isThrownBy(() -> parse("mint", "--kind"));
+    // "needs a value" and not "is required": reading past the end of the arguments and never
+    // seeing the flag at all are different bugs with the same exception type, and only the
+    // message tells them apart.
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parse("mint", "--kind"))
+        .withMessageContaining("--kind needs a value");
   }
 
   @Test
