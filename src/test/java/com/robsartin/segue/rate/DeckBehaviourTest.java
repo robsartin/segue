@@ -22,6 +22,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterEach;
@@ -101,6 +102,8 @@ class DeckBehaviourTest {
 
   private final AtomicLong lastArrived = new AtomicLong(System.nanoTime());
 
+  private final AtomicReference<String> lastPath = new AtomicReference<>("nothing yet");
+
   @BeforeAll
   static void requireBrowser() {
     if (Boolean.getBoolean("segue.requireBrowser") && !HeadlessChrome.available()) {
@@ -178,6 +181,7 @@ class DeckBehaviourTest {
       public void doFilter(HttpExchange exchange, Chain chain) throws IOException {
         inFlight.incrementAndGet();
         lastArrived.set(System.nanoTime());
+        lastPath.set(exchange.getRequestURI().getPath());
         try {
           chain.doFilter(exchange);
         } finally {
@@ -315,9 +319,16 @@ class DeckBehaviourTest {
    * the page says nothing about it, so there is no condition to wait on — only a length of silence
    * after which one has certainly gone out. Measured on this machine, the favicon reaches the stub
    * 6–14 ms after {@code /api/card} does, and nothing else arrives in the 1500 ms after it; over
-   * the 59 traced runs in {@code .superpowers/sdd/169-evidence.md} the same gap was 6–20 ms, under
-   * a load average between 6 and 30 on 28 cores. This is ten times that measured worst case, and
-   * comfortably above {@link #untilQuiet()}'s own 20 ms polling granularity.
+   * the 59 traced runs in {@code docs/retry-precondition-evidence.md} the same gap was 6–20 ms,
+   * under a load average between 6 and 30 on 28 cores. This is ten times that measured worst case,
+   * and comfortably above {@link #untilQuiet()}'s own 20 ms polling granularity.
+   *
+   * <p><strong>If that bound is ever wrong, nothing goes red.</strong> A browser that issued the
+   * favicon — or anything else — more than this long after load would slip past the wait and go
+   * straight back to racing the POST for the pooled socket, which is a flake and not a failure: the
+   * first anyone would know is the positive control failing again, intermittently, saying something
+   * untrue about the browser. The ten-fold margin is the only thing holding that off, and it is why
+   * a real condition would be worth having if one ever became observable.
    */
   private static final long QUIET_MILLIS = 200;
 
@@ -330,13 +341,24 @@ class DeckBehaviourTest {
    * resent on. So the number of attempts is one plus the number of pooled sockets free when the key
    * is pressed, and if an unfinished request is holding them all, the count is one and that test's
    * positive control goes red having found nothing wrong with the page (issue #169; the measurement
-   * is in {@code .superpowers/sdd/169-evidence.md}, and the rule it establishes is in ADR 46's
-   * 2026-09-01 amendment).
+   * is in {@code docs/retry-precondition-evidence.md}, §6 of which forces that failure on demand,
+   * and the rule it establishes is in ADR 46's 2026-09-01 amendment).
    *
    * <p>The request that used to do the holding is Chrome's {@code GET /favicon.ico}: it lands only
    * a few milliseconds before the POST, because waiting for {@code #card h1} waits for {@code
    * /api/card} and for nothing else. This waits for it, and for anything else the page or the
    * browser has started, to be finished and back in the pool.
+   *
+   * <p><strong>The limit of this instrument: it counts exchanges, not sockets.</strong> Chrome
+   * keeps a socket checked out until the response body has been <em>read</em>, so a response the
+   * page never drains leaves the socket held long after the exchange here has ended and the count
+   * has gone back to zero — this wait would report quiet and be wrong, with no assertion to fire.
+   * That is not hypothetical: {@code deck.html} returns on {@code !response.ok} without reading the
+   * body, on both its card path and its rating path, and the stub answers 403 and 404 with a body.
+   * The precondition holds today only because nothing issues such a response before this wait
+   * returns — every refusal in this file is set up after {@code start()} has finished. A test that
+   * made the stub refuse during load would break it silently, and the fix would be to drain in the
+   * page rather than to lengthen anything here.
    *
    * <p>A condition with a deadline rather than a sleep, for {@link #untilSent(int)}'s reason: a
    * fixed sleep that turned out to be too short would go quietly back to being the same flake.
@@ -350,11 +372,20 @@ class DeckBehaviourTest {
       }
       HeadlessChrome.sleep(20);
     }
+    // Both halves of the condition, because "0 still in flight" on its own explains nothing: it
+    // is the other half — a request arriving every few milliseconds, so the quiet window never
+    // completes — and only the elapsed time and the path say which of the two happened.
     throw new AssertionError(
         "the page never stopped asking the stub for things, so no test here can assume a socket is"
             + " free: "
             + inFlight.get()
-            + " still in flight");
+            + " still in flight, last request "
+            + (System.nanoTime() - lastArrived.get()) / 1_000_000
+            + " ms ago ("
+            + lastPath.get()
+            + "), needing "
+            + QUIET_MILLIS
+            + " ms of silence");
   }
 
   @Test
