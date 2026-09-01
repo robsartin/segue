@@ -15,6 +15,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.export.InventedGraph.FakeAssertionLog;
 import com.robsartin.segue.ingest.GraphProjector;
+import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -54,7 +55,7 @@ class ViewSelectorTest {
                 edge(WREN, MARLOW, "INFLUENCED_BY", guessed()),
                 edge(MARLOW, PRIZE, "RECEIVED_AWARD", secondSource()));
     graph = new TinkerGraphStore();
-    GraphProjector.project(log, graph);
+    GraphProjector.project(log, graph, IdentityMerge.NONE);
     selector = new ViewSelector(graph, log);
   }
 
@@ -113,7 +114,7 @@ class ViewSelectorTest {
                 edge(WREN, KETTLES, "MEMBER_OF", secondSource()),
                 edge(MARLOW, KETTLES, "MEMBER_OF", secondSource()));
     try (TinkerGraphStore ownGraph = new TinkerGraphStore()) {
-      GraphProjector.project(log, ownGraph);
+      GraphProjector.project(log, ownGraph, IdentityMerge.NONE);
 
       GraphView view = new ViewSelector(ownGraph, log).route(WREN, MARLOW, 2);
 
@@ -234,7 +235,7 @@ class ViewSelectorTest {
             .with(
                 node(HOLLOW_TIDE, NodeKind.WORK, "Hollow Tide", List.of("Q482994", "Q105543609")));
     try (TinkerGraphStore classified = new TinkerGraphStore()) {
-      GraphProjector.project(log, classified);
+      GraphProjector.project(log, classified, IdentityMerge.NONE);
 
       GraphView view = new ViewSelector(classified, log).neighbourhood(HOLLOW_TIDE, 1);
 

@@ -1,10 +1,13 @@
 package com.robsartin.segue.retract;
 
 import com.robsartin.segue.domain.AssertionRecord;
+import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
+import com.robsartin.segue.domain.OwnerEdge;
 import com.robsartin.segue.domain.Retraction;
 import com.robsartin.segue.domain.Retractions;
+import com.robsartin.segue.domain.SameAs;
 import com.robsartin.segue.ingest.IngestService;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.retract.RetractCli.Options;
@@ -138,6 +141,31 @@ public final class RetractRun {
         }
         // Retractions never survive: they describe the fold rather than appear in it.
         case Retraction ignored -> {}
+        // The owner's claims (#92) are counted in the same two buckets they project into, so the
+        // report still says what will stop projecting rather than what a source claimed. A minted
+        // entity supplies the label too: without this, retracting something the owner minted
+        // would print "(no node claim in the projection)" for an entity that is plainly in the
+        // graph - and the label is the safety feature this report exists for.
+        case LocalEntity minted -> {
+          if (minted.qid().equals(qid)) {
+            label = minted.label();
+            nodeClaims++;
+          }
+        }
+        case OwnerEdge owned -> {
+          if (owned.fromQid().equals(qid) || owned.toQid().equals(qid)) {
+            edgeClaims++;
+          }
+        }
+        // Counted with the edges rather than ignored, matching Retractions.survives, which drops
+        // a merge naming a retracted entity on the edge rule. Counting is what decides whether
+        // "nothing to retract" is refused, so a merge the retraction WILL reach has to be
+        // visible here or an entity known only through one would be unretractable.
+        case SameAs merge -> {
+          if (merge.localQid().equals(qid) || merge.canonicalQid().equals(qid)) {
+            edgeClaims++;
+          }
+        }
       }
     }
     return new Effect(qid, label, nodeClaims, edgeClaims);

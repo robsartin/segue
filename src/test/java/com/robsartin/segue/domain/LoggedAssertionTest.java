@@ -10,8 +10,9 @@ import org.junit.jupiter.api.Test;
 
 /**
  * ADR 24: nodes are logged as assertions too, so replay can reconstruct them. A sealed {@link
- * LoggedAssertion} permits the node and edge claims and, since ADR 44, the retraction that takes
- * some of them back out of the projection; replay dispatches on the pattern.
+ * LoggedAssertion} permits the node and edge claims, the retraction that takes some of them back
+ * out of the projection (ADR 44), and, since #92, the owner's own first-person acts - minting a
+ * local entity, asserting an edge, declaring a merge; replay dispatches on the pattern.
  */
 class LoggedAssertionTest {
 
@@ -30,10 +31,17 @@ class LoggedAssertionTest {
   }
 
   @Test
-  @DisplayName("the sealed hierarchy permits the two claim kinds and the retraction")
-  void permitsExactlyThree() {
+  @DisplayName(
+      "the sealed hierarchy permits the two sourced claim kinds and the four first-person acts")
+  void shouldPermitExactlySixSubtypesWhenTheHierarchyIsSealed() {
     assertThat(LoggedAssertion.class.getPermittedSubclasses())
-        .containsExactlyInAnyOrder(NodeAssertion.class, AssertionRecord.class, Retraction.class);
+        .containsExactlyInAnyOrder(
+            NodeAssertion.class,
+            AssertionRecord.class,
+            Retraction.class,
+            LocalEntity.class,
+            OwnerEdge.class,
+            SameAs.class);
   }
 
   @Test

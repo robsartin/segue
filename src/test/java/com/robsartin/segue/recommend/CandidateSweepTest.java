@@ -18,17 +18,21 @@ import static com.robsartin.segue.recommend.InventedWorld.SHARED_PRIZE;
 import static com.robsartin.segue.recommend.InventedWorld.THE_ACADEMY;
 import static com.robsartin.segue.recommend.InventedWorld.THE_ADMIRER;
 import static com.robsartin.segue.recommend.InventedWorld.edge;
+import static com.robsartin.segue.recommend.InventedWorld.fillerQid;
 import static com.robsartin.segue.recommend.InventedWorld.hubConcept;
 import static com.robsartin.segue.recommend.InventedWorld.node;
 import static com.robsartin.segue.recommend.InventedWorld.padDegreeTo;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.EdgeTypes;
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.domain.Recommendation;
 import com.robsartin.segue.domain.Recommendations;
 import com.robsartin.segue.domain.Scorer;
 import com.robsartin.segue.tinker.TinkerGraphStore;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -243,6 +247,47 @@ class CandidateSweepTest {
     assertThat(find(sweep(), A_THIN_BAND)).isEmpty();
     assertThat(find(sweep(Scorer.LIFT, FLOOR - 2, Recommendations.EQUAL_REGARD), A_THIN_BAND))
         .isPresent();
+  }
+
+  private static final Instant OWNER_ASSERTED_AT = Instant.parse("2026-08-31T00:00:00Z");
+
+  @Test
+  @DisplayName("an edge sourced only by the owner still counts toward the candidate's degree floor")
+  void shouldCountAnOwnerEdgeTowardTheDegreeFloorWhenSweeping() {
+    // The open question the plan handed this task rather than assuming: does CandidateSweep's
+    // degree floor count an owner edge? #degree(String) is graph.edges(qid).size() with no
+    // provenance filter, so every filler edge here is owner-sourced and nothing else touches
+    // A_THIN_BAND — if the floor asked who claimed an edge, this candidate would stay below it and
+    // theDegreeFloorIsApplied()'s shape (same setup, sourced padding) would diverge from this one.
+    // It does not: this is the spec's stated design, observed rather than assumed.
+    node(graph, SHARED_ARTIST, NodeKind.PERSON, "the artist they both cite");
+    node(graph, A_THIN_BAND, NodeKind.GROUP, "reached once, then padded by the owner alone");
+    edge(graph, KNOWN_ONE, SHARED_ARTIST, EdgeTypes.INFLUENCED_BY.code());
+    edge(graph, SHARED_ARTIST, A_THIN_BAND, EdgeTypes.INFLUENCED_BY.code());
+    padDegreeWithOwnerEdges(A_THIN_BAND, FLOOR);
+
+    assertThat(find(sweep(), A_THIN_BAND)).isPresent();
+  }
+
+  /**
+   * {@link InventedWorld#padDegreeTo}, but every filler edge is owner-sourced, not "invented".
+   * Shares {@link InventedWorld#fillerQid} rather than re-deriving the id, so the two padding
+   * helpers cannot drift onto different filler ranges.
+   */
+  private void padDegreeWithOwnerEdges(String qid, int degree) {
+    int already = graph.edges(qid).size();
+    for (int i = already; i < degree; i++) {
+      String filler = fillerQid(qid, i);
+      node(graph, filler, NodeKind.WORK, "owner-claimed filler " + filler);
+      graph.record(
+          new AssertionRecord(
+              qid,
+              filler,
+              EdgeTypes.PERFORMED.code(),
+              null,
+              null,
+              Provenance.owner(OWNER_ASSERTED_AT)));
+    }
   }
 
   @Test

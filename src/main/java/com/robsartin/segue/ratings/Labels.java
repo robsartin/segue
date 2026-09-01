@@ -1,9 +1,14 @@
 package com.robsartin.segue.ratings;
 
+import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
+import com.robsartin.segue.domain.Retractions;
+import com.robsartin.segue.domain.SameAs;
 import com.robsartin.segue.port.AssertionLog;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -22,6 +27,22 @@ import java.util.Set;
  * here is the label {@code get_entity} would return. The kind is deliberately not re-derived: ADR
  * 42's {@code KindMapper.rederive} matters to a picture that colours by kind, and this is a list of
  * names.
+ *
+ * <p><b>A merge is folded here too, and that invariant is why</b> (#92). {@code
+ * IngestService.carry} puts a node under the canonical id carrying the label of the entity merged
+ * into it, and it writes that to the <em>graph</em> while this reads the <em>log</em> - so for as
+ * long as this fold ignored merges, the sentence above was false in the one case the third layer
+ * creates: a carried canonical row was listed as {@link AffinityRow#NO_LABEL} - "(not in the
+ * graph)" - while the node was in the graph. That string is for a rating that outlived its node,
+ * which is the opposite situation, and it is what made the wrong output read as intended. The rule
+ * is carry's, not a second one: the canonical id takes the merged entity's label only where nothing
+ * has claimed it, and a claim after the merge still overwrites.
+ *
+ * <p><b>Both rows stay, and that is not the same defect.</b> A merge carries the rating and leaves
+ * the local row where it is, deliberately - {@code IdentityMerge.carryingRatings} moves the score
+ * and never the note, so the owner's own words survive only on the local row, and this is the one
+ * tool that reads a note (ADR 43). Collapsing the two rows into one here would hide it. What was
+ * wrong was one of them denying it was in the graph, not that there were two.
  *
  * <p><b>Not a class name containing "Affinity", and that is deliberate.</b> This reads the
  * world-fact layer, which {@code affinityNeverTouchesTheWorldFactLayer} would forbid to any type
@@ -43,11 +64,62 @@ final class Labels {
     if (qids.isEmpty()) {
       return labels;
     }
-    for (LoggedAssertion assertion : log.readAll()) {
-      if (assertion instanceof NodeAssertion claim && qids.contains(claim.qid())) {
-        labels.put(claim.qid(), claim.label());
+    List<LoggedAssertion> logged = log.readAll();
+    Retractions retractions = Retractions.in(logged);
+    // The qids asked for, plus every local id merged into one of them. A canonical id can be rated
+    // while the entity merged into it never was - the owner mints, merges, then rates the real
+    // item - and the only name that node has ever had is the one the merge carried onto it. One
+    // hop is the whole of it, for Equivalences' reason: allocatable and unallocatable are
+    // complementary, so a canonical id can never itself be the local side of another merge.
+    Set<String> wanted = new HashSet<>(qids);
+    for (int i = 0; i < logged.size(); i++) {
+      if (logged.get(i) instanceof SameAs merge
+          && retractions.survives(i, merge)
+          && qids.contains(merge.canonicalQid())) {
+        wanted.add(merge.localQid());
       }
     }
+    for (int i = 0; i < logged.size(); i++) {
+      LoggedAssertion assertion = logged.get(i);
+      // Two claim types name an entity, not one (#92). A source states a NodeAssertion; the owner
+      // mints a LocalEntity, which is a first-person claim and deliberately not a NodeAssertion -
+      // it carries no Provenance, because the owner minting it IS the source. Both put a node in
+      // the graph, so both have to answer here, and the failure of matching only the first was
+      // silent rather than loud: a rated minted entity listed as AffinityRow.NO_LABEL - "(not in
+      // the graph)" - while being in the graph. That string exists for a rating that OUTLIVED its
+      // node, which is the opposite situation and the reason nothing noticed.
+      String qid = null;
+      String label = null;
+      if (assertion instanceof NodeAssertion claim) {
+        qid = claim.qid();
+        label = claim.label();
+      } else if (assertion instanceof LocalEntity claim) {
+        qid = claim.qid();
+        label = claim.label();
+      }
+      // Last claim wins, matching upsertNode and the boot replay, across both kinds together: a
+      // merged entity a source later names is renamed here too, in the order the log holds.
+      if (qid != null && wanted.contains(qid)) {
+        labels.put(qid, label);
+      }
+      // A merge names an entity too, at one remove: IngestService.carry puts a node under the
+      // canonical id carrying the label of the entity that was merged into it, so this fold has to
+      // do the same or the invariant above is false. It was: a carried canonical row listed as
+      // "(not in the graph)" while the node was in the graph.
+      if (assertion instanceof SameAs merge && retractions.survives(i, merge)) {
+        String local = labels.get(merge.localQid());
+        // Only where nothing has claimed the canonical entity, which is carry()'s own guard: a
+        // source that HAS named it wins, because overwriting its label with the owner's working
+        // title would be the merge editing the world rather than recording an identity. A source
+        // that names it LATER still wins, here by the put above and in the graph by upsertNode.
+        if (local != null && !labels.containsKey(merge.canonicalQid())) {
+          labels.put(merge.canonicalQid(), local);
+        }
+      }
+    }
+    // The merged local ids that were only ever looked up to answer for a canonical id go no
+    // further: this method answers about the qids it was asked about (ADR 16).
+    labels.keySet().retainAll(qids);
     return labels;
   }
 }

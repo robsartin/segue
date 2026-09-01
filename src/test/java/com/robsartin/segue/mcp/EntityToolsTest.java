@@ -10,6 +10,7 @@ import com.robsartin.segue.ingest.IngestService;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.EntityResolver;
 import com.robsartin.segue.port.GraphStore;
+import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.port.SourceAdapters;
 import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
@@ -40,7 +41,7 @@ class EntityToolsTest {
     AssertionLog log = SqliteAssertionLog.inMemory();
     GraphStore graph = new TinkerGraphStore();
     try {
-      IngestService ingest = new IngestService(log, graph);
+      IngestService ingest = new IngestService(log, graph, IdentityMerge.NONE);
       SegueService service =
           new SegueService(
               new NoOpEntityResolver(),

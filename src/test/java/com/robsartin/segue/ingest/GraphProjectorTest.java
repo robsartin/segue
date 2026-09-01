@@ -9,6 +9,7 @@ import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.domain.Retraction;
 import com.robsartin.segue.port.AssertionLog;
+import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import java.time.Instant;
@@ -32,7 +33,7 @@ class GraphProjectorTest {
       log.append(new NodeAssertion("Q2", NodeKind.GROUP, "The Bad Seeds", WIKIDATA));
       log.append(new AssertionRecord("Q1", "Q2", "MEMBER_OF", null, null, WIKIDATA));
 
-      GraphProjector.project(log, store);
+      GraphProjector.project(log, store, IdentityMerge.NONE);
 
       assertThat(store.node("Q1")).isPresent();
       assertThat(store.node("Q1").orElseThrow().label()).isEqualTo("Nick Cave");
@@ -59,7 +60,7 @@ class GraphProjectorTest {
       log.append(new NodeAssertion("Q2", NodeKind.GROUP, "The Bad Seeds", WIKIDATA));
       log.append(new AssertionRecord("Q1", "Q2", "MEMBER_OF", null, null, precise));
 
-      GraphProjector.project(log, store);
+      GraphProjector.project(log, store, IdentityMerge.NONE);
 
       assertThat(store.edges("Q1"))
           .singleElement()
@@ -87,7 +88,7 @@ class GraphProjectorTest {
           new NodeAssertion(
               "Q0900001", NodeKind.CONCEPT, "Ninebark Sermon", List.of("Q56816954"), WIKIDATA));
 
-      GraphProjector.project(log, store);
+      GraphProjector.project(log, store, IdentityMerge.NONE);
 
       assertThat(store.node("Q0900001").orElseThrow().kind()).isEqualTo(NodeKind.GROUP);
       // The log itself is untouched: it still says what the source said and what we made of
@@ -113,7 +114,7 @@ class GraphProjectorTest {
           new NodeAssertion(
               "Q0900002", NodeKind.PERSON, "Marisol Kettleby", List.of("Q999999999"), WIKIDATA));
 
-      GraphProjector.project(log, store);
+      GraphProjector.project(log, store, IdentityMerge.NONE);
 
       assertThat(store.node("Q0900002").orElseThrow().kind()).isEqualTo(NodeKind.CONCEPT);
     }
@@ -129,7 +130,7 @@ class GraphProjectorTest {
         TinkerGraphStore store = new TinkerGraphStore()) {
       log.append(new NodeAssertion("Q0900003", NodeKind.PERSON, "Marisol Kettleby", WIKIDATA));
 
-      GraphProjector.project(log, store);
+      GraphProjector.project(log, store, IdentityMerge.NONE);
 
       assertThat(store.node("Q0900003").orElseThrow().kind()).isEqualTo(NodeKind.PERSON);
     }
@@ -140,7 +141,7 @@ class GraphProjectorTest {
   void emptyLogEmptyGraph() {
     try (AssertionLog log = SqliteAssertionLog.inMemory();
         TinkerGraphStore store = new TinkerGraphStore()) {
-      GraphProjector.project(log, store);
+      GraphProjector.project(log, store, IdentityMerge.NONE);
       assertThat(store.edgeCount()).isZero();
     }
   }
@@ -155,7 +156,7 @@ class GraphProjectorTest {
       log.append(new AssertionRecord("Q1", "Q404", "MEMBER_OF", null, null, WIKIDATA));
 
       // ...fatally, naming the offending position (the second assertion).
-      assertThatThrownBy(() -> GraphProjector.project(log, store))
+      assertThatThrownBy(() -> GraphProjector.project(log, store, IdentityMerge.NONE))
           .isInstanceOf(IllegalStateException.class)
           .hasMessageContaining("sequence 2");
     }
@@ -174,7 +175,7 @@ class GraphProjectorTest {
       log.append(new AssertionRecord("Q900101", "Q900102", "PERFORMED", null, null, WIKIDATA));
       log.append(new Retraction("Q900101", "resolved to the painters, not the band", RETRACTED_AT));
 
-      GraphProjector.project(log, store);
+      GraphProjector.project(log, store, IdentityMerge.NONE);
 
       assertThat(store.node("Q900101")).isEmpty();
       assertThat(store.edgeCount()).isZero();
@@ -201,7 +202,7 @@ class GraphProjectorTest {
       log.append(edge);
       log.append(retraction);
 
-      GraphProjector.project(log, store);
+      GraphProjector.project(log, store, IdentityMerge.NONE);
 
       assertThat(log.readAll()).contains(wrong, edge, retraction);
     }
@@ -218,7 +219,7 @@ class GraphProjectorTest {
       log.append(new NodeAssertion("Q900102", NodeKind.WORK, "A Song", WIKIDATA));
       log.append(new AssertionRecord("Q900101", "Q900102", "PERFORMED", null, null, WIKIDATA));
 
-      GraphProjector.project(log, store);
+      GraphProjector.project(log, store, IdentityMerge.NONE);
 
       assertThat(store.node("Q900101").orElseThrow().label()).isEqualTo("The Right Ones");
       assertThat(store.edgeCount()).isEqualTo(1);
@@ -235,7 +236,9 @@ class GraphProjectorTest {
       assertThatThrownBy(
               () ->
                   IngestService.apply(
-                      store, new Retraction("Q900101", "wrong entity", RETRACTED_AT)))
+                      store,
+                      IdentityMerge.NONE,
+                      new Retraction("Q900101", "wrong entity", RETRACTED_AT)))
           .isInstanceOf(IllegalStateException.class)
           .hasMessageContaining("Q900101");
     }

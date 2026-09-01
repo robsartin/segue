@@ -74,3 +74,27 @@ The range was picked on the assumption that a high number would be free, which i
 external identifier looks like when it is done in good faith. The bullet is retained unedited above
 because an ADR records what was decided, not what turned out to be true. The rest of this ADR —
 anchoring identity to Wikidata QIDs — is unaffected.
+
+**Amendment (2026-08-31, issue #92).** Clause 1 above — *"The Wikidata QID is the identity spine"* —
+now admits a second identity kind, and the consequence *"Entities Wikidata does not know cannot be
+represented"* has had the decision it asked for.
+
+That consequence said the boundary was acceptable *"for a personal interest graph"* and that if it
+stopped being one it *"needs its own decision, not a workaround."*
+[ADR 53](0053-all-the-owners-interests-bounded-per-domain.md) is what stopped it being one, and
+[ADR 59](0059-owner-claims-as-a-third-layer.md) is that decision. A local entity carries an id with
+two leading zeros, which Wikibase's own `ItemId` grammar can never allocate
+([ADR 58](0058-stand-in-identifiers-cannot-be-allocatable.md)), so it is a second kind of identity
+living inside a shape the first kind cannot reach.
+
+**What that costs.** "Everything in the graph has a Wikidata QID" is no longer true, so a reader who
+assumed it — or a future adapter that round-trips an id to a source — has to read the id's shape
+first. In exchange, the two populations can never collide, and nothing outside `LocalEntity` and
+`SameAs` has to learn a second pattern: `Qid.check`, every `Q\d+` in `src/main`, and all of `port`,
+`tinker` and `jena` are untouched. The alternative that would have been honest at a glance — a
+visibly different prefix such as `L42` — is recorded in ADR 59 and lost on exactly that blast
+radius.
+
+Clauses 2 through 6 are unaffected: source-local identifiers still resolve to a QID in the ingest
+layer, and the edge vocabulary is still borrowed rather than invented. An owner edge is drawn from
+that same borrowed vocabulary.

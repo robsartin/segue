@@ -290,3 +290,40 @@ The behaviour is demonstrated in the gate on invented ratings instead — `Known
 case, exactly as `AffinityWeightedRecommendationTest` demonstrates ADR 45's weighting. Re-running
 against a later snapshot will name different entities; what should hold is the shape — a purely
 subtractive effect whose size tracks the degree floor.
+
+---
+
+**Amendment (2026-08-31, issue #92): the parameter is now called `notOffered` and carries a second
+population. Nothing above is withdrawn.**
+
+Owner claims (#92) gave the sweep a second reason to refuse a candidate. A merge asserts that a
+local id the owner minted is really some Wikidata item, and a merged local id must stop being
+offered: it is not a rejection — the owner may like the thing very much — but it is not a discovery
+either, because he already has it under another name.
+
+`CandidateSweep.over`'s second parameter is therefore renamed `suppressed` to **`notOffered`**, and
+`KnownList.notOffered(ratings, merges)` is what fills it: this ADR's suppressed set, unioned with the
+merged local ids. `KnownList.suppressed` is unchanged and is still the authority on its own rule.
+
+**The decision above is not reopened by that, and the union it argues against is a different one.**
+The section "Why the suppressed set is separate from the known-list" turns on `knownFound` and
+`knownMissing` being *reported* to the operator and describing the known-list — so folding a
+rejection into `known` would silently redefine two printed numbers. The `Sweep` record reports no
+count over the exclusion parameter at all (its fields are the candidates, `knownFound`,
+`knownMissing`, `hubIntermediatesExcluded`, and the two floor readings), so two populations sharing
+that parameter changes nothing it says about a run. The rule that a rejection stays out of `known`
+holds exactly as written, and so does the seed loop's indifference to the set: a merged local id, like
+a rejected one, is still available as an *intermediate*.
+
+**Where the two populations differ is `--revise`, and deliberately.** This ADR's "Why `--revise`
+still reaches a suppressed entity" rests on there being no other way to withdraw a rejection —
+`AffinityStore` has no delete, so re-rating the entity is the only path back and an unreachable
+suppression would be permanent. A merge removes that precondition: the rating is resolved onto the
+canonical id, which the deck deals, so the judgement is appealable there. A merged local id is
+therefore **not** in `KnownList.revisitable`, and dealing it would be actively harmful rather than
+merely redundant — `Equivalences.resolve` keeps one rating per thing, so a rating written against the
+dealt local id would be discarded on the next read and the owner would have rated a card to no
+effect. The principle this ADR actually defends — that no owner judgement becomes permanent and
+unappealable — is upheld by a different mechanism, not abandoned.
+
+`Equivalences` is the authority on the resolution itself; this amendment does not restate it.

@@ -459,6 +459,12 @@ public final class JenaGraphStore implements GraphStore {
   /**
    * The query that would be painful in a property graph and is trivial here: one GROUP BY over
    * named graphs, with the engine counting distinct sources.
+   *
+   * <p>The owner is filtered out of the count before the GROUP BY, mirroring {@link
+   * EdgeRecord#corroboration()} (#92): the owner routes a claim into the graph but is not a second
+   * witness to it, on {@code EdgeRecord}'s reasoning. Two independent implementations of one port
+   * method is exactly the seam ADR 18 exists to cross-check, and this is that seam - not a query
+   * this store gets to answer differently just because SPARQL makes the un-filtered version easy.
    */
   @Override
   public List<EdgeRecord> corroborated(int minDistinctSources) {
@@ -469,11 +475,13 @@ public final class JenaGraphStore implements GraphStore {
                 SELECT ?f ?p ?t (COUNT(DISTINCT ?src) AS ?n) WHERE {
                   GRAPH ?g { ?f ?p ?t }
                   ?g sg:source ?src .
+                  FILTER (?src != ?owner)
                 }
                 GROUP BY ?f ?p ?t
                 HAVING (COUNT(DISTINCT ?src) >= ?minSources)
                 """);
     pss.setLiteral("minSources", minDistinctSources);
+    pss.setLiteral("owner", Provenance.OWNER);
     return selectKeysThenHydrate(pss);
   }
 

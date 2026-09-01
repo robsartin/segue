@@ -5,6 +5,7 @@ import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.Candidate;
 import com.robsartin.segue.domain.EdgeRecord;
 import com.robsartin.segue.domain.ExpansionBounds;
+import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
@@ -201,12 +202,31 @@ public final class SegueService {
    * either bound below, so a caller cannot ask past the ceiling and a bitten ceiling is reported
    * exactly like any other truncation — through the same observed {@code truncated} flag, arriving
    * as {@code partial}.
+   *
+   * <p><b>A local entity is refused, and the refusal is the point</b> (#92). The owner mints one
+   * because no source models it, and its id is one Wikidata's grammar can never allocate (ADR 58),
+   * so there is no source to expand from now or later. The tempting alternative is to run the
+   * adapters anyway and return what they find, which is nothing — but ADR 56 has just finished
+   * establishing that an empty {@link ExpandResult} already carries two meanings, "found nothing"
+   * and "the source was unavailable", and teaching it a third would rebuild the defect ADR 56
+   * fixed. So this is an {@code error} with its own sentence rather than a silent {@code ok} with a
+   * zero in it. A merged local id is refused too: the equivalence gives the canonical id everything
+   * the local one held, and that is the id a source can answer for.
    */
   public ToolResult<ExpansionSummary> expandEntity(String qid, int maxNewEdges) {
     Objects.requireNonNull(qid, "qid");
     Optional<NodeRecord> seed = graph.node(qid);
     if (seed.isEmpty()) {
       return error("unknown entity: " + qid + " — add it before expanding");
+    }
+    // #92: the owner minted this, so no source has it and none ever will — its id is one Wikidata
+    // cannot allocate (ADR 58). Refused out loud, and before the bound is even checked, because
+    // no argument makes it expandable. Returning the empty result instead would be the cheaper
+    // move and the wrong one: ADR 56 has just separated the two things an empty ExpandResult
+    // already means, and a third would rebuild the defect it fixed.
+    if (LocalEntity.isLocal(qid)) {
+      return error(
+          "local entity: " + qid + " — no source to expand from, because the owner minted it");
     }
     if (maxNewEdges <= 0) {
       return error("maxNewEdges must be positive, got " + maxNewEdges);

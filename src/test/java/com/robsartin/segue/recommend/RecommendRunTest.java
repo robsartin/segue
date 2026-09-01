@@ -13,6 +13,7 @@ import static com.robsartin.segue.recommend.InventedWorld.padDegreeTo;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.domain.EdgeTypes;
+import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.KnownList;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.Recommendations;
@@ -72,7 +73,8 @@ class RecommendRunTest {
   }
 
   private List<Explained> run(Options options, Map<String, Integer> ratings) throws IOException {
-    return new RecommendRun(graph, INSTITUTIONS, Recommendations.EQUAL_REGARD, ratings)
+    return new RecommendRun(
+            graph, INSTITUTIONS, Recommendations.EQUAL_REGARD, ratings, Equivalences.NONE)
         .run(options, notes::add);
   }
 
@@ -90,7 +92,7 @@ class RecommendRunTest {
   @DisplayName("the warning comes first, before a candidate exists and long before the file does")
   void theWarningComesFirst() throws IOException {
     Options options = options(KNOWN_ONE, KNOWN_TWO);
-    new RecommendRun(graph, INSTITUTIONS, Recommendations.EQUAL_REGARD, Map.of())
+    new RecommendRun(graph, INSTITUTIONS, Recommendations.EQUAL_REGARD, Map.of(), Equivalences.NONE)
         .run(
             options,
             note -> {
@@ -109,7 +111,7 @@ class RecommendRunTest {
   void theCountsArriveBeforeTheWrite() throws IOException {
     Options options = options(KNOWN_ONE, KNOWN_TWO);
     List<String> beforeTheFile = new ArrayList<>();
-    new RecommendRun(graph, INSTITUTIONS, Recommendations.EQUAL_REGARD, Map.of())
+    new RecommendRun(graph, INSTITUTIONS, Recommendations.EQUAL_REGARD, Map.of(), Equivalences.NONE)
         .run(
             options,
             note -> {

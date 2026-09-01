@@ -108,6 +108,45 @@ public final class KnownList {
   }
 
   /**
+   * Every qid the candidate sweep must not offer: {@link #suppressed}, plus every local id the
+   * owner has merged into a canonical one (#92).
+   *
+   * <p><b>Two populations, one question.</b> A rejection and a merge are different judgements —
+   * "not this" against "this is that" — but the sweep asks each of them the same single question,
+   * and it is the only question it asks: <em>may this be a final candidate</em>. {@code
+   * CandidateSweep.over} takes one exclusion set and reports no count over it, so unioning the two
+   * corrupts nothing it says about a run. That is exactly the test ADR 50 applied when it kept the
+   * suppressed set <em>out</em> of {@code known}: {@code knownFound} and {@code knownMissing} are
+   * reported and describe the known-list, so a rejection folded in there would have changed what
+   * two printed numbers meant. Nothing here is reported, so nothing here changes meaning.
+   *
+   * <p><b>It lives here for {@link #revisitable}'s reason.</b> Two callers need this union — {@code
+   * RecommendRun} and {@code RateRun.buildDeck} — and a union written out at each call site is two
+   * copies that agree only until somebody adds a third contributing set to one of them. That has
+   * already happened once on this project (issue #109), which is why {@code revisitable} exists,
+   * and this is the same shape one question over.
+   *
+   * <p><b>A merged local id is not {@code revisitable} either, and that is a decision.</b> {@link
+   * #revisitable} unions the known-list with {@link #suppressed}, and a merged local id is in
+   * neither: its rating has been resolved onto the canonical id by {@code Equivalences.resolve}
+   * before any of this is asked. So the appeal path for a merged entity is to re-rate it under the
+   * id it turned out to have, which is the id the deck now deals. Dealing the local id as well
+   * would write a second live row and rebuild the very defect this method exists for.
+   *
+   * @param ratings the note-free bulk read, already resolved through {@code Equivalences.resolve} —
+   *     so a merged local id has no rating here and cannot be suppressed by one
+   * @param merges what the owner has merged, folded out of the log
+   */
+  public static Set<String> notOffered(Map<String, Integer> ratings, Equivalences merges) {
+    Objects.requireNonNull(ratings, "ratings");
+    Objects.requireNonNull(merges, "merges");
+
+    Set<String> off = new LinkedHashSet<>(suppressed(ratings));
+    off.addAll(merges.merged());
+    return Set.copyOf(off);
+  }
+
+  /**
    * Every qid a revision pass may deal at some rating: the known-list plus {@link #suppressed}.
    *
    * <p><b>Lives here, not in {@code Deck} or {@code RateRun}, for the reason this class exists at

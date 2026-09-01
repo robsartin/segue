@@ -89,10 +89,20 @@ final class InventedWorld {
   static void padDegreeTo(TinkerGraphStore graph, String qid, int degree) {
     int already = graph.edges(qid).size();
     for (int i = already; i < degree; i++) {
-      String filler = "Q9009" + (Math.abs(qid.hashCode()) % 90 + 10) + i;
+      String filler = fillerQid(qid, i);
       node(graph, filler, NodeKind.WORK, "filler " + filler);
       edge(graph, qid, filler, EdgeTypes.PERFORMED.code());
     }
+  }
+
+  /**
+   * The filler id one padding round mints, split out so {@link #padDegreeTo} and any caller that
+   * needs the same shape but a different provenance - {@code CandidateSweepTest}'s owner-sourced
+   * padding, for one - share a single formula rather than each spelling it out (issue #171: when
+   * the {@code Q9009xx} range migrates, there is exactly one expression to change).
+   */
+  static String fillerQid(String qid, int index) {
+    return "Q9009" + (Math.abs(qid.hashCode()) % 90 + 10) + index;
   }
 
   /** A busy CONCEPT, which is what issue #52 calls a hub. */

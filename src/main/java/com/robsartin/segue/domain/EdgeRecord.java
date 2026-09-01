@@ -25,9 +25,22 @@ public record EdgeRecord(
     sources = List.copyOf(Objects.requireNonNull(sources, "sources"));
   }
 
-  /** How many DISTINCT sources back this edge. The corroboration signal. */
+  /**
+   * How many DISTINCT sources back this edge. The corroboration signal.
+   *
+   * <p>An owner claim is filtered out before counting (#92): the owner routes an edge into the
+   * graph but does not vouch for it, so an edge a real source asserted and the owner also claimed
+   * corroborates once, not twice. ADR 55 declined {@code subgroup} partly on this exact hazard -
+   * one coding manufacturing agreement with itself - and an owner claim over a source's pair would
+   * do the same thing with the owner's own hand.
+   */
   public int corroboration() {
-    return (int) sources.stream().map(Provenance::sourceId).distinct().count();
+    return (int)
+        sources.stream()
+            .filter(source -> !source.isOwner())
+            .map(Provenance::sourceId)
+            .distinct()
+            .count();
   }
 
   /** True when every supporting assertion came from a model rather than a real source. */

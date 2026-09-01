@@ -7,9 +7,12 @@ import com.robsartin.segue.app.SegueApplication;
 import com.robsartin.segue.domain.AffinityRecord;
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.EdgeRecord;
+import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
+import com.robsartin.segue.domain.OwnerEdge;
 import com.robsartin.segue.domain.Provenance;
+import com.robsartin.segue.domain.SameAs;
 import com.robsartin.segue.ingest.IngestService;
 import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
@@ -19,6 +22,7 @@ import com.tngtech.archunit.core.domain.Dependency;
 import com.tngtech.archunit.core.domain.JavaAccess;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaCodeUnitAccess;
+import com.tngtech.archunit.core.domain.JavaConstructor;
 import com.tngtech.archunit.core.domain.properties.HasName;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
@@ -123,7 +127,7 @@ class ArchitectureTest {
    * fence exists it forbids the return edge, so no cycle can form.
    */
   static final List<String> DEV_TOOL_PACKAGES =
-      List.of("export", "rate", "ratings", "recommend", "retract", "seed");
+      List.of("export", "own", "rate", "ratings", "recommend", "retract", "seed");
 
   /**
    * Every dev-tool package except the ones named, as {@code ..x..} patterns, then {@code
@@ -431,6 +435,76 @@ class ArchitectureTest {
           .because(
               "ADR 19: the log is the source of truth and only ingest projects it — a graph write"
                   + " that skipped the log would be gone at the next boot");
+
+  /**
+   * A call to a constructor of {@code owner}, <b>or a reference to it</b>.
+   *
+   * <p>Shaped like {@link #callTo} and for the same reason (issue #104): ArchUnit models {@code new
+   * OwnerEdge(...)} as a {@code JavaConstructorCall} and {@code OwnerEdge::new} as a {@code
+   * JavaConstructorReference}, and those two meet only at {@link JavaCodeUnitAccess}. A rule
+   * written with {@code callConstructorWhere} would be structurally incapable of seeing the
+   * reference form, which is exactly the dormant gap #104 found in the method-call fences.
+   *
+   * <p>{@code equivalentTo}, not assignability: records are final, there is no subclass to reach
+   * the constructor through, and a target owner is the exact declaring type here rather than the
+   * static type of a receiver expression.
+   */
+  private static DescribedPredicate<JavaAccess<?>> constructionOf(Class<?> owner) {
+    return DescribedPredicate.<JavaAccess<?>>describe(
+            "a constructor call or a constructor reference", JavaCodeUnitAccess.class::isInstance)
+        .and(
+            JavaAccess.Predicates.target(HasName.Predicates.name(JavaConstructor.CONSTRUCTOR_NAME)))
+        .and(JavaAccess.Predicates.targetOwner(JavaClass.Predicates.equivalentTo(owner)))
+        .as("a construction of %s", owner.getSimpleName());
+  }
+
+  /**
+   * #92: the owner's three claims are made through their factories, never their constructors.
+   *
+   * <p><b>This rule is the structural half of a split the domain records make deliberately.</b>
+   * {@link LocalEntity}, {@link OwnerEdge} and {@link SameAs} validate two different things in two
+   * different places. Their canonical constructors enforce only what Wikidata's own grammar fixes
+   * and this project can never re-tighten — {@code Q\d+}, and ADR 58's fact that a leading zero is
+   * never allocatable. Their factories {@code minted()}, {@code claimed()} and {@code declared()}
+   * enforce this project's <em>conventions</em>: two leading zeros for a local id (issue #141), and
+   * ADR 22 clause 3's controlled relation vocabulary.
+   *
+   * <p>The split exists because the constructor is also the path {@code SqliteAssertionLog.readRow}
+   * rebuilds a logged row through, and the log is append-only (ADR 19): a row written under last
+   * month's convention has to stay decodable after the convention moves, which it already has once
+   * ({@code c837265}). Re-running today's convention against yesterday's row would make one old row
+   * take out boot replay, {@code rate}, {@code recommend}, {@code exportGraph}, {@code
+   * retractEntity} and {@code listRatings} at once, on a row nothing may delete.
+   *
+   * <p><b>What it costs, and what this rule buys back.</b> The cost is that {@code new
+   * OwnerEdge(from, to, "NOT_A_TYPE", now)} compiles, and is appendable. The obvious guard — a
+   * second copy of the vocabulary check at the write boundary — was deliberately refused, on the
+   * grounds that an unpinned duplicate of a rule is the copy a future writer forgets to move. This
+   * is the fix that adds no second copy: every <em>maker</em> of a claim is required to go through
+   * the one place the convention lives, and only the two packages that legitimately reconstruct a
+   * claim from storage may reach past it.
+   *
+   * <p><b>Two packages, and only two.</b> {@code domain}, because a factory's whole job is to
+   * delegate to the constructor it guards; {@code sqlite}, because {@code readRow} is
+   * reconstruction rather than claiming — the row was validated when it was made, and re-validating
+   * it on the way out is the re-litigation the split exists to prevent. Anything else that wants
+   * one of these claims is making one.
+   */
+  @ArchTest
+  static final ArchRule ownerClaimsAreMadeThroughTheirFactories =
+      noClasses()
+          .that()
+          .resideOutsideOfPackages("..domain..", "..sqlite..")
+          .should(
+              ArchConditions.accessTargetWhere(
+                  constructionOf(LocalEntity.class)
+                      .or(constructionOf(OwnerEdge.class))
+                      .or(constructionOf(SameAs.class))))
+          .because(
+              "#92: the conventions live in LocalEntity.minted, OwnerEdge.claimed and"
+                  + " SameAs.declared, so everything that MAKES an owner claim goes through them —"
+                  + " only domain and sqlite, which reconstruct logged rows, may reach the"
+                  + " constructors");
 
   /**
    * ADR 41: the graph exporter reads. It has no way to write, and that is the point.
@@ -1104,6 +1178,63 @@ class ArchitectureTest {
           .because(
               "ADR 44: retraction is a decision about the log, made offline, from a tool that"
                   + " cannot hold a graph, a rating, an engine or a network connection");
+
+  /**
+   * #92: the owner-claim tool appends through {@code ingest} and opens nothing else.
+   *
+   * <p><b>The seventh dev-side tool, and the second that writes a world-fact claim.</b> Its fence
+   * is deliberately the same shape as {@link #theRetractionToolOpensNothingElse}'s, and the reason
+   * is not that the two tools are alike — it is that they are unalike in the one way that would
+   * have argued for a graph, and still do not get one. A retraction genuinely <em>has</em> no graph
+   * half. An owner claim does: {@code IngestService.apply} has a case for each of the three, and a
+   * minted entity becomes a node the moment the log is replayed. What both tools lack is a
+   * <em>running</em> graph to apply it to, so the projection catches up at the next boot (ADR 24)
+   * and neither tool has any business holding a {@link GraphStore}. Naming the type rather than the
+   * two write calls is what makes that unarguable: {@link #onlyIngestAppliesClaimsToTheGraph}
+   * already forbids the calls from here, and this forbids reaching the object they are made on.
+   *
+   * <p><b>{@link AffinityStore} as a type, and it is not decoration.</b> A merge carries the
+   * owner's ratings across — that is half of what {@code SameAs} is for — but it carries them
+   * through {@link com.robsartin.segue.port.IdentityMerge} at read time, on the machine that holds
+   * the graph, and never from this tool. A rating is the one thing in segue that cannot be
+   * regenerated from a source, and the tool whose merge subcommand is the most plausible reason
+   * anyone would reach for the affinity table must be unable to reach it at all. That single clause
+   * covers both taste-layer writes and both taste-layer reads at once, which is why this package
+   * needs no second rule in the shape of {@link #theRetractionToolWritesOnlyRetractions}.
+   *
+   * <p>The sibling half comes from {@link #DEV_TOOL_PACKAGES}, which {@code own} now joins — the
+   * first real exercise of the derived list since issue #105 built it, and the reason this rule
+   * only had to be written once rather than seven times. A dependency on a sibling would let this
+   * tool inherit that sibling's fence instead of its own: {@code rate} may write a rating and this
+   * may not, {@code export} may build a projection and this has no graph to project onto. {@code
+   * java.net} because a claim about the owner's own shelf is a pure function of one local file and
+   * nothing about it leaves the machine — the same clause every sibling but {@code rate} carries,
+   * and {@code rate} is exempt only because it <em>is</em> an HTTP server.
+   */
+  @ArchTest
+  static final ArchRule theOwnerClaimToolOpensNothingElse =
+      noClasses()
+          .that()
+          .resideInAPackage("..own..")
+          .should()
+          .dependOnClassesThat(
+              JavaClass.Predicates.equivalentTo(GraphStore.class)
+                  .or(JavaClass.Predicates.equivalentTo(AffinityStore.class))
+                  .or(
+                      JavaClass.Predicates.resideInAnyPackage(
+                          otherDevToolsAnd(
+                              List.of("own"),
+                              "..tinker..",
+                              "..jena..",
+                              "..mcp..",
+                              "..app..",
+                              "java.net..",
+                              "javax.net.."))))
+          .because(
+              "#92: an owner claim is appended through IngestService.claim and applied at the next"
+                  + " boot — the tool holds no graph, never reaches the taste layer a merge"
+                  + " carries, borrows no sibling's fence, and cannot become an MCP tool by"
+                  + " accident");
 
   /**
    * The taste layer, by type rather than by package.

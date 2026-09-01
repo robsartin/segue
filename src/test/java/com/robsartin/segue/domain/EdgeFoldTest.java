@@ -19,11 +19,13 @@ import org.junit.jupiter.api.Test;
 class EdgeFoldTest {
 
   @Test
-  @DisplayName("25 assertions fold into exactly 22 edges, and every edge keeps its sources")
+  @DisplayName("26 assertions fold into exactly 22 edges, and every edge keeps its sources")
   void assertionsCollapseIntoEdges() {
     Map<String, EdgeRecord> edges = fold();
 
-    // 25 assertions, 3 pairs sharing a (from, type, to) triple (corroboration()), fold to 22.
+    // 26 assertions: 3 pairs sharing a (from, type, to) triple from two real sources, plus the
+    // owner's claim folding onto a fourth triple a real source already asserted (#92) — four
+    // folds, 26 assertions fold to 22 edges.
     assertThat(edges.size()).isEqualTo(22);
     assertThat(edges.values()).allSatisfy(e -> assertThat(e.sources()).isNotEmpty());
   }

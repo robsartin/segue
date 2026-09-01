@@ -180,13 +180,21 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   vs `provenance.assertedAt` (when we learned it). Never conflate them.
 - **Model-generated edges use a `llm:` source prefix** and stay quarantined until
   a real source corroborates. `EdgeRecord.isUncorroboratedHypothesis()`.
-- **Affinity is not an assertion, and the two layers never meet below
-  `SegueService`.** A rating lives in the `affinity` table behind `AffinityStore`,
-  carries no `Provenance` and no corroboration, and never reaches the graph or the
-  log. `note_affinity` is the only writer; `IngestService` never sees a rating.
-  Two ArchUnit rules enforce it in both directions
+- **Affinity is not an assertion.** A rating lives in the `affinity` table behind
+  `AffinityStore`, carries no `Provenance` and no corroboration, and never reaches
+  the graph or the log. `note_affinity` is the only writer; `IngestService` never
+  sees a rating. Two ArchUnit rules enforce it in both directions
   (`affinityNeverTouchesTheWorldFactLayer`,
   `theWorldFactLayerNeverTouchesAffinity`). ADR 33 and ADR 39.
+  *(Corrected 2026-08-31, issue #92. This bullet used to open "Affinity is not an
+  assertion, **and the two layers never meet below `SegueService`**", and there are
+  three layers now. Owner claims — a minted local entity, an owner edge, a merge —
+  are first-person like affinity and project to the graph like a world fact, so a
+  first-person claim reaches the world-fact store from `own` and `ingest`, well
+  below `SegueService`. A merge also carries ratings across, at read time through
+  `Equivalences` and the `IdentityMerge` port, which is the two stores meeting on
+  one machine. The clause the sentence was defending is intact and is stated on its
+  own terms above: **affinity** never reaches the graph or the log. ADR 59.)*
 - **A rating is a required integer 1-5; the note is optional; re-rating
   overwrites.** Negative affinity is 1-2, not a separate concept. One row per
   entity keyed by qid, with `updated_at` — there is no history table, and taste
