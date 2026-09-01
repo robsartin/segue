@@ -238,8 +238,12 @@ tasks.register<JavaExec>("retractEntity") {
     description =
         "Retracts one entity: appends a retraction claim so the projection stops showing that " +
             "entity and its edges. The log is never edited — every original claim stays in it. " +
-            "Needs no network. See ADR 44. Example: ./gradlew retractEntity " +
-            "--args=\"--qid Q12345 --reason 'resolved to the wrong entity' --dry-run\""
+            "Needs no network. See ADR 44 and ADR 60. --db is required, and SEGUE_DB does not " +
+            "satisfy it: this tool has no default database, because the one it used to have was " +
+            "the hole in issue #179. Write \$HOME and not ~ — a tilde does not expand inside " +
+            "double quotes. Example: ./gradlew retractEntity --args=\"--db " +
+            "\$HOME/.segue/segue.db --qid Q12345 --reason 'resolved to the wrong entity' " +
+            "--dry-run\""
     mainClass.set("com.robsartin.segue.retract.RetractCli")
     classpath = sourceSets["main"].runtimeClasspath
     // sqlite-jdbc loads a native library, the same grant tasks.test makes.
@@ -255,8 +259,13 @@ tasks.register<JavaExec>("ownClaim") {
             "edge between two ids, or merge a local id into the QID it turned out to be. " +
             "Appends to the log and writes nothing else — the graph is rebuilt from it at the " +
             "next boot. Deliberately not an MCP tool: an owner claim skips the corroboration " +
-            "count, so a model must not be able to make one. Needs no network. Example: " +
-            "./gradlew ownClaim --args=\"mint --kind WORK --label 'A Self-Pressed Record'\""
+            "count, so a model must not be able to make one. Needs no network. See ADR 60. " +
+            "--db is required, and SEGUE_DB does not satisfy it; there is no default database " +
+            "here. Type the whole task name: Gradle matches abbreviations by camel-case hump, " +
+            "so ./gradlew own resolves to :ownClaim and runs rather than reporting an unknown " +
+            "task (issue #179). Write \$HOME and not ~ — a tilde does not expand inside double " +
+            "quotes. Example: ./gradlew ownClaim --args=\"mint --db \$HOME/.segue/segue.db " +
+            "--kind WORK --label 'A Self-Pressed Record'\""
     mainClass.set("com.robsartin.segue.own.OwnCli")
     classpath = sourceSets["main"].runtimeClasspath
     // sqlite-jdbc loads a native library, the same grant tasks.test makes.

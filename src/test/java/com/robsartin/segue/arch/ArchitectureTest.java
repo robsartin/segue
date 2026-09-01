@@ -17,7 +17,9 @@ import com.robsartin.segue.ingest.IngestService;
 import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.GraphStore;
+import com.robsartin.segue.support.DefaultDatabase;
 import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.AccessTarget;
 import com.tngtech.archunit.core.domain.Dependency;
 import com.tngtech.archunit.core.domain.JavaAccess;
 import com.tngtech.archunit.core.domain.JavaClass;
@@ -32,6 +34,7 @@ import com.tngtech.archunit.lang.conditions.ArchConditions;
 import com.tngtech.archunit.library.dependencies.SliceAssignment;
 import com.tngtech.archunit.library.dependencies.SliceIdentifier;
 import com.tngtech.archunit.library.dependencies.SlicesRuleDefinition;
+import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashSet;
@@ -1235,6 +1238,133 @@ class ArchitectureTest {
                   + " boot — the tool holds no graph, never reaches the taste layer a merge"
                   + " carries, borrows no sibling's fence, and cannot become an MCP tool by"
                   + " accident");
+
+  /**
+   * #179: the two claim tools have no default database, and cannot quietly grow one back.
+   *
+   * <p>The dev tools that resolve {@code --db}, then {@code SEGUE_DB}, then {@code
+   * ${user.home}/.segue/segue.db} do it through the one copy of that rule in {@link
+   * DefaultDatabase} — so they are exactly its callers, which is a grep rather than a list anybody
+   * has to keep correct here. {@code retract} and {@code own} require {@code --db} outright,
+   * because they append a first-person claim to a log ADR 19 forbids editing, and because an
+   * agent's shell is initialised from the owner's profile and inherits {@code SEGUE_DB} — a
+   * variable cannot tell the owner apart from an agent running as the owner.
+   *
+   * <p><b>This rule is the second line of defence, not the first, and an earlier draft of this
+   * javadoc had that backwards.</b> It claimed the refusal tests would still pass if a later edit
+   * wired the default in behind the refusal. They do not. Measured against three separate plants —
+   * a call to {@link DefaultDatabase#resolve}, the env-or-home rule re-implemented inline, and the
+   * same rule in a class outside {@code support} — each one reds <b>three</b> tests in {@code
+   * RetractCliTest} or {@code OwnCliTest}: the refusal, the {@code --dry-run} refusal and the
+   * {@code SEGUE_DB}-only refusal, each of which also asserts that no database was created under
+   * the test's own home. Those tests are what catches a default coming back.
+   *
+   * <p>What this rule adds is what a behaviour test cannot survive: it still holds when the tests
+   * are <em>edited to match</em>, which is the ordinary way a guard dies — someone wires the
+   * default in, three tests go red, and the cheapest way back to green is to change what they
+   * expect. This rule has to be deleted deliberately instead, and it states the decision at the
+   * boundary rather than inside a test's expectations.
+   *
+   * <p>{@code dependOnClassesThat} rather than {@code callMethodWhere}, deliberately. A dependency
+   * is any constant-pool reference — a call, a method reference, a field of that type, a signature
+   * — so the rule does not have to anticipate the shape the reintroduction takes. {@code
+   * callConstructorWhere} would have missed a {@code DefaultDatabase::resolve} method reference
+   * entirely, which is the trap issue #105 already recorded in {@link #callTo}.
+   *
+   * <p><b>Prose does not count, and that is why this rule needs a control that plants real
+   * code.</b> Both CLIs name {@code DefaultDatabase} inside {@code &#123;@code …&#125;} javadoc to
+   * say they do not use it, and javadoc leaves no bytecode edge: {@code javap -v} finds zero
+   * references to it in {@code RetractCli}, {@code OwnCli} and all their nested classes, against
+   * four in each class that really does call {@code resolve}. A control that planted only a comment
+   * would pass while testing nothing.
+   */
+  @ArchTest
+  static final ArchRule theClaimToolsHaveNoDefaultDatabase =
+      noClasses()
+          .that()
+          .resideInAnyPackage("..retract..", "..own..")
+          .should()
+          .dependOnClassesThat(JavaClass.Predicates.equivalentTo(DefaultDatabase.class))
+          .because(
+              "#179: retraction and owner-claim append a permanent first-person claim, so the"
+                  + " database is named per invocation and there is no default here to fall back"
+                  + " to — SEGUE_DB is inherited by any shell started from the owner's profile");
+
+  /**
+   * A {@link Path} handed out by anything in {@code support} — a method's return, a field's type.
+   *
+   * <p>Both forms, because a capability does not care how it is packaged: {@code
+   * RequiredDatabase.resolved(env, home)} and {@code public static final Path DEFAULT} give a
+   * caller the same thing. {@code CodeUnitAccessTarget} covers a call <b>and</b> a method reference
+   * (they share that supertype), which is the distinction {@link #callTo} exists to make and the
+   * one a {@code callMethodWhere} predicate would have lost.
+   */
+  private static final DescribedPredicate<JavaAccess<?>> A_PATH_TAKEN_OUT_OF_SUPPORT =
+      new DescribedPredicate<>("a Path taken out of support") {
+        @Override
+        public boolean test(JavaAccess<?> access) {
+          AccessTarget target = access.getTarget();
+          if (!target.getOwner().getPackageName().startsWith("com.robsartin.segue.support")) {
+            return false;
+          }
+          JavaClass handedBack =
+              switch (target) {
+                case AccessTarget.CodeUnitAccessTarget codeUnit -> codeUnit.getRawReturnType();
+                case AccessTarget.FieldAccessTarget field -> field.getRawType();
+                default -> null;
+              };
+          return handedBack != null && handedBack.isEquivalentTo(Path.class);
+        }
+      };
+
+  /**
+   * #179: the claim tools' database comes from the flag they were typed with, and from nowhere
+   * else.
+   *
+   * <p>{@link #theClaimToolsHaveNoDefaultDatabase} forbids a <em>name</em>. This forbids the
+   * <em>capability</em>, and the difference is not academic — it was measured. Both tools depend on
+   * {@code support.RequiredDatabase}, which calls {@link DefaultDatabase#resolve} itself for the
+   * path it quotes back in its refusal. Give that class one more public method returning a {@link
+   * Path} and wire it into either tool, and the default is back with the same reach it had before
+   * #179 — while the class the other rule names is never mentioned. Planted exactly that way, the
+   * other rule stayed <b>green</b>.
+   *
+   * <p><b>Why {@code Path} is the line, and why a {@code String} is not.</b> The refusal has to
+   * quote the database the tool would once have used or the owner's next command is a lookup, so
+   * {@code support} genuinely does hand these two packages that path — inside a sentence. What
+   * separates the sentence from the capability is the type: a {@code String} has to be parsed back
+   * into a {@code Path} by a line somebody has to write and a reviewer can see, and a {@code Path}
+   * does not. That is the whole reason {@code RequiredDatabase.refusal} returns one and not the
+   * other, and this rule is what makes that a property of the build rather than of the javadoc that
+   * asserts it.
+   *
+   * <p><b>Over {@code support} as a package, not over {@code RequiredDatabase} as a class.</b> A
+   * rule naming the one class that bridges these packages today would be the same shape as the
+   * mistake it guards — the next helper to carry a path across would inherit nothing, exactly as
+   * {@code ArchitectureTest}'s hand-written sibling lists kept missing the newest tool until issue
+   * #105 derived them. The claim tools call nothing in {@code support} but {@code refusal} today,
+   * so the whole surface can be fenced at no cost to anything that exists.
+   *
+   * <p><b>Three routes leave every rule in this class green</b>, all three measured rather than
+   * reasoned about, and all three caught by the refusal tests instead: the env-or-home rule
+   * re-implemented inline in either CLI (the mistake this branch already made once); a {@code
+   * support} helper returning the default as a {@code String} for the caller to parse; and the same
+   * helper returning a {@code Path} from <b>any package that is not {@code support}</b> — a new
+   * {@code com.robsartin.segue.dbpath.DbPath} wired into {@code OwnCli} passed both #179 rules and
+   * {@link #theOwnerClaimToolOpensNothingElse} together. The fence is scoped to one package and one
+   * class name, so a path handed out from elsewhere is outside it by construction. {@code Path.of}
+   * on the flag's own value is of course what both tools do and must keep doing.
+   */
+  @ArchTest
+  static final ArchRule theClaimToolsTakeTheirDatabaseFromTheFlagAlone =
+      noClasses()
+          .that()
+          .resideInAnyPackage("..retract..", "..own..")
+          .should(ArchConditions.accessTargetWhere(A_PATH_TAKEN_OUT_OF_SUPPORT))
+          .because(
+              "#179: retraction and owner-claim take the database from the --db they were typed"
+                  + " with — support may hand them the default path inside a refusal sentence, and"
+                  + " may not hand either of them a Path they could open");
 
   /**
    * The taste layer, by type rather than by package.

@@ -4,6 +4,7 @@ import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.Qid;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
+import com.robsartin.segue.support.RequiredDatabase;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -16,8 +17,23 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The entry point, run from Gradle: {@code ./gradlew ownClaim --args="mint --kind WORK --label 'A
- * Self-Pressed Record'"}.
+ * The entry point, run from Gradle: {@code ./gradlew ownClaim --args="mint --db
+ * $HOME/.segue/segue.db --kind WORK --label 'A Self-Pressed Record'"}.
+ *
+ * <p><b>{@code $HOME} and not {@code ~}.</b> A tilde does not expand inside double quotes in either
+ * zsh or bash, so {@code --args="mint --db ~/.segue/…"} arrives as a literal {@code ~} and the tool
+ * dies with {@code no segue database at ~/.segue/segue.db}. This class already argues that a broken
+ * example is worse than a broken task name; a pastable one has to survive the quotes it is pasted
+ * inside.
+ *
+ * <p><b>{@code --db} is required</b> (#179). This tool has no default database at all, where the
+ * tools that do fall back to {@code SEGUE_DB} or {@code ${user.home}/.segue/segue.db} are exactly
+ * the callers of {@code support.DefaultDatabase.resolve} - grep for it rather than trust a list
+ * here, and note that {@code resolveNames} and {@code hoverableSvg} have no {@code --db} at all.
+ * The default is what turned the mistake below into a permanent row. {@code SEGUE_DB} does not
+ * satisfy the requirement either: an agent's shell is initialised from the owner's profile and
+ * inherits it, so the variable cannot tell the owner apart from an agent running as the owner, and
+ * a flag typed per invocation can.
  *
  * <p><b>The task is {@code ownClaim}. This line said {@code own} - the package name - and that is
  * worse than a broken example.</b> Gradle matches abbreviated task names by camel-case hump, so
@@ -25,7 +41,9 @@ import org.slf4j.LoggerFactory;
  * DEFAULT database, because {@code --db} was not part of the copied line either. Verified against
  * this build: {@code ./gradlew own --args="mint …" --dry-run} prints {@code :ownClaim SKIPPED}. A
  * wrong invocation that errors costs a retype; this one appends a row to a log ADR 19 forbids
- * editing. Every example here names {@code ownClaim} in full, and passes {@code --db}.
+ * editing. Every example here names {@code ownClaim} in full, and passes {@code --db} - which this
+ * tool now requires outright: {@code ./gradlew own} still resolves to {@code :ownClaim}, and now
+ * refuses to do anything.
  *
  * <p><b>Dev-side, and deliberately never a seventh MCP tool.</b> ADR 26 held {@code assert_edge}
  * back until corroboration was visibly working and ADR 56 made it work - but the reason for holding
@@ -57,7 +75,7 @@ public final class OwnCli {
           + "> --label \"<name>\""
           + " | assert --from <Q…> --to <Q…> --type <CODE>"
           + " | merge --local <Q00…> --canonical <Q…>"
-          + " [--dry-run] [--db <segue.db>]";
+          + " --db <segue.db> [--dry-run]";
 
   private OwnCli() {}
 
@@ -72,10 +90,15 @@ public final class OwnCli {
    * OwnRun}'s switch is exhaustive and a fourth operation cannot be added without deciding what it
    * does.
    *
-   * @param database the log to append to. Defaults exactly as the server's does: {@code SEGUE_DB}
-   *     if set, otherwise {@code ${user.home}/.segue/segue.db}. Stated here as well as in {@code
-   *     application.yaml} because this tool is plain Java and ADR 32 keeps Spring out of every
-   *     package but {@code app} and {@code mcp}
+   * @param database the log to append to. Required, and named by {@code --db} on every invocation:
+   *     this tool has no default, because the default is what turned {@code ./gradlew own} into a
+   *     row in the owner's real log (#179). {@code SEGUE_DB} does not satisfy it - an agent's shell
+   *     is initialised from the owner's profile and inherits it. Every dev tool that does still
+   *     default goes through {@code support.DefaultDatabase.resolve}, so grepping for that call is
+   *     what says which ones they are; this package deliberately does not use it. It uses {@code
+   *     support.RequiredDatabase} instead, which owns the refusal sentence and calls {@code
+   *     resolve} itself: the rule stays in one place, and this package stays clear of the class
+   *     {@code ArchitectureTest.theClaimToolsHaveNoDefaultDatabase} names
    * @param dryRun report what would be claimed and append nothing. Not decoration: every operation
    *     here appends a row to a log that is never edited, and two of the three name qids by hand
    */
@@ -163,7 +186,11 @@ public final class OwnCli {
       }
     }
 
-    Path resolved = defaultDatabase(values.remove("--db"), envDatabase, userHome);
+    String given = values.remove("--db");
+    if (given == null) {
+      throw usage(RequiredDatabase.refusal(envDatabase, userHome));
+    }
+    Path resolved = Path.of(given);
     return switch (operation) {
       case "mint" -> mint(resolved, values, dryRun);
       case "assert" -> assertion(resolved, values, dryRun);
@@ -241,15 +268,6 @@ public final class OwnCli {
     return Stream.of(NodeKind.values()).map(Enum::name).collect(Collectors.joining("|"));
   }
 
-  private static Path defaultDatabase(String given, String envDatabase, String userHome) {
-    if (given != null) {
-      return Path.of(given);
-    }
-    return envDatabase != null && !envDatabase.isBlank()
-        ? Path.of(envDatabase)
-        : Path.of(userHome, ".segue", "segue.db");
-  }
-
   private static String valueOf(String[] args, int i, String flag) {
     if (i + 1 >= args.length) {
       throw usage(flag + " needs a value");
@@ -263,7 +281,21 @@ public final class OwnCli {
   }
 
   public static void main(String[] args) {
-    Options options = parse(args, System.getenv("SEGUE_DB"), System.getProperty("user.home"));
+    run(args, System.getenv("SEGUE_DB"), System.getProperty("user.home"));
+  }
+
+  /**
+   * {@code main}, with the two environment reads passed in.
+   *
+   * <p>A seam, and not a decorative one: the order of the two refusals below is the behaviour. The
+   * missing {@code --db} has to be refused by {@link #parse} before {@code Files.exists} is
+   * reached, or the operator is told "no segue database at …" - which reads as a missing file
+   * rather than a missing flag, and names a path they never typed. A test can only hold that order
+   * if it can supply a home directory of its own; through {@code main} it would have to reach the
+   * real one.
+   */
+  static void run(String[] args, String envDatabase, String userHome) {
+    Options options = parse(args, envDatabase, userHome);
 
     // Refuse a database that is not there rather than creating an empty one and claiming into it:
     // SqliteAssertionLog's constructor creates the file and its schema if absent, which is right

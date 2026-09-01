@@ -2,6 +2,7 @@ package com.robsartin.segue.retract;
 
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
+import com.robsartin.segue.support.RequiredDatabase;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -11,7 +12,23 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The entry point, run from Gradle: {@code ./gradlew retractEntity --args="--qid Q… --reason …"}.
+ * The entry point, run from Gradle: {@code ./gradlew retractEntity --args="--db
+ * $HOME/.segue/segue.db --qid Q… --reason …"}.
+ *
+ * <p><b>{@code $HOME} and not {@code ~} in that example, and it is not a style choice.</b> A tilde
+ * does not expand inside double quotes in either zsh or bash, so {@code --args="--db ~/.segue/…"}
+ * arrives as the literal four characters {@code ~/.s…} and the tool dies with {@code no segue
+ * database at ~/.segue/segue.db}. An example that cannot be pasted is the failure this class's next
+ * paragraph is about.
+ *
+ * <p><b>{@code --db} is required</b> (#179). The dev tools that do default to {@code SEGUE_DB} or
+ * {@code ${user.home}/.segue/segue.db} are exactly the callers of {@code
+ * support.DefaultDatabase.resolve} - grep for it rather than trust a list here, and note that
+ * {@code resolveNames} and {@code hoverableSvg} have no {@code --db} at all. This one refuses to
+ * run without being told which database to append to, because a retraction lands in a log ADR 19
+ * forbids editing - it cannot be taken back, only appended over. {@code SEGUE_DB} does not satisfy
+ * the requirement: an agent's shell is initialised from the owner's profile and inherits it, so it
+ * cannot tell the owner apart from an agent running as the owner.
  *
  * <p><b>Deliberately not a seventh MCP tool.</b> ADR 26 pins the surface at six, and #5, ADR 40,
  * ADR 41 and ADR 43 each declined a seventh for lighter reasons than this one. Retraction is the
@@ -33,17 +50,22 @@ public final class RetractCli {
   private static final Pattern QID = Pattern.compile("Q\\d+");
 
   private static final String USAGE =
-      "usage: --qid <Q12345> --reason \"<why>\" [--dry-run] [--db <segue.db>]";
+      "usage: --db <segue.db> --qid <Q12345> --reason \"<why>\" [--dry-run]";
 
   private RetractCli() {}
 
   /**
    * Which entity, why, and whether to stop short of appending.
    *
-   * @param database the log to append to. Defaults exactly as the server's does: {@code SEGUE_DB}
-   *     if set, otherwise {@code ${user.home}/.segue/segue.db}. Stated here as well as in {@code
-   *     application.yaml} because this tool is plain Java and ADR 32 keeps Spring out of every
-   *     package but {@code app} and {@code mcp}
+   * @param database the log to append to. Required, and named by {@code --db} on every invocation:
+   *     this tool has no default, because the default was the hole in #179. An agent's shell is
+   *     initialised from the owner's profile, so {@code SEGUE_DB} is inherited and cannot stand in
+   *     for a flag that is typed each time. Every dev tool that does still default goes through
+   *     {@code support.DefaultDatabase.resolve}, so grepping for that call is what says which ones
+   *     they are; this package deliberately does not use it. It uses {@code
+   *     support.RequiredDatabase} instead, which owns the refusal sentence and calls {@code
+   *     resolve} itself: the rule stays in one place, and this package stays clear of the class
+   *     {@code ArchitectureTest.theClaimToolsHaveNoDefaultDatabase} names
    * @param reason required. The value of keeping a retraction in an append-only log is that it
    *     records what we concluded and why; there is no editing one afterwards to add the why
    * @param dryRun report what the retraction would reach and append nothing. Not decoration: this
@@ -82,6 +104,9 @@ public final class RetractCli {
       }
     }
 
+    if (database == null) {
+      throw usage(RequiredDatabase.refusal(envDatabase, userHome));
+    }
     if (qid == null) {
       throw usage("--qid is required");
     }
@@ -91,14 +116,7 @@ public final class RetractCli {
     if (reason == null || reason.isBlank()) {
       throw usage("--reason is required — the log records why, and is never edited afterwards");
     }
-    return new Options(
-        database != null ? database : defaultDatabase(envDatabase, userHome), qid, reason, dryRun);
-  }
-
-  private static Path defaultDatabase(String envDatabase, String userHome) {
-    return envDatabase != null && !envDatabase.isBlank()
-        ? Path.of(envDatabase)
-        : Path.of(userHome, ".segue", "segue.db");
+    return new Options(database, qid, reason, dryRun);
   }
 
   private static String valueOf(String[] args, int i, String flag) {
@@ -114,7 +132,21 @@ public final class RetractCli {
   }
 
   public static void main(String[] args) {
-    Options options = parse(args, System.getenv("SEGUE_DB"), System.getProperty("user.home"));
+    run(args, System.getenv("SEGUE_DB"), System.getProperty("user.home"));
+  }
+
+  /**
+   * {@code main}, with the two environment reads passed in.
+   *
+   * <p>A seam, and not a decorative one: the order of the two refusals below is the behaviour. The
+   * missing {@code --db} has to be refused by {@link #parse} before {@code Files.exists} is
+   * reached, or the operator is told "no segue database at …" - which reads as a missing file
+   * rather than a missing flag, and names a path they never typed. A test can only hold that order
+   * if it can supply a home directory of its own; through {@code main} it would have to reach the
+   * real one.
+   */
+  static void run(String[] args, String envDatabase, String userHome) {
+    Options options = parse(args, envDatabase, userHome);
 
     // Refuse a database that is not there rather than creating an empty one and retracting
     // nothing: SqliteAssertionLog's constructor creates the file and its schema if absent, which

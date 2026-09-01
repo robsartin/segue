@@ -4,9 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.sqlite.SqliteAssertionLog;
+import com.robsartin.segue.support.RequiredDatabase;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -24,8 +28,23 @@ class OwnCliTest {
 
   @TempDir Path dir;
 
+  private static final String DATABASE = "/graphs/some.db";
+
   private static OwnCli.Options parse(String... args) {
-    return OwnCli.parse(args, null, "/home/invented");
+    return OwnCli.parse(withDatabase(args), null, "/home/invented");
+  }
+
+  /** Every valid invocation now names --db, so every test of anything else has to name it too. */
+  private static String[] withDatabase(String[] args) {
+    if (args.length == 0 || List.of(args).contains("--db")) {
+      return args;
+    }
+    String[] named = new String[args.length + 2];
+    named[0] = args[0];
+    named[1] = "--db";
+    named[2] = DATABASE;
+    System.arraycopy(args, 1, named, 3, args.length - 1);
+    return named;
   }
 
   @Test
@@ -36,7 +55,7 @@ class OwnCliTest {
     assertThat(mint.kind()).isEqualTo(NodeKind.WORK);
     assertThat(mint.label()).isEqualTo("A Pressed Record");
     assertThat(mint.dryRun()).isFalse();
-    assertThat(mint.database()).isEqualTo(Path.of("/home/invented", ".segue", "segue.db"));
+    assertThat(mint.database()).isEqualTo(Path.of(DATABASE));
   }
 
   @Test
@@ -62,22 +81,71 @@ class OwnCliTest {
   }
 
   @Test
-  @DisplayName("should let SEGUE_DB win over the home directory when both are available")
-  void shouldLetSegueDbWinOverTheHomeDirectoryWhenBothAreAvailable() {
-    OwnCli.Options options =
-        OwnCli.parse(
-            new String[] {"mint", "--kind", "PERSON", "--label", "someone"},
-            "/elsewhere/segue.db",
-            "/home/invented");
-
-    assertThat(options.database()).isEqualTo(Path.of("/elsewhere/segue.db"));
-  }
-
-  @Test
   @DisplayName("should take no value when --dry-run is given")
   void shouldTakeNoValueWhenDryRunIsGiven() {
     assertThat(parse("mint", "--kind", "PERSON", "--label", "someone", "--dry-run").dryRun())
         .isTrue();
+  }
+
+  @Test
+  @DisplayName(
+      "should refuse when --db is not given, naming the flag and the path it would have used")
+  void shouldRefuseWhenTheDatabaseIsNotNamed() {
+    // The invocation from issue #179 itself: `./gradlew own --args="mint --kind WORK --label x"`,
+    // which Gradle resolved to :ownClaim and ran against the owner's real log because --db was
+    // not part of the copied line. The message names the flag and the path it would have used,
+    // so the owner's next command is a copy-paste rather than a lookup.
+    assertThatIllegalArgumentException()
+        .isThrownBy(
+            () ->
+                OwnCli.parse(
+                    new String[] {"mint", "--kind", "WORK", "--label", "x"},
+                    null,
+                    "/home/invented"))
+        // The whole sentence, from the one class that owns it: RetractCliTest asserts the same
+        // string, so the two tools are held to one refusal rather than two that look alike today.
+        .withMessageContaining(RequiredDatabase.refusal(null, "/home/invented"));
+  }
+
+  @Test
+  @DisplayName("should refuse when only SEGUE_DB is set, and name it as the path to pass to --db")
+  void shouldRefuseWhenOnlySegueDbIsSet() {
+    // RetractCliTest's reason, and it applies here first: the invocation in issue #179 was run by
+    // an agent in a shell started from the owner's profile. SEGUE_DB cannot distinguish the owner
+    // from an agent running as the owner; a flag typed per invocation can.
+    assertThatThrownBy(
+            () ->
+                OwnCli.parse(
+                    new String[] {"mint", "--kind", "WORK", "--label", "x"},
+                    "/elsewhere/segue.db",
+                    "/home/invented"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining(RequiredDatabase.refusal("/elsewhere/segue.db", "/home/invented"))
+        .hasMessageContaining("/elsewhere/segue.db")
+        .hasMessageNotContaining("/home/invented");
+  }
+
+  @Test
+  @DisplayName("should refuse before opening any database when --dry-run is given without --db")
+  void shouldRefuseBeforeOpeningAnyDatabaseWhenDryRunIsGivenWithoutTheDatabase() {
+    // RetractCliTest's rule, and for the same reason: the property is an ORDER. If the refusal
+    // came after the Files.exists check the operator would be told "no segue database at …",
+    // which reads as a missing file rather than a missing flag.
+    Path home = dir.resolve("home");
+
+    assertThatThrownBy(
+            () ->
+                OwnCli.run(
+                    new String[] {"mint", "--kind", "WORK", "--label", "x", "--dry-run"},
+                    null,
+                    home.toString()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("--db")
+        .hasMessageNotContaining("no segue database");
+
+    assertThat(Files.exists(home.resolve(".segue").resolve("segue.db")))
+        .as("no database was opened, so none was created")
+        .isFalse();
   }
 
   @Test
@@ -185,8 +253,59 @@ class OwnCliTest {
                       "mint", "--db", absent.toString(), "--kind", "WORK", "--label", "a book"
                     }))
         .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("no segue database");
+        .hasMessageContaining("no segue database")
+        // A different mistake from the one above, and it has to read as one: a path that does not
+        // name a database, rather than a flag nobody typed.
+        .hasMessageNotContaining("--db is required");
 
     assertThat(Files.exists(absent)).as("the database was not created").isFalse();
+  }
+
+  @Test
+  @DisplayName("should proceed when --db names an existing database")
+  void shouldProceedWhenTheOneNamedByDbExists() {
+    Path database = dir.resolve("segue.db");
+    try (SqliteAssertionLog created = new SqliteAssertionLog(database)) {
+      assertThat(created.readAll()).isEmpty();
+    }
+
+    OwnCli.run(
+        new String[] {
+          "mint", "--db", database.toString(), "--kind", "WORK", "--label", "a book", "--dry-run"
+        },
+        null,
+        "/home/invented");
+
+    try (SqliteAssertionLog after = new SqliteAssertionLog(database)) {
+      assertThat(after.readAll()).as("a dry run appends nothing").isEmpty();
+    }
+  }
+
+  @Test
+  @DisplayName("should append the minted entity when the run is not a dry run")
+  void shouldAppendTheMintedEntityWhenTheRunIsNotADryRun() {
+    // The only test that takes this tool all the way through the write. Everything else about
+    // --db is a refusal or a dry run, so without this the non-dry-run path - the one the whole
+    // fence exists to guard - would be covered by nothing at the command-line level.
+    Path database = dir.resolve("segue.db");
+    try (SqliteAssertionLog created = new SqliteAssertionLog(database)) {
+      assertThat(created.readAll()).isEmpty();
+    }
+
+    OwnCli.run(
+        new String[] {"mint", "--db", database.toString(), "--kind", "WORK", "--label", "a book"},
+        null,
+        "/home/invented");
+
+    try (SqliteAssertionLog after = new SqliteAssertionLog(database)) {
+      assertThat(after.readAll())
+          .singleElement()
+          .isInstanceOfSatisfying(
+              LocalEntity.class,
+              minted -> {
+                assertThat(minted.kind()).isEqualTo(NodeKind.WORK);
+                assertThat(minted.label()).isEqualTo("a book");
+              });
+    }
   }
 }

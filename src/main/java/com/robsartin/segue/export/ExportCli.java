@@ -5,6 +5,7 @@ import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
+import com.robsartin.segue.support.DefaultDatabase;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -65,11 +66,9 @@ public final class ExportCli {
    *     {@code out} extension names, otherwise {@link OutputFormat#DEFAULT}. A {@code --format}
    *     that disagrees with the extension never reaches here — it is refused. See {@code
    *     formatFor}.
-   * @param database the assertion log to read. Defaults exactly as the server's does — {@code
-   *     SEGUE_DB} if set, otherwise {@code ${user.home}/.segue/segue.db}. That default is stated
-   *     twice, here and in {@code application.yaml}, because this tool is plain Java and ADR 32
-   *     keeps Spring out of every package but {@code app} and {@code mcp}; the yaml is the
-   *     authority for the server and this is the authority for the tool.
+   * @param database the assertion log to read. Defaults per {@link DefaultDatabase#resolve} — one
+   *     rule shared with {@code RateCli}, {@code RatingsCli} and {@code RecommendCli} (issue #179)
+   *     — rather than a copy of it stated here.
    */
   public record Options(
       ViewKind view,
@@ -103,7 +102,7 @@ public final class ExportCli {
   static Options parse(String[] args, String envDatabase, String userHome) {
     ViewKind view = null;
     OutputFormat requestedFormat = null;
-    Path database = null;
+    String db = null;
     Path out = null;
     String fromQid = null;
     String toQid = null;
@@ -125,7 +124,7 @@ public final class ExportCli {
           switch (flag) {
             case "--view" -> view = ViewKind.parse(value);
             case "--format" -> requestedFormat = OutputFormat.parse(value);
-            case "--db" -> database = Path.of(value);
+            case "--db" -> db = value;
             case "--out" -> out = Path.of(value);
             case "--from" -> fromQid = value;
             case "--to" -> toQid = value;
@@ -182,7 +181,7 @@ public final class ExportCli {
     return new Options(
         view,
         formatFor(requestedFormat, out),
-        database != null ? database : defaultDatabase(envDatabase, userHome),
+        DefaultDatabase.resolve(db, envDatabase, userHome),
         out,
         fromQid,
         toQid,
@@ -244,12 +243,6 @@ public final class ExportCli {
               + ". Change one — a file whose name says otherwise fails later, in another tool");
     }
     return requested;
-  }
-
-  private static Path defaultDatabase(String envDatabase, String userHome) {
-    return envDatabase != null && !envDatabase.isBlank()
-        ? Path.of(envDatabase)
-        : Path.of(userHome, ".segue", "segue.db");
   }
 
   private static String valueOf(String[] args, int i, String flag) {
