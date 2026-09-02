@@ -131,6 +131,21 @@ class HeadlessChromeNetworkTest {
     }
   }
 
+  /**
+   * {@link #PHONE_HOME_CONTROL} is the part of {@link #KNOWN_ATTEMPTS} the instrument control
+   * relies on. If a flag ever removes one of those hosts, both lists have to move together, and
+   * until this test existed only a javadoc said so. No browser is launched here; it is a check on
+   * the two constants.
+   */
+  @Test
+  @DisplayName("the instrument control's hosts are inside the allowlist it guards")
+  void shouldKeepTheControlHostsInsideTheAllowlistWhenTheListsAreCompared() {
+    assertThat(KNOWN_ATTEMPTS)
+        .as("PHONE_HOME_CONTROL must be a subset of KNOWN_ATTEMPTS: a host the control expects to"
+            + " see is one the allowlist must admit, or the guard contradicts itself")
+        .containsAll(PHONE_HOME_CONTROL);
+  }
+
   @Test
   @DisplayName(
       "the browser reaches no host but loopback, and asks only for the phone-homes on record")
