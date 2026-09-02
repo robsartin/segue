@@ -1,6 +1,7 @@
 package com.robsartin.segue.musicbrainz;
 
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.domain.Qid;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -112,8 +113,22 @@ public interface MusicBrainzIdentity {
     Map<String, BridgedIdentity> bridged = new LinkedHashMap<>();
     qidsFor(mbids)
         .forEach(
-            (mbid, qid) ->
-                bridged.put(mbid, new BridgedIdentity(qid, NodeKind.CONCEPT, null, List.of())));
+            (mbid, qid) -> {
+              // Dropped rather than thrown, and this is the one line where the two differ. A
+              // BridgedIdentity refuses to hold a non-QID (ADR 58), so constructing one here from
+              // whatever qidsFor returned would turn a malformed value into an
+              // IllegalArgumentException out of MusicBrainzSourceAdapter.expand — and
+              // SegueService.expandEntity wraps nothing, so one contributor-entered P434 would
+              // abort a whole expansion across every adapter. That is precisely the failure GAP 9
+              // and issue #147 exist to prevent, and qidsFor's own javadoc already promises the
+              // other answer: an MBID this bridge cannot map is absent from the result, silently.
+              // So the shape check that used to happen in the adapter happens here instead, with
+              // the same outcome — no QID, no neighbour, no flag — and the adapter's GAP 9 guard
+              // stays as the second line BridgedIdentity's javadoc says it is.
+              if (Qid.looksLikeAQid(qid)) {
+                bridged.put(mbid, new BridgedIdentity(qid, NodeKind.CONCEPT, null, List.of()));
+              }
+            });
     return Map.copyOf(bridged);
   }
 }

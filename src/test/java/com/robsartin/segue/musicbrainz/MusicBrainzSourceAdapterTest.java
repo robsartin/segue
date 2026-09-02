@@ -354,6 +354,12 @@ class MusicBrainzSourceAdapterTest {
     // shipped wiring — so this is arriving external data rather than a programming error, the same
     // case ClaimMapper's non-QID object-id guard refuses for Wikidata. The adapter does not know
     // which bridge is behind the seam, which is exactly why it checks.
+    //
+    // Since issue #163 the drop happens one layer earlier for a bridge like this one, which maps
+    // identifiers and answers identitiesFor through the seam's default: a BridgedIdentity may not
+    // hold a non-QID, so the default drops the binding rather than constructing one and throwing
+    // out of expand(). The assertions below are unchanged because the observable answer is — no
+    // assertion, no flag — and the adapter's own GAP 9 guard remains behind it.
     MusicBrainzSourceAdapter adapter =
         adapter(mapping(QUINTET_MBID, QUINTET_QID, FIRST_MEMBER_MBID, "https://example.invalid/x"));
 

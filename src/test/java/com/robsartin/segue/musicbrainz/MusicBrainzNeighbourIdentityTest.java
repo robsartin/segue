@@ -3,6 +3,7 @@ package com.robsartin.segue.musicbrainz;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
+import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.Candidate;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
@@ -175,43 +176,83 @@ class MusicBrainzNeighbourIdentityTest {
     assertThat(neighbour.label()).isEqualTo(WIKIDATA_LABEL);
   }
 
+  /**
+   * The other side of the guard, and the change ADR 61 makes: an existing neighbour the bridge
+   * <i>could</i> describe keeps its classes because the bridge restated them, not because nothing
+   * was emitted.
+   *
+   * <p>The label is the tell. {@code SegueService} records volunteered identity whether or not the
+   * node already exists (issue #55), so a neighbour this adapter emitted arrives under the bridge's
+   * label; one it declined to emit keeps the label the graph already had. Asserting {@link
+   * #BRIDGE_LABEL} rather than {@link #WIKIDATA_LABEL} is what makes this test fail if the emission
+   * stops, instead of passing on the old adapter's silence.
+   */
   @Test
   @DisplayName("should keep a neighbour's stated classes when musicbrainz expands over it")
   void shouldKeepANeighboursStatedClassesWhenMusicbrainzExpandsOverIt() {
-    ingest.record(
-        new NodeAssertion(
-            NEIGHBOUR_QID,
-            NodeKind.PERSON,
-            WIKIDATA_LABEL,
-            List.of(HUMAN),
-            new Provenance("wikidata", NEIGHBOUR_QID, NOW, 1.00)));
+    seedTheNeighbourWithItsClasses();
 
-    expand();
+    expandWithoutAFetch(bridgeAnswering(described()));
 
-    // The positive control. "The classes survived" is equally true of an expansion that asserted
-    // nothing at all, so without this the test would stay green if the fixture, the stub mapping
-    // or the whitelist quietly stopped producing an edge over this neighbour.
-    assertThat(graph.edges(SEED_QID))
-        .extracting(edge -> edge.fromQid() + " " + edge.typeCode() + " " + edge.toQid())
-        .contains(NEIGHBOUR_QID + " MEMBER_OF " + SEED_QID);
-
+    assertTheEdgeWasStillRecorded();
     NodeRecord neighbour = graph.node(NEIGHBOUR_QID).orElseThrow();
     assertThat(neighbour.instanceOf()).containsExactly(HUMAN);
-    assertThat(neighbour.label()).isEqualTo(WIKIDATA_LABEL);
+    assertThat(neighbour.label()).isEqualTo(BRIDGE_LABEL);
   }
 
+  /**
+   * The saving itself: the neighbour is absent, and the fetch #143 proposed to skip is skipped —
+   * because the bridge answered the question that fetch existed to answer, on the round trip it was
+   * already making.
+   *
+   * <p>{@link RefusesToFetch} is the assertion, not the setup. A count would say the fetch did not
+   * happen; a resolver that cannot be called says the classes below could only have come from the
+   * bridge.
+   */
   @Test
-  @DisplayName("should give a newly discovered neighbour the classes the resolver states")
-  void shouldGiveANewlyDiscoveredNeighbourTheClassesTheResolverStates() {
-    // The neighbour is absent, so SegueService reaches for EntityResolver.fetch — the round trip
-    // #143 proposes to skip. What it buys is this: the classes MusicBrainz has none of.
+  @DisplayName("should give a newly discovered neighbour the classes the bridge states")
+  void shouldGiveANewlyDiscoveredNeighbourTheClassesTheBridgeStates() {
     assertThat(graph.node(NEIGHBOUR_QID)).isEmpty();
 
-    expand();
+    expandWithoutAFetch(bridgeAnswering(described()));
 
+    assertTheEdgeWasStillRecorded();
     NodeRecord neighbour = graph.node(NEIGHBOUR_QID).orElseThrow();
     assertThat(neighbour.instanceOf()).containsExactly(HUMAN);
-    assertThat(neighbour.label()).isEqualTo(WIKIDATA_LABEL);
+    assertThat(neighbour.label()).isEqualTo(BRIDGE_LABEL);
+  }
+
+  /**
+   * Controller ruling 1 of the spec, held by a test: the neighbour claim is stamped {@code
+   * "wikidata"}, not this adapter's own id.
+   *
+   * <p>The kind, label and classes are Wikidata's facts, read on the bridge's round trip, and this
+   * claim is what {@code WikidataEntityResolver.fetch} would have produced for the same entity —
+   * same source id, same 1.00. The edge keeps {@code "musicbrainz"} at 0.80, which is the half of
+   * the expansion MusicBrainz actually stated. {@code SourceAdapter.id()}'s javadoc is amended to
+   * say it governs {@code assertions()} for exactly this reason.
+   */
+  @Test
+  @DisplayName("should attribute the neighbour's identity to wikidata and the edge to musicbrainz")
+  void shouldAttributeTheNeighboursIdentityToWikidataAndTheEdgeToMusicbrainz() {
+    expandWithoutAFetch(bridgeAnswering(described()));
+
+    assertThat(log.readAll())
+        .filteredOn(NodeAssertion.class::isInstance)
+        .map(NodeAssertion.class::cast)
+        .filteredOn(claim -> claim.qid().equals(NEIGHBOUR_QID))
+        .singleElement()
+        .extracting(
+            claim -> claim.provenance().sourceId(), claim -> claim.provenance().confidence())
+        .containsExactly("wikidata", 1.00);
+
+    assertThat(log.readAll())
+        .filteredOn(AssertionRecord.class::isInstance)
+        .map(AssertionRecord.class::cast)
+        .filteredOn(edge -> edge.fromQid().equals(NEIGHBOUR_QID))
+        .singleElement()
+        .extracting(edge -> edge.provenance().sourceId(), edge -> edge.provenance().confidence())
+        .containsExactly("musicbrainz", 0.80);
   }
 
   /**
@@ -243,20 +284,30 @@ class MusicBrainzNeighbourIdentityTest {
     assertThat(graph.node(NEIGHBOUR_QID).orElseThrow().instanceOf()).isEmpty();
   }
 
-  private void expand() {
-    expand(StubIdentity.of(Map.of(SEED_MBID, SEED_QID, NEIGHBOUR_MBID, NEIGHBOUR_QID)));
+  private void expand(MusicBrainzIdentity bridge) {
+    expand(bridge, new ResolvesWithClasses());
   }
 
-  private void expand(MusicBrainzIdentity bridge) {
+  /** As {@link #expand}, with a resolver that turns a fetch into a failure rather than a number. */
+  private void expandWithoutAFetch(MusicBrainzIdentity bridge) {
+    expand(bridge, new RefusesToFetch());
+  }
+
+  private void expand(MusicBrainzIdentity bridge, EntityResolver resolver) {
     SegueService service =
         new SegueService(
-            new ResolvesWithClasses(),
+            resolver,
             graph,
             ingest,
             new SourceAdapters(List.of(musicBrainz(bridge))),
             affinity,
             CLOCK);
     service.expandEntity(SEED_QID, 200);
+  }
+
+  /** The neighbour as a bridge that could see it answers: a real label and the class it implies. */
+  private static BridgedIdentity described() {
+    return new BridgedIdentity(NEIGHBOUR_QID, NodeKind.PERSON, BRIDGE_LABEL, List.of(HUMAN));
   }
 
   private static SourceAdapter musicBrainz(MusicBrainzIdentity bridge) {
@@ -293,6 +344,31 @@ class MusicBrainzNeighbourIdentityTest {
     assertThat(graph.edges(SEED_QID))
         .extracting(edge -> edge.fromQid() + " " + edge.typeCode() + " " + edge.toQid())
         .contains(NEIGHBOUR_QID + " MEMBER_OF " + SEED_QID);
+  }
+
+  /**
+   * A resolver that cannot be fetched from. Where the bridge described the neighbour, {@code
+   * SegueService} must never reach for one — so the honest instrument is not a counter that would
+   * report zero whether or not the code path exists, but a resolver whose being called is itself
+   * the failure.
+   */
+  private static final class RefusesToFetch implements EntityResolver {
+
+    @Override
+    public String id() {
+      return "wikidata";
+    }
+
+    @Override
+    public List<Candidate> search(String query, NodeKind kind, int limit) {
+      throw new UnsupportedOperationException("expandEntity does not search");
+    }
+
+    @Override
+    public Optional<NodeAssertion> fetch(String qid) {
+      throw new AssertionError(
+          "EntityResolver.fetch reached for " + qid + ", which the bridge had already described");
+    }
   }
 
   /**

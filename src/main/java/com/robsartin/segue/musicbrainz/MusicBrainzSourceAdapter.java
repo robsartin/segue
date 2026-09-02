@@ -3,6 +3,7 @@ package com.robsartin.segue.musicbrainz;
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.EdgeType;
 import com.robsartin.segue.domain.EdgeTypes;
+import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.Provenance;
@@ -16,6 +17,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -183,6 +185,8 @@ public final class MusicBrainzSourceAdapter implements SourceAdapter {
 
   private static final String SOURCE_ID = "musicbrainz";
 
+  private static final String WIKIDATA_SOURCE_ID = "wikidata";
+
   /** MusicBrainz's own name for the relation this adapter maps. */
   private static final String MEMBER_OF_BAND = "member of band";
 
@@ -299,9 +303,11 @@ public final class MusicBrainzSourceAdapter implements SourceAdapter {
     List<ArtistRelation> bounded = mappable.stream().limit(ctx.maxNewEdges()).toList();
     boolean truncated = bounded.size() < mappable.size();
 
-    Map<String, String> qids;
+    Map<String, BridgedIdentity> bridgedNeighbours;
     try {
-      qids = identity.qidsFor(bounded.stream().map(ArtistRelation::targetMbid).distinct().toList());
+      bridgedNeighbours =
+          identity.identitiesFor(
+              bounded.stream().map(ArtistRelation::targetMbid).distinct().toList());
     } catch (MusicBrainzIdentityUnavailableException e) {
       // The same reasoning one call later, and with more at stake: an empty map is how ADR 22
       // clause 2 declines to reach a neighbour, measured at 49% of them, so a failed batch used to
@@ -314,8 +320,10 @@ public final class MusicBrainzSourceAdapter implements SourceAdapter {
     // a single response at a single moment, and repeated clock reads would say otherwise (ADR 20).
     Instant assertedAt = clock.instant();
     List<AssertionRecord> assertions = new ArrayList<>();
+    Map<String, NodeAssertion> neighbours = new LinkedHashMap<>();
     for (ArtistRelation relation : bounded) {
-      String targetQid = qids.get(relation.targetMbid());
+      BridgedIdentity neighbour = bridgedNeighbours.get(relation.targetMbid());
+      String targetQid = neighbour == null ? null : neighbour.qid();
       if (targetQid == null) {
         // ADR 22 clause 2 declining to reach this neighbour, measured at 49% of artist-relation
         // neighbours and mostly tributes, pseudonyms and billing variants. Not a shortfall.
@@ -337,8 +345,12 @@ public final class MusicBrainzSourceAdapter implements SourceAdapter {
         continue;
       }
       assertions.add(toAssertion(seed.qid(), seedMbid, relation, targetQid, assertedAt));
+      if (describes(neighbour)) {
+        neighbours.putIfAbsent(targetQid, toNeighbour(neighbour, assertedAt));
+      }
     }
-    return new ExpandResult(List.copyOf(assertions), false, truncated);
+    return new ExpandResult(
+        List.copyOf(assertions), List.copyOf(neighbours.values()), false, truncated);
   }
 
   /**
@@ -364,6 +376,50 @@ public final class MusicBrainzSourceAdapter implements SourceAdapter {
         && BY_RELATION_TYPE.containsKey(relation.type())
         && (FORWARD.equals(relation.direction()) || BACKWARD.equals(relation.direction()))
         && looksLikeAnMbid(relation.targetMbid());
+  }
+
+  /**
+   * Whether this bridged identity says enough to be worth emitting as a neighbour, which is the
+   * whole of the non-erasing guard (issue #163; ADR 61).
+   *
+   * <p><b>Both halves are erasure, not fastidiousness.</b> {@code SegueService} prefers an
+   * adapter's neighbour to a fetch and records it <b>whether or not the node already exists</b>
+   * (issue #55), and {@code TinkerGraphStore.upsertNode} writes {@code instanceOf} on every upsert,
+   * empty included and deliberately so — its own comment says a later claim stating no classes must
+   * not leave an earlier claim's behind. So a neighbour emitted with an empty {@code instanceOf}
+   * removes the classes an existing node already had and gives a new one none: exactly what ADR 55
+   * refused, measured. A label is the same story one field over: {@code wikibase:label} answers
+   * with the bare QID where no English label exists, {@link BridgedIdentity} normalises every
+   * unbelievable answer to null, and {@link NodeAssertion} requires a label — so emitting one would
+   * not misname the node, it would throw out of {@link #expand} and lose the whole expansion.
+   *
+   * <p>An identity that fails either half is simply omitted, and {@code SegueService} falls back to
+   * the fetch it would have spent anyway. That is what makes the saving a saving rather than a
+   * trade: nothing is lost when the bridge could not see enough, and the round trip is only skipped
+   * when it had nothing left to buy.
+   */
+  private static boolean describes(BridgedIdentity neighbour) {
+    return neighbour.label() != null && !neighbour.instanceOf().isEmpty();
+  }
+
+  /**
+   * The neighbour claim, carrying {@code "wikidata"} rather than {@link #SOURCE_ID}.
+   *
+   * <p>The kind, label and classes are Wikidata's facts — {@code P31} and the label service, read
+   * on the bridge's own round trip — and this claim is byte-identical to what {@code ReverseClaims}
+   * and {@code WikidataEntityResolver.fetch} would have produced for the same entity, because it is
+   * the same claim from the same source. Stamping it {@code "musicbrainz"} would attribute
+   * Wikidata's classes to a database that states none. The edge stays MusicBrainz's; only the
+   * identity is Wikidata's. See {@link SourceAdapter#id()}, whose sentence is scoped to {@link
+   * ExpandResult#assertions()} for this reason.
+   */
+  private static NodeAssertion toNeighbour(BridgedIdentity neighbour, Instant assertedAt) {
+    return new NodeAssertion(
+        neighbour.qid(),
+        neighbour.kind(),
+        neighbour.label(),
+        neighbour.instanceOf(),
+        new Provenance(WIKIDATA_SOURCE_ID, neighbour.qid(), assertedAt, 1.00));
   }
 
   /** Whether this string is an MBID, for the two callers that check rather than refuse. */
