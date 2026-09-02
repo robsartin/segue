@@ -17,8 +17,11 @@ The `reference`, `syntax`, `html` and `accessibility` groups are clean.
 
 A second fact the issue names: main-source javadoc cites the tests that enforce its rules as
 `{@code ArchitectureTest.theExporterOnlyReads}`-style text, because `{@link}` cannot reach the test
-source set. Measured: **31 citation sites, 23 distinct, 12 naming a member**, every one resolving to a
-real test class and member today. Nothing keeps that true; a renamed rule drifts silently in every
+source set. Measured by a per-line grep: 31 citation sites. **Corrected 2026-09-02 by the test itself,
+which reads whole javadoc spans: 51 sites, 37 distinct, 32 naming a member** — twenty citations are
+formatter-wrapped across lines with a `*` inside the span, and a per-line instrument was blind to them
+(the "grep narrower than the claim" defect, in the instrument that was measuring for it). Every one
+resolves to a real test class and member today. Nothing keeps that true; a renamed rule drifts silently in every
 place it is named — the shape this repo keeps finding.
 
 ## The decision
