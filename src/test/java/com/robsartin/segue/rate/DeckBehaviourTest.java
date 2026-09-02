@@ -850,9 +850,9 @@ class DeckBehaviourTest {
    * That is the property the warm-up exists for, and it is not observable from this side. Which
    * pooled socket Chrome hands a request — the one the page used, or the preconnect spare it opened
    * alongside and never used — is Chrome's choice, and both are pooled, so no port this stub
-   * records can be equal to anything run after run. Two attempts to assert it that way each flaked
-   * at about one run in sixty, which is the one outcome this round cannot ship: a spurious red
-   * introduced to remove a spurious red.
+   * records can be equal to anything run after run. Two attempts to assert it that way flaked — the
+   * first at about one run in ten, the second at one in sixty — which is the one outcome this round
+   * cannot ship: a spurious red introduced to remove a spurious red.
    *
    * <p>It is established instead where it can be. The Loop C and D controls demonstrate it — with
    * round 1's occupancy probe holding every pooled socket, the retry control fails without this
