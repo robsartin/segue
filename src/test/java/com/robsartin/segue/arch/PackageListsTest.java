@@ -8,6 +8,7 @@ import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.core.domain.JavaModifier;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -52,6 +53,11 @@ class PackageListsTest {
   /**
    * A {@code JavaExec} registration opens at the very start of a line, and closes at the first line
    * that is exactly {@code "}"} — the only shape {@code build.gradle.kts} uses.
+   *
+   * <p>Recognising one form is safe only because {@link #devToolsFromGradle()} also asserts that
+   * every line mentioning {@code JavaExec} is one of these. Without that guard the pattern was
+   * form-blind: Kotlin's other registration form, {@code tasks.register("x", JavaExec::class)},
+   * registered a real task the derivation never saw, and an indented open vanished the same way.
    */
   private static final Pattern JAVA_EXEC_BLOCK =
       Pattern.compile("^tasks\\.register<JavaExec>\\(\"(\\w+)\"\\)\\s*\\{$");
@@ -115,6 +121,14 @@ class PackageListsTest {
    * mainClass}, with two, with one assigned from a variable, or with one built by concatenation
    * fails naming the block. This repo's recurring defect is a parser that reports clean on what it
    * cannot parse, so every unparsed shape reds here instead of vanishing.
+   *
+   * <p><b>And the opening line itself is checked, not just what is inside it.</b> Every line
+   * mentioning {@code JavaExec} must be one of those opens — all eight are today — so a
+   * registration written any other legal way ({@code tasks.register("x", JavaExec::class)}, or an
+   * indented open) fails by line number and content instead of silently not being a dev tool. The
+   * strictness one level down is worth nothing while the block open can vanish, which is how a
+   * planted eighth task passed every test in this class. Whole-line {@code //} comments are the one
+   * exception, because a comment registers nothing; a trailing comment after code is still checked.
    */
   static Set<String> devToolsFromGradle() {
     List<String> lines =
@@ -162,6 +176,26 @@ class PackageListsTest {
             "build.gradle.kts — at least one register<JavaExec> block. Finding none would make every"
                 + " dev-tool assertion here vacuously true")
         .isPositive();
+
+    List<String> unrecognised = new ArrayList<>();
+    for (int line = 0; line < lines.size(); line++) {
+      String text = lines.get(line);
+      if (text.strip().startsWith("//")) {
+        continue;
+      }
+      if (text.contains("JavaExec") && !JAVA_EXEC_BLOCK.matcher(text).matches()) {
+        unrecognised.add((line + 1) + ": " + text);
+      }
+    }
+    assertThat(unrecognised)
+        .as(
+            "build.gradle.kts — every line mentioning JavaExec is a block this derivation opens on,"
+                + " written as tasks.register<JavaExec>(\"name\") { at the start of a line. A"
+                + " registration in any other legal form — tasks.register(\"name\","
+                + " JavaExec::class), or an indented open — registers a real task this parser never"
+                + " sees, so it is named here rather than quietly not being a dev tool")
+        .isEmpty();
+
     return packages;
   }
 

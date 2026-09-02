@@ -139,6 +139,15 @@ tasks.test {
         .dir("docs/adr")
         .withPropertyName("adrDirectory")
         .withPathSensitivity(PathSensitivity.RELATIVE)
+    // PackageListsTest derives the dev-tool packages from this file's own JavaExec registrations
+    // (issue #165), and `test` is blind to it for the third time: measured — with a mainClass the
+    // parser must refuse planted in a registration below, `./gradlew test` printed
+    // `Task :test UP-TO-DATE` and BUILD SUCCESSFUL before this was added. The cost is that any
+    // edit to this file re-runs the suite, which is the same price the two lines above pay.
+    inputs
+        .file("build.gradle.kts")
+        .withPropertyName("buildScript")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
     useJUnitPlatform {
         // Excluded from the normal gate: it needs the network and can fail for reasons
         // that have nothing to do with this code. Run it deliberately, via ./gradlew liveTest.
