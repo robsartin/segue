@@ -189,6 +189,25 @@ public abstract class GraphStoreContract {
   }
 
   @Test
+  @DisplayName("Q4 at zero: the owner's standalone claim is an edge whose corroboration is 0")
+  void shouldReturnTheOwnerOnlyEdgeWhenTheCorroborationFloorIsZero() {
+    // ADR 59's third layer, uncorroborated: an owner claim over two local entities no source has
+    // ever mentioned. Its corroboration is 0 - a count, not an absence - so corroborated(0) has to
+    // return it, and corroborated(1), which asks for one real witness, must not (#176).
+    //
+    // This sits beside the N = 2 case above for the same reason that one exists: it pins the rule
+    // on WHICHEVER engine runs the contract, so a third adapter would inherit it. The differential
+    // guard in TinkerGraphStoreContractTest hardcodes Tinker and Jena and could not.
+    assertThat(store.corroborated(0)).anyMatch(GraphStoreContract::isTheOwnerOnlyEdge);
+    assertThat(store.corroborated(1)).noneMatch(GraphStoreContract::isTheOwnerOnlyEdge);
+  }
+
+  private static boolean isTheOwnerOnlyEdge(EdgeRecord edge) {
+    return edge.fromQid().equals(Fixture.LOCAL_NOVELIST)
+        && edge.toQid().equals(Fixture.LOCAL_NOVEL);
+  }
+
+  @Test
   @DisplayName("an assertedAt instant survives the round trip at full precision")
   void provenanceTimestampSurvivesFullPrecision() {
     // Issue #6: ProvenanceCodec truncated to epoch millis while Jena kept ISO precision,
