@@ -417,7 +417,7 @@ class CandidateSweepTest {
     Sweep sweep =
         new CandidateSweep(graph, INSTITUTIONS)
             .over(
-                List.of(KNOWN_ONE, KNOWN_TWO, "Q900999"),
+                List.of(KNOWN_ONE, KNOWN_TWO, "Q0900999"),
                 Set.of(),
                 Scorer.LIFT,
                 FLOOR,
@@ -460,7 +460,7 @@ class CandidateSweepTest {
   void suppressionDoesNotTouchOtherCandidates() {
     influenceChain();
 
-    Sweep sweep = sweep(Set.of("Q900999"));
+    Sweep sweep = sweep(Set.of("Q0900999"));
 
     assertThat(find(sweep, ANCESTOR)).isPresent();
   }

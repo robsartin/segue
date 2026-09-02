@@ -416,7 +416,7 @@ class RateRunTest {
   private static void padDegreeTo(TinkerGraphStore graph, String qid, int degree) {
     int already = graph.edges(qid).size();
     for (int i = already; i < degree; i++) {
-      String filler = "Q9009" + i;
+      String filler = "Q09009" + i;
       node(graph, filler, NodeKind.WORK, "filler " + filler);
       edge(graph, qid, filler, EdgeTypes.INFLUENCED_BY.code());
     }

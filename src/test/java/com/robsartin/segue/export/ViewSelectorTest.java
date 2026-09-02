@@ -134,9 +134,9 @@ class ViewSelectorTest {
   @Test
   @DisplayName("an unknown endpoint is refused by name rather than returning nothing")
   void refusesAnUnknownRouteEndpoint() {
-    assertThatThrownBy(() -> selector.route(WREN, "Q900999", 3))
+    assertThatThrownBy(() -> selector.route(WREN, "Q0900999", 3))
         .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("Q900999");
+        .hasMessageContaining("Q0900999");
   }
 
   // ---- neighbourhood ----------------------------------------------------
@@ -171,9 +171,9 @@ class ViewSelectorTest {
   @Test
   @DisplayName("an unknown centre is refused by name")
   void refusesAnUnknownCentre() {
-    assertThatThrownBy(() -> selector.neighbourhood("Q900999", 1))
+    assertThatThrownBy(() -> selector.neighbourhood("Q0900999", 1))
         .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("Q900999");
+        .hasMessageContaining("Q0900999");
   }
 
   // ---- subgraph ---------------------------------------------------------
@@ -198,7 +198,7 @@ class ViewSelectorTest {
   @Test
   @DisplayName("a listed entity the graph has never heard of is reported, not invented")
   void reportsUnknownRequests() {
-    GraphView view = selector.subgraph(List.of(WREN, "Q900999"));
+    GraphView view = selector.subgraph(List.of(WREN, "Q0900999"));
 
     assertThat(qids(view)).containsExactly(WREN);
     assertThat(view.description()).contains("2").contains("1");

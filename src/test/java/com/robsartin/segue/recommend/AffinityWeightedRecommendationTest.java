@@ -157,7 +157,7 @@ class AffinityWeightedRecommendationTest {
 
   private static void padTo(SqliteAssertionLog log, String candidate, int records, int offset) {
     for (int i = 0; i < records; i++) {
-      String record = "Q9009" + (offset + i);
+      String record = "Q09009" + (offset + i);
       log.append(
           new NodeAssertion(record, NodeKind.WORK, "an invented record " + record, sourced()));
       log.append(

@@ -83,7 +83,7 @@ final class InventedWorld {
   /**
    * Attach {@code extra} filler neighbours, so a node reaches a degree the rules care about.
    *
-   * <p>Filler nodes are {@code WORK}s off in {@code Q9009xx}, and they are never candidates: the
+   * <p>Filler nodes are {@code WORK}s off in {@code Q09009xx}, and they are never candidates: the
    * kind rules them out, which keeps them out of every assertion in these tests.
    */
   static void padDegreeTo(TinkerGraphStore graph, String qid, int degree) {
@@ -98,11 +98,11 @@ final class InventedWorld {
   /**
    * The filler id one padding round mints, split out so {@link #padDegreeTo} and any caller that
    * needs the same shape but a different provenance - {@code CandidateSweepTest}'s owner-sourced
-   * padding, for one - share a single formula rather than each spelling it out (issue #171: when
-   * the {@code Q9009xx} range migrates, there is exactly one expression to change).
+   * padding, for one - share a single formula rather than each spelling it out (issue #171: the
+   * {@code Q09009xx} range migrated here as one expression, not one per call site).
    */
   static String fillerQid(String qid, int index) {
-    return "Q9009" + (Math.abs(qid.hashCode()) % 90 + 10) + index;
+    return "Q09009" + (Math.abs(qid.hashCode()) % 90 + 10) + index;
   }
 
   /** A busy CONCEPT, which is what issue #52 calls a hub. */

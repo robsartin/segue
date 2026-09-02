@@ -34,7 +34,7 @@ class ClassLabelsTest {
   @Test
   @DisplayName("a class the table has never heard of is named by its QID, not guessed at")
   void fallsBackToTheQid() {
-    assertThat(ClassLabels.label("Q900901")).isEqualTo("Q900901");
+    assertThat(ClassLabels.label("Q0900901")).isEqualTo("Q0900901");
     assertThat(ClassLabels.describe(List.of())).isEqualTo(ClassLabels.NO_CLASS);
   }
 }

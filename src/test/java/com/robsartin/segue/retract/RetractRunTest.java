@@ -139,9 +139,9 @@ class RetractRunTest {
     // reads as a decision somebody made.
     seedAWronglyExpandedEntity();
 
-    assertThatThrownBy(() -> run.run(options("Q900999", "wrong entity", false), notes::add))
+    assertThatThrownBy(() -> run.run(options("Q0900999", "wrong entity", false), notes::add))
         .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("Q900999");
+        .hasMessageContaining("Q0900999");
 
     assertThat(log.readAll()).hasSize(5);
   }

@@ -102,7 +102,7 @@ class RecognitionInstitutionsTest {
   @Test
   @DisplayName("a class the table has never heard of is not an institution")
   void unknownClassesAreNotInstitutions() {
-    assertThat(RecognitionInstitutions.isRecognitionInstitution("Q900901")).isFalse();
+    assertThat(RecognitionInstitutions.isRecognitionInstitution("Q0900901")).isFalse();
   }
 
   @Test

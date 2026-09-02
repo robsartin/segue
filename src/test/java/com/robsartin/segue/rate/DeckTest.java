@@ -23,9 +23,11 @@ class DeckTest {
 
   private static final Map<String, NodeRecord> NODES =
       Map.of(
-          "Q0900001", new NodeRecord("Q0900001", NodeKind.GROUP, "Low Degree", List.of("Q900901")),
-          "Q0900002", new NodeRecord("Q0900002", NodeKind.GROUP, "High Degree", List.of("Q900901")),
-          "Q0900003", new NodeRecord("Q0900003", NodeKind.PERSON, "Mid Degree", List.of("Q900902")),
+          "Q0900001", new NodeRecord("Q0900001", NodeKind.GROUP, "Low Degree", List.of("Q0900901")),
+          "Q0900002",
+              new NodeRecord("Q0900002", NodeKind.GROUP, "High Degree", List.of("Q0900901")),
+          "Q0900003",
+              new NodeRecord("Q0900003", NodeKind.PERSON, "Mid Degree", List.of("Q0900902")),
           "Q0900004", new NodeRecord("Q0900004", NodeKind.WORK, "Already Rated", List.of()));
 
   private static final Map<String, Integer> DEGREES =
@@ -64,7 +66,7 @@ class DeckTest {
   @Test
   @DisplayName("an entity on the list but absent from the graph is skipped, not dealt blank")
   void skipsEntitiesMissingFromTheGraph() {
-    List<Card> cards = deal(List.of("Q0900002", "Q900999"), Map.of(), List.of());
+    List<Card> cards = deal(List.of("Q0900002", "Q0900999"), Map.of(), List.of());
 
     assertThat(cards).extracting(Card::qid).containsExactly("Q0900002");
   }

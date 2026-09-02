@@ -146,7 +146,7 @@ class DotWriterTest {
             view(
                 List.of(
                     new ViewNode("Q901", NodeKind.WORK, "A Novel", List.of("Q7725634")),
-                    new ViewNode("Q902", NodeKind.WORK, "Something", List.of("Q900901")),
+                    new ViewNode("Q902", NodeKind.WORK, "Something", List.of("Q0900901")),
                     new ViewNode("Q903", NodeKind.WORK, "Unclassified", List.of())),
                 List.of()));
 
@@ -177,7 +177,7 @@ class DotWriterTest {
             view(
                 List.of(
                     new ViewNode(
-                        "Q901", NodeKind.WORK, "Kettle Song", List.of("Q900901", "Q134556"))),
+                        "Q901", NodeKind.WORK, "Kettle Song", List.of("Q0900901", "Q134556"))),
                 List.of()));
 
     assertThat(dot).contains("fillcolor=\"#BFB633\"");
@@ -241,10 +241,10 @@ class DotWriterTest {
     String dot =
         render(
             view(
-                List.of(new ViewNode("Q901", NodeKind.CONCEPT, "Something", List.of("Q900901"))),
+                List.of(new ViewNode("Q901", NodeKind.CONCEPT, "Something", List.of("Q0900901"))),
                 List.of()));
 
-    assertThat(dot).contains("tooltip=\"Q900901\"");
+    assertThat(dot).contains("tooltip=\"Q0900901\"");
   }
 
   @Test
@@ -265,7 +265,7 @@ class DotWriterTest {
                 List.of(
                     new ViewNode("Q901", NodeKind.PERSON, "Wren Alderman", List.of("Q5")),
                     new ViewNode("Q902", NodeKind.GROUP, "The Paper Kettles"),
-                    new ViewNode("Q903", NodeKind.WORK, "Hollow Tide", List.of("Q900901")),
+                    new ViewNode("Q903", NodeKind.WORK, "Hollow Tide", List.of("Q0900901")),
                     new ViewNode(
                         "Q904", NodeKind.CONCEPT, "The Invented Prize", List.of("Q618779"))),
                 List.of()));

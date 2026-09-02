@@ -80,7 +80,7 @@ class WikidataFactsTest {
     try (StubWikidataServer stub = new StubWikidataServer()) {
       List<String> qids = new ArrayList<>();
       for (int i = 0; i < WikidataFacts.MAX_IDS_PER_CALL + 1; i++) {
-        qids.add("Q9010" + i);
+        qids.add("Q09010" + i);
       }
       stub.enqueueBody("{\"entities\":{}}");
       stub.enqueueBody("{\"entities\":{}}");
