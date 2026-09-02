@@ -202,6 +202,45 @@ class HeadlessChromeNetworkTest {
   }
 
   /**
+   * The other half of what a NetLog on every launch buys: {@link HeadlessChrome#open} does not
+   * navigate until Chrome's startup cert-verifier flush has passed.
+   *
+   * <p>This is not a duplicate of the network posture above. The flush closes pooled sockets — the
+   * page's loopback socket included, {@code {"reason": "Cert verifier changed"}}, in 20 planted
+   * runs of 20 ({@code docs/loopback-only-evidence.md} §4) — and until issue #186's Task 3 the deck
+   * tests survived it on 57 ms of accidental slack rather than on anything the harness did. What is
+   * asserted here is that the ordering is now a <b>condition the launch observed</b>: delete the
+   * wait from {@code open} and there is nothing to report, which is exactly the difference between
+   * an ordering that holds and an ordering that is enforced.
+   *
+   * <p>Deliberately not asserted: that the marker was seen rather than the bound. A browser that
+   * never fires the flush is the outcome this whole line of work wants, and a test that reddened on
+   * it would be a test against good news. The bound says so in the line it prints.
+   */
+  @Test
+  @DisplayName("the browser waits for the startup cert-verifier flush before it loads the page")
+  void shouldObserveTheStartupFlushWhenThePageIsOpened() {
+    Path netLog = scratch.resolve("chrome-net-log-flush.json");
+    String origin = "http://" + LOOPBACK + ":" + server.getAddress().getPort() + "/";
+
+    try (HeadlessChrome chrome = HeadlessChrome.launch(netLog)) {
+      chrome.open(origin);
+
+      assertThat(chrome.flushWait())
+          .as(
+              "open() must decide the flush question before Page.navigate and say how it decided —"
+                  + " a null here is a launch that navigated without asking, which is the state"
+                  + " issue #186 Task 3 left behind")
+          .isNotNull();
+      assertThat(chrome.flushWait().waitedMillis())
+          .as(
+              "the wait is bounded by %s ms, counted from the browser's launch",
+              HeadlessChrome.FLUSH_BOUND_MILLIS)
+          .isLessThanOrEqualTo(HeadlessChrome.FLUSH_BOUND_MILLIS);
+    }
+  }
+
+  /**
    * Hosts Chrome still <em>asks</em> for, which the resolver rule then refuses.
    *
    * <p><b>This list is a debt, not a design.</b> The spec for issue #186 expected the flags
@@ -218,12 +257,6 @@ class HeadlessChromeNetworkTest {
    *       reconcilor's cookie-jar read, on a profile with no account in it
    *   <li>{@code www.google.com} — 30 sightings; {@code /async/folae}, the omnibox's AI-mode
    *       eligibility fetch
-   *   <li>{@code android.clients.google.com} — {@code /checkin}, GCM's device check-in. <b>0 of
-   *       6</b> in this test's own runs, and listed anyway: it is seen from browsers left running
-   *       longer than this test keeps one, and under load this test's browser may live that long.
-   *       The asymmetry decides it — with {@code isSubsetOf}, an over-listed host is silent while
-   *       an under-listed one reds the gate, so a residual that <em>appears</em> is a flake and one
-   *       that <em>disappears</em> is not
    *   <li>{@code ~notfound} — 61 sightings, all {@code HOST_RESOLVER_MANAGER_REQUEST}. Not a host:
    *       Chrome logs the name the resolver rule <em>mapped it to</em>, so this entry is the rule
    *       working rather than anything escaping. It is kept because the parser reports it in the
@@ -244,14 +277,20 @@ class HeadlessChromeNetworkTest {
    * over-list.</b> An attempt that stops happening will never announce itself here, and a stale
    * entry silently weakens the guard by the width of one host — so it is re-derived when the
    * browser changes, not trimmed on a hunch. Shortening it for real is work left undone.
+   *
+   * <p><b>The rule for what belongs here: what this test's own scenario asks for, and nothing
+   * else.</b> Other scenarios ask for more — a browser held open past about 2.3 s adds {@code
+   * android.clients.google.com} and past about 2.8 s adds {@code update.googleapis.com}, both
+   * measured over 80 deck-scenario NetLogs in {@code docs/loopback-only-evidence.md} §5, which is
+   * where hosts outside this scenario are recorded. Neither is listed here, because neither can
+   * make this test red: an entry admitted on evidence from a different scenario widens an {@code
+   * isSubsetOf} allowlist by one host for a red nobody can produce, and it is silent forever after.
+   * So <b>a red naming one of them is not a flake to be silenced by adding it</b> — it means the
+   * guard's scenario has changed, most likely by keeping its browser alive longer, and the list has
+   * to be re-derived against that scenario rather than extended to fit the failure.
    */
   private static final List<String> KNOWN_ATTEMPTS =
-      List.of(
-          "accounts.google.com",
-          "www.google.com",
-          "android.clients.google.com",
-          "~notfound",
-          "2001:4860:4860::8888");
+      List.of("accounts.google.com", "www.google.com", "~notfound", "2001:4860:4860::8888");
 
   /**
    * Whether an event means the browser actually got onto the network, rather than merely asked.

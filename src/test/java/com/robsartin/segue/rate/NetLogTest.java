@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -68,6 +69,86 @@ class NetLogTest {
 
   private Path captured() throws IOException {
     return Files.writeString(scratch.resolve("net-log.json"), CAPTURED);
+  }
+
+  /**
+   * A log in the shape Chrome streams one: the constants block, then one event per line, and no
+   * closing bracket because the browser is still running. The event type ids here are again
+   * arbitrary, and deliberately not the ids the other fixture uses — {@link NetLog.Tail} resolves
+   * the flush marker's name through this block or it does not find it at all.
+   */
+  private static final String STREAMING_HEAD =
+      """
+      {"constants":{"logEventTypes":{\
+      "QUIC_SESSION_POOL_MARK_ALL_ACTIVE_SESSIONS_GOING_AWAY":311,\
+      "CERT_VERIFY_PROC_CREATED":812,"TCP_CONNECT":91},\
+      "logSourceType":{"SOCKET":42}},
+      "events": [
+      {"type":91,"source":{"id":4,"type":42},"params":{"address_list":["127.0.0.1:8080"]}},
+      """;
+
+  private static final String GOING_AWAY_LINE =
+      "{\"type\":311,\"source\":{\"id\":7,\"type\":42}},\n";
+
+  private static final String CERT_VERIFIER_LINE =
+      "{\"type\":812,\"source\":{\"id\":8,\"type\":42}},\n";
+
+  @Test
+  @DisplayName("the flush has passed once Chrome appends the going-away marker")
+  void shouldReportTheFlushPassedWhenTheGoingAwayMarkerIsAppended() throws IOException {
+    Path streaming = Files.writeString(scratch.resolve("streaming.json"), STREAMING_HEAD);
+    NetLog.Tail tail = new NetLog.Tail(streaming);
+
+    assertThat(tail.flushHasPassed())
+        .as("nothing in the log yet says the cert verifier has been created")
+        .isFalse();
+
+    Files.writeString(streaming, GOING_AWAY_LINE, StandardOpenOption.APPEND);
+
+    assertThat(tail.flushHasPassed())
+        .as(
+            "the marker was appended after the first read, which is the only way it ever arrives:"
+                + " a tail that only ever sees the log as it was when it opened would wait out its"
+                + " bound on every launch")
+        .isTrue();
+  }
+
+  @Test
+  @DisplayName("two cert-verifier creations settle the flush without the going-away marker")
+  void shouldReportTheFlushPassedWhenTheCertVerifierPairIsAppended() throws IOException {
+    Path streaming = Files.writeString(scratch.resolve("streaming.json"), STREAMING_HEAD);
+    NetLog.Tail tail = new NetLog.Tail(streaming);
+    Files.writeString(streaming, CERT_VERIFIER_LINE, StandardOpenOption.APPEND);
+
+    assertThat(tail.flushHasPassed())
+        .as("one creation is half of the pair the capture always shows; it is not the flush")
+        .isFalse();
+
+    Files.writeString(streaming, CERT_VERIFIER_LINE, StandardOpenOption.APPEND);
+
+    assertThat(tail.flushHasPassed())
+        .as(
+            "the pair is the second half of the condition, kept because it is the event that"
+                + " carries the reason string the closes quote")
+        .isTrue();
+  }
+
+  @Test
+  @DisplayName("an event whose id happens to match a source type is not read as the marker")
+  void shouldIgnoreASourceTypeWhenItCarriesTheMarkersId() throws IOException {
+    Path streaming = Files.writeString(scratch.resolve("streaming.json"), STREAMING_HEAD);
+    NetLog.Tail tail = new NetLog.Tail(streaming);
+
+    Files.writeString(
+        streaming,
+        "{\"type\":91,\"source\":{\"id\":9,\"type\":311}},\n",
+        StandardOpenOption.APPEND);
+
+    assertThat(tail.flushHasPassed())
+        .as(
+            "source types and event types are two different numberings; a substring match on"
+                + " \"type\":311 would read this ordinary socket event as the flush")
+        .isFalse();
   }
 
   @Test

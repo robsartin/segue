@@ -76,7 +76,11 @@ final class HeadlessChrome implements AutoCloseable {
 
   private final Process process;
   private final Path userData;
+  private final Path netLog;
+  private final boolean netLogIsOurs;
+  private final long launchedAt;
   private final WebSocket socket;
+  private FlushWait flushWait;
   private final LinkedBlockingQueue<String> messages = new LinkedBlockingQueue<>();
   private final AtomicInteger nextId = new AtomicInteger(1);
 
@@ -99,25 +103,46 @@ final class HeadlessChrome implements AutoCloseable {
     return executable().isPresent();
   }
 
-  /** Launches a throwaway browser and attaches to its first (blank) tab. */
+  /**
+   * Launches a throwaway browser and attaches to its first (blank) tab.
+   *
+   * <p>The NetLog is written to a temporary file the browser owns and {@link #close()} removes. It
+   * is not optional and it is not for inspection: {@link #open} reads it to find out when Chrome's
+   * startup cert-verifier flush has passed, and that flush closes any loopback socket the page
+   * already holds — 20 launches of 20 in the control behind {@code docs/loopback-only-evidence.md}
+   * §4. Without the log there is no observable for that, and the page's survival is left to the 57
+   * ms of accidental slack §6 measured.
+   */
   static HeadlessChrome launch() {
-    return launch(null);
+    try {
+      return launch(Files.createTempFile("segue-deck-netlog", ".json"), true);
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
   }
 
   /**
-   * The same browser, additionally writing Chrome's own NetLog to {@code netLog} (JSON).
+   * The same browser, with Chrome's NetLog written where the caller can read it afterwards.
    *
-   * <p>Only {@link HeadlessChromeNetworkTest} and the measurements in {@code
-   * docs/retry-pool-flush-evidence.md} pass a path; every other test takes the no-argument launch
-   * and its command line is unchanged by this. The instrument was checked in that study — 20 of 81
-   * runs made with the NetLog flags removed were indistinguishable from the rest (§2, "Instrument
-   * control") — so capturing it neither causes nor masks what the guard asserts on.
+   * <p>Every launch writes one now, so this overload chooses the <em>path</em> rather than the
+   * capture: {@link HeadlessChromeNetworkTest} and the measurements behind {@code
+   * docs/loopback-only-evidence.md} need the log to outlive the browser, and the no-argument launch
+   * deletes its own. The command line is identical either way, deliberately — the guard must
+   * measure the browser the deck tests run, not a differently configured one.
+   *
+   * <p>The instrument was checked in {@code docs/retry-pool-flush-evidence.md} — 20 of 81 runs made
+   * with the NetLog flags removed were indistinguishable from the rest (§2, "Instrument control") —
+   * so capturing it neither causes nor masks what the guard asserts on.
    *
    * <p>{@code IncludeSensitive} rather than the default: the default strips URLs and headers it
    * judges private, and a guard that asserts on what Chrome reached must see everything Chrome
    * reached. Nothing sensitive is in reach — the only origin is a loopback stub this test started.
    */
   static HeadlessChrome launch(Path netLog) {
+    return launch(netLog, false);
+  }
+
+  private static HeadlessChrome launch(Path netLog, boolean ours) {
     Path exe =
         executable()
             .orElseThrow(() -> new IllegalStateException("no Chrome or Chromium on this machine"));
@@ -126,17 +151,16 @@ final class HeadlessChrome implements AutoCloseable {
       List<String> command = new ArrayList<>();
       command.add(exe.toString());
       command.addAll(flags(userData));
-      if (netLog != null) {
-        command.add("--log-net-log=" + netLog);
-        command.add("--net-log-capture-mode=IncludeSensitive");
-      }
+      command.add("--log-net-log=" + netLog);
+      command.add("--net-log-capture-mode=IncludeSensitive");
       command.add("about:blank");
+      long launchedAt = System.nanoTime();
       Process process =
           new ProcessBuilder(command)
               .redirectOutput(ProcessBuilder.Redirect.DISCARD)
               .redirectError(ProcessBuilder.Redirect.DISCARD)
               .start();
-      return new HeadlessChrome(process, userData);
+      return new HeadlessChrome(process, userData, netLog, ours, launchedAt);
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     }
@@ -202,9 +226,13 @@ final class HeadlessChrome implements AutoCloseable {
         "--user-data-dir=" + userData);
   }
 
-  private HeadlessChrome(Process process, Path userData) {
+  private HeadlessChrome(
+      Process process, Path userData, Path netLog, boolean netLogIsOurs, long launchedAt) {
     this.process = process;
     this.userData = userData;
+    this.netLog = netLog;
+    this.netLogIsOurs = netLogIsOurs;
+    this.launchedAt = launchedAt;
     WebSocket connected;
     try {
       connected = connect(devToolsPort());
@@ -337,11 +365,98 @@ final class HeadlessChrome implements AutoCloseable {
         "no answer to " + method + " (saw " + events.size() + " events)");
   }
 
-  /** Loads a URL and waits for the document to be parsed. */
+  /**
+   * Loads a URL and waits for the document to be parsed — but not before the startup flush has
+   * passed.
+   *
+   * <p><b>Why the wait is here and not in the test.</b> Some hundreds of milliseconds into every
+   * launch Chrome creates its certificate verifier and closes every pooled socket whose validation
+   * it no longer trusts, {@code {"reason": "Cert verifier changed"}}. The loopback pool is
+   * collateral: the reason applies to the pool, not to any certificate a loopback stub ever
+   * presented. Put the page's socket in that pool first and it goes — 20 of 20 in the planted
+   * control, and 6 of 6 in the independent one before it ({@code docs/loopback-only-evidence.md}
+   * §4). Nothing about the page can defend against that; only not being there yet can, so the
+   * ordering belongs to whatever loads the page.
+   *
+   * <p>Until this line the ordering held by luck — 57 ms of it at quiet load, which is about one
+   * poll of this class's own DevTools handshake (§6). It is a condition now.
+   */
   void open(String url) {
+    flushWait = awaitFlush(netLog, launchedAt, FLUSH_BOUND_MILLIS);
+    System.out.println("[HeadlessChrome] " + flushWait);
     send("Page.enable", Map.of());
     send("Page.navigate", Map.of("url", url));
     until("document.readyState === 'complete'", "the page to load");
+  }
+
+  /** What the last {@link #open} waited on, for a test that wants to assert on the ordering. */
+  FlushWait flushWait() {
+    return flushWait;
+  }
+
+  /**
+   * How long {@link #open} will wait for the flush before loading the page anyway.
+   *
+   * <p><b>A bound, not a timeout.</b> Measured over five launches, the marker line became visible
+   * to a poll of the NetLog file at 921, 938, 979, 1009 and 1718 ms of wall clock after {@link
+   * ProcessBuilder#start()} ({@code docs/loopback-only-evidence.md} §6). This is that p100 plus
+   * about 45% — far enough out that a slow machine is still waiting on the condition, near enough
+   * that a browser which never fires it costs one launch two and a half seconds.
+   */
+  static final long FLUSH_BOUND_MILLIS = 2500;
+
+  /**
+   * Which of the two ended the wait before {@code Page.navigate}, and what it cost.
+   *
+   * @param sawMarker true where the NetLog showed the flush; false where the bound ended the wait
+   * @param waitedMillis how much the wait added to this launch
+   * @param boundMillis the bound that was in force, deadline-counted from the browser's launch
+   */
+  record FlushWait(boolean sawMarker, long waitedMillis, long boundMillis) {
+    @Override
+    public String toString() {
+      return sawMarker
+          ? "flush marker seen after " + waitedMillis + " ms"
+          : "proceeded on the "
+              + boundMillis
+              + " ms fallback bound after "
+              + waitedMillis
+              + " ms — this NetLog never showed the flush, which is the good outcome, not an error";
+    }
+  }
+
+  /**
+   * Waits until the NetLog says Chrome's startup cert-verifier flush has passed, or until the
+   * bound.
+   *
+   * <p><b>The bound never fails.</b> A Chrome that does not create a certificate verifier on
+   * startup has no flush to wait for, and that is the outcome this whole line of work would like to
+   * reach — turning it into a timeout would make good news red. So the wait ends by proceeding, and
+   * the launch says which of the two ended it. If a run's output starts carrying that line, the
+   * condition has stopped being observable and the ordering is back to being luck.
+   *
+   * <p>Polls at 20 ms, matching {@link #until}. The deadline is counted from the browser's launch
+   * rather than from this call, because the p100 it is set against was measured that way — and
+   * because a launch whose DevTools handshake was already slow has had that much longer for the
+   * marker to arrive, not less.
+   */
+  static FlushWait awaitFlush(Path netLog, long launchedAtNanos, long boundMillis) {
+    long startedWaiting = System.nanoTime();
+    long deadline = launchedAtNanos + TimeUnit.MILLISECONDS.toNanos(boundMillis);
+    NetLog.Tail tail = new NetLog.Tail(netLog);
+    while (true) {
+      if (tail.flushHasPassed()) {
+        return new FlushWait(true, waitedMillis(startedWaiting), boundMillis);
+      }
+      if (System.nanoTime() >= deadline) {
+        return new FlushWait(false, waitedMillis(startedWaiting), boundMillis);
+      }
+      sleep(20);
+    }
+  }
+
+  private static long waitedMillis(long startedWaiting) {
+    return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedWaiting);
   }
 
   /**
@@ -460,6 +575,9 @@ final class HeadlessChrome implements AutoCloseable {
   public void close() {
     socket.abort();
     kill();
+    if (netLogIsOurs) {
+      deleteQuietly(netLog);
+    }
   }
 
   /**

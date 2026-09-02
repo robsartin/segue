@@ -4,8 +4,12 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.ByteBuffer;
+import java.nio.channels.SeekableByteChannel;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -40,6 +44,145 @@ import tools.jackson.databind.json.JsonMapper;
  * constants.logSourceType}, and it is read from there.
  */
 final class NetLog {
+
+  /**
+   * Chrome's own name for the going-away notification that ends the startup cert-verifier flush.
+   *
+   * <p>{@code docs/loopback-only-evidence.md} §4 has the sequence verbatim: two {@code
+   * CERT_VERIFY_PROC_CREATED} events in one millisecond, every pooled socket closed with {@code
+   * {"reason": "Cert verifier changed"}}, then this. It is the last of the three, so it is the one
+   * to wait for; the pair is kept as the second half of the condition in case a future Chrome stops
+   * logging this event but still creates the verifier.
+   */
+  private static final String GOING_AWAY = "QUIC_SESSION_POOL_MARK_ALL_ACTIVE_SESSIONS_GOING_AWAY";
+
+  private static final String CERT_VERIFIER_CREATED = "CERT_VERIFY_PROC_CREATED";
+
+  /**
+   * A NetLog read while Chrome is still writing it, answering one question: has the startup
+   * cert-verifier flush passed?
+   *
+   * <p><b>Why a tail and not a parse.</b> The file is not valid JSON until the browser exits — the
+   * events array is left open — so {@link #sightings} cannot be asked this question of a running
+   * browser. What Chrome does guarantee is the shape: the {@code constants} block first, then one
+   * event per line, appended. So this resolves the two event ids out of that block <em>once</em>
+   * (never hardcoded — see the class note) and then reads only the bytes that appeared since the
+   * last look, parsing each completed line on its own.
+   *
+   * <p>Each poll advances only as far as the last newline in what it read, so a line Chrome is
+   * halfway through writing is left for the next one, and a UTF-8 sequence is never split: {@code
+   * 0x0A} cannot occur inside a multi-byte character.
+   *
+   * <p><b>The top-level {@code type} only.</b> An event's own type and its {@code source.type} are
+   * two different numberings that share a range, so {@code "type":311} appears in NetLogs meaning
+   * something else entirely. Matching on the parsed field rather than the text is what keeps an
+   * ordinary socket event from reading as the flush.
+   */
+  static final class Tail {
+
+    private final Path netLog;
+    private long offset;
+    private int goingAwayId = -1;
+    private int certVerifierId = -1;
+    private boolean goingAwaySeen;
+    private int certVerifierSeen;
+
+    Tail(Path netLog) {
+      this.netLog = netLog;
+    }
+
+    /**
+     * Whether the flush has passed, reading whatever Chrome has appended since the last call.
+     *
+     * <p>False while the log does not exist, while the constants block is still being written, and
+     * while neither the going-away marker nor a second cert-verifier creation has been logged.
+     */
+    boolean flushHasPassed() {
+      if (goingAwaySeen || certVerifierSeen >= 2) {
+        return true;
+      }
+      if (goingAwayId < 0 && certVerifierId < 0 && !resolveIds()) {
+        return false;
+      }
+      for (String line : appendedLines()) {
+        int type = typeOf(line);
+        if (type < 0) {
+          continue;
+        }
+        if (type == goingAwayId) {
+          goingAwaySeen = true;
+        } else if (type == certVerifierId) {
+          certVerifierSeen++;
+        }
+      }
+      return goingAwaySeen || certVerifierSeen >= 2;
+    }
+
+    /**
+     * Reads the two ids out of the log's own constants block, which Chrome writes before any event.
+     *
+     * <p>Both names are looked up independently and either is enough: a Chrome that renamed one of
+     * them should cost the caller its condition, not its ability to see the other.
+     */
+    private boolean resolveIds() {
+      JsonNode types;
+      try {
+        types = parse(netLog).path("constants").path("logEventTypes");
+      } catch (RuntimeException notWrittenYet) {
+        return false;
+      }
+      goingAwayId = types.path(GOING_AWAY).asInt(-1);
+      certVerifierId = types.path(CERT_VERIFIER_CREATED).asInt(-1);
+      return goingAwayId >= 0 || certVerifierId >= 0;
+    }
+
+    /** Every line completed since the last call, and the file position moved past them. */
+    private List<String> appendedLines() {
+      try (SeekableByteChannel channel = Files.newByteChannel(netLog, StandardOpenOption.READ)) {
+        long available = channel.size() - offset;
+        if (available <= 0) {
+          return List.of();
+        }
+        ByteBuffer buffer = ByteBuffer.allocate((int) Math.min(available, 1 << 20));
+        channel.position(offset);
+        int read = channel.read(buffer);
+        if (read <= 0) {
+          return List.of();
+        }
+        byte[] bytes = buffer.array();
+        int lastNewline = -1;
+        for (int i = read - 1; i >= 0; i--) {
+          if (bytes[i] == '\n') {
+            lastNewline = i;
+            break;
+          }
+        }
+        if (lastNewline < 0) {
+          return List.of();
+        }
+        offset += lastNewline + 1L;
+        return List.of(new String(bytes, 0, lastNewline, StandardCharsets.UTF_8).split("\n", -1));
+      } catch (IOException notReadableYet) {
+        return List.of();
+      }
+    }
+
+    /** The event's own type id, or −1 for a line that is not one event. */
+    private static int typeOf(String line) {
+      String text = line.strip();
+      if (text.endsWith(",")) {
+        text = text.substring(0, text.length() - 1);
+      }
+      if (!text.startsWith("{") || !text.endsWith("}")) {
+        return -1;
+      }
+      try {
+        return JSON.readTree(text).path("type").asInt(-1);
+      } catch (RuntimeException notAnEvent) {
+        return -1;
+      }
+    }
+  }
 
   /** Which part of "no request, resolution or socket" a sighting belongs to. */
   enum Kind {
