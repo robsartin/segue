@@ -14,10 +14,10 @@ shape `NetLog.Tail` is built for, and a fully closed log would not exercise it.
    macOS, Chrome 152, 2026-09-02. Its guard keeps the log it measured at
    `build/reports/netlog/shouldContactOnlyLoopbackWhenTheDeckPageIsDriven.json` on every
    run (see `NetLog.keep`) — 656 lines, 651 events, 142 KB.
-2. Seven event lines were copied **verbatim** from it. Six are the page's own connection
+2. Eight event lines were copied **verbatim** from it. Seven are the page's own connection
    to the loopback stub (ordinals 61, 64, 66, 71, 73, 77 and 83 of that capture:
    `HTTP_STREAM_JOB_WAITING`, `TCP_CLIENT_SOCKET_POOL_REQUESTED_SOCKETS`, `CONNECT_JOB`,
-   `SOCKET_ALIVE`, `TCP_CONNECT` begin and end, `CONNECT_JOB` end); the seventh is that
+   `SOCKET_ALIVE`, `TCP_CONNECT` begin and end, `CONNECT_JOB` end); the eighth is that
    capture's own flush marker, `QUIC_SESSION_POOL_MARK_ALL_ACTIVE_SESSIONS_GOING_AWAY`
    at ordinal 55.
 3. The `constants.logEventTypes` block is trimmed to the four names the tail resolves,
