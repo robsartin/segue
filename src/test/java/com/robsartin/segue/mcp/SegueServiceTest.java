@@ -388,7 +388,8 @@ class SegueServiceTest {
     ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "Nick Cave", WIKIDATA));
     resolver.withEntity(new NodeAssertion("Q02", NodeKind.GROUP, "Bad Seeds", WIKIDATA));
     // Q03 is deliberately left unresolvable.
-    AssertionRecord resolvable = new AssertionRecord("Q01", "Q02", "MEMBER_OF", null, null, WIKIDATA);
+    AssertionRecord resolvable =
+        new AssertionRecord("Q01", "Q02", "MEMBER_OF", null, null, WIKIDATA);
     AssertionRecord unresolvable =
         new AssertionRecord("Q01", "Q03", "MEMBER_OF", null, null, WIKIDATA);
     SourceAdapter adapter =
@@ -413,7 +414,8 @@ class SegueServiceTest {
     ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "Nick Cave", WIKIDATA));
     resolver.withEntity(new NodeAssertion("Q02", NodeKind.GROUP, "Bad Seeds", WIKIDATA));
     resolver.fetchThrowsFor("Q03", new WikidataUnavailableException("timed out"));
-    AssertionRecord resolvable = new AssertionRecord("Q01", "Q02", "MEMBER_OF", null, null, WIKIDATA);
+    AssertionRecord resolvable =
+        new AssertionRecord("Q01", "Q02", "MEMBER_OF", null, null, WIKIDATA);
     AssertionRecord flaky = new AssertionRecord("Q01", "Q03", "MEMBER_OF", null, null, WIKIDATA);
     SourceAdapter adapter =
         new StubSourceAdapter("mixed", new ExpandResult(List.of(resolvable, flaky), false, false));
@@ -439,7 +441,8 @@ class SegueServiceTest {
     // Q02 is deliberately left unresolvable, and is the far end of both assertions.
     AssertionRecord wrote =
         new AssertionRecord("Q01", "Q02", "WROTE_SCREENPLAY_FOR", null, null, WIKIDATA);
-    AssertionRecord scored = new AssertionRecord("Q01", "Q02", "COMPOSED_FOR", null, null, WIKIDATA);
+    AssertionRecord scored =
+        new AssertionRecord("Q01", "Q02", "COMPOSED_FOR", null, null, WIKIDATA);
     SourceAdapter adapter =
         new StubSourceAdapter("multigraph", new ExpandResult(List.of(wrote, scored), false, false));
 
@@ -468,7 +471,8 @@ class SegueServiceTest {
     resolver.withEntity(new NodeAssertion("Q02", NodeKind.WORK, "The Proposition", WIKIDATA));
     AssertionRecord wrote =
         new AssertionRecord("Q01", "Q02", "WROTE_SCREENPLAY_FOR", null, null, WIKIDATA);
-    AssertionRecord scored = new AssertionRecord("Q01", "Q02", "COMPOSED_FOR", null, null, WIKIDATA);
+    AssertionRecord scored =
+        new AssertionRecord("Q01", "Q02", "COMPOSED_FOR", null, null, WIKIDATA);
     SourceAdapter adapter =
         new StubSourceAdapter("multigraph", new ExpandResult(List.of(wrote, scored), false, false));
 
@@ -634,7 +638,8 @@ class SegueServiceTest {
     NodeAssertion corrected = new NodeAssertion("Q02", NodeKind.WORK, "The Proposition", WIKIDATA);
     AssertionRecord wrote =
         new AssertionRecord("Q01", "Q02", "WROTE_SCREENPLAY_FOR", null, null, WIKIDATA);
-    AssertionRecord scored = new AssertionRecord("Q01", "Q02", "COMPOSED_FOR", null, null, WIKIDATA);
+    AssertionRecord scored =
+        new AssertionRecord("Q01", "Q02", "COMPOSED_FOR", null, null, WIKIDATA);
     SourceAdapter adapter =
         new StubSourceAdapter(
             "multigraph",

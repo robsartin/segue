@@ -61,7 +61,8 @@ class LoggedAssertionTest {
 
     assertThatNullPointerException()
         .isThrownBy(() -> new NodeAssertion(null, NodeKind.PERSON, "x", WIKIDATA));
-    assertThatNullPointerException().isThrownBy(() -> new NodeAssertion("Q01", null, "x", WIKIDATA));
+    assertThatNullPointerException()
+        .isThrownBy(() -> new NodeAssertion("Q01", null, "x", WIKIDATA));
     assertThatNullPointerException()
         .isThrownBy(() -> new NodeAssertion("Q01", NodeKind.WORK, "x", null));
   }
