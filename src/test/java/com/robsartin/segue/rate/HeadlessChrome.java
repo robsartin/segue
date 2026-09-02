@@ -192,8 +192,11 @@ final class HeadlessChrome implements AutoCloseable {
         // --disable-breakpad, --enable-automation, --no-pings, and --disable-features= for
         // Translate, OptimizationHints, MediaRouter, InterestFeedContentSuggestions,
         // AutofillServerCommunication, CertificateTransparencyComponentUpdater and
-        // DialMediaRouteProvider. None is here, because a flag that removes nothing is a flag
-        // nobody can explain later.
+        // DialMediaRouteProvider. Nor did --disable-features=DnsOverHttpsUpgrade or
+        // DnsOverHttps or --dns-over-https-mode=off, each measured against the one socket
+        // that looks like a DNS probe (see KNOWN_ATTEMPTS: it sends no byte, and this
+        // profile has no DoH server configured). None is here, because a flag that removes
+        // nothing is a flag nobody can explain later.
         "--disable-features=NetworkTimeServiceQuerying,SafeBrowsingHashPrefixRealTimeLookups",
         "--remote-debugging-port=0",
         "--user-data-dir=" + userData);

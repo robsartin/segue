@@ -162,8 +162,13 @@ final class NetLog {
         || eventName.startsWith("TCP_")
         || eventName.startsWith("UDP_")
         || eventName.startsWith("QUIC_SESSION")
+        // HTTP/2 for the same reason as QUIC: a session is a thing held over a socket, and the
+        // flush in retry-pool-flush-evidence.md §4 closes both. h2 is caught today through the
+        // TCP and SSL events underneath it, but leaving it out made the symmetry one-sided.
+        || eventName.startsWith("HTTP2_SESSION")
         || sourceName.endsWith("SOCKET")
-        || sourceName.startsWith("QUIC_SESSION")) {
+        || sourceName.startsWith("QUIC_SESSION")
+        || sourceName.startsWith("HTTP2_SESSION")) {
       return Kind.SOCKET;
     }
     return null;
@@ -186,18 +191,45 @@ final class NetLog {
       return "";
     }
     String text = value.trim();
-    if (text.contains("://")) {
+    int scheme = text.indexOf("://");
+    if (scheme > 0) {
+      String host = null;
       try {
-        String host = new URI(text).getHost();
-        return host == null ? "" : strip(host);
-      } catch (URISyntaxException notAUrl) {
-        return "";
+        host = new URI(text).getHost();
+      } catch (URISyntaxException notAUri) {
+        // Fall through to the raw authority below.
       }
+      // java.net.URI is RFC 2396, which forbids `~` and `_` in a host — so getHost() answers null
+      // for names Chrome writes and DNS accepts. Two of them matter here: `https://~notfound`,
+      // which is how Chrome logs a name the resolver rule mapped, and anything of the shape
+      // `https://evil_host.example/`. The shipped parser returned "" for both, so a NetLog full of
+      // them read as a browser that had reached nothing at all — the dead instrument #169 spent
+      // two rounds on, rebuilt inside the guard against it. Falling back to the authority Chrome
+      // wrote is what keeps "could not parse" from looking like "nothing happened".
+      return strip(host != null ? host : authority(text.substring(scheme + 3)));
     }
     if (text.contains(":/") || text.startsWith("about:") || text.startsWith("data:")) {
       return "";
     }
     return strip(text);
+  }
+
+  /**
+   * The authority of a URL whose scheme has been removed: everything before the path, query or
+   * fragment, with any {@code user@} dropped.
+   */
+  private static String authority(String afterScheme) {
+    int end = afterScheme.length();
+    for (int i = 0; i < afterScheme.length(); i++) {
+      char c = afterScheme.charAt(i);
+      if (c == '/' || c == '?' || c == '#') {
+        end = i;
+        break;
+      }
+    }
+    String authority = afterScheme.substring(0, end);
+    int credentials = authority.lastIndexOf('@');
+    return credentials < 0 ? authority : authority.substring(credentials + 1);
   }
 
   /** Removes a trailing {@code :port} and IPv6 brackets, and lowercases what is left. */

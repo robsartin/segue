@@ -191,32 +191,44 @@ class HeadlessChromeNetworkTest {
    * Puppeteer launches with to remove these attempts; measured one at a time against the NetLog on
    * Chrome 152.0.7977.65, <em>not one of them removed anything</em> (the flags tried are listed in
    * {@code HeadlessChrome.flags}). Two flags outside that set did, and they are the two this
-   * harness keeps. What remains is:
+   * harness keeps.
+   *
+   * <p>Re-derived from this parser, over six runs of this very test, after the RFC 2396 hole that
+   * had been hiding {@code ~notfound} was fixed. Every entry below appeared in <b>6 of 6</b> runs:
    *
    * <ul>
-   *   <li>{@code accounts.google.com} — {@code /ListAccounts}, the account reconcilor's cookie-jar
-   *       read, on a profile with no account in it
-   *   <li>{@code android.clients.google.com} — {@code /checkin}, GCM's device check-in
-   *   <li>{@code www.google.com} — {@code /async/folae}, the omnibox's AI-mode eligibility fetch
-   *   <li>{@code ~notfound} — not a host: the sentinel the resolver rule itself maps names to, so
-   *       this entry is the rule working rather than a request escaping
-   *   <li>{@code 2001:4860:4860::8888} — Chromium's hardcoded IPv6 reachability probe. A UDP {@code
-   *       connect()} asks the kernel for a route and sends nothing; the assertion above is what
-   *       proves no byte follows it
+   *   <li>{@code accounts.google.com} — 30 sightings; {@code /ListAccounts}, the account
+   *       reconcilor's cookie-jar read, on a profile with no account in it
+   *   <li>{@code www.google.com} — 30 sightings; {@code /async/folae}, the omnibox's AI-mode
+   *       eligibility fetch
+   *   <li>{@code ~notfound} — 61 sightings, all {@code HOST_RESOLVER_MANAGER_REQUEST}. Not a host:
+   *       Chrome logs the name the resolver rule <em>mapped it to</em>, so this entry is the rule
+   *       working rather than anything escaping. It is kept because the parser reports it in the
+   *       host position, which is where Chrome put it
+   *   <li>{@code 2001:4860:4860::8888} — 12 sightings, all {@code UDP_CONNECT} / {@code
+   *       SOCKET_CONNECT} on port <b>443</b>. Chromium's hardcoded IPv6 reachability probe: a UDP
+   *       {@code connect()} that asks the kernel for a route. Read off a captured NetLog, the
+   *       socket's entire life is {@code SOCKET_OPEN}, {@code UDP_CONNECT}, {@code
+   *       UDP_LOCAL_ADDRESS}, {@code SOCKET_ALIVE} end — <b>no byte or packet event of any
+   *       kind</b>. Not Secure DNS: the same log records {@code doh_config: {servers: []}} and
+   *       {@code can_use_secure_dns_transactions: false}, and never names {@code dns.google}.
+   *       {@code --disable-features=DnsOverHttpsUpgrade}, {@code DnsOverHttps} and {@code
+   *       --dns-over-https-mode=off} were each measured against it and removed nothing
    * </ul>
    *
-   * <p>Each is stopped at DNS, so none of them reaches anything — that is the assertion above, and
-   * it is the one that matters. Shortening this list is real work left undone, and the guard will
-   * say so if it ever gets shorter than the code expects, because the assertion is a subset check
-   * and a host that stops appearing costs nothing to remove from here.
+   * <p>{@code android.clients.google.com} ({@code /checkin}, GCM) is deliberately <b>not</b> here:
+   * 0 of 6 runs. It does appear when a browser is left running for six seconds on {@code
+   * about:blank}, so if this guard ever reds naming it, the browser lived longer than this test
+   * keeps it — not a regression.
+   *
+   * <p>Each entry is stopped at DNS, so none of them reaches anything; that is the assertion above,
+   * and it is the one that matters. <b>The check is {@code isSubsetOf}, so this list can only
+   * over-list.</b> An attempt that stops happening will never announce itself here, and a stale
+   * entry silently weakens the guard by the width of one host — so it is re-derived when the
+   * browser changes, not trimmed on a hunch. Shortening it for real is work left undone.
    */
   private static final List<String> KNOWN_ATTEMPTS =
-      List.of(
-          "accounts.google.com",
-          "android.clients.google.com",
-          "www.google.com",
-          "~notfound",
-          "2001:4860:4860::8888");
+      List.of("accounts.google.com", "www.google.com", "~notfound", "2001:4860:4860::8888");
 
   /**
    * Whether an event means the browser actually got onto the network, rather than merely asked.
