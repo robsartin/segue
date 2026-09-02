@@ -51,15 +51,20 @@ Apache Jena.
 
 **No production code is committed by this task.** Its output is the list Task 3 works from.
 
-- [ ] Apply the target change crudely: in `IngestService.apply`'s `SameAs` arm delete the edge-copy
+- [x] Apply the target change crudely: in `IngestService.apply`'s `SameAs` arm delete the edge-copy
       loop, and in `GraphProjector.project` resolve `from`/`to` on every `AssertionRecord` and
       `OwnerEdge` through `Equivalences.in(assertions)` before `apply`. Do the same in
       `LogProjection.of`.
-- [ ] Run the full gate, **blocking**. Record every failing test by name with the assertion that
+- [x] Run the full gate, **blocking**. Record every failing test by name with the assertion that
       failed — not a count. Expect at least `MergeCarriesEverythingTest`, `BothFoldsAgreeTest`,
       `OwnerClaimProjectionTest` and the export fixtures; do not assume that list is complete.
-- [ ] `git checkout -- src/` and re-run the gate to confirm green. **Record the count.**
-- [ ] Write the prerequisite list into this plan under Task 3 before continuing.
+- [x] `git checkout -- src/` and re-run the gate to confirm green. **Record the count.**
+- [x] Write the prerequisite list into this plan under Task 3 before continuing.
+
+**Done 2026-09-02.** Probe: 1061 tests, **11 failed**; reverted, re-run, **1061 tests, 0 failed** —
+so all 11 are the probe's. Four prerequisites, under Task 3. The full patch, every failure message
+and two expected-reds-that-were-not are in `.superpowers/sdd/2026-09-02-merge-degree/task-1-report.md`
+(the SDD workspace is gitignored, so that note is not committed). No production code changed.
 
 ### Task 2: The guard, seen red for the right reason
 
@@ -91,13 +96,50 @@ Apache Jena.
 Filled in from Task 1's list. Each leaf lands green on unchanged production code, so the change in
 Task 4 has nothing left to knock over.
 
-- [ ] For every test the probe broke, separate the assertion that encodes *"the canonical id gained
-      the edges"* — which stays true — from the assertion that encodes *"the local id kept them"* —
-      which is the behaviour being changed. Give each its own `@DisplayName` naming what it holds.
-      `MergeCarriesEverythingTest` is the largest of these.
-- [ ] `BothFoldsAgreeTest` keeps comparing the pair; only the expected sets move, in Task 4. Do not
-      weaken it here.
+**Task 1's probe broke 11 of 1061 tests; the reverted tree is green at 1061/0, so all 11 are the
+probe's.** Evidence and the full failure text are in
+`.superpowers/sdd/2026-09-02-merge-degree/task-1-report.md`. Four leaves, in this order:
+
+- [ ] **P3 — three tests assert the LIVE `ingest.record(SameAs…)` path** (`should carry an owner edge
+      to the canonical id…`, `should carry an edge that points AT the local id…`, `should carry the
+      owner's own provenance…`, all `MergeCarriesEverythingTest`; `Expected size: 1 but was: 0`, and
+      one `ArrayIndexOutOfBoundsException` from `graph.edges(CANONICAL).get(0)`). The fold has no
+      live half by design — no `SameAs` reaches a live graph. Restate all three against a replayed
+      graph, which is green today because the carry runs on replay too (its sibling `should rebuild
+      the carried edge when the log is replayed at boot` already proves it), and drop the `.get(0)`
+      for an AssertJ assertion. This is where the "canonical gained the edges" / "local kept them"
+      separation applies: the first half survives Task 4 on the replay path, the second is what
+      changes.
+- [ ] **P2 — the fold may not construct an `OwnerEdge` outside `domain`.**
+      `ArchitectureTest.ownerClaimsAreMadeThroughTheirFactories` named
+      `GraphProjector.folded(...)` calling `OwnerEdge.<init>` (#92 fences those constructors to
+      `domain` and `sqlite`). Put the endpoint fold in `domain` as a method on `Equivalences` — the
+      sibling of `Retractions`, one home per question — with its own tests in `EquivalencesTest`.
+      A pure addition, unused by production until Task 4.
+- [ ] **P1 — the canonical node must exist before any folded edge is applied.** Seven failures, all
+      `replay failed at sequence N` ← `assertion references unknown entity Q900… - upsert the node
+      first`: today's `carry` is safe only because it runs at the merge's own position, after the
+      node; the fold moves the edge but not the node creation. **Not anticipated by the spec, and
+      the reason the fold cannot land in one commit.** Hoist canonical stand-in creation to a
+      whole-log pre-pass in both folds. Expected to be a no-op today (`upsertNode` is
+      last-writer-wins, so a source still wins) — **prove that with the gate**, and add a
+      source-names-it-first ordering case so the no-op is asserted rather than believed. Open
+      question this leaf must answer with a run: the stand-in reads its kind and label off the local
+      node, which a pre-pass may reach before that node is claimed — does it need two passes?
+- [ ] **Widen `BothFoldsAgreeTest`** with a merge whose local id carries edges on *both* sides. Both
+      its merge tests died inside `GraphProjector.project` before comparing anything, so the probe
+      produced **no evidence at all** that the two folds agree under the change. Green today. The
+      test keeps comparing the pair and must not be weakened — it is widened.
 - [ ] Gate and commit.
+
+**Two things Task 1 expected to red and did not.** `OwnerClaimProjectionTest` stayed green: its four
+merge cases use logs with no owner edge on the local id, so nothing moves — it is not a
+prerequisite. And **no export fixture broke because none exists**: outside `BothFoldsAgreeTest` and
+`InventedGraph`, nothing in `export/` mentions a merge, so the DOT and GraphML writers have no
+merged fixture. That is a coverage gap rather than an absence of risk — ruling 3 (a merged local id
+is drawn as an orphan, hidden by nothing) has no test today and becomes visible behaviour in Task 4.
+**Task 2 adds that export case**, red today for the honest opposite reason: the local id still has
+its edges.
 
 ### Task 4: Both folds resolve endpoints through the equivalences
 
