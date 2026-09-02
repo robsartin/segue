@@ -1,0 +1,156 @@
+{
+  "note": "A log small enough to know by hand, for MusicBrainzProbeTest. Every identifier here is invented: the QIDs carry a leading zero and are unallocatable (ADR 58), and the MBIDs are the 00000000-0000-4000-8000-0000000000nn family this package already uses for stand-ins. Nothing here names anyone. The expected block below is written by hand from the claims above it and is the only place this fixture's totals are stated.",
+
+  "seeds": [
+    {
+      "qid": "Q0910001",
+      "kind": "GROUP",
+      "label": "the first invented ensemble",
+      "instanceOf": ["Q215380"],
+      "mbid": "00000000-0000-4000-8000-000000000001",
+      "describes": [],
+      "response": {
+        "relations": [
+          {
+            "type": "member of band",
+            "direction": "backward",
+            "artist": {"id": "00000000-0000-4000-8000-000000000014", "name": "an invented player"}
+          },
+          {
+            "type": "member of band",
+            "direction": "backward",
+            "artist": {"id": "00000000-0000-4000-8000-000000000015", "name": "another invented player"}
+          },
+          {
+            "type": "subgroup",
+            "direction": "forward",
+            "artist": {"id": "00000000-0000-4000-8000-000000000021", "name": "an invented side project the bridge cannot place"}
+          }
+        ]
+      }
+    },
+    {
+      "qid": "Q0910002",
+      "kind": "PERSON",
+      "label": "the first invented player",
+      "instanceOf": ["Q5"],
+      "mbid": "00000000-0000-4000-8000-000000000002",
+      "describes": [],
+      "response": {
+        "relations": [
+          {
+            "type": "member of band",
+            "direction": "forward",
+            "artist": {"id": "00000000-0000-4000-8000-000000000011", "name": "an invented band the graph already holds"}
+          },
+          {
+            "type": "collaboration",
+            "direction": "forward",
+            "artist": {"id": "00000000-0000-4000-8000-000000000016", "name": "an invented collaborator"}
+          },
+          {
+            "type": "teacher",
+            "direction": "backward",
+            "artist": {"id": "00000000-0000-4000-8000-000000000022", "name": "an invented teacher the bridge cannot place"}
+          }
+        ]
+      }
+    },
+    {
+      "qid": "Q0910003",
+      "kind": "GROUP",
+      "label": "the second invented ensemble",
+      "instanceOf": ["Q215380"],
+      "mbid": "00000000-0000-4000-8000-000000000003",
+      "describes": ["Q0910013"],
+      "response": {
+        "relations": [
+          {
+            "type": "member of band",
+            "direction": "backward",
+            "artist": {"id": "00000000-0000-4000-8000-000000000011", "name": "an invented band the graph already holds"}
+          },
+          {
+            "type": "member of band",
+            "direction": "backward",
+            "artist": {"id": "00000000-0000-4000-8000-000000000012", "name": "a second invented entity the graph already holds"}
+          },
+          {
+            "type": "named after artist",
+            "direction": "forward",
+            "artist": {"id": "00000000-0000-4000-8000-000000000013", "name": "an invented namesake"}
+          }
+        ]
+      }
+    },
+    {
+      "qid": "Q0910004",
+      "kind": "PERSON",
+      "label": "the second invented player, whom the bridge cannot place",
+      "instanceOf": ["Q5"],
+      "describes": []
+    }
+  ],
+
+  "neighbours": [
+    {"mbid": "00000000-0000-4000-8000-000000000011", "qid": "Q0910011"},
+    {"mbid": "00000000-0000-4000-8000-000000000012", "qid": "Q0910012"},
+    {"mbid": "00000000-0000-4000-8000-000000000013", "qid": "Q0910013"},
+    {"mbid": "00000000-0000-4000-8000-000000000014", "qid": "Q0910014"},
+    {"mbid": "00000000-0000-4000-8000-000000000015", "qid": "Q0910015"},
+    {"mbid": "00000000-0000-4000-8000-000000000016", "qid": "Q0910016"}
+  ],
+
+  "alreadyInTheGraph": [
+    {
+      "qid": "Q0910011",
+      "kind": "PERSON",
+      "label": "an invented entity the graph already holds, carrying a class",
+      "instanceOf": ["Q5"]
+    },
+    {
+      "qid": "Q0910012",
+      "kind": "GROUP",
+      "label": "an invented entity the graph already holds, stating no class",
+      "instanceOf": []
+    }
+  ],
+
+  "expected": {
+    "block1": {
+      "seedsRequested": 4,
+      "seedsPerson": 2,
+      "seedsGroup": 2,
+      "bridged": 3,
+      "seedsWithAResolvedNeighbour": 3,
+      "resolvedNeighbours": 7
+    },
+    "block2": {
+      "total": 9,
+      "census": {
+        "member of band": 5,
+        "collaboration": 1,
+        "named after artist": 1,
+        "subgroup": 1,
+        "teacher": 1
+      }
+    },
+    "block3": {
+      "alreadyInTheGraph": 3,
+      "describedInTheSameCall": 1,
+      "newAndUndescribed": 3
+    },
+    "block4": {
+      "median": 1,
+      "p90": 2,
+      "max": 2
+    },
+    "block5": {
+      "classLessCreations": 3,
+      "erasureOccurrences": 3,
+      "distinctErased": 2,
+      "erasedCarryingInstanceOf": 1,
+      "seedsTheBoundCut": 0
+    }
+  }
+}
