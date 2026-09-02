@@ -132,8 +132,11 @@ socket in every one; the abandoned rating was attempted three times in every one
 **So the destructive event is gone from this harness's timeline, and it is not gone from the
 browser.** A control that plants the page load on Chrome's own command line — so a loopback socket
 is idle in the pool when the marker fires — had that socket closed by the marker in **16 of 20
-runs**. The flush is alive; what saves the deck tests is that the page now loads 57–140 ms after the
-marker, and nothing enforces that ordering: the gap is about one 50 ms poll interval of
+runs**, each close carrying Chrome's own reason for it, `"Cert verifier changed"`, with two
+`CERT_VERIFY_PROC_CREATED` events in the same millisecond ahead of it — which names the handler
+round 2 could only describe. The flush is alive; what saves the deck tests is that the page now
+loads 57–140 ms after the marker in 69 of the 80 traced runs, and 574–683 ms after it in the other
+eleven, and nothing enforces that ordering: the gap is about one 50 ms poll interval of
 `HeadlessChrome`'s own DevTools handshake. **No wait was added**, because the licensed shape of one
 is a condition rather than a bound and the two candidate conditions came out as follows —
 `Network.enable` on Chrome 152's browser target does not exist (`-32601`, 3 probes of 3), while

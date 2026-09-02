@@ -592,8 +592,8 @@ stated above. **The phone-home was not the flush's cause**: the browser-wide not
 fires, once per launch, in 80 of 80 — so those Google requests were present at the sighting and are
 not what drives the flush, and `docs/retry-pool-flush-evidence.md` §5's "they are the trigger"
 carries a dated note to that effect. And **the flush no longer finds the deck's sockets**:
-it closed nothing in 80 of 80 runs, landing 57–140 ms before the page's first socket every time, and
-the retry control passed 60 of 60. So the residual this amendment measured is **closed within what
+it closed nothing in 80 of 80 runs, landing 57–140 ms before the page's first socket in 69 of them
+and 574–683 ms before it in the other eleven, and the retry control passed 60 of 60. So the residual this amendment measured is **closed within what
 those runs bound** — 0 failures in 60 is consistent with rates up to about 4.9%, and round 2's own
 1-in-81 would have produced a clean 60 about half the time — which is not the same as fixed. It is
 also not enforced: a control that plants the page load early had the flush close its loopback socket

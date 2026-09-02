@@ -6,8 +6,13 @@ for the flush. Round 3 measured that directly, with the browser unable to resolv
 it is wrong: the browser-wide notification fires in 80 of 80 launches with nothing to fetch, and a
 planted early page load still had its loopback socket closed by it in 16 of 20 runs. Those requests
 were present at the sighting; they are not what drives the flush. What round 3 did find is that the
-flush no longer reaches the deck's sockets — it lands 57–140 ms before the page's first socket, in
-80 of 80 — and the rest of this page stands. See
+flush no longer reaches the deck's sockets — it lands ahead of the page's first socket in 80 of 80,
+by 57–140 ms in 69 of them and by 574–683 ms in the other eleven — and the rest of this page stands.
+**Round 3 also names the handler §4 below leaves open.** On the planted control the closing event
+carries Chrome's own reason, `{"reason": "Cert verifier changed"}`, with two
+`CERT_VERIFY_PROC_CREATED` events in the same millisecond ahead of it, in 20 runs of 20: the
+configuration change is the certificate verifier being created, and every pooled socket goes with
+it. Why Chrome creates it on that schedule is still not established. See
 [the loopback-only flush measurement](loopback-only-evidence.md) and ADR 52's 2026-09-02 amendment.
 
 **Evidence only. No fix is proposed here, and none was made.** Round 1

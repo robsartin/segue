@@ -27,7 +27,7 @@ dated note it puts on [ADR 46](adr/0046-the-rating-deck.md)'s second retry amend
 | Launches traced with a NetLog, running the retry scenario as the test does | **80** (60 under load, 20 quiet) |
 | Runs where a `SOCKET_POOL_CLOSING_SOCKET` **burst** occurred (≥2 sockets in one millisecond) | **0 / 80** |
 | Runs where any socket at all closed within 2 ms of the flush marker | **0 / 80** |
-| Runs where the `QUIC_SESSION_POOL_MARK_ALL_ACTIVE_SESSIONS_GOING_AWAY` marker still fired | **80 / 80**, exactly once each |
+| Runs where the `QUIC_SESSION_POOL_MARK_ALL_ACTIVE_SESSIONS_GOING_AWAY` marker still fired | **80 / 80**, once each — round 2 logged **three** |
 | Runs where the marker fired **before** the page's first socket existed | **80 / 80** |
 | Attempts at the abandoned rating (three is the healthy case) | **3 in 80 / 80** |
 | Non-loopback hosts **reached** — connect, handshake, QUIC session or byte | **0 in 80 / 80** |
@@ -144,10 +144,18 @@ Run by run, so the derived numbers below can be checked against the rows they co
 | page's first socket | 729 – 900 | 803 – 952 | 714 – 764 |
 | marker − page socket | −110 … **+53** | −683 … **−81** | −615 … **−57** |
 | runs with the flush landing late | 5 of 61 traced (1 fatal) | **0 of 60** | **0 of 20** |
+| going-away markers logged per launch | 3 (QUIC pools #28, #35, #7) | **1** | **1** |
 | sockets closed by the marker | 6, across 5 origins | **0** | **0** |
 
-**The margin is one-sided now, and it is also narrow and incidental.** Quiet, the marker and the
-page's first socket are 57–66 ms apart; loaded, 81–140 ms. Both sides move together with load —
+The marker count fell for the same reason the burst did, and it is worth saying together: the flush
+marks and closes what the browser is holding, and the browser is now holding almost nothing. Six
+sockets across five origins became none, and three QUIC session pools with live sessions became one
+pool marked on an empty browser. Neither number is the flush getting weaker — §4 is the test of
+that.
+
+**The margin is one-sided now, and it is also narrow and incidental.** In the 69 runs whose marker
+falls in the main band it is 57–66 ms quiet and 81–140 ms loaded; the other 11 runs — the five and
+six early markers above — are 574–683 ms clear, and are not what any bound should be read off. Both sides move together with load —
 round 2 §5's finding, reproduced. Nothing in the harness *enforces* that ordering: the gap is
 roughly one poll interval of `HeadlessChrome`'s own DevTools handshake (`devToolsPort` and
 `pageEndpoint` sleep 50 ms between attempts), which is to say the page is late enough by accident,
@@ -188,15 +196,38 @@ Twenty runs, quiet box:
 | 20 | 753 | 202 | — |
 
 **20 of 20 put a loopback socket in the pool before the marker; 16 of those 20 had it closed by the
-marker, in the marker's own millisecond.** That is round 2's flush, on a browser that reaches
+marker, in the marker's own millisecond — and the log says why.** Round 2 wrote that "the exact
+Chromium handler was not identified and this page does not name one." These logs name it: the
+closing event carries a reason, verbatim, and two `CERT_VERIFY_PROC_CREATED` events land in the same
+millisecond ahead of it, in 20 runs of 20.
+
+```
+ 736 CERT_VERIFY_PROC_CREATED
+ 736 CERT_VERIFY_PROC_CREATED
+ 736 SOCKET_POOL_CLOSING_SOCKET      src=19   {"reason": "Cert verifier changed"}
+ 736 SOCKET_ALIVE                    src=19   (end)
+ 736 QUIC_SESSION_POOL_MARK_ALL_ACTIVE_SESSIONS_GOING_AWAY
+```
+
+**The configuration change is Chrome's certificate verifier being created, and a pooled connection
+whose certificate validation is no longer trusted goes.** That is what the reason string says and
+what the ordering shows; it is also why the loopback pool is collateral damage, since the reason
+applies to the pool and not to any certificate the stub ever presented. **Why Chrome creates the
+verifier on this schedule — and twice — is not established here**, and this page does not guess.
+`"Cert verifier changed"` accounts for exactly the 16 closes at the marker; the other closing
+reasons in these 20 logs are `"Socket pool destroyed"` (36, the browser exiting) and `"Socket
+generation out of date"` (4). That is round 2's flush, on a browser that reaches
 nothing at all: no Google socket, no QUIC session, no certificate to re-verify for a remote host —
 and it still closes the one loopback socket in the pool. The phone-home is not the flush's cause;
 the flush is a notification that fires on the startup clock either way, and round 2's socket burst
 was six sockets wide only because there were six sockets.
 
-The four runs where nothing closed are not explained here; the socket's state in the pool at that
-exact millisecond is not something these logs pin down, and 16 of 20 is enough for the claim being
-made.
+The four runs where nothing closed carry `"Socket generation out of date"` on their page socket
+instead, and are most likely a property of this driver rather than of the mechanism: it loads the
+whole deck page, so a favicon and a preconnect spare are in the race for the pool at that moment. A
+second, independent driver with neither — run during review of this page — closed the planted socket
+in **6 of 6**. What both agree on is the claim being made: the flush still closes a live loopback
+socket.
 
 ---
 
