@@ -386,10 +386,20 @@ final class HeadlessChrome implements AutoCloseable {
    *
    * <p>Until this line the ordering held by luck — 57 ms of it at quiet load, which is about one
    * poll of this class's own DevTools handshake (§6). It is a condition now.
+   *
+   * <p><b>And a bound is not a guarantee.</b> Where the bound ends the wait, the tail is resumed
+   * and kept reading past {@code Page.navigate}, so that a marker arriving late — after the page
+   * has its socket, which is the flush taking that socket — is recorded and said out loud rather
+   * than lost in a green run. See {@link MarkerOrder}; issue #193.
    */
   void open(String url) {
-    flushWait = awaitFlush(netLog, launchedAt, FLUSH_BOUND_MILLIS);
-    if (!flushWait.sawMarker()) {
+    NetLog.Tail tail = new NetLog.Tail(netLog);
+    flushWait = awaitFlush(tail, launchedAt, FLUSH_BOUND_MILLIS);
+    // Only where the bound ended the wait is there anything left to ask: a launch that saw the
+    // marker saw the flush finish before this page could hold a socket. Taken before navigate, so
+    // that the resumed tail's first event is the first the page caused.
+    NetLog.Tail afterNavigate = flushWait.sawMarker() ? null : tail.resumed();
+    if (afterNavigate != null) {
       // The abnormal case only, and on stderr, which the build's testLogging shows on the console.
       // A line per launch would be noise nobody reads; a line only when the ordering stopped being
       // observable is the one thing a run needs to be told without being asked.
@@ -398,6 +408,13 @@ final class HeadlessChrome implements AutoCloseable {
     send("Page.enable", Map.of());
     send("Page.navigate", Map.of("url", url));
     until("document.readyState === 'complete'", "the page to load");
+    if (afterNavigate != null) {
+      // Beside the line above, and the half of it that line could not carry: whether the marker
+      // this launch proceeded without then landed on top of the page's own socket. Printed either
+      // way — "the ordering held" is the thing a run that skipped nothing needs to be able to say.
+      flushWait = observeMarkerOrder(flushWait, afterNavigate, LATE_MARKER_BOUND_MILLIS);
+      System.err.println("[HeadlessChrome] " + flushWait.order());
+    }
   }
 
   /** What the last {@link #open} waited on, for a test that wants to assert on the ordering. */
@@ -526,9 +543,16 @@ final class HeadlessChrome implements AutoCloseable {
    * marker to arrive, not less.
    */
   static FlushWait awaitFlush(Path netLog, long launchedAtNanos, long boundMillis) {
+    return awaitFlush(new NetLog.Tail(netLog), launchedAtNanos, boundMillis);
+  }
+
+  /**
+   * The same wait over a tail the caller keeps, so that {@link NetLog.Tail#resumed()} can carry on
+   * from exactly where the wait stopped reading.
+   */
+  static FlushWait awaitFlush(NetLog.Tail tail, long launchedAtNanos, long boundMillis) {
     long startedWaiting = System.nanoTime();
     long deadline = launchedAtNanos + TimeUnit.MILLISECONDS.toNanos(boundMillis);
-    NetLog.Tail tail = new NetLog.Tail(netLog);
     while (true) {
       if (tail.flushHasPassed()) {
         return new FlushWait(
