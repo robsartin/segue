@@ -1,8 +1,10 @@
 package com.robsartin.segue.app;
 
 import com.robsartin.segue.domain.Qid;
+import com.robsartin.segue.musicbrainz.BridgedIdentity;
 import com.robsartin.segue.musicbrainz.MusicBrainzIdentity;
 import com.robsartin.segue.musicbrainz.MusicBrainzIdentityUnavailableException;
+import com.robsartin.segue.wikidata.KindMapper;
 import com.robsartin.segue.wikidata.WikidataClient;
 import com.robsartin.segue.wikidata.WikidataUnavailableException;
 import java.util.Collection;
@@ -11,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -94,6 +97,37 @@ public final class WikidataMusicBrainzIdentity implements MusicBrainzIdentity {
       """;
 
   /**
+   * The same question with two riders, which is the whole of issue #163: the neighbour's label and
+   * its {@code P31} classes, on the round trip {@link #BATCH_TEMPLATE} was already making.
+   *
+   * <p><b>{@code p:P31/ps:P31}, not {@code wdt:P31}.</b> The truthy predicate exposes only the
+   * best-ranked, non-deprecated value; {@code ClaimMapper.instanceOf} reads every statement. A
+   * bridge on {@code wdt:} could therefore hand back fewer classes than a {@code fetch} would for
+   * the same entity, and {@code TinkerGraphStore.upsertNode} is last-writer-wins — so refreshing an
+   * existing node would silently shrink its {@code instanceOf}. That is #143's erasure arriving a
+   * step later, and it is the one thing this change may not reintroduce. {@code ReverseClaims} has
+   * carried that exposure since ADR 36 as accepted precedent; a NEW query has no such excuse, and
+   * the request-line measurement on {@link #MAX_MBIDS_PER_QUERY} says the fuller shape fits.
+   *
+   * <p>Both riders multiply rows — an item stating three classes returns three bindings — so a row
+   * is not an entity and the parser keys on the item, exactly as {@code ReverseClaims} does.
+   *
+   * <p>The {@code OPTIONAL} is what keeps an item with no {@code P31} in the answer at all: an
+   * unbound {@code ?type} is a binding without the key, not a dropped row. An entity the bridge can
+   * name but not classify is still a resolved QID.
+   */
+  private static final String DESCRIBED_BATCH_TEMPLATE =
+      """
+      SELECT ?item ?mbid ?itemLabel ?type WHERE {
+        VALUES ?mbid { %s }
+        ?item wdt:%s ?mbid .
+        OPTIONAL { ?item p:P31/ps:P31 ?type }
+        SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+      }
+      ORDER BY ?mbid ?item
+      """;
+
+  /**
    * The most MBIDs one {@code VALUES} clause may carry, because a {@code GET} spends its query on
    * the request line.
    *
@@ -156,9 +190,7 @@ public final class WikidataMusicBrainzIdentity implements MusicBrainzIdentity {
 
   @Override
   public Map<String, String> qidsFor(Collection<String> mbids) {
-    Objects.requireNonNull(mbids, "mbids");
-    List<String> asked =
-        mbids.stream().filter(m -> m != null && MBID.matcher(m).matches()).distinct().toList();
+    List<String> asked = accepted(mbids);
     if (asked.isEmpty()) {
       // Nothing whitelisted, or nothing that could be an MBID. A VALUES clause with no members is
       // a round trip whose only possible answer is the empty map.
@@ -166,31 +198,87 @@ public final class WikidataMusicBrainzIdentity implements MusicBrainzIdentity {
     }
 
     Map<String, String> resolved = new LinkedHashMap<>();
+    inChunks(asked, BATCH_TEMPLATE, response -> collect(response, resolved));
+    return Map.copyOf(resolved);
+  }
+
+  /**
+   * The same bridge, asked for everything the neighbour's identity needs rather than its QID alone
+   * (issue #163).
+   *
+   * <p>It is a separate method beside {@link #qidsFor} rather than a replacement for it, because
+   * the seam has six implementors and moving them all at once is the big-bang the Mikado rule
+   * refuses. {@code qidsFor} is retired once the last caller has moved.
+   */
+  @Override
+  public Map<String, BridgedIdentity> identitiesFor(Collection<String> mbids) {
+    List<String> asked = accepted(mbids);
+    if (asked.isEmpty()) {
+      return Map.of();
+    }
+
+    // Three maps rather than one, because a row is not an entity: the OPTIONAL P31 and the label
+    // service each multiply rows, so the classes of one item arrive spread across several. Keyed
+    // on the item, as ReverseClaims keys its own; insertion-ordered so ORDER BY still decides
+    // which item wins an MBID that Wikidata states twice.
+    Map<String, String> qidByMbid = new LinkedHashMap<>();
+    Map<String, String> labelByQid = new LinkedHashMap<>();
+    Map<String, String> classByQid = new LinkedHashMap<>();
+    inChunks(
+        asked,
+        DESCRIBED_BATCH_TEMPLATE,
+        response -> describe(response, qidByMbid, labelByQid, classByQid));
+
+    Map<String, BridgedIdentity> bridged = new LinkedHashMap<>();
+    qidByMbid.forEach(
+        (mbid, qid) -> {
+          String stated = classByQid.get(qid);
+          List<String> instanceOf = stated == null ? List.of() : List.of(stated);
+          // KindMapper is called here, in app, and never in musicbrainz: ADR 32's
+          // adapters-are-siblings fence forbids that package importing wikidata, and app is the
+          // only one permitted to see two adapters at once.
+          bridged.put(
+              mbid,
+              new BridgedIdentity(
+                  qid, KindMapper.fromInstanceOf(instanceOf), labelByQid.get(qid), instanceOf));
+        });
+    return Map.copyOf(bridged);
+  }
+
+  /**
+   * The MBIDs worth putting in a {@code VALUES} clause: distinct, and shaped like the UUIDs
+   * MusicBrainz issues. Anything else is contributor-entered data on its way into a SPARQL query
+   * and is refused rather than escaped — see {@link #MBID}.
+   */
+  private static List<String> accepted(Collection<String> mbids) {
+    Objects.requireNonNull(mbids, "mbids");
+    return mbids.stream().filter(m -> m != null && MBID.matcher(m).matches()).distinct().toList();
+  }
+
+  /**
+   * Runs {@code template} once per {@link #MAX_MBIDS_PER_QUERY} MBIDs, handing each response to
+   * {@code reader}.
+   *
+   * <p>One chunk's failure fails the whole call, by throwing out of {@link #ask}. Returning what
+   * the earlier chunks resolved would be worse than useless: a half-filled map is indistinguishable
+   * from Wikidata knowing no QID for the rest, and that is the normal drop path (ADR 22 clause 2)
+   * which reports nothing to anybody. Returning an EMPTY map, which is what this did before issue
+   * #148, had the same problem for every neighbour at once.
+   */
+  private void inChunks(List<String> asked, String template, Consumer<JsonNode> reader) {
     for (int from = 0; from < asked.size(); from += MAX_MBIDS_PER_QUERY) {
       List<String> chunk = asked.subList(from, Math.min(from + MAX_MBIDS_PER_QUERY, asked.size()));
       String values = chunk.stream().map(m -> "\"" + m + "\"").collect(Collectors.joining(" "));
-      // One chunk's failure fails the whole call, by throwing out of ask(). Returning what the
-      // earlier chunks resolved would be worse than useless: a half-filled map is
-      // indistinguishable from Wikidata knowing no QID for the rest, and that is the normal drop
-      // path (ADR 22 clause 2) which reports nothing to anybody. Returning an EMPTY map, which is
-      // what this did before issue #148, had the same problem for every neighbour at once.
-      collect(ask(BATCH_TEMPLATE.formatted(values, MBID_PROPERTY)), resolved);
+      reader.accept(ask(template.formatted(values, MBID_PROPERTY)));
     }
-    return Map.copyOf(resolved);
   }
 
   /** Reads one response's bindings into {@code resolved}, dropping what cannot be a mapping. */
   private static void collect(JsonNode response, Map<String, String> resolved) {
     for (JsonNode row : response.path("results").path("bindings")) {
       String mbid = row.at("/mbid/value").asText(null);
-      String item = row.at("/item/value").asText(null);
-      if (mbid == null || item == null || !item.startsWith(ENTITY_PREFIX)) {
-        continue;
-      }
-      String qid = item.substring(ENTITY_PREFIX.length());
-      if (!Qid.looksLikeAQid(qid)) {
-        // A lexeme or a property answers this shape too, and MusicBrainzSourceAdapter would drop
-        // one anyway; dropping it here keeps the map's contract — every value is a QID.
+      String qid = entityQid(row.at("/item/value").asText(null));
+      if (mbid == null || qid == null) {
         continue;
       }
       // An MBID absent from the result carries no QID and is simply not a key: the interface says
@@ -198,6 +286,49 @@ public final class WikidataMusicBrainzIdentity implements MusicBrainzIdentity {
       // neighbours drop this way. Nothing is put here to record the absence.
       resolved.putIfAbsent(mbid, qid);
     }
+  }
+
+  /** Reads one widened response's bindings, gathering each item's rows back into one entity. */
+  private static void describe(
+      JsonNode response,
+      Map<String, String> qidByMbid,
+      Map<String, String> labelByQid,
+      Map<String, String> classByQid) {
+
+    for (JsonNode row : response.path("results").path("bindings")) {
+      String mbid = row.at("/mbid/value").asText(null);
+      String qid = entityQid(row.at("/item/value").asText(null));
+      if (mbid == null || qid == null) {
+        continue;
+      }
+      qidByMbid.putIfAbsent(mbid, qid);
+      rememberLabel(labelByQid, qid, row.at("/itemLabel/value").asText(null));
+      String classQid = entityQid(row.at("/type/value").asText(null));
+      if (classQid != null) {
+        classByQid.putIfAbsent(qid, classQid);
+      }
+    }
+  }
+
+  /** The label the label service returned, where it returned one. */
+  private static void rememberLabel(Map<String, String> labels, String qid, String label) {
+    if (label == null || label.isBlank()) {
+      return;
+    }
+    labels.putIfAbsent(qid, label);
+  }
+
+  /**
+   * The QID an entity IRI names, or null where it names something else. A lexeme or a property
+   * answers the item shape too, and {@code MusicBrainzSourceAdapter} would drop one anyway;
+   * dropping it here keeps the contract that every value is a QID.
+   */
+  private static String entityQid(String iri) {
+    if (iri == null || !iri.startsWith(ENTITY_PREFIX)) {
+      return null;
+    }
+    String qid = iri.substring(ENTITY_PREFIX.length());
+    return Qid.looksLikeAQid(qid) ? qid : null;
   }
 
   /**

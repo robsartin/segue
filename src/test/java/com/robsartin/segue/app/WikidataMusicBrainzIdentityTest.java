@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.entry;
 
+import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.musicbrainz.BridgedIdentity;
 import com.robsartin.segue.musicbrainz.MusicBrainzIdentity;
 import com.robsartin.segue.musicbrainz.MusicBrainzIdentityUnavailableException;
 import com.robsartin.segue.wikidata.StubWikidataServer;
@@ -41,6 +43,21 @@ class WikidataMusicBrainzIdentityTest {
   private static final String QUINTET_QID = "Q0900001";
   private static final String MEMBER_QID = "Q0900002";
 
+  /** {@code Q5}, human — the class the fixture's neighbours all carry. */
+  private static final String HUMAN = "Q5";
+
+  /** {@code Q215380}, musical group. A second class on one item, for the row-multiplying case. */
+  private static final String MUSICAL_GROUP = "Q215380";
+
+  private static final String MEMBER_LABEL = "A Player Wikidata Has A Name For";
+
+  /**
+   * The committed MusicBrainz fixture's mappable relations, all naming distinct target MBIDs —
+   * {@code NeighbourFetchCountTest} is the authority on that count. A whole neighbourhood of this
+   * size is what one expansion hands the bridge, and it must still cost one round trip.
+   */
+  private static final int FIXTURE_MAPPABLE_NEIGHBOURS = 22;
+
   /**
    * {@code application.yaml}'s shipped {@code segue.expand.max-new-edges}. {@code
    * MusicBrainzSourceAdapter} spends that bound on relations <i>before</i> it resolves any
@@ -73,6 +90,31 @@ class WikidataMusicBrainzIdentityTest {
         + "\"},\"mbid\":{\"type\":\"literal\",\"value\":\""
         + mbid
         + "\"}}";
+  }
+
+  /**
+   * One binding of the widened query: the item and its MBID, plus the label service's {@code
+   * ?itemLabel} and one {@code ?type}. A class of null is an item with no {@code P31} statement, on
+   * which the {@code OPTIONAL} leaves the variable unbound and the binding simply lacks the key.
+   */
+  private static String describedRow(String qid, String mbid, String label, String classQid) {
+    StringBuilder row = new StringBuilder();
+    row.append("{\"item\":{\"type\":\"uri\",\"value\":\"http://www.wikidata.org/entity/")
+        .append(qid)
+        .append("\"},\"mbid\":{\"type\":\"literal\",\"value\":\"")
+        .append(mbid)
+        .append("\"}");
+    if (label != null) {
+      row.append(",\"itemLabel\":{\"type\":\"literal\",\"xml:lang\":\"en\",\"value\":\"")
+          .append(label)
+          .append("\"}");
+    }
+    if (classQid != null) {
+      row.append(",\"type\":{\"type\":\"uri\",\"value\":\"http://www.wikidata.org/entity/")
+          .append(classQid)
+          .append("\"}");
+    }
+    return row.append("}").toString();
   }
 
   private static String mbidRow(String mbid) {
@@ -332,6 +374,44 @@ class WikidataMusicBrainzIdentityTest {
       assertThat(identity(stub).qidsFor(List.of(MEMBER_MBID)))
           .containsOnly(entry(MEMBER_MBID, MEMBER_QID));
       assertThat(decodedQuery(stub)).contains("ORDER BY");
+    }
+  }
+
+  @Test
+  @DisplayName("should carry the label and classes back on the round trip it already makes")
+  void shouldCarryTheLabelAndClassesBackOnTheRoundTripItAlreadyMakes() {
+    try (StubWikidataServer stub = new StubWikidataServer()) {
+      stub.enqueueBody(bindings(describedRow(MEMBER_QID, MEMBER_MBID, MEMBER_LABEL, HUMAN)));
+
+      Map<String, BridgedIdentity> bridged = identity(stub).identitiesFor(List.of(MEMBER_MBID));
+
+      assertThat(bridged).containsOnlyKeys(MEMBER_MBID);
+      BridgedIdentity member = bridged.get(MEMBER_MBID);
+      assertThat(member.qid()).isEqualTo(MEMBER_QID);
+      assertThat(member.label()).isEqualTo(MEMBER_LABEL);
+      assertThat(member.instanceOf()).containsExactly(HUMAN);
+      assertThat(member.kind()).isEqualTo(NodeKind.PERSON);
+      // The whole point of the change: more columns on the call already made, not a second call.
+      assertThat(stub.requestCount()).isEqualTo(1);
+      // Full P31 statements, not truthy ones (the design note's controller ruling 2). wdt:P31
+      // exposes only the best-ranked value, so a bridge reading it could hand back FEWER classes
+      // than ClaimMapper.instanceOf does for the same entity — and TinkerGraphStore.upsertNode is
+      // last-writer-wins, so a refresh would shrink an existing node's classes.
+      assertThat(decodedQuery(stub))
+          .contains("wdt:P434")
+          .contains("p:P31/ps:P31")
+          .contains("wikibase:label");
+    }
+  }
+
+  @Test
+  @DisplayName("should still spend one round trip when a whole neighbourhood is bridged at once")
+  void shouldStillSpendOneRoundTripWhenAWholeNeighbourhoodIsBridgedAtOnce() {
+    try (StubWikidataServer stub = new StubWikidataServer()) {
+      identity(stub).identitiesFor(mbids(FIXTURE_MAPPABLE_NEIGHBOURS));
+
+      assertThat(stub.requestCount()).isEqualTo(1);
+      assertThat(decodedQuery(stub)).contains("p:P31/ps:P31").contains("wikibase:label");
     }
   }
 
