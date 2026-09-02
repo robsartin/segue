@@ -77,6 +77,27 @@ public interface GraphStore extends AutoCloseable {
    * Q4 - CORROBORATION. Edges backed by at least N distinct sources. This is what keeps
    * model-generated hypotheses from silently becoming facts, and it is where RDF's named graphs pay
    * for themselves.
+   *
+   * <p><b>N = 0 returns every edge, the owner's standalone claims included.</b> {@link
+   * EdgeRecord#corroboration()} counts distinct NON-owner sources, so an edge the owner claimed and
+   * no source ever asserted has corroboration 0 - a count, not a missing answer. ADR 59 makes owner
+   * claims a third layer, projected into the graph and exempt from the corroboration count; exempt
+   * from the count is not absent from the query, and "at least 0" admits it. An implementation that
+   * drops owner-only edges before grouping answers 0 as though it meant "at least one real source",
+   * which is what 1 means - and that is the divergence #176 closed.
+   *
+   * <p>Both implementations have to agree, and agreeing at one N is not agreeing. {@code
+   * com.robsartin.segue.tinker.TinkerGraphStoreContractTest#enginesAgreeOnEdgeSets} compares their
+   * edge-key sets across the whole range the fixture makes meaningful, and {@code
+   * com.robsartin.segue.tinker.TinkerGraphStoreContractTest#shouldPlaceOwnerClaimsByCorroborationWhenEitherEngineAnswersTheRange}
+   * pins the shape per engine so that comparison cannot pass on two identical mistakes. {@code
+   * com.robsartin.segue.port.GraphStoreContract#shouldReturnTheOwnerOnlyEdgeWhenTheCorroborationFloorIsZero}
+   * pins it on whichever engine runs the contract.
+   *
+   * <p><b>Those three references are unchecked.</b> They are {@code @code} and not {@code @link}
+   * because the test source set is not on {@code :javadoc}'s classpath - a {@code @link} to any of
+   * them fails the task with {@code reference not found}, measured. They are written fully
+   * qualified with a {@code #} so a rename's grep finds them; nothing else will.
    */
   List<EdgeRecord> corroborated(int minDistinctSources);
 

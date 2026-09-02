@@ -82,3 +82,48 @@ Two reasons decided it, in order of weight:
   domain record, not in the adapter.
 - Revisit only if auditing the graph becomes more common than walking it. Because the
   assertion log is the source of truth, that revisit is a replay, not a migration.
+
+**Amendment (2026-09-02, issue #176): the Q4 claim above — *"Both adapters return identical results
+on all four"* — was false at N = 0, from the day owner claims existed until this change.**
+
+[ADR 59](0059-owner-claims-as-a-third-layer.md) admits owner claims as a third layer, projected to
+the graph and exempt from the corroboration *count*, not absent from the corroboration *query* — so
+an edge whose only provenance is the owner has corroboration 0, and `corroborated(0)` asks for "at
+least 0," which such an edge always satisfies. `EdgeRecord.corroboration()` is the authority for the
+count: it filters owner sources out before counting *distinct non-owner* sources, so an owner-only
+edge counts 0 rather than being undefined or absent.
+
+One engine did not see it that way. `JenaGraphStore.corroborated` used to filter the owner's rows out
+of the SPARQL result set before `GROUP BY`, which drops the group along with the rows — an edge with
+no non-owner rows had no group at all, so `HAVING` was never evaluated for it and the edge vanished
+from every answer, `corroborated(0)` included. It now keeps every row's group and counts non-owner
+sources within it instead of filtering rows away; the method's own javadoc, kept current rather than
+mirrored here, has the detail. `TinkerGraphStore.corroborated` never had the bug — it filters on
+`EdgeRecord.corroboration()` itself, which was already correct.
+
+The divergence went undetected because `TinkerGraphStoreContractTest.enginesAgreeOnEdgeSets` compared
+the two engines' edge-key sets at `corroborated(2)` alone — a single point on the range, structurally
+unable to see a disagreement anywhere else. It now spans 0 through 3, the range the fixture makes
+meaningful, and `GraphStoreContract` gained a per-engine case,
+`shouldReturnTheOwnerOnlyEdgeWhenTheCorroborationFloorIsZero`, so a third adapter running the shared
+contract would inherit the same pin. Neither test's assertions are restated here.
+
+The shared `Fixture` compounded the miss rather than caused it. Its one owner claim,
+`owner(CAVE, "AUTHORED", ASS_SAW_ANGEL)`, is layered on a Wikidata assertion of the same triple, so
+that edge's corroboration is 1, not 0 — Jena kept its group for it regardless of the bug, so a guard
+widened to the full range would still have come up green against the fixture as it stood. The
+fixture now also seeds a genuine owner-only edge, between two local-shape ids (ADR 58's two-leading-
+zero shape), so the third layer's uncorroborated case is visible to every contract test rather than
+planted only by the differential guard.
+
+Three narrower fixes were rejected. Forbidding `min < 1` at the `GraphStore` port would have made the
+Q4 claim true by removing a legal value nothing has ever asked the port for. Making Jena's
+row-dropping behaviour the rule and changing Tinker to match would have contradicted
+`EdgeRecord.corroboration()`, which reports 0 for an owner-only edge rather than treating it as
+inapplicable — a larger decision about the domain object than this divergence asked for. Leaving the
+differential guard at `corroborated(2)` and adding one isolated test for N = 0 would have closed this
+instance and left the next divergence, at any other N, exactly as invisible as this one was.
+
+`corroborated` still has no production caller. The fix changes nothing anyone depends on; what it
+buys is that this ADR's claim about Jena — "the cross-check that keeps the port honest" — is now true
+of the query it names.

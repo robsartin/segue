@@ -460,11 +460,29 @@ public final class JenaGraphStore implements GraphStore {
    * The query that would be painful in a property graph and is trivial here: one GROUP BY over
    * named graphs, with the engine counting distinct sources.
    *
-   * <p>The owner is filtered out of the count before the GROUP BY, mirroring {@link
-   * EdgeRecord#corroboration()} (#92): the owner routes a claim into the graph but is not a second
-   * witness to it, on {@code EdgeRecord}'s reasoning. Two independent implementations of one port
-   * method is exactly the seam ADR 18 exists to cross-check, and this is that seam - not a query
-   * this store gets to answer differently just because SPARQL makes the un-filtered version easy.
+   * <p><b>The owner is excluded from the count, not from the query</b> (#176). This method used to
+   * drop the owner's rows with {@code FILTER (?src != ?owner)} before the {@code GROUP BY} and
+   * describe that as mirroring {@link EdgeRecord#corroboration()} (#92). It is not the same thing.
+   * Dropping the rows also drops the group, so an edge whose only provenance is an owner claim had
+   * no group for {@code HAVING} to test and was absent from every answer - including {@code
+   * corroborated(0)}, where a corroboration of 0 is exactly what makes it belong. {@code
+   * EdgeRecord} filters the owner out of a count over an edge it still holds; a row filter here
+   * removed the edge itself.
+   *
+   * <p>So every row keeps its group and the owner's rows contribute nothing to the count: {@code
+   * BIND} maps a non-owner source to itself and an owner source to the never-bound {@code ?absent},
+   * which {@code COUNT(DISTINCT ...)} ignores. An owner-only edge groups with {@code n = 0} and
+   * every other count is what it was. Measured rather than reasoned from the spec: on a planted
+   * dataset this query returns {@code n=0} for an owner-only triple, {@code n=1} for one a source
+   * and the owner both assert, and {@code n=2} for one two sources assert.
+   *
+   * <p>Two independent implementations of one port method is exactly the seam ADR 18 exists to
+   * cross-check, and this is that seam - not a query this store gets to answer differently just
+   * because SPARQL makes the un-filtered version easy. {@code
+   * com.robsartin.segue.tinker.TinkerGraphStoreContractTest#enginesAgreeOnEdgeSets} compares the
+   * two across the range of N, not at one value, because a divergence at 0 hid beside a comparison
+   * at 2. That reference is unchecked - the test source set is not on {@code :javadoc}'s classpath,
+   * so {@code @link} cannot reach it - and is fully qualified so a rename's grep finds it.
    */
   @Override
   public List<EdgeRecord> corroborated(int minDistinctSources) {
@@ -472,13 +490,13 @@ public final class JenaGraphStore implements GraphStore {
         new ParameterizedSparqlString(
             Vocab.PREFIXES
                 + """
-                SELECT ?f ?p ?t (COUNT(DISTINCT ?src) AS ?n) WHERE {
+                SELECT ?f ?p ?t (COUNT(DISTINCT ?nonOwner) AS ?n) WHERE {
                   GRAPH ?g { ?f ?p ?t }
                   ?g sg:source ?src .
-                  FILTER (?src != ?owner)
+                  BIND(IF(?src != ?owner, ?src, ?absent) AS ?nonOwner)
                 }
                 GROUP BY ?f ?p ?t
-                HAVING (COUNT(DISTINCT ?src) >= ?minSources)
+                HAVING (COUNT(DISTINCT ?nonOwner) >= ?minSources)
                 """);
     pss.setLiteral("minSources", minDistinctSources);
     pss.setLiteral("owner", Provenance.OWNER);
