@@ -120,6 +120,15 @@ tasks.test {
         .file("docs/developer-guide.md")
         .withPropertyName("developerGuide")
         .withPathSensitivity(PathSensitivity.RELATIVE)
+    // AdrIndexTest reads docs/adr/README.md and the ADR files beside it (issue #170), and has
+    // the same blind spot: an index-only commit is exactly the commit this guard exists to
+    // check, and without this line `test` reports UP-TO-DATE on it. Measured here too —
+    // deleting a row and running `./gradlew check` printed `Task :test UP-TO-DATE` and
+    // BUILD SUCCESSFUL before this was added.
+    inputs
+        .dir("docs/adr")
+        .withPropertyName("adrDirectory")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
     useJUnitPlatform {
         // Excluded from the normal gate: it needs the network and can fail for reasons
         // that have nothing to do with this code. Run it deliberately, via ./gradlew liveTest.

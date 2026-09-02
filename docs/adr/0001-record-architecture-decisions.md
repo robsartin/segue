@@ -45,3 +45,37 @@ We record architecturally significant decisions as **Architecture Decision Recor
 - The reasoning behind significant choices is preserved and discoverable next to the code.
 - Superseding rather than editing keeps a truthful timeline at the cost of some duplication.
 - Contributors must judge when a decision is significant enough to warrant an ADR.
+
+**Amendment (2026-09-01, issue #170): the index is now machine-checked, and `AdrIndexTest` is the
+authority for what it must contain.**
+
+`AdrIndexTest` (`src/test/java/com/robsartin/segue/arch/AdrIndexTest.java`) reads `docs/adr/` and
+`docs/adr/README.md` on every build. As with ADR 32's rule table, this ADR does not restate what
+its methods check — the test is the list, not this ADR. Its methods:
+`shouldGiveEveryAdrFileExactlyOneRowWhenTheIndexIsParsed`,
+`shouldNameOnlyExistingFilesWhenTheIndexIsParsed`,
+`shouldClaimEachNumberOnceWhenTheIndexAndTheDirectoryAreRead`,
+`shouldAscendByNumberWithinASectionWhenTheRowsAreGrouped`, and
+`shouldAgreeWithTheFileOnEveryFieldWhenARowIsComparedToIt`.
+
+Issue #170 read the index as unordered, citing ADR 34 sitting between 11 and 12. That misread a
+sectioned index — see `shouldAscendByNumberWithinASectionWhenTheRowsAreGrouped`. ADR 34 stays where
+it is: its first tag is `language`, the axis a row's section is placed by, so its position is by
+rule, not by accident.
+
+The day it landed, the test caught real drift: ADR 41's index row had dropped the backticks its own
+heading carries around `seed`, fixed in `0a29f45`.
+
+The index's shape — its sections, and the order within them — comes from the adr-toolkit that
+scaffolded `docs/adr/` at this project's baseline: `build_index` groups ADRs by axis, the axis is
+each ADR's first tag, sections render in a fixed axis order, and anything without a recognised axis
+falls to `Uncategorized` so nothing silently vanishes. This file has not been regenerated since
+that baseline. Every ADR from 18 on was appended by hand into `Uncategorized`, and 42 of those 43
+carry `project` as their first tag — the axis `build_index` renders first, as a Project section this
+file has never had. Regenerating today would move all 42. So `AdrIndexTest` asserts the file as it
+is maintained, not as the generator would render it; whether to regenerate, and re-file, is a
+taxonomy decision left to a later issue.
+
+What the test deliberately does not check: the description and `Related:` prose beneath each row,
+and the section names themselves — those display names are the toolkit's `_AXIS_DISPLAY_NAMES` to
+own, not a list for this ADR to hand-copy into a second source (issue #190).

@@ -40,8 +40,8 @@ import org.junit.jupiter.api.Test;
  */
 class DeveloperGuideEnumerationsTest {
 
-  private static final Path ROOT = repositoryRoot();
-  private static final String GUIDE = read(ROOT.resolve("docs/developer-guide.md"));
+  private static final Path ROOT = RepositoryTree.root();
+  private static final String GUIDE = RepositoryTree.read(ROOT.resolve("docs/developer-guide.md"));
   private static final Path MAIN = ROOT.resolve("src/main/java/com/robsartin/segue");
   private static final Path TESTS = ROOT.resolve("src/test/java/com/robsartin/segue");
 
@@ -179,7 +179,7 @@ class DeveloperGuideEnumerationsTest {
   void shouldNameEveryLiveTaggedClassWhenTheGuideTabulatesTheTestingStrategy() {
     Set<String> tagged =
         testSources()
-            .filter(p -> read(p).contains("@Tag(\"live\")"))
+            .filter(p -> RepositoryTree.read(p).contains("@Tag(\"live\")"))
             .map(DeveloperGuideEnumerationsTest::simpleName)
             .collect(Collectors.toCollection(TreeSet::new));
 
@@ -205,7 +205,7 @@ class DeveloperGuideEnumerationsTest {
     Set<String> stubs =
         testSources()
             .filter(p -> !p.getFileName().toString().endsWith("Test.java"))
-            .filter(p -> read(p).contains("com.sun.net.httpserver.HttpServer"))
+            .filter(p -> RepositoryTree.read(p).contains("com.sun.net.httpserver.HttpServer"))
             .map(DeveloperGuideEnumerationsTest::simpleName)
             .collect(Collectors.toCollection(TreeSet::new));
 
@@ -256,7 +256,7 @@ class DeveloperGuideEnumerationsTest {
             .filter(p -> p.getFileName().toString().endsWith(".java"))
             .forEach(
                 p -> {
-                  Matcher m = projectImport.matcher(read(p));
+                  Matcher m = projectImport.matcher(RepositoryTree.read(p));
                   while (m.find()) {
                     String to = m.group(1);
                     if (!to.equals(from) && packages.contains(to)) {
@@ -338,27 +338,5 @@ class DeveloperGuideEnumerationsTest {
 
   private static Set<String> matches(Pattern pattern, String text, int group) {
     return new TreeSet<>(matchList(pattern, text, group));
-  }
-
-  private static String read(Path path) {
-    try {
-      return Files.readString(path);
-    } catch (IOException e) {
-      throw new UncheckedIOException(e);
-    }
-  }
-
-  private static Path repositoryRoot() {
-    Path candidate = Path.of("").toAbsolutePath();
-    while (candidate != null && !Files.exists(candidate.resolve("settings.gradle.kts"))) {
-      candidate = candidate.getParent();
-    }
-    if (candidate == null) {
-      throw new IllegalStateException(
-          "no settings.gradle.kts above "
-              + Path.of("").toAbsolutePath()
-              + " — cannot find the repository root");
-    }
-    return candidate;
   }
 }
