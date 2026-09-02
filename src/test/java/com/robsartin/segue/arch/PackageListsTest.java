@@ -25,8 +25,8 @@ import org.junit.jupiter.api.Test;
  *
  * <p>Before this class, {@link ArchitectureTest#DEV_TOOL_PACKAGES} and {@link
  * ArchitectureTest#ADAPTER_PACKAGES} were the source of truth for every sibling fence that reads
- * them, so a package the constant did not name was fenced by nothing. #165 measured it: a seventh
- * dev tool planted under {@code src/main}, reaching {@code export}, {@code recommend} and {@code
+ * them, so a package the constant did not name was fenced by nothing. #165 measured it: a new dev
+ * tool planted under {@code src/main}, reaching {@code export}, {@code recommend} and {@code
  * IngestService}, left every one of {@code ArchitectureTest}'s rules green. Comparing the guide to
  * the constant (issue #145) cannot close that either — a document against a document, both stale
  * together. The set has to come from the tree, and that is what these tests derive.
@@ -66,6 +66,15 @@ class PackageListsTest {
   private static final Pattern MAIN_CLASS_LINE =
       Pattern.compile(
           "^\\s*mainClass\\.set\\(\"" + BASE.replace(".", "\\.") + "\\.(\\w+)\\.\\w+\"\\)$");
+
+  /**
+   * Any plain string literal passed to {@code mainClass.set(...)}, with no requirement on its
+   * shape. Distinguishes a literal that simply has more than one package segment under {@link
+   * #BASE} (which {@link #MAIN_CLASS_LINE} rejects on shape) from a value built from a variable or
+   * concatenation, so the two failures can be told apart in the assertion message below.
+   */
+  private static final Pattern MAIN_CLASS_LITERAL =
+      Pattern.compile("^\\s*mainClass\\.set\\(\"([^\"]*)\"\\)$");
 
   @Test
   @DisplayName("the JavaExec registrations name exactly the dev-tool packages the constant lists")
@@ -161,13 +170,24 @@ class PackageListsTest {
           .hasSize(1);
 
       Matcher mainClass = MAIN_CLASS_LINE.matcher(mentions.getFirst());
-      assertThat(mainClass.matches())
-          .as(
-              "build.gradle.kts, register<JavaExec>(\"%s\") — its mainClass spelled out as"
-                  + " mainClass.set(\"%s.<pkg>.<Class>\"), not built from a variable, so that this"
-                  + " derivation cannot quietly skip a tool it failed to read: %s",
-              task, BASE, mentions.getFirst())
-          .isTrue();
+      if (MAIN_CLASS_LITERAL.matcher(mentions.getFirst()).matches()) {
+        assertThat(mainClass.matches())
+            .as(
+                "build.gradle.kts, register<JavaExec>(\"%s\") — its mainClass is a literal, but"
+                    + " this derivation only recognises one package segment directly under"
+                    + " %s.<pkg>.<Class>; either move the class so it lives one segment under %s,"
+                    + " or extend this derivation deliberately if a nested package is intended: %s",
+                task, BASE, BASE, mentions.getFirst())
+            .isTrue();
+      } else {
+        assertThat(mainClass.matches())
+            .as(
+                "build.gradle.kts, register<JavaExec>(\"%s\") — its mainClass spelled out as"
+                    + " mainClass.set(\"%s.<pkg>.<Class>\"), not built from a variable, so that this"
+                    + " derivation cannot quietly skip a tool it failed to read: %s",
+                task, BASE, mentions.getFirst())
+            .isTrue();
+      }
       packages.add(mainClass.group(1));
       line = end;
     }

@@ -118,7 +118,7 @@ roster, so the next rule added does not silently make this ADR false again.*
 *Amendment (2026-09-02, issue #165): the roster the correction above points at — `ArchitectureTest`'s
 `DEV_TOOL_PACKAGES` and `ADAPTER_PACKAGES` — was itself the only source of truth for every sibling
 fence that reads it, and a package neither constant named was fenced by nothing. Issue #165 measured
-it: a seventh dev tool planted under `src/main`, reaching `export`, `recommend` and `IngestService`,
+it: an eighth dev tool planted under `src/main`, reaching `export`, `recommend` and `IngestService`,
 left every one of `ArchitectureTest`'s 36 rules green.*
 
 *Both sets are now derived from the tree rather than typed by hand, and the constants are checked

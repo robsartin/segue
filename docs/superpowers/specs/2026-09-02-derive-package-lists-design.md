@@ -6,7 +6,7 @@ Issue #165. Written 2026-09-02.
 
 `ArchitectureTest.DEV_TOOL_PACKAGES` and `ADAPTER_PACKAGES` are hand-maintained lists, and every
 sibling fence derives from them. A package the constant does not name is fenced by nothing. #165
-measured it: a seventh dev tool planted under `src/main`, reaching `export`, `recommend` and
+measured it: an eighth dev tool planted under `src/main`, reaching `export`, `recommend` and
 `IngestService`, left every one of `ArchitectureTest`'s rules green. The build still failed — three
 `DeveloperGuideEnumerationsTest` checks are filesystem-derived — but all three can be satisfied by
 editing the guide, so an unfenced tool can ship with the constant untouched. That is how `own` arrived
@@ -52,7 +52,7 @@ it; a constant naming a package the tree no longer has reds too.
   (`docs/developer-guide.md`, "…are the seven dev-side tools") is compared as a *set* to the derived
   set, not to the constant, so a stale sentence cannot agree with a stale constant.
 
-**Positive controls, definition of done.** Plant a seventh tool (`promote/PromoteCli` with `main`
+**Positive controls, definition of done.** Plant a new tool (`promote/PromoteCli` with `main`
 and a `JavaExec` registration): the dev-tool derivation reds naming `promote`, the constant unchanged,
 `ArchitectureTest`'s fences still green — that green is the point. Plant a class implementing
 `GraphStore` in a new package: the adapter derivation reds naming it. Add a bogus entry to each
