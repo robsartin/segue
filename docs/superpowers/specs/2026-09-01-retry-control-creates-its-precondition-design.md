@@ -51,13 +51,23 @@ Three properties of this decision are worth stating exactly:
   the warm-up. From round 2's rate — one flush in eighty-one runs over a ~225 ms window — a ~30 ms
   window gives on the order of one failure in five hundred runs under the same churn. The ADR
   records that number and its basis.
-- **The control's failure is classified.** The stub records every client port it has served. When
-  the control fails, the message says which of two things happened: the POST arrived on a port
-  **never seen before** — the pool was flushed between the warm-up and the keypress, an
-  environmental event the test cannot prevent — or on a port that **had served a request** — Chrome
-  was bound to a pooled socket and still did not resend, which is the browser changing. The first
-  is a rerun; the second is the fact ADR 46 wants to be told. Today the message cannot tell them
-  apart, so every red costs someone the investigation this round just did.
+  *Corrected 2026-09-01, after the ninth sighting:* the round-2 failure coincided with network
+  churn from another Chrome, but the implementer's untouched baseline gate failed on a box at load
+  3.99 with nothing else recorded, so "under the same churn" is the honest qualifier on the rate
+  above and "under load" is not. The flush is the only mechanism ever observed; what triggers it on
+  a quiet machine is not established, and the fix does not depend on knowing.
+- **The control's failure states what was observed, and names the cause as inferred.** The stub
+  records every client port it has served. When the control fails, the message says which of two
+  observable things happened: the POST arrived on a port **never seen before** — so Chrome had no
+  pooled socket to resend on — or on a port that **had served a request** — so Chrome was bound to
+  a pooled socket and still did not resend, which is the browser changing and the fact ADR 46
+  wants to be told. For the first, the one cause ever *observed* is the network-change pool flush,
+  and the message says so — but port novelty cannot distinguish a flush from a socket held open by
+  something else, and the message must not claim it can. *Corrected 2026-09-01 after review: the
+  first draft said "the pool was flushed", and the reviewer produced that message with nothing
+  flushed and every socket merely held.* The first case is environmental and a rerun, with a
+  NetLog if it repeats; the second is the finding. Before this, every red cost someone the
+  investigation these two rounds did.
 
 ## What this does not do
 
@@ -92,8 +102,12 @@ Three properties of this decision are worth stating exactly:
 *Corrected 2026-09-01 during Task 1:* the warm-up does not need an idle socket — Chrome connects one
 and the drained body returns it — and it may land on the **never-used preconnect spare** (6 of 60
 runs), whose port is not yet in the served set. A test asserting the warm-up's port was previously
-seen is therefore a 1-in-10 flake; the committed test asserts two consecutive warm-ups land on the
-same port (0 of 40 failures). The control's classification is unaffected: the spare is pooled, so
+seen is therefore a 1-in-10 flake — and so, it turned out, is asserting two consecutive warm-ups
+land on the same port (1 in 60 under review): *which* pooled socket Chrome hands a request is
+Chrome's choice. The committed test asserts what the server can observe — each warm-up produced
+exactly one new served exchange, nothing in flight afterwards, the promise resolved — and the
+pooled-socket property is proven by the Loop C/D controls and enforced by the retry test itself,
+not asserted per run. The control's classification is unaffected: the spare is pooled, so
 a POST bound to it is resent, and its port becomes *seen* the moment the warm-up uses it.
 
 - Red: with the §6 occupancy probe from round 1, remove the warm-up and observe the existing
