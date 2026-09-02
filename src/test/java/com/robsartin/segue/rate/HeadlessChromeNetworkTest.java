@@ -141,8 +141,9 @@ class HeadlessChromeNetworkTest {
   @DisplayName("the instrument control's hosts are inside the allowlist it guards")
   void shouldKeepTheControlHostsInsideTheAllowlistWhenTheListsAreCompared() {
     assertThat(KNOWN_ATTEMPTS)
-        .as("PHONE_HOME_CONTROL must be a subset of KNOWN_ATTEMPTS: a host the control expects to"
-            + " see is one the allowlist must admit, or the guard contradicts itself")
+        .as(
+            "PHONE_HOME_CONTROL must be a subset of KNOWN_ATTEMPTS: a host the control expects to"
+                + " see is one the allowlist must admit, or the guard contradicts itself")
         .containsAll(PHONE_HOME_CONTROL);
   }
 
