@@ -71,8 +71,8 @@ public final class MusicBrainzClient {
    *
    * <p>The value every production client is built with — {@code SegueConfiguration} calls {@link
    * #MusicBrainzClient()}, which never overrides it. {@link #minRequestInterval} is the
-   * per-instance field this defaults; only the two package-private constructors that take a {@code
-   * Duration}, used by tests, ever pass something else, and it is that constructor's own javadoc
+   * per-instance field this defaults; only {@link #MusicBrainzClient(URI, Clock, Duration,
+   * Sleeper)}, used by tests, ever passes something else, and it is that constructor's own javadoc
    * that says why a shorter interval is asserting the same real-time-spacing property at a cheaper
    * scale, not a different pace MusicBrainz would notice.
    */
@@ -86,14 +86,13 @@ public final class MusicBrainzClient {
 
   /**
    * How far apart this client spaces its request slots. {@link #DEFAULT_MIN_REQUEST_INTERVAL}
-   * unless one of the package-private constructors that takes a {@code Duration} built this
-   * instance.
+   * unless {@link #MusicBrainzClient(URI, Clock, Duration, Sleeper)} built this instance.
    */
   private final Duration minRequestInterval;
 
   /**
    * How this client waits out a slot or a backoff. {@link Thread#sleep(Duration)} unless {@link
-   * #MusicBrainzClient(URI, Clock, Duration, Sleeper)} was used to build this instance.
+   * #MusicBrainzClient(URI, Clock, Duration, Sleeper)} built this instance.
    */
   private final Sleeper sleeper;
 
@@ -145,57 +144,40 @@ public final class MusicBrainzClient {
   }
 
   /**
-   * Package-private: the same real-HTTP-with-injectable-clock shape as {@link
-   * #MusicBrainzClient(URI, Clock)}, widened by the one seam that constructor could not offer — how
-   * far apart this client's slots are spaced.
+   * Package-private: {@link #MusicBrainzClient(URI, Clock)} widened by the two seams that
+   * constructor could not offer — how far apart this client spaces its slots, and how it waits.
    *
    * <p><b>Production never calls this.</b> {@code SegueConfiguration:139} builds a client with
-   * {@link #MusicBrainzClient()}, which keeps {@link #DEFAULT_MIN_REQUEST_INTERVAL}; MusicBrainz's
-   * ~1 rps is a condition of anonymous {@code ws/2} access, not a tuning knob (see {@link
-   * #DEFAULT_MIN_REQUEST_INTERVAL}'s javadoc), so nothing in this repository has reason to pass a
-   * different value outside a test.
+   * {@link #MusicBrainzClient()}, which keeps {@link #DEFAULT_MIN_REQUEST_INTERVAL} and {@link
+   * Thread#sleep(Duration)}; MusicBrainz's ~1 rps is a condition of anonymous {@code ws/2} access,
+   * not a tuning knob (see {@link #DEFAULT_MIN_REQUEST_INTERVAL}'s javadoc), so nothing in this
+   * repository has reason to pass either seam a different value outside a test. Both are pinned
+   * from the other side: {@code shouldKeepTheDefaultRequestIntervalWhenNoInstanceOverrideIsGiven}
+   * asserts a default-constructed client's interval, and {@code
+   * shouldKeepARealSleeperWhenNoInstanceOverrideIsGiven} asks its sleeper for 50ms and asserts that
+   * 50ms passed, so neither a test's short interval nor a test's no-op can leak into production by
+   * an edit made elsewhere.
    *
-   * <p><b>Why a test wants this at all.</b> {@code concurrentCallersDoNotLeaveTogether} asserts a
-   * real-time property — the spacing between two requests actually leaving — and a fake or fixed
-   * {@link Clock} would change what {@link #reserve} means rather than freezing it (see that
-   * constructor's own javadoc). The only way to keep the property real and still make the test
-   * cheap is to shrink the scale it is measured at, which is what this parameter is for: a test
-   * builds a client with a 50ms interval instead of waiting out three real one-second slots.
-   */
-  MusicBrainzClient(URI baseUri, Clock clock, Duration minRequestInterval) {
-    this(
-        Objects.requireNonNull(baseUri, "baseUri"),
-        null,
-        Objects.requireNonNull(clock, "clock"),
-        Objects.requireNonNull(minRequestInterval, "minRequestInterval"),
-        Thread::sleep);
-  }
-
-  /**
-   * Package-private: {@link #MusicBrainzClient(URI, Clock, Duration)} widened by the second seam,
-   * how this client waits.
+   * <p><b>What the seams are for, and what they are not.</b> The sleeper exists so a test can
+   * assert <em>what this client asked to wait for</em> rather than wait for it; the interval exists
+   * so a test can choose the scale that assertion is made at. They work together and are weakest
+   * apart: {@code concurrentCallersDoNotLeaveTogether} sets a five-minute interval precisely
+   * because nothing waits for it, which puts the slots {@link #reserve} claims minutes away from
+   * anything scheduling could produce by accident.
    *
-   * <p><b>Production never calls this either.</b> Every public constructor passes {@link
-   * Thread#sleep(Duration)}, and {@code shouldKeepARealSleeperWhenNoInstanceOverrideIsGiven} pins
-   * that a default-constructed client's sleeper really waits, so a test's no-op cannot leak into
-   * the path {@code SegueConfiguration:139} builds.
-   *
-   * <p><b>What the two seams are for, and what they are not.</b> Both default to production's
-   * behaviour; neither changes the pace segue keeps with MusicBrainz. The interval exists so that a
-   * property about real time can be asserted at a scale a test can afford, and the sleeper exists
-   * so that a test can assert <em>what this client asked to wait for</em> instead of waiting for
-   * it. A no-op sleeper is admissible only where the assertion is an outcome — an exception type, a
-   * relation count, a request count, a claimed slot — and never where the assertion is elapsed
-   * time: {@code throttleAppliesEvenAfterAConnectionFailure} keeps a real sleeper and a real
-   * one-second interval because its assertion <em>is</em> a duration, and shrinking either would
-   * make it vacuous.
+   * <p><b>A no-op sleeper is admissible only where the assertion is an outcome</b> — an exception
+   * type, a relation count, a request count, a claimed slot — and never where the assertion is
+   * elapsed time. {@code throttleAppliesEvenAfterAConnectionFailure} therefore keeps a real sleeper
+   * and the real one-second interval: its assertion <em>is</em> a duration, and either seam applied
+   * to it would make that duration mean nothing. It is the only test left in this class that
+   * verifies end to end that this client really waits.
    *
    * <p><b>Measured, not estimated.</b> {@code MusicBrainzClientTest} was 12.836/13.029/13.149 s
-   * before either seam, 11.142/10.938/11.267 s with the interval seam alone, and 3.185/3.176/3.181
+   * before either seam, 11.142/10.938/11.267 s with the interval seam alone, and 3.904/3.931/3.953
    * s with both — three runs each, read out of {@code build/test-results/test/*.xml} on a machine
-   * at load average 144–253. What is left is almost entirely {@code
-   * throttleAppliesEvenAfterAConnectionFailure}'s ~3.01 s, which is the one second this class still
-   * spends on purpose.
+   * at load average 144–253; ten runs of the finished class spanned 3.819–4.220 s. What is left is
+   * almost entirely {@code throttleAppliesEvenAfterAConnectionFailure}'s ~3.01 s, which is the time
+   * this class still spends on purpose.
    */
   MusicBrainzClient(URI baseUri, Clock clock, Duration minRequestInterval, Sleeper sleeper) {
     this(
@@ -417,7 +399,7 @@ public final class MusicBrainzClient {
    * what is worth asserting, and asserting it through {@link #reserve} would mean a test that
    * really waits out a full interval. {@code minRequestInterval} is a parameter, not {@link
    * #DEFAULT_MIN_REQUEST_INTERVAL} read directly, so this stays exercisable at any scale — see
-   * {@link #MusicBrainzClient(URI, Clock, Duration)}'s javadoc for why a test wants that.
+   * {@link #MusicBrainzClient(URI, Clock, Duration, Sleeper)}'s javadoc for why a test wants that.
    */
   static Duration throttleDelay(Instant lastRequestAt, Instant now, Duration minRequestInterval) {
     Duration elapsed = Duration.between(lastRequestAt, now);
