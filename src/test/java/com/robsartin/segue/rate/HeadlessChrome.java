@@ -42,6 +42,18 @@ import tools.jackson.databind.json.JsonMapper;
  * the JDK can already speak: {@link ProcessBuilder} launches Chrome, {@link WebSocket} carries the
  * commands, and Jackson (already here) reads the answers. Chrome is discovered, never downloaded.
  *
+ * <p><b>Network posture: loopback only, and checked.</b> This class used to say "nothing here
+ * should reach the network" over two flags that did not achieve it — every NetLog captured for
+ * issue #169 shows Chrome reaching {@code clients2.google.com}, {@code accounts.google.com} and
+ * {@code gstatic.com} on each launch, opening QUIC sessions to them, and then closing every socket
+ * it holds when that work settles, the loopback ones included ({@code
+ * docs/retry-pool-flush-evidence.md} §4–§5). What is true now, and enforced by {@link
+ * HeadlessChromeNetworkTest} rather than asserted here: <b>no socket, no handshake and no byte
+ * reaches any host but {@code 127.0.0.1}</b>, because {@code --host-resolver-rules} fails every
+ * other name at DNS. Chrome still <em>asks</em> for three of its own hosts and is refused; that
+ * residual is measured, listed and asserted on in that test, not hidden. See {@link #flags} for
+ * each flag and what the NetLog showed it removing.
+ *
  * <p>Absent a browser this class reports {@link #available()} false and the tests that need it skip
  * — with CI made to fail rather than skip, see {@code DeckBehaviourTest}.
  */
@@ -89,29 +101,38 @@ final class HeadlessChrome implements AutoCloseable {
 
   /** Launches a throwaway browser and attaches to its first (blank) tab. */
   static HeadlessChrome launch() {
+    return launch(null);
+  }
+
+  /**
+   * The same browser, additionally writing Chrome's own NetLog to {@code netLog} (JSON).
+   *
+   * <p>Only {@link HeadlessChromeNetworkTest} and the measurements in {@code
+   * docs/retry-pool-flush-evidence.md} pass a path; every other test takes the no-argument launch
+   * and its command line is unchanged by this. The instrument was checked in that study — 20 of 81
+   * runs made with the NetLog flags removed were indistinguishable from the rest (§2, "Instrument
+   * control") — so capturing it neither causes nor masks what the guard asserts on.
+   *
+   * <p>{@code IncludeSensitive} rather than the default: the default strips URLs and headers it
+   * judges private, and a guard that asserts on what Chrome reached must see everything Chrome
+   * reached. Nothing sensitive is in reach — the only origin is a loopback stub this test started.
+   */
+  static HeadlessChrome launch(Path netLog) {
     Path exe =
         executable()
             .orElseThrow(() -> new IllegalStateException("no Chrome or Chromium on this machine"));
     try {
       Path userData = Files.createTempDirectory("segue-deck-chrome");
+      List<String> command = new ArrayList<>();
+      command.add(exe.toString());
+      command.addAll(flags(userData));
+      if (netLog != null) {
+        command.add("--log-net-log=" + netLog);
+        command.add("--net-log-capture-mode=IncludeSensitive");
+      }
+      command.add("about:blank");
       Process process =
-          new ProcessBuilder(
-                  exe.toString(),
-                  "--headless=new",
-                  "--disable-gpu",
-                  // The browser only ever loads a loopback page this test just started, and a
-                  // CI container may run it as root, where the sandbox refuses to start at all.
-                  "--no-sandbox",
-                  "--no-first-run",
-                  "--no-default-browser-check",
-                  "--disable-extensions",
-                  // Nothing here should reach the network: the deck is offline by design, and a
-                  // component update mid-test is a flake with no cause anyone could find.
-                  "--disable-background-networking",
-                  "--disable-component-update",
-                  "--remote-debugging-port=0",
-                  "--user-data-dir=" + userData,
-                  "about:blank")
+          new ProcessBuilder(command)
               .redirectOutput(ProcessBuilder.Redirect.DISCARD)
               .redirectError(ProcessBuilder.Redirect.DISCARD)
               .start();
@@ -119,6 +140,63 @@ final class HeadlessChrome implements AutoCloseable {
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     }
+  }
+
+  /** The command line, minus the executable, the NetLog options and the page to open. */
+  private static List<String> flags(Path userData) {
+    return List.of(
+        "--headless=new",
+        "--disable-gpu",
+        // The browser only ever loads a loopback page this test just started, and a
+        // CI container may run it as root, where the sandbox refuses to start at all.
+        "--no-sandbox",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-extensions",
+        // Kept, though neither is sufficient and this one is measurably not what its name
+        // says: with only these two, Chrome 152 still resolves and connects to
+        // clients2.google.com, accounts.google.com, www.google.com, www.gstatic.com and
+        // android.clients.google.com on every launch. That is what the next three flags exist
+        // for, and what HeadlessChromeNetworkTest now refuses to let anyone forget.
+        "--disable-background-networking",
+        "--disable-component-update",
+        // THE GUARANTEE. Every hostname resolution outside loopback fails at DNS, so no socket,
+        // no TLS handshake and no QUIC session to a non-loopback host can exist. Measured: with
+        // this line, every TCP_CONNECT, SSL handshake and QUIC session to a Google address
+        // disappears from the NetLog.
+        //
+        // `EXCLUDE 127.0.0.1` is load-bearing, and was NOT obvious. Issue #186's spec assumed the
+        // literal needs no exclusion because "the page is loaded by IP literal, which is never
+        // resolved". It is: with `EXCLUDE localhost` alone, Chrome 152 maps 127.0.0.1 to
+        // ~NOTFOUND like any other name and every test here loads an ERR_NAME_NOT_RESOLVED page
+        // instead of the deck. Found by the deck failing to deal a card, not by reading.
+        //
+        // Not --proxy-server to a dead port, which proxies loopback too unless bypassed, and the
+        // bypass list would be a second place the loopback rule lives (issue #186).
+        "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1",
+        // ON TOP OF THE GUARANTEE: the two flags that measurably stop an *attempt* being made,
+        // so there is less for a configuration change to tear down. Added one at a time against
+        // the NetLog on Chrome 152.0.7977.65, keeping only what removed something:
+        //
+        //   NetworkTimeServiceQuerying          removes http://clients2.google.com/time/1/current
+        //   SafeBrowsingHashPrefixRealTimeLookups
+        //                                       removes https://www.gstatic.com/ohttp_gateway/…
+        //
+        // The first is not incidental: docs/retry-pool-flush-evidence.md §4 caught the browser-wide
+        // socket flush firing in the same millisecond that clients2.google.com/time completed.
+        //
+        // Every flag Puppeteer launches with was tried here and removed NOTHING on this build —
+        // --disable-sync, --disable-default-apps, --metrics-recording-only, --no-service-autorun,
+        // --disable-domain-reliability, --disable-client-side-phishing-detection,
+        // --safebrowsing-disable-auto-update, --disable-component-extensions-with-background-pages,
+        // --disable-breakpad, --enable-automation, --no-pings, and --disable-features= for
+        // Translate, OptimizationHints, MediaRouter, InterestFeedContentSuggestions,
+        // AutofillServerCommunication, CertificateTransparencyComponentUpdater and
+        // DialMediaRouteProvider. None is here, because a flag that removes nothing is a flag
+        // nobody can explain later.
+        "--disable-features=NetworkTimeServiceQuerying,SafeBrowsingHashPrefixRealTimeLookups",
+        "--remote-debugging-port=0",
+        "--user-data-dir=" + userData);
   }
 
   private HeadlessChrome(Process process, Path userData) {
