@@ -38,8 +38,8 @@ film is the bridge, and there are two distinct ways across it.
 
 Two relationships between one pair of nodes, kept apart rather than collapsed, and each hop carrying
 the Wikidata claim that backs it. That is a multigraph with provenance on every edge, and it is the
-property most of the design decisions are protecting. [The full response, with citations, is in the
-user guide](docs/user-guide.md#6-ask-for-the-route).
+property most of the design decisions are protecting.
+[The full response, with citations, is in the user guide](docs/user-guide.md#6-ask-for-the-route).
 
 ## Quick start
 
