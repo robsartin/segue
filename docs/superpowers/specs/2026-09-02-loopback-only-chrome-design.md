@@ -32,7 +32,9 @@ which; this work finds out, and does not guess.
 **1. Loopback only, enforced, not commented.** `HeadlessChrome.launch()` adds
 `--host-resolver-rules="MAP * ~NOTFOUND, EXCLUDE localhost"`: every hostname resolution outside
 loopback fails at DNS, so no socket, no TLS handshake and no QUIC session to a non-loopback host can
-exist. The page is loaded by IP literal (`http://127.0.0.1:port/`), which is not resolved at all. On
+exist. The page is loaded by IP literal (`http://127.0.0.1:port/`). *Corrected 2026-09-02 by measurement
+during Task 1:* that literal is **not** exempt — Chrome 152 maps `127.0.0.1` through the rule too,
+and with `EXCLUDE localhost` alone the deck never deals a card. `EXCLUDE 127.0.0.1` is load-bearing. On
 top of the guarantee, the flags that stop the *attempts* being made — so there is nothing for a
 configuration change to tear down and no DNS failure to log: the attempt-suppressing set Puppeteer
 launches with (`--disable-features=…`, `--disable-sync`, `--disable-default-apps`,
@@ -40,13 +42,23 @@ launches with (`--disable-features=…`, `--disable-sync`, `--disable-default-ap
 `--disable-client-side-phishing-detection`, `--safebrowsing-disable-auto-update`,
 `--disable-component-extensions-with-background-pages`, `--disable-breakpad`). **Added one at a time
 against the NetLog**, keeping only those that remove an attempt; a flag that removes nothing is a
-flag nobody can explain later.
+flag nobody can explain later. *Measured 2026-09-02, Task 1:* of the sixteen candidates named here
+and twelve more, **one** removed anything — `--disable-features=NetworkTimeServiceQuerying,
+SafeBrowsingHashPrefixRealTimeLookups`, which removes `clients2.google.com/time` (the request that
+shared the flush's millisecond) and `www.gstatic.com/ohttp_gateway/…` outright. Three attempts
+survive every flag found: `accounts.google.com/ListAccounts`, `android.clients.google.com/checkin`,
+`www.google.com/async/folae`. They die at DNS under the rule; no launch flag stops them being asked.
 
 **2. A guard that fails when the claim stops being true.** `HeadlessChrome` gains an optional
 NetLog capture (`--log-net-log=<file>`, JSON), and a test — `HeadlessChromeNetworkTest` — launches
 the harness's Chrome exactly as the deck test does, loads the stub page, issues one warm-up, closes
 the browser, parses the NetLog, and asserts **no request, resolution or socket to any host other
-than `127.0.0.1`**. The comment becomes an assertion. Positive control: remove the resolver rule and
+than `127.0.0.1`**. The comment becomes an assertion. *Corrected 2026-09-02:* "no request" is
+unreachable with launch flags (three attempts survive, above), so the guard asserts two things with
+different strengths — **zero reached** (no connect, handshake, QUIC session or byte to a non-loopback
+host: the property the flush and the offline claim depend on) and an **exact allowlist of what is
+asked for** (`KNOWN_ATTEMPTS`: the three DNS-dead attempts, so a *new* attempt is a red, and the
+list is the documentation of what Chrome still tries). Positive control: remove the resolver rule and
 watch the test name `clients2.google.com`.
 
 **3. Measure the flush, then decide.** With loopback enforced, 60 launches with NetLog, the same
