@@ -3,19 +3,32 @@ package com.robsartin.segue.musicbrainz;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
+import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.musicbrainz.MusicBrainzProbe.Buckets;
 import com.robsartin.segue.musicbrainz.MusicBrainzProbe.Cost;
 import com.robsartin.segue.musicbrainz.MusicBrainzProbe.Percentiles;
+import com.robsartin.segue.musicbrainz.MusicBrainzProbe.ProbeInputs;
 import com.robsartin.segue.musicbrainz.MusicBrainzProbe.ProbeReport;
 import com.robsartin.segue.musicbrainz.MusicBrainzProbe.Sample;
 import com.robsartin.segue.musicbrainz.MusicBrainzProbe.SeedObservation;
+import com.robsartin.segue.port.ExpandContext;
+import com.robsartin.segue.port.ExpandResult;
 import com.robsartin.segue.port.GraphStore;
+import com.robsartin.segue.port.SourceAdapter;
 import com.robsartin.segue.tinker.TinkerGraphStore;
+import java.net.URISyntaxException;
+import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -31,6 +44,10 @@ class MusicBrainzProbeEngineTest {
   private static final String DESCRIBED_HERE = "Q0900102";
   private static final String UNDESCRIBED = "Q0900103";
   private static final String A_LABEL = "An Invented Ensemble";
+  private static final String BRIDGED_SEED = "Q0900301";
+  private static final String UNBRIDGED_SEED = "Q0900302";
+  private static final Clock CLOCK =
+      Clock.fixed(Instant.parse("2026-09-02T00:00:00Z"), ZoneOffset.UTC);
 
   private static ArtistRelation relation(String type) {
     return new ArtistRelation(
@@ -104,7 +121,7 @@ class MusicBrainzProbeEngineTest {
 
       assertThat(report.sample())
           .as("block 1, in the spec's row order")
-          .isEqualTo(new MusicBrainzProbe.Sample(3, 2, 1, 2, 3, 1, 1));
+          .isEqualTo(new Sample(3, 2, 1, 2, 3, 1, 1));
     }
   }
 
@@ -490,5 +507,201 @@ class MusicBrainzProbeEngineTest {
     ProbeReport report = valid();
     return new ProbeReport(
         report.sample(), report.census(), report.buckets(), report.saving(), cost);
+  }
+
+  // --- Fix round 1
+
+  @Test
+  @DisplayName("invariant 0 reds when the probe was handed no seed at all")
+  void shouldRedWhenTheProbeWasHandedNoSeed() {
+    assertThatThrownBy(
+            () -> MusicBrainzProbe.assertInvariants(withSample(new Sample(0, 0, 0, 0, 0, 0, 0))))
+        .hasMessageContaining("invariant 0");
+  }
+
+  @Test
+  @DisplayName("invariant 0 reds when no seed bridged to MusicBrainz")
+  void shouldRedWhenNoSeedBridged() {
+    assertThatThrownBy(
+            () -> MusicBrainzProbe.assertInvariants(withSample(new Sample(3, 2, 1, 0, 6, 0, 4))))
+        .hasMessageContaining("invariant 0");
+  }
+
+  @Test
+  @DisplayName("the privacy invariant reds when a census row is a QID rather than a relation type")
+  void shouldRedWhenACensusRowIsAQid() {
+    Map<String, Integer> named = new LinkedHashMap<>();
+    named.put(UNDESCRIBED, 6);
+
+    assertThatThrownBy(() -> MusicBrainzProbe.assertInvariants(violating(valid(), named)))
+        .hasMessageContaining("invariant 8");
+  }
+
+  @Test
+  @DisplayName("the privacy invariant reds when a census row is shaped like a name, not a type")
+  void shouldRedWhenACensusRowIsShapedLikeAName() {
+    Map<String, Integer> named = new LinkedHashMap<>();
+    named.put("an ensemble and the several names it was billed under", 6);
+
+    assertThatThrownBy(() -> MusicBrainzProbe.assertInvariants(violating(valid(), named)))
+        .hasMessageContaining("invariant 8");
+  }
+
+  @Test
+  @DisplayName("the relation types MusicBrainz actually states are not mistaken for names")
+  void shouldAcceptTheRelationTypesMusicBrainzActuallyStates() {
+    Map<String, Integer> asStated = new LinkedHashMap<>();
+    asStated.put("member of band", 3);
+    asStated.put("DJ-mix", 1);
+    asStated.put("(has) collaborated on", 1);
+    asStated.put("instrumental supporting musician", 1);
+
+    MusicBrainzProbe.assertInvariants(violating(valid(), asStated));
+  }
+
+  @Test
+  @DisplayName("a run pays for each seed once: one bridge lookup, one batch, one fetch")
+  void shouldPayForEachSeedOnceWhenTheProbeRuns() {
+    CountingIdentity identity =
+        new CountingIdentity(
+            Map.of(
+                "650bf385-6f6d-4992-a3b9-779d144920a4", IN_THE_GRAPH,
+                "ae2017b8-a309-4dd1-87ce-5532e3e3f6a6", UNDESCRIBED),
+            Map.of(BRIDGED_SEED, "ee55e4e8-807d-49b1-8470-d1c0898ed7cb"));
+    try (GraphStore graph = graphWith()) {
+      ProbeReport report =
+          MusicBrainzProbe.run(
+              new ProbeInputs(
+                  List.of(
+                      new NodeRecord(BRIDGED_SEED, NodeKind.GROUP, "a seed", List.of()),
+                      new NodeRecord(UNBRIDGED_SEED, NodeKind.PERSON, "another seed", List.of())),
+                  MusicBrainzClient.readingFrom(fixture()),
+                  identity,
+                  new WikidataSideThatDescribesOne(),
+                  graph));
+
+      // MusicBrainzSourceAdapter.expand opens with mbidFor and follows it with artistRelations and
+      // qidsFor, so one mbidFor per seed is what says the adapter was not driven a second time —
+      // and therefore that each seed cost exactly one /artist/<mbid> request.
+      assertThat(identity.mbidForCalls).as("one bridge lookup per seed").isEqualTo(2);
+      assertThat(identity.qidsForCalls).as("one batched neighbour lookup per bridged seed").isOne();
+      assertThat(report.sample()).isEqualTo(new Sample(2, 1, 1, 1, 24, 1, 2));
+      assertThat(report.census())
+          .containsExactly(Map.entry("member of band", 22), Map.entry("named after artist", 2));
+      assertThat(report.buckets().alreadyInTheGraph()).isOne();
+      assertThat(report.buckets().newAndUndescribed()).isOne();
+      MusicBrainzProbe.assertInvariants(report);
+    }
+  }
+
+  @Test
+  @DisplayName("the saving is zero, over no per-seed counts, when no bridged seed had a neighbour")
+  void shouldReportZeroPercentilesWhenNoBridgedSeedResolvedANeighbour() {
+    try (GraphStore graph = new TinkerGraphStore()) {
+      SeedObservation bridgedButAlone =
+          new SeedObservation(
+              NodeKind.GROUP, true, List.of(relation("tribute")), List.of(), Set.of(), 1);
+
+      ProbeReport report = MusicBrainzProbe.report(List.of(bridgedButAlone), graph);
+
+      assertThat(report.saving())
+          .as("no seed resolved a neighbour, so there is no per-seed count to take a rank over")
+          .isEqualTo(new Percentiles(0, 0, 0, List.of()));
+    }
+  }
+
+  @Test
+  @DisplayName("a report that shared nothing out, and says so, passes the shape checker")
+  void shouldPassWhenNothingWasSharedOut() {
+    MusicBrainzProbe.assertInvariants(nothingResolved(new Buckets(0, 0, 0, 0, 0, 0)));
+  }
+
+  @Test
+  @DisplayName("invariant 4 reds when shares are stated with nothing to share out")
+  void shouldRedWhenSharesAreStatedWithNothingToShareOut() {
+    assertThatThrownBy(
+            () -> MusicBrainzProbe.assertInvariants(nothingResolved(new Buckets(0, 0, 0, 5, 0, 0))))
+        .hasMessageContaining("invariant 4");
+  }
+
+  private static ProbeReport nothingResolved(Buckets buckets) {
+    ProbeReport report = valid();
+    return new ProbeReport(
+        new Sample(3, 2, 1, 2, 6, 0, 0),
+        report.census(),
+        buckets,
+        new Percentiles(0, 0, 0, List.of()),
+        new Cost(0, 0, 0, 0, 0));
+  }
+
+  private static Path fixture() {
+    try {
+      return Path.of(
+          MusicBrainzProbeEngineTest.class
+              .getResource("/musicbrainz/artist-with-relations.json")
+              .toURI());
+    } catch (URISyntaxException e) {
+      throw new IllegalStateException(e);
+    }
+  }
+
+  /** Counts what the probe asks of the bridge, which is what says it asked once. */
+  private static final class CountingIdentity implements MusicBrainzIdentity {
+    private final Map<String, String> neighbourMbidToQid;
+    private final Map<String, String> seedQidToMbid;
+    private int mbidForCalls;
+    private int qidsForCalls;
+
+    private CountingIdentity(
+        Map<String, String> neighbourMbidToQid, Map<String, String> seedQidToMbid) {
+      this.neighbourMbidToQid = Map.copyOf(neighbourMbidToQid);
+      this.seedQidToMbid = Map.copyOf(seedQidToMbid);
+    }
+
+    @Override
+    public Optional<String> mbidFor(String qid) {
+      mbidForCalls++;
+      return Optional.ofNullable(seedQidToMbid.get(qid));
+    }
+
+    @Override
+    public Map<String, String> qidsFor(Collection<String> mbids) {
+      qidsForCalls++;
+      Map<String, String> resolved = new LinkedHashMap<>();
+      for (String mbid : mbids) {
+        String qid = neighbourMbidToQid.get(mbid);
+        if (qid != null) {
+          resolved.put(mbid, qid);
+        }
+      }
+      return Map.copyOf(resolved);
+    }
+  }
+
+  /** The Wikidata side, describing one neighbour and stating two assertions of its own. */
+  private static final class WikidataSideThatDescribesOne implements SourceAdapter {
+    @Override
+    public String id() {
+      return "wikidata";
+    }
+
+    @Override
+    public boolean supports(NodeKind kind) {
+      return kind == NodeKind.PERSON || kind == NodeKind.GROUP;
+    }
+
+    @Override
+    public ExpandResult expand(NodeRecord seed, ExpandContext ctx) {
+      return new ExpandResult(
+          List.of(),
+          List.of(
+              new NodeAssertion(
+                  DESCRIBED_HERE,
+                  NodeKind.PERSON,
+                  "described in the same call",
+                  new Provenance("wikidata", "ref", CLOCK.instant(), 0.9))),
+          false,
+          false);
+    }
   }
 }

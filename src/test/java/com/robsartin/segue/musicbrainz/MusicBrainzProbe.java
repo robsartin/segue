@@ -6,11 +6,11 @@ import com.robsartin.segue.domain.ExpansionBounds;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
+import com.robsartin.segue.domain.Qid;
 import com.robsartin.segue.port.ExpandContext;
 import com.robsartin.segue.port.ExpandResult;
 import com.robsartin.segue.port.GraphStore;
 import com.robsartin.segue.port.SourceAdapter;
-import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -139,7 +139,17 @@ final class MusicBrainzProbe {
       Pattern.compile("[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}");
   private static final Pattern AN_INTEGER = Pattern.compile("\\d+");
   private static final Pattern A_PERCENTAGE = Pattern.compile("\\d+%");
-  private static final Pattern A_RELATION_TYPE = Pattern.compile("[a-z][a-z0-9 '/&.-]*");
+
+  /**
+   * What a MusicBrainz relation type may look like. Wider than the sixteen lower-case types ADR
+   * 55's census happened to hold: MusicBrainz states types carrying capitals, hyphens, commas and
+   * parentheses ({@code DJ-mix}, {@code (has) collaborated on}), and rejecting one of those as if
+   * it were a name would red the live run on a correct table. It is the QID and MBID checks, not
+   * this shape, that reject an identifier; and the reason a label cannot reach the census at all is
+   * structural — the report carries no label to print.
+   */
+  private static final Pattern A_RELATION_TYPE =
+      Pattern.compile("[A-Za-z(][A-Za-z0-9 ()',./&+-]{0,39}");
 
   private MusicBrainzProbe() {}
 
@@ -208,7 +218,15 @@ final class MusicBrainzProbe {
       SourceAdapter wikidataSide,
       GraphStore graph) {}
 
-  /** The five blocks. */
+  /**
+   * The five blocks.
+   *
+   * <p><b>Block 4's p90 is nearest rank</b>, {@code sorted.get(ceil(0.90n) - 1)}. ADR 55 records "a
+   * p90 of 4" and not which definition produced it, so the choice here is this probe's own and the
+   * two cannot be set side by side without assuming the scratch probe agreed — a linear
+   * interpolation over the same counts gives a different number. Task 4's amendment to ADR 55 says
+   * so.
+   */
   record ProbeReport(
       Sample sample, Map<String, Integer> census, Buckets buckets, Percentiles saving, Cost cost) {
 
@@ -328,6 +346,20 @@ final class MusicBrainzProbe {
     Buckets buckets = report.buckets();
     Percentiles saving = report.saving();
     Cost cost = report.cost();
+
+    assertThat(sample.seedsRequested())
+        .as(
+            "invariant 0 (the instrument ran): the probe was handed at least one seed. A table of"
+                + " zeros and a dead instrument look identical, which is the failure this"
+                + " repository has filed three times, so an empty sample fails here rather than"
+                + " printing five well-formed blocks of nothing")
+        .isPositive();
+    assertThat(sample.bridged())
+        .as(
+            "invariant 0 (the instrument ran): at least one seed bridged to MusicBrainz. Every"
+                + " block below is empty when none did, and a run that measured nothing must fail"
+                + " rather than report success")
+        .isPositive();
 
     assertThat(report.census().values().stream().mapToInt(Integer::intValue).sum())
         .as("invariant 1: block 2's counts sum to block 1's relation total")
@@ -501,8 +533,6 @@ final class MusicBrainzProbe {
    * anything outside this class, and the fixture run is what exercises it end to end.
    */
   static ProbeReport run(ProbeInputs inputs) {
-    MusicBrainzSourceAdapter musicbrainz =
-        new MusicBrainzSourceAdapter(inputs.client(), inputs.identity(), Clock.systemUTC());
     ExpandContext ctx = new ExpandContext(SHARED_BOUND);
     List<SeedObservation> observations = new ArrayList<>();
     for (NodeRecord seed : inputs.seeds()) {
@@ -512,7 +542,11 @@ final class MusicBrainzProbe {
             new SeedObservation(seed.kind(), false, List.of(), List.of(), Set.of(), 0));
         continue;
       }
-      // Relations MusicBrainz stated without a type are dropped here rather than censused under an
+      // One fetch per seed, and one batch per seed, for everything below. Driving
+      // MusicBrainzSourceAdapter here instead would re-issue both — MusicBrainz asks for one
+      // request a second, and the offline run counts requests to prove none escaped.
+      //
+      // Relations MusicBrainz stated without a type are dropped rather than censused under an
       // invented label: a census row needs a type, and block 1 counts what block 2 counts.
       List<ArtistRelation> relations =
           inputs.client().artistRelations(mbid.get()).stream()
@@ -542,18 +576,34 @@ final class MusicBrainzProbe {
       for (NodeAssertion neighbour : wikidata.neighbors()) {
         described.add(neighbour.qid());
       }
-      int collected = wikidata.assertions().size();
-      if (!neighbours.isEmpty()) {
-        // The second half of what SegueService would have concatenated, and the only reason the
-        // adapter is driven at all: block 5's last row is the bound cutting that concatenation.
-        // Spent only where there is a neighbour to count, because MusicBrainz asks for one request
-        // a second.
-        collected += musicbrainz.expand(seed, ctx).assertions().size();
-      }
       observations.add(
-          new SeedObservation(seed.kind(), true, relations, neighbours, described, collected));
+          new SeedObservation(
+              seed.kind(),
+              true,
+              relations,
+              neighbours,
+              described,
+              wikidata.assertions().size() + musicbrainzAssertions(relations, qids)));
     }
     return report(observations, inputs.graph());
+  }
+
+  /**
+   * What {@code MusicBrainzSourceAdapter} would have added to the concatenation the shared bound
+   * cuts, counted off the response already in hand. It reads the adapter's own {@code isMappable}
+   * and applies the bound where the adapter applies it, so this is not a second copy of the
+   * whitelist — block 5's last row would go stale the day that rule changed.
+   */
+  private static int musicbrainzAssertions(
+      List<ArtistRelation> relations, Map<String, String> qids) {
+    return (int)
+        relations.stream()
+            .filter(MusicBrainzSourceAdapter::isMappable)
+            .limit(SHARED_BOUND)
+            .map(relation -> qids.get(relation.targetMbid()))
+            .filter(Objects::nonNull)
+            .filter(Qid::looksLikeAQid)
+            .count();
   }
 
   /** The arithmetic over already-gathered observations. */
