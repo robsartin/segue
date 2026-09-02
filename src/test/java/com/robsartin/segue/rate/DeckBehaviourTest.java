@@ -104,6 +104,23 @@ class DeckBehaviourTest {
 
   private final AtomicReference<String> lastPath = new AtomicReference<>("nothing yet");
 
+  /**
+   * One exchange the stub served, and the TCP port the client sent it from.
+   *
+   * <p>The port is the only thing that separates the two ways {@code
+   * aRetriedRatingCannotOverwriteAReRating}'s positive control can go red. Chrome resends a POST
+   * only on a socket already in its pool, so a POST that was never resent either arrived on a
+   * socket that had carried an earlier request — and Chrome declined to resend on it, which is the
+   * browser changing — or on a brand new one, which means the pool was empty and the control never
+   * had its precondition. Round 2 saw the second happen for a reason no server-side counter can
+   * observe: Chrome closing every socket it held, browser-wide, without an exchange to count
+   * ({@code .superpowers/sdd/169b-evidence.md}, and the amendment to ADR 46).
+   */
+  private record Served(int port, String path) {}
+
+  /** Every exchange the stub has served, in arrival order — see {@link Served}. */
+  private final List<Served> portsServed = Collections.synchronizedList(new ArrayList<>());
+
   @BeforeAll
   static void requireBrowser() {
     if (Boolean.getBoolean("segue.requireBrowser") && !HeadlessChrome.available()) {
@@ -182,6 +199,11 @@ class DeckBehaviourTest {
         inFlight.incrementAndGet();
         lastArrived.set(System.nanoTime());
         lastPath.set(exchange.getRequestURI().getPath());
+        // On entry rather than on completion, because the exchange this most needs to record is
+        // the one whose handler throws — the abandoned POST, whose port is the whole question.
+        portsServed.add(
+            new Served(
+                exchange.getRemoteAddress().getPort(), exchange.getRequestURI().getPath()));
         try {
           chain.doFilter(exchange);
         } finally {
@@ -257,6 +279,13 @@ class DeckBehaviourTest {
   private int ratedThisSession() {
     Matcher count = Pattern.compile("(\\d+) rated").matcher(chrome.text("progress"));
     return count.find() ? Integer.parseInt(count.group(1)) : 0;
+  }
+
+  /** Every exchange served so far, safe to read while the stub is still running. */
+  private List<Served> servedSoFar() {
+    synchronized (portsServed) {
+      return List.copyOf(portsServed);
+    }
   }
 
   /** How many times a rating of this value reached the server. */
@@ -679,6 +708,28 @@ class DeckBehaviourTest {
 
   private static String quoted(String text) {
     return "'" + text + "'";
+  }
+
+  @Test
+  @DisplayName("the stub records the client port of every request it serves, in arrival order")
+  void shouldRecordTheClientPortWhenAnExchangeIsServed() {
+    List<Served> exchanges = servedSoFar();
+
+    assertThat(exchanges).as("loading the deck must have been recorded").isNotEmpty();
+    assertThat(exchanges.get(0).path())
+        .as("recorded in arrival order, so the page itself comes first")
+        .isEqualTo("/");
+    Served cardFetch =
+        exchanges.stream()
+            .filter(served -> "/api/card".equals(served.path()))
+            .findFirst()
+            .orElseThrow(
+                () ->
+                    new AssertionError(
+                        "the deck's own card fetch was never recorded: " + exchanges));
+    assertThat(cardFetch.port())
+        .as("a real client port, which is what tells a reused socket from a fresh one")
+        .isGreaterThan(0);
   }
 
   @Test
