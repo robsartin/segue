@@ -265,4 +265,42 @@ class NetLogTest {
     HeadlessChromeNetworkTest.requireTheParserStillSeesChromesAttempts(
         NetLog.sightings(withAttempt));
   }
+
+  /**
+   * The NetLog the guard measured has to survive the run, or the next platform delta can only be
+   * read out of an assertion message.
+   *
+   * <p>This is what {@code redirector.gvt1.com} cost. CI run 33655745937 reddened on a host Linux
+   * Chrome asks for and macOS Chrome does not, and the {@code reports} artifact carried the test
+   * XML and the coverage HTML and no NetLog — so the CI host set could be recovered only from the
+   * two lists AssertJ happened to print. {@link NetLog#keep} copies the log where the workflow's
+   * artifact will pick it up, on every run rather than only on a red: a passing run's log is the
+   * baseline the next re-derivation is compared against, and a baseline that only exists after a
+   * failure is not a baseline.
+   *
+   * <p>Both halves are asserted, because a copy that lands in the right directory and is not a
+   * readable NetLog buys nothing: the destination, and that {@link NetLog#sightings} still reads
+   * what arrived there.
+   */
+  @Test
+  @DisplayName("a kept NetLog lands under build/reports/netlog and still parses where it lands")
+  void shouldCopyTheLogUnderBuildReportsWhenItIsKept() throws IOException {
+    Path kept = NetLog.keep(captured(), "netlog-keep-test");
+
+    assertThat(kept)
+        .as("the kept NetLog must exist where CI's reports artifact will find it")
+        .exists();
+    assertThat(kept.getFileName())
+        .as("the copy is named for what produced it, so two logs in one run do not collide")
+        .hasToString("netlog-keep-test.json");
+    assertThat(kept.getParent().getFileName())
+        .as("the copy belongs in a netlog/ directory of its own")
+        .hasToString("netlog");
+    assertThat(kept.getParent().getParent().getFileName())
+        .as("under reports/, which is the tree the workflow's artifact step uploads")
+        .hasToString("reports");
+    assertThat(NetLog.sightings(kept))
+        .as("a copy that cannot be parsed where it landed is not evidence of anything")
+        .isNotEmpty();
+  }
 }

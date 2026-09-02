@@ -164,14 +164,18 @@ class HeadlessChromeNetworkTest {
           "fetch('/warm-up', {cache: 'no-store'}).then(r => r.text()).then(body => body.length)");
     }
 
-    List<NetLog.Sighting> sightings = NetLog.sightings(netLog);
-    Set<String> hosts = NetLog.hostsContacted(netLog);
+    // Kept before anything is asserted, and every assertion below then reads the copy rather than
+    // the temporary file. What CI's `reports` artifact carries is therefore provably the log this
+    // run asserted on — see NetLog.keep for why a copy made only on a red would be no use.
+    Path kept = NetLog.keep(netLog, "shouldContactOnlyLoopbackWhenTheDeckPageIsDriven");
+    List<NetLog.Sighting> sightings = NetLog.sightings(kept);
+    Set<String> hosts = NetLog.hostsContacted(kept);
 
     // The instrument first. An empty or unreadable log would satisfy the real assertion below
     // without having observed anything, and this suite has been caught by a dead instrument
     // before (docs/retry-precondition-evidence.md).
     assertThat(hosts)
-        .as("the NetLog at %s should contain the loopback traffic this test just caused", netLog)
+        .as("the NetLog at %s should contain the loopback traffic this test just caused", kept)
         .contains(LOOPBACK);
     assertThat(kinds(sightings, LOOPBACK))
         .as("the NetLog should show both the page's requests and its sockets, or it saw too little")

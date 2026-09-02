@@ -9,6 +9,7 @@ import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -228,6 +229,50 @@ final class NetLog {
   private static final List<String> ADDRESS_LIST_PARAMS = List.of("address_list", "addresses");
 
   private NetLog() {}
+
+  /**
+   * Where a kept NetLog goes: {@code build/reports/netlog/}, inside the tree CI uploads.
+   *
+   * <p>Read from {@code segue.reports}, which {@code tasks.test} sets from Gradle's own build
+   * directory, so the copy follows a relocated {@code build/} rather than guessing. The fallback is
+   * the conventional path relative to the working directory, for a run launched from an IDE that
+   * sets no property.
+   */
+  private static Path reportsDirectory() {
+    String configured = System.getProperty("segue.reports", "");
+    return configured.isBlank() ? Path.of("build", "reports") : Path.of(configured);
+  }
+
+  /**
+   * Copies a NetLog to {@code build/reports/netlog/<name>.json} and answers where it landed.
+   *
+   * <p><b>Why the log has to outlive the run.</b> {@code HeadlessChromeNetworkTest}'s allowlist is
+   * per-scenario <em>and</em> per-platform, and the second half was learned the expensive way: CI
+   * run 33655745937 reddened on {@code redirector.gvt1.com}, a host Google Chrome stable on {@code
+   * ubuntu-latest} asks for and Chrome 152 on macOS does not. The guard's NetLog was a temporary
+   * file the browser owned, and the workflow's {@code reports} artifact carried the test XML and
+   * the coverage HTML and nothing else — so the CI host set could be recovered only from the two
+   * lists AssertJ printed in the failure. That is a derivation from an error message, which is
+   * exactly what this project does not do with measurements.
+   *
+   * <p><b>On every run, not only on a red.</b> A copy kept only when the assertion fails gives the
+   * next re-derivation nothing to compare against: the interesting question on a new platform is
+   * what the <em>green</em> run named, and a baseline that exists only after a failure is not a
+   * baseline. It costs one file copy per guarded launch.
+   *
+   * <p>Throws rather than reporting failure quietly. The guard asserts on the copy, so a copy that
+   * did not happen must not read as a browser that reached nothing.
+   */
+  static Path keep(Path netLog, String name) {
+    Path destination = reportsDirectory().resolve("netlog").resolve(name + ".json");
+    try {
+      Files.createDirectories(destination.getParent());
+      Files.copy(netLog, destination, StandardCopyOption.REPLACE_EXISTING);
+    } catch (IOException e) {
+      throw new UncheckedIOException("could not keep " + netLog + " at " + destination, e);
+    }
+    return destination;
+  }
 
   /** Every host the log names, in the order first seen. */
   static Set<String> hostsContacted(Path netLog) {
