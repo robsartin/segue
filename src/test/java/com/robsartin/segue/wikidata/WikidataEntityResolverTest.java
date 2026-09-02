@@ -129,11 +129,11 @@ class WikidataEntityResolverTest {
   @DisplayName("an unknown identifier yields empty rather than a fabricated node")
   void unknownQidIsEmpty() {
     try (StubWikidataServer stub = new StubWikidataServer()) {
-      stub.enqueueBody("{\"entities\":{\"Q999999999\":{\"missing\":\"\"}}}");
+      stub.enqueueBody("{\"entities\":{\"Q0999999999\":{\"missing\":\"\"}}}");
       EntityResolver resolver =
           new WikidataEntityResolver(new WikidataClient(stub.baseUri()), FIXED);
 
-      assertThat(resolver.fetch("Q999999999")).isEmpty();
+      assertThat(resolver.fetch("Q0999999999")).isEmpty();
     }
   }
 

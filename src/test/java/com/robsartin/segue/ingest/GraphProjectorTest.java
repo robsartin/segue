@@ -113,7 +113,7 @@ class GraphProjectorTest {
         TinkerGraphStore store = new TinkerGraphStore()) {
       log.append(
           new NodeAssertion(
-              "Q0900002", NodeKind.PERSON, "Marisol Kettleby", List.of("Q999999999"), WIKIDATA));
+              "Q0900002", NodeKind.PERSON, "Marisol Kettleby", List.of("Q0999999999"), WIKIDATA));
 
       GraphProjector.project(log, store, IdentityMerge.NONE);
 

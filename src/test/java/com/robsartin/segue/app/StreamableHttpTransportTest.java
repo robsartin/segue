@@ -121,7 +121,7 @@ class StreamableHttpTransportTest {
     HttpResponse<String> call =
         post(
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":"
-                + "\"get_entity\",\"arguments\":{\"qid\":\"Q999999999\"}}}",
+                + "\"get_entity\",\"arguments\":{\"qid\":\"Q0999999999\"}}}",
             sessionId,
             null);
     assertThat(call.statusCode()).isEqualTo(200);

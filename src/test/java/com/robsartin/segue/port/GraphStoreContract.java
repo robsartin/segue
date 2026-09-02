@@ -239,8 +239,8 @@ public abstract class GraphStoreContract {
     // fan-out will hit this constantly, and the two engines must fail the same way.
     AssertionRecord toNowhere =
         new AssertionRecord(
-            "Q999999997",
-            "Q999999996",
+            "Q0999999997",
+            "Q0999999996",
             "AUTHORED",
             null,
             null,
