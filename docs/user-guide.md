@@ -1069,4 +1069,7 @@ Captured on 2026-08-26 against the jar built from this branch by `./gradlew boot
 - [The retry-precondition measurement](retry-precondition-evidence.md) — the sixty-run trace study
   behind ADR 46's retry precondition, and what the rating deck's browser test has to establish
   before it can assert anything.
+- [The retry pool-flush evidence](retry-pool-flush-evidence.md) — round 2: the eighty-one-run trace
+  study behind ADR 46's second retry amendment, and why a socket existing in Chrome's pool is not
+  something silence can prove.
 - [The project README](../README.md) — the short version of everything above.

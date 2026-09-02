@@ -1,5 +1,13 @@
 # The retry-precondition measurement
 
+**Note (2026-09-01, issue #169, round 2).** The control this page measures failed again under load
+after the fix below shipped. Round 2's trace study,
+[the retry pool-flush evidence](retry-pool-flush-evidence.md), found the residual: a browser-wide
+socket-pool flush that closes every socket Chrome holds, which produces no exchange and so is
+invisible to the counter this page's fix added. §8's "incidental observation" below, filing the
+`clients2.google.com` traffic as unrelated to the flake, is corrected: round 2 saw the flush fire
+in the same millisecond that request completed (#186). See ADR 46's 2026-09-01 round-2 amendment.
+
 **This page is a finished measurement, kept because an amendment rests on it.** On 2026-09-01 a
 positive control in `DeckBehaviourTest` — that Chrome retries a POST whose connection died — had
 failed seven times in two days and passed on every rerun. The test was traced sixty times with
