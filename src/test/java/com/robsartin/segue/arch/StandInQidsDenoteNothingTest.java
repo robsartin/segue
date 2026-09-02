@@ -162,7 +162,10 @@ class StandInQidsDenoteNothingTest {
           entry("Q809003", "entity — a real value in the two recorded bad-seeds responses"),
           entry("Q829080", "class id — mapped by RecognitionInstitutions"),
           entry("Q855091", "class id — mapped by Expectations"),
-          entry("Q937857", "class id — AdjudicatorTest and ExpectationsTest name it in a comment"),
+          entry(
+              "Q937857",
+              "class id — AdjudicatorTest's and ExpectationsTest's FOOTBALLER, the occupation the"
+                  + " musician expectation must reject"),
           entry("Q955824", "class id — mapped by RecognitionInstitutions"),
           entry("Q1046088", "class id — mapped by RecognitionInstitutions"),
           entry("Q1051182", "entity — named by EdgeTypes"),
@@ -188,7 +191,10 @@ class StandInQidsDenoteNothingTest {
           entry("Q6301911", "entity — a real value in the recorded cave-reverse.json"),
           entry("Q6650163", "entity — WikidataLiveSmokeTest asks the real API about it"),
           entry("Q6774606", "entity — SharedAwardRouteLiveTest asks the real API about it"),
-          entry("Q7558495", "class id — RecognitionInstitutionsTest names it in its own comment"),
+          entry(
+              "Q7558495",
+              "class id — a solo-act class leavesTheBandsAlone asserts is never a recognition"
+                  + " institution"),
           entry("Q7612859", "entity — a real value in the recorded hofstetter-claims.json"),
           entry("Q7725634", "class id — mapped by ClassLabels and KindMapper"),
           entry("Q9212979", "class id — mapped by KindMapper"),
@@ -200,7 +206,10 @@ class StandInQidsDenoteNothingTest {
           entry("Q13473501", "class id — mapped by KindMapper"),
           entry("Q16334295", "class id — mapped by KindMapper"),
           entry("Q18510489", "class id — mapped by KindMapper"),
-          entry("Q19314966", "class id — RecognitionInstitutionsTest names it in its own comment"),
+          entry(
+              "Q19314966",
+              "class id — a comedy class leavesTheBandsAlone asserts is never a recognition"
+                  + " institution"),
           entry("Q19351429", "class id — mapped by KindMapper"),
           entry("Q19863965", "entity — a real value in the recorded search-cave.json"),
           entry("Q21191270", "class id — mapped by ClassLabels and KindMapper"),
@@ -214,16 +223,20 @@ class StandInQidsDenoteNothingTest {
           entry("Q105543609", "class id — mapped by ClassLabels and KindMapper"),
           entry("Q110039749", "class id — mapped by ClassLabels and KindMapper"),
           entry("Q121998451", "entity — named by ReverseClaims"),
-          entry("Q127334927", "class id — RecognitionInstitutionsTest names it in its own comment"),
+          entry(
+              "Q127334927",
+              "class id — a band class leavesTheBandsAlone asserts is never a recognition"
+                  + " institution"),
           entry("Q131806449", "entity — WikidataLiveSmokeTest asks the real API about it"));
 
   /**
    * Invented ids still in the allocatable form, carried so the rest of the suite can go green while
    * they are migrated band by band.
    *
-   * <p><b>This set shrinks to empty and is then deleted.</b> Adding an id to it is not a fix; it is
-   * a record that a fix is owed. A new test that needs an id it invents takes the leading-zero form
-   * — {@code Q0900100} — which Wikibase's grammar refuses outright.
+   * <p><b>This set shrinks to empty and is then deleted.</b> It is emptied band by band under issue
+   * #171, whose last task deletes it and this paragraph with it. Adding an id to it is not a fix;
+   * it is a record that a fix is owed. A new test that needs an id it invents takes the
+   * leading-zero form — {@code Q0900100} — which Wikibase's grammar refuses outright.
    */
   static final Set<String> NOT_YET_MIGRATED =
       Set.of(
@@ -373,6 +386,13 @@ class StandInQidsDenoteNothingTest {
                 + " and the deliberately real ids in ALLOWED guarantee this stays non-empty",
             ROOT.relativize(TEST_TREE))
         .isNotEmpty();
+    assertThat(SWEEP.files())
+        .as(
+            "this class's own source among the files the sweep read. It is named by an absolute"
+                + " path, and the dead-entry test discounts it - so a rename or a move would leave"
+                + " that test comparing the lists against a tree that still contains every id they"
+                + " name, silently vacuous rather than red")
+        .contains(SELF);
   }
 
   @Test
@@ -494,7 +514,16 @@ class StandInQidsDenoteNothingTest {
     try {
       Field field = Class.forName(owner).getDeclaredField("WIKIBASE_ITEM_ID");
       field.setAccessible(true);
-      return (Pattern) field.get(null);
+      Object grammar = field.get(null);
+      if (!(grammar instanceof Pattern pattern)) {
+        throw new AssertionError(
+            owner
+                + ".WIKIBASE_ITEM_ID is no longer a java.util.regex.Pattern but a "
+                + (grammar == null ? "null" : grammar.getClass().getName())
+                + ". This class reads Wikibase's item-id grammar from that field and matches"
+                + " tokens against it, so it must stay a compiled Pattern");
+      }
+      return pattern;
     } catch (ReflectiveOperationException e) {
       throw new AssertionError(
           owner
