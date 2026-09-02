@@ -178,9 +178,9 @@ class AdrIndexTest {
     List<String> unknown = headings.stream().filter(h -> !ALLOWED_SECTIONS.contains(h)).toList();
     assertThat(unknown)
         .as(
-            "docs/adr/README.md has `## ` heading(s) not among adr_toolkit/index.py"
-                + " _AXIS_DISPLAY_NAMES (plus \"Uncategorized\"), the toolkit's authority for"
-                + " section names")
+            "docs/adr/README.md has `## ` heading(s) that are not sections this index has decided"
+                + " to carry (see ALLOWED_SECTIONS; the toolkit's _AXIS_DISPLAY_NAMES vocabulary is"
+                + " wider — adding a section here is the recorded decision)")
         .isEmpty();
 
     assertThat(claimedMoreThanOnce(headings))
