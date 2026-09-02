@@ -56,13 +56,13 @@ class DeveloperGuideRetractionExamplesTest {
   }
 
   @Test
-  @DisplayName("no retractEntity example opens an argument string it never closes")
-  void shouldNameTheLineWhenARetractionExampleIsNeverFinished() {
-    assertThat(RUNBOOK.unfinishedOpenings())
+  @DisplayName("every line mentioning retractEntity --args= is read as an example")
+  void shouldNameTheLineWhenARetractionExampleCannotBeRead() {
+    assertThat(RUNBOOK.unreadableExamples())
         .as(
-            "docs/developer-guide.md — an example whose --args=\"…\" is never closed, even after"
-                + " joining backslash-continued lines, is one this test cannot run, and skipping it"
-                + " silently is the hole this assertion exists to close")
+            "docs/developer-guide.md — a line mentioning retractEntity --args= that this test"
+                + " cannot read is a line nothing checks, and skipping it silently is the hole this"
+                + " assertion exists to close")
         .isEmpty();
   }
 

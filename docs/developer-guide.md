@@ -2029,9 +2029,12 @@ have, and handing that to a model is what ADR 40 already refused.
 ./gradlew ownClaim --args="merge --db $HOME/.segue/segue.db --local Q00900042 --canonical Q12345"
 ```
 
-Every example above is executed by `DeveloperGuideRunbooksTest`, which splits each `--args` string
-the way a shell would and hands it to `OwnCli.parse` — the boundary that decides whether a line is
-correct to type. A flag renamed in the tool reds this chapter.
+Every example above is executed by `DeveloperGuideOwnClaimExamplesTest`, which splits each `--args`
+string the way a shell would and hands it to `OwnCli.parse` — the boundary that decides whether a
+line is correct to type. A flag renamed in the tool reds this chapter, and so does an example this
+guide writes in a shape the test cannot read. `DeveloperGuideRetractionExamplesTest` does the same
+for [Taking something back out](#taking-something-back-out); `arch.GuideExamples` is the extraction
+they share.
 
 `--db` is required, `SEGUE_DB` does not satisfy it, and `./gradlew own` resolves to `:ownClaim` and
 runs rather than reporting an unknown task. All three are the subject of

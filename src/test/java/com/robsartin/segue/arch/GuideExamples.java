@@ -16,13 +16,21 @@ import java.util.regex.Pattern;
  * the extraction, and the second copy of a rule is the one a future editor misses — {@link
  * RepositoryTree}'s own reason for existing.
  *
- * <p><b>A continued line is joined before it is read, and an opening that is never closed is a
- * failure rather than a skip.</b> Both were measured: a {@code merge} example wrapped with a
- * trailing backslash, carrying a flag belonging to another operation, was extracted by nothing and
- * passed silently, and the guide's example lines already run to 118 columns, so wrapping one is the
- * likely next edit. Joining fixes the wrapped case; {@link #unfinishedOpenings()} is what stops the
- * <em>next</em> shape of the same defect from being silent, because an example this class cannot
- * finish reading is exactly the example nothing is checking.
+ * <p><b>A continued line is joined before it is read, and anything this class cannot read is a
+ * failure rather than a skip.</b> That rule was reached twice, by measurement. A {@code merge}
+ * example wrapped with a trailing backslash, carrying a flag belonging to another operation, was
+ * extracted by nothing and passed silently - and the guide's example lines already run to 118
+ * columns, so wrapping one is the likely next edit. Joining fixed that shape, and a single-quoted
+ * {@code --args='…'} carrying the same wrong flag then passed just as silently. Narrowing the
+ * recogniser is what keeps producing the hole, so the loud check is the widest one available:
+ * <b>every line mentioning {@code ./gradlew <task> --args=} must be one this class fully
+ * consumed</b>, and everything else lands in {@link #unreadableExamples()} naming the line.
+ *
+ * <p><b>Single-quoted outer strings are refused rather than supported</b>, and the guide's own rule
+ * is why: {@code $HOME} does not expand inside single quotes in either zsh or bash, so {@code
+ * --args='--db $HOME/.segue/segue.db'} reaches the tool as a literal {@code $HOME} and dies. That
+ * is the tilde defect one quote further out, so the refusal says which shape to use rather than
+ * teaching this class to split a form the guide must not contain.
  */
 public final class GuideExamples {
 
@@ -41,24 +49,27 @@ public final class GuideExamples {
   public record Example(int line, String text, List<String> arguments) {}
 
   private final List<Example> examples;
-  private final List<String> unfinishedOpenings;
+  private final List<String> unreadableExamples;
 
-  private GuideExamples(List<Example> examples, List<String> unfinishedOpenings) {
+  private GuideExamples(List<Example> examples, List<String> unreadableExamples) {
     this.examples = List.copyOf(examples);
-    this.unfinishedOpenings = List.copyOf(unfinishedOpenings);
+    this.unreadableExamples = List.copyOf(unreadableExamples);
   }
 
   /** Every example the guide shows for one Gradle task, in the order it shows them. */
   public static GuideExamples of(String taskName) {
-    String opening = "./gradlew " + taskName + " --args=\"";
+    // The widest recogniser there is: any mention of the task and --args= at all. A narrower one
+    // is what let a wrapped example and then a single-quoted one through, each time by failing to
+    // match rather than by failing.
+    String mention = "./gradlew " + taskName + " --args=";
     Pattern complete =
         Pattern.compile("\\./gradlew " + Pattern.quote(taskName) + " --args=\"(.*)\"");
     String[] lines = RepositoryTree.read(RepositoryTree.root().resolve(GUIDE)).split("\n", -1);
 
     List<Example> examples = new ArrayList<>();
-    List<String> unfinished = new ArrayList<>();
+    List<String> unreadable = new ArrayList<>();
     for (int i = 0; i < lines.length; i++) {
-      if (!lines[i].contains(opening)) {
+      if (!lines[i].contains(mention)) {
         continue;
       }
       StringBuilder joined = new StringBuilder(lines[i]);
@@ -75,11 +86,19 @@ public final class GuideExamples {
       if (matcher.find()) {
         examples.add(new Example(i + 1, matcher.group(), split(matcher.group(1))));
       } else {
-        unfinished.add("line " + (i + 1) + ": " + text);
+        unreadable.add(
+            "line "
+                + (i + 1)
+                + ": "
+                + text
+                + "\n    not read. An example must be a double-quoted --args=\"…\", closed on the"
+                + " same line or continued with a trailing backslash. Single quotes are refused:"
+                + " $HOME does not expand inside them in zsh or bash, so the line would not be"
+                + " pasteable.");
       }
       i = last;
     }
-    return new GuideExamples(examples, unfinished);
+    return new GuideExamples(examples, unreadable);
   }
 
   public List<Example> examples() {
@@ -87,13 +106,14 @@ public final class GuideExamples {
   }
 
   /**
-   * Every line that opens {@code --args="} and never closes it, joined continuations included.
+   * Every line mentioning {@code ./gradlew <task> --args=} that this class could not read as an
+   * example - an unclosed double quote, a single-quoted outer string, no quote at all.
    *
-   * <p>Not a skip, deliberately. An example this class cannot finish reading is an example nothing
-   * checks, which is the silent hole the wrapped-line plant found.
+   * <p>Not a skip, deliberately. An example this class cannot read is an example nothing checks,
+   * which is the silent hole both the wrapped-line and the single-quoted plants found.
    */
-  public List<String> unfinishedOpenings() {
-    return unfinishedOpenings;
+  public List<String> unreadableExamples() {
+    return unreadableExamples;
   }
 
   /**

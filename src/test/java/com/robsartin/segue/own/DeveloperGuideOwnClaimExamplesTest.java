@@ -70,13 +70,14 @@ class DeveloperGuideOwnClaimExamplesTest {
   }
 
   @Test
-  @DisplayName("no ownClaim example opens an argument string it never closes")
-  void shouldNameTheLineWhenAnOwnClaimExampleIsNeverFinished() {
-    assertThat(RUNBOOK.unfinishedOpenings())
+  @DisplayName("every line mentioning ownClaim --args= is read as an example")
+  void shouldNameTheLineWhenAnOwnClaimExampleCannotBeRead() {
+    assertThat(RUNBOOK.unreadableExamples())
         .as(
-            "docs/developer-guide.md — an example whose --args=\"…\" is never closed, even after"
-                + " joining backslash-continued lines, is one this test cannot run. Skipping it"
-                + " silently is how a wrapped example carrying a wrong flag passed unnoticed")
+            "docs/developer-guide.md — a line mentioning ownClaim --args= that this test cannot"
+                + " read is a line nothing checks. A wrapped example and then a single-quoted one"
+                + " each carried a wrong flag past a narrower recogniser, so anything but the"
+                + " double-quoted form reds here rather than being skipped")
         .isEmpty();
   }
 
