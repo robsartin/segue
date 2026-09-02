@@ -169,3 +169,6 @@ forward/backward direction, an MBID target), over **22 distinct target MBIDs, al
    fail — is knowledge either way and proceeds.
 4. **`MAX_MBIDS_PER_QUERY` is re-measured** in Task 2, as the plan says; its javadoc figures are not
    inherited.
+
+**Ratified by the owner, 2026-09-02:** proceed — new ADR 61 plus a dated amendment on ADR 55. Tasks
+2–5 are unblocked.
