@@ -279,3 +279,7 @@ retake, both dated.
    and the exclusion list's shrinkage mechanical.
 3. **Tasks 1–9 and 11 proceed in order, one implementer at a time, gate green after each band**
    (Mikado). Task 12 waits for Task 10.
+
+**Ratified by the owner, 2026-09-02:** option (3) — narrow `Qid.ALLOCATABLE` to Wikibase's grammar
+`Q[1-9]\d{0,9}`, then fixture merges use an eleven-digit canonical id the grammar can never allocate.
+Task 10 is unblocked; it carries the ADR.
