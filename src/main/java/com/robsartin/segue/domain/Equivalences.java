@@ -102,6 +102,74 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
   }
 
   /**
+   * A node for every canonical id a surviving merge names, to be applied <b>before</b> the log is
+   * projected (#178).
+   *
+   * <p><b>Why before, and not at the merge's own position.</b> {@code IngestService.carry} creates
+   * the canonical node where the merge sits, which is safe only while the edges it carries are
+   * created at that same moment. Once the endpoints are folded by {@link #foldEndpoints}, an edge
+   * claimed <em>earlier</em> in the log arrives on the canonical id before the merge row that would
+   * have created its node, and {@code TinkerGraphStore.record} refuses an endpoint it has never
+   * seen — {@code assertion references unknown entity … - upsert the node first}, at every boot, on
+   * a row ADR 19 forbids deleting. Hoisting the node is therefore a prerequisite of the fold rather
+   * than part of it, and it is a no-op on its own.
+   *
+   * <p><b>Offered whether or not a source has named the canonical entity.</b> {@code carry} asks
+   * {@code graph.node(canonical).isEmpty()} because it runs mid-log and a source that got there
+   * first must not be overwritten. Applied first, the same guarantee comes free from the other
+   * direction: every real claim in the log lands on top of this map and wins, by {@code
+   * upsertNode}'s last-writer-wins and by {@code LogProjection}'s {@code nodes.put}. Asking the
+   * question here as well would put one ordering rule in two places.
+   *
+   * <p><b>Read off the log, not off a store, and that is what makes this a second pass.</b> At the
+   * moment this map is wanted, nothing has been projected: the store is empty and the minted node
+   * whose kind and label the stand-in copies does not exist in it yet. So the walk below is the
+   * projection's walk done once in advance — it tracks minted entities and honours {@link
+   * Retractions} exactly as the projection will — and the projection then runs as it always did.
+   * Two passes over the log, one pass over the store.
+   *
+   * <p><b>Log order, in both senses.</b> A minted entity is read as it stood <em>when the merge was
+   * made</em>, matching {@code carry}'s "order is log order" paragraph, so a claim appended after a
+   * merge is not what the merge stood in for; and where two local ids were merged onto one
+   * canonical id the first merge names the stand-in, matching {@code carry}'s creating a node only
+   * where none exists. The returned map keeps log order for {@link #canonicalByLocal}'s reason.
+   *
+   * <p><b>Only {@link LocalEntity} claims are consulted for the local side.</b> A merge's local id
+   * is unallocatable by construction ({@link LocalEntity#checkUnallocatable}, run on the
+   * reconstruction path too), and an id Wikidata can never allocate is one no source can ever have
+   * known — {@link LocalEntity#isLocal}'s own argument. So a {@link NodeAssertion} about a merge's
+   * local side cannot arise from a source, and consulting node claims here would drag {@code
+   * KindMapper}'s re-derivation into {@code domain} to answer a question that has no instances.
+   *
+   * @return each canonical id and the node to stand in for it, in log order
+   */
+  public static Map<String, NodeRecord> standIns(List<LoggedAssertion> log) {
+    Objects.requireNonNull(log, "log");
+    Retractions retractions = Retractions.in(log);
+    Map<String, NodeRecord> minted = new LinkedHashMap<>();
+    Map<String, NodeRecord> standIns = new LinkedHashMap<>();
+    for (int i = 0; i < log.size(); i++) {
+      LoggedAssertion assertion = log.get(i);
+      if (!retractions.survives(i, assertion)) {
+        continue;
+      }
+      if (assertion instanceof LocalEntity local) {
+        minted.put(local.qid(), local.toNode());
+      } else if (assertion instanceof SameAs merge) {
+        NodeRecord local = minted.get(merge.localQid());
+        if (local != null) {
+          // No instanceOf: the owner stated no classes, which is LocalEntity.toNode()'s own
+          // reason, and a stand-in carries what it was given rather than inventing a class.
+          standIns.putIfAbsent(
+              merge.canonicalQid(),
+              new NodeRecord(merge.canonicalQid(), local.kind(), local.label(), List.of()));
+        }
+      }
+    }
+    return Collections.unmodifiableMap(standIns);
+  }
+
+  /**
    * The same claim with both of its endpoints read through the equivalences (#178).
    *
    * <p><b>This is the graph half of a merge, and it lives here for the reason the taste half

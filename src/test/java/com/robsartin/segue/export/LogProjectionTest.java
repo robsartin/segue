@@ -1,9 +1,13 @@
 package com.robsartin.segue.export;
 
+import static com.robsartin.segue.export.InventedGraph.ALMANAC;
 import static com.robsartin.segue.export.InventedGraph.HOLLOW_TIDE;
 import static com.robsartin.segue.export.InventedGraph.KETTLES;
+import static com.robsartin.segue.export.InventedGraph.PRESSING;
 import static com.robsartin.segue.export.InventedGraph.WREN;
 import static com.robsartin.segue.export.InventedGraph.edge;
+import static com.robsartin.segue.export.InventedGraph.merged;
+import static com.robsartin.segue.export.InventedGraph.minted;
 import static com.robsartin.segue.export.InventedGraph.node;
 import static com.robsartin.segue.export.InventedGraph.secondSource;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -160,5 +164,57 @@ class LogProjectionTest {
                     new Retraction(WREN, "wrong entity", WHEN_RETRACTED)));
 
     assertThat(projection.danglingEdges()).isZero();
+  }
+
+  @Test
+  @DisplayName("the exported fold keeps the label of a source that named the canonical id first")
+  void keepsTheSourcesLabelWhenTheSourceNamedTheCanonicalIdBeforeTheMerge() {
+    LogProjection projection =
+        LogProjection.of(
+            new FakeAssertionLog()
+                .with(
+                    node(PRESSING, NodeKind.WORK, "what the source calls it"),
+                    minted(ALMANAC, NodeKind.WORK, "what the owner called it"),
+                    merged(ALMANAC, PRESSING)));
+
+    assertThat(projection.nodes().get(PRESSING).label())
+        .as(
+            "a stand-in is a placeholder for an entity no source has expanded; overwriting a"
+                + " source's label with the owner's working title would be the merge editing the"
+                + " world rather than recording an identity")
+        .isEqualTo("what the source calls it");
+  }
+
+  @Test
+  @DisplayName("the exported fold keeps the label of a source that named the canonical id later")
+  void keepsTheSourcesLabelWhenTheSourceNamedTheCanonicalIdAfterTheMerge() {
+    LogProjection projection =
+        LogProjection.of(
+            new FakeAssertionLog()
+                .with(
+                    minted(ALMANAC, NodeKind.WORK, "what the owner called it"),
+                    merged(ALMANAC, PRESSING),
+                    node(PRESSING, NodeKind.WORK, "what the source calls it")));
+
+    assertThat(projection.nodes().get(PRESSING).label())
+        .as("a later node claim overwrites an earlier one, matching upsertNode")
+        .isEqualTo("what the source calls it");
+  }
+
+  @Test
+  @DisplayName("the exported fold stands in for a canonical id no source has named")
+  void standsInForACanonicalIdNoSourceHasNamed() {
+    LogProjection projection =
+        LogProjection.of(
+            new FakeAssertionLog()
+                .with(
+                    minted(ALMANAC, NodeKind.WORK, "what the owner called it"),
+                    merged(ALMANAC, PRESSING)));
+
+    assertThat(projection.nodes().get(PRESSING))
+        .as("without a stand-in the canonical id would have no node for a folded edge to land on")
+        .isNotNull()
+        .extracting("kind", "label")
+        .containsExactly(NodeKind.WORK, "what the owner called it");
   }
 }

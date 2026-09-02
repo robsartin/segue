@@ -1,7 +1,9 @@
 package com.robsartin.segue.ingest;
 
+import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
+import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.Retractions;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.GraphStore;
@@ -34,6 +36,12 @@ import java.util.List;
  * quietly holds a stale classification. That was already the shape of issue #55. The rule itself
  * lives in {@link KindMapper#rederive}, which is also what {@code LogProjection} calls.
  *
+ * <p><b>A merge's canonical node is created before replay begins, not at the merge's own row</b>
+ * (#178). {@link Equivalences#standIns} says why - an edge whose endpoint has been folded onto the
+ * canonical id can be claimed earlier in the log than the merge that names it, and {@code
+ * TinkerGraphStore.record} refuses an endpoint it has never seen. The exporter's fold seeds the
+ * same map from the same method, so the two cannot disagree about which entities exist.
+ *
  * <p><b>Retractions are honoured here too</b> (ADR 44, issue #68), through the same shared-rule
  * shape: {@link Retractions} decides which rows reach the graph, and {@code LogProjection} asks it
  * the same question about the same log. A retraction is a claim like any other and is never applied
@@ -64,6 +72,13 @@ public final class GraphProjector {
   public static long project(AssertionLog log, GraphStore store, IdentityMerge merges) {
     List<LoggedAssertion> assertions = log.readAll();
     Retractions retractions = Retractions.in(assertions);
+    // Every merged entity's canonical id gets its node before anything is applied (#178). See
+    // Equivalences.standIns for why this cannot wait for the merge's own row, and why it is a
+    // no-op until the endpoint fold lands: a real claim about the canonical id, wherever it sits
+    // in the log, lands on top of the stand-in and wins by upsertNode's last-writer-wins.
+    for (NodeRecord standIn : Equivalences.standIns(assertions).values()) {
+      store.upsertNode(standIn);
+    }
     long applied = 0;
     for (int i = 0; i < assertions.size(); i++) {
       LoggedAssertion assertion = assertions.get(i);

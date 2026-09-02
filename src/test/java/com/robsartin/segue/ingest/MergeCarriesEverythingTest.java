@@ -138,6 +138,58 @@ class MergeCarriesEverythingTest {
   }
 
   @Test
+  @DisplayName("should keep the label of a source that named the canonical id BEFORE the merge")
+  void shouldKeepTheLabelOfASourceThatNamedTheCanonicalIdBeforeTheMerge() {
+    ingest.record(
+        new NodeAssertion(CANONICAL, NodeKind.PERSON, "what the source calls it", SOURCE));
+    ingest.record(LocalEntity.minted(MINTED, NodeKind.PERSON, "what the owner called it", NOW));
+    ingest.record(SameAs.declared(MINTED, CANONICAL, NOW));
+
+    try (GraphStore rebuilt = new TinkerGraphStore()) {
+      GraphProjector.project(log, rebuilt, IdentityMerge.NONE);
+
+      assertThat(rebuilt.node(CANONICAL).orElseThrow().label())
+          .as(
+              "the stand-in is a placeholder for an entity no source has expanded yet; where one"
+                  + " HAS, overwriting its label with the owner's working title would be the merge"
+                  + " editing the world rather than recording an identity")
+          .isEqualTo("what the source calls it");
+    }
+  }
+
+  @Test
+  @DisplayName("should keep the label of a source that named the canonical id AFTER the merge")
+  void shouldKeepTheLabelOfASourceThatNamedTheCanonicalIdAfterTheMerge() {
+    ingest.record(LocalEntity.minted(MINTED, NodeKind.PERSON, "what the owner called it", NOW));
+    ingest.record(SameAs.declared(MINTED, CANONICAL, NOW));
+    ingest.record(
+        new NodeAssertion(CANONICAL, NodeKind.PERSON, "what the source calls it", SOURCE));
+
+    try (GraphStore rebuilt = new TinkerGraphStore()) {
+      GraphProjector.project(log, rebuilt, IdentityMerge.NONE);
+
+      assertThat(rebuilt.node(CANONICAL).orElseThrow().label())
+          .as("upsertNode is last-writer-wins, and the source is the later writer here")
+          .isEqualTo("what the source calls it");
+    }
+  }
+
+  @Test
+  @DisplayName("should stand in with the owner's own label where no source has named the entity")
+  void shouldStandInWithTheOwnersLabelWhereNoSourceHasNamedTheCanonicalEntity() {
+    ingest.record(LocalEntity.minted(MINTED, NodeKind.PERSON, "what the owner called it", NOW));
+    ingest.record(SameAs.declared(MINTED, CANONICAL, NOW));
+
+    try (GraphStore rebuilt = new TinkerGraphStore()) {
+      GraphProjector.project(log, rebuilt, IdentityMerge.NONE);
+
+      assertThat(rebuilt.node(CANONICAL).orElseThrow().label())
+          .as("without a stand-in a folded edge would have an endpoint the store has never seen")
+          .isEqualTo("what the owner called it");
+    }
+  }
+
+  @Test
   @DisplayName("should rebuild the carried edge when the log is replayed at boot")
   void shouldRebuildTheCarriedEdgeWhenTheLogIsReplayedAtBoot() {
     mintAndClaimAnEdge();

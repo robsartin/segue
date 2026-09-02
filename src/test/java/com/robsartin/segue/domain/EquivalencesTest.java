@@ -236,6 +236,102 @@ class EquivalencesTest {
     assertThat(merges.foldEndpoints(edge(MINTED, NEIGHBOUR)).fromQid()).isEqualTo(MINTED);
   }
 
+  @Test
+  @DisplayName("a merge's canonical id gets a stand-in node carrying what the owner minted")
+  void shouldStandInForTheCanonicalIdWithTheMintedEntitysKindAndLabel() {
+    List<LoggedAssertion> log =
+        List.of(
+            LocalEntity.minted(MINTED, NodeKind.WORK, "The Salt Almanac", WHEN),
+            SameAs.declared(MINTED, CANONICAL, WHEN));
+
+    assertThat(Equivalences.standIns(log))
+        .as(
+            "a merge is usually declared before any source has expanded the real item, and a"
+                + " folded edge needs both of its endpoints to exist")
+        .containsExactly(
+            Map.entry(
+                CANONICAL,
+                new NodeRecord(CANONICAL, NodeKind.WORK, "The Salt Almanac", List.of())));
+  }
+
+  @Test
+  @DisplayName("nothing minted under the local id means nothing to stand in for, and no error")
+  void shouldStandInForNothingWhenTheLocalIdWasNeverMinted() {
+    List<LoggedAssertion> log = List.of(SameAs.declared(MINTED, CANONICAL, WHEN));
+
+    assertThat(Equivalences.standIns(log))
+        .as("the log is append-only: a merge may be replayed with the claim it resolves retracted")
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("a merge a retraction reaches stands in for nothing, the way it carries nothing")
+  void shouldStandInForNothingWhenTheMergeWasRetracted() {
+    List<LoggedAssertion> log =
+        List.of(
+            LocalEntity.minted(MINTED, NodeKind.WORK, "The Salt Almanac", WHEN),
+            SameAs.declared(MINTED, CANONICAL, WHEN),
+            new Retraction(CANONICAL, "the merge named the wrong item", WHEN));
+
+    assertThat(Equivalences.standIns(log)).isEmpty();
+  }
+
+  @Test
+  @DisplayName("an entity minted after the merge is not what the merge stood in for")
+  void shouldReadTheMintedEntityAsItStoodWhenTheMergeWasMade() {
+    List<LoggedAssertion> log =
+        List.of(
+            SameAs.declared(MINTED, CANONICAL, WHEN),
+            LocalEntity.minted(MINTED, NodeKind.WORK, "The Salt Almanac", WHEN));
+
+    assertThat(Equivalences.standIns(log))
+        .as("order is log order - IngestService.carry reads the graph as it stands at the merge")
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("two local ids merged onto one canonical id: the first merge names the stand-in")
+  void shouldLetTheFirstMergeOntoACanonicalIdNameTheStandIn() {
+    List<LoggedAssertion> log =
+        List.of(
+            LocalEntity.minted(MINTED, NodeKind.WORK, "the first name", WHEN),
+            LocalEntity.minted(OTHER_MINTED, NodeKind.PERSON, "the second name", WHEN),
+            SameAs.declared(MINTED, CANONICAL, WHEN),
+            SameAs.declared(OTHER_MINTED, CANONICAL, WHEN));
+
+    assertThat(Equivalences.standIns(log))
+        .as("carry creates the node only where nothing has claimed one, so the first merge wins")
+        .containsExactly(
+            Map.entry(
+                CANONICAL, new NodeRecord(CANONICAL, NodeKind.WORK, "the first name", List.of())));
+  }
+
+  @Test
+  @DisplayName("a stand-in is offered even where a source has already named the canonical entity")
+  void shouldOfferAStandInEvenWhereASourceHasAlreadyNamedTheCanonicalEntity() {
+    List<LoggedAssertion> log =
+        List.of(
+            new NodeAssertion(
+                CANONICAL,
+                NodeKind.WORK,
+                "what the source calls it",
+                new Provenance("invented", "invented:1", WHEN, 1.0)),
+            LocalEntity.minted(MINTED, NodeKind.WORK, "what the owner called it", WHEN),
+            SameAs.declared(MINTED, CANONICAL, WHEN));
+
+    // Deliberately NOT "only where nothing has claimed one". This map is applied BEFORE the log
+    // is projected, so every real claim about the canonical id - whether it was made before the
+    // merge or after it - lands on top of the stand-in and wins by last-writer-wins. Refusing to
+    // offer it here would put the ordering question in two places, and the caller's answer is
+    // already the same in both directions. The source's label winning is asserted end-to-end in
+    // MergeCarriesEverythingTest and LogProjectionTest.
+    assertThat(Equivalences.standIns(log))
+        .containsExactly(
+            Map.entry(
+                CANONICAL,
+                new NodeRecord(CANONICAL, NodeKind.WORK, "what the owner called it", List.of())));
+  }
+
   private static AssertionRecord edge(String from, String to) {
     return new AssertionRecord(
         from, to, "INFLUENCED_BY", null, null, new Provenance("invented", "invented:1", WHEN, 1.0));
