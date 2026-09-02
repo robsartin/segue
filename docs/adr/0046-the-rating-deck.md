@@ -489,6 +489,101 @@ withdrawn: the ordering finding, the reason a `fetch` timeout is a constraint on
 limit stated about the wording all stand, and none of them depended on the attempt count being
 three.
 
+**Amendment (2026-09-01, issue #169, round 2): the "quiet" precondition above can be true and the
+socket still gone, so the test now makes one instead of inferring it, and the residual left behind
+is measured.**
+
+The fix above shipped, and the control it protects failed again under load during another branch's
+gate. Traced 81 runs with per-request server logging and Chrome's NetLog: **one failure.** In the
+225 ms of genuine silence `untilQuiet()` measured before the keypress, Chrome closed every socket
+it held — six sockets, across five origins, in one millisecond — with
+`QUIC_SESSION_POOL_MARK_ALL_ACTIVE_SESSIONS_GOING_AWAY` alongside: a browser-wide network-change
+pool flush, not pressure and not an idle reap. **A flush is not an exchange.** The counter the
+2026-08-30 amendment added saw nothing, because nothing was requested; `untilQuiet()`'s condition
+was genuinely true and its conclusion was false. The precondition the control needs — a pooled
+socket exists at the keypress — is a fact about Chrome's socket pool, and no count of exchanges at
+the stub can observe it.
+
+The favicon was checked again and ruled out a second time, with more margin than before: 6.00–21.25
+ms across all 81 runs, none above 200 ms. `untilQuiet()`'s 200 ms bound held; the silence itself
+was always the window a flush could land in, not the favicon racing it. And the dose-response
+across the batches was clean: attempts at the abandoned rating equalled one plus the pooled sockets
+alive at the POST in 61 of 61 traced runs. The full study is
+[docs/retry-pool-flush-evidence.md](../retry-pool-flush-evidence.md), a dated measurement kept the
+same way as the 2026-08-30 and 2026-09-01 figures above it.
+
+**Decision: create the precondition, then press at once.** `DeckBehaviourTest.warmUp()` issues a
+same-origin `GET` from the page itself, right after `untilQuiet()` returns, waits for the stub to
+see that exchange finish and the page's own promise to resolve, and the keypress follows
+immediately with nothing between them. `untilQuiet()` stays exactly as the 2026-09-01 amendment
+above left it — it closes the favicon race, which is still real and still bounded, and removing it
+would reopen that one. The warm-up closes a different hole: instead of waiting through a window a
+flush can land in, it puts a used, idle socket in the pool at the last possible moment before the
+key is pressed. Draining the warm-up's response is kept, but as insurance rather than as the thing
+that makes the test pass — at the committed 4-byte body an undrained response still passed 3/3,
+because Chrome drains a body that small on its own, and draining only becomes load-bearing near
+200 KB.
+
+**What a red control now says, and what it does not claim.** `aRetriedRatingCannotOverwriteAReRating`'s
+helper — `whyNoRetryHappened()` — reads the client port the stub recorded for the abandoned POST.
+A port that had already served a request is Chrome bound to a pooled socket and choosing not to
+resend on it: the browser changing, which is the finding this ADR wants to be told about. A port
+never seen before is the observable this round adds, and the message names the network-change flush
+as the one cause of it ever observed here — while stating plainly that port novelty cannot
+distinguish a flush from a socket held open by something else, and does not claim to. See the
+javadoc on `warmUp()` and on `whyNoRetryHappened()` for the exact wording; it is not restated here.
+
+**`shouldServeOneCompletedExchangeWhenTheWarmUpRuns` proves what the stub can see, and the
+pooled-socket property is established elsewhere, not per run.** Which pooled socket Chrome hands a
+request — the one the warm-up used, or a never-touched preconnect spare opened alongside it — is
+Chrome's own choice, not the test's to assert. Two attempts to pin it by port each turned into a
+flake before this was understood: asserting the warm-up landed on a previously-seen port failed
+about 1 run in 10, and asserting two consecutive warm-ups shared a port failed about 1 in 60. The
+committed test asserts only what the server observes — one new served exchange per call, nothing
+left in flight, the body read to completion — and leaves the pooled-socket property to the Loop C
+and D controls (round 1's occupancy probe holding every socket: the retry control fails without the
+warm-up and passes with it) and to `aRetriedRatingCannotOverwriteAReRating` itself, which exercises
+it on every run by depending on it.
+
+**The residual is measured, not hidden.** A flush can still land in the few milliseconds between
+the warm-up finishing and the keypress. From round 2's rate — one flush in 81 runs over a ~225 ms
+window of silence — a ~30 ms window gives on the order of one failure in five hundred runs, under
+the same network churn that produced the sighting. That qualifier is deliberate: the one failure
+coincided with another Chrome on the machine saturating its network, and a NetLog placed the flush
+in the same millisecond a `clients2.google.com/time` request completed. But a ninth sighting, on an
+untouched baseline, failed during a full gate run at a 1-minute load of 3.99 with nothing else
+recorded — so "under the same churn" is the honest qualifier on the rate above, and "under load" is
+not. The flush is the only mechanism ever observed to produce this failure; what triggers it on an
+otherwise-quiet machine is not established, and the fix above does not depend on knowing.
+
+**Rejected.**
+
+- **Widen the silence window.** The favicon bound was never the weak point — 0 of 81 runs exceeded
+  it — and every millisecond of added silence is a millisecond in which a flush can land. Widening
+  it makes the race worse, not better.
+- **Observe the pool through CDP before pressing.** The DevTools protocol exposes no socket-pool
+  state. The flush was seen only through `--log-net-log`, a per-run capture, not a live query the
+  test could poll.
+- **Warm up without draining the body.** An undrained response keeps the socket checked out (#188);
+  measured during this round, draining is not what makes the committed 4-byte warm-up pass — it is
+  insurance against a larger body, not load-bearing today.
+- **Warm up and then wait for silence again.** Re-creates the exact window the warm-up exists to
+  close.
+
+**Correction to §8 of `docs/retry-precondition-evidence.md`.** That page filed Chrome's requests to
+`clients2.google.com` as "incidental observation, not related to the flake." Round 2 found they are
+related: the flush that caused the one failure fired in the same millisecond the `clients2.google.
+com/time` request completed (#186). The page carries a dated note to this effect; #186 — Chrome
+reaching Google despite `--disable-background-networking` — remains a confound worth removing
+separately, and no attempt was made here to suppress the flush itself, since no Chrome switch was
+found that disables network-change handling; the notifier is driven by the OS.
+
+**What this amendment does not do.** No retry loop: a test that reruns its own scenario on a
+classified environmental failure would hide the rate this amendment exists to state. No production
+change: the warm-up request is issued by the test through the page, not by `deck.html`. Nothing
+above either 2026-09-01 amendment is withdrawn; this one narrows what "the stub saw nothing" is
+allowed to mean.
+
 ## Alternatives considered
 
 - **A controller in the Spring app** — the server and the port already exist. Refused because it
