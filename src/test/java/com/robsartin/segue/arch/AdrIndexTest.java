@@ -58,6 +58,25 @@ class AdrIndexTest {
 
   private static final List<Row> ROWS = parseRows();
 
+  /**
+   * The section headings {@code docs/adr/README.md} carries today: which of the adr-toolkit's
+   * {@code _AXIS_DISPLAY_NAMES} (in {@code adr_toolkit/index.py}) this index actually uses, plus
+   * {@code "Uncategorized"} for entries {@code build_index} could not classify. The toolkit
+   * vocabulary is wider — ten names, not seven — so this list is not "every name the toolkit could
+   * write" but "every section this repository has decided to have." Adding an eighth section here
+   * is that decision, made on purpose, not a side effect of the toolkit picking a new axis for some
+   * ADR's front matter.
+   */
+  private static final List<String> ALLOWED_SECTIONS =
+      List.of(
+          "Universal",
+          "Language",
+          "Framework",
+          "App shape",
+          "Concern",
+          "Interaction",
+          "Uncategorized");
+
   /** One index row. The description and {@code Related:} lines beneath it are not parsed. */
   private record Row(String section, int number, String title, String file, String status) {}
 
@@ -128,6 +147,57 @@ class AdrIndexTest {
                 + " and the next section may start below it; only two rows sharing a section are"
                 + " compared.")
         .isEmpty();
+  }
+
+  /**
+   * {@link #shouldAscendByNumberWithinASectionWhenTheRowsAreGrouped} checks ordering only within a
+   * section, comparing consecutive rows that share a {@code section} string — so a typo'd {@code ##
+   * } heading opens a second, unrelated section whose rows ascend on their own, and that test never
+   * sees the split. This test catches the split at the heading itself: every {@code ## } line in
+   * {@code docs/adr/README.md} must be one of {@link #ALLOWED_SECTIONS}, and no heading may appear
+   * twice (a repeated heading is the same split by a different route — two runs of rows that belong
+   * together, told apart).
+   *
+   * <p>{@link #ALLOWED_SECTIONS} is hand-held rather than read from the toolkit, and it is
+   * deliberately narrower than the toolkit's own vocabulary: the toolkit says what a heading is
+   * <em>allowed to be</em> ({@code adr_toolkit/index.py}'s {@code _AXIS_DISPLAY_NAMES}, ten names),
+   * but which of those this repository actually <em>has</em> is a decision this list records, not a
+   * fact the toolkit can supply — this repository has no dependency through which to read that
+   * Python dict at build time regardless. The accepted cost is that {@code build_index} choosing a
+   * new axis for some ADR's front matter opens a section this test has not been told about, and
+   * correctly reds until a person decides to add it here — that red is the point, not a defect: an
+   * axis the toolkit could recognize but this index has never carried is exactly the kind of
+   * addition that should require an edit to this file, not happen silently.
+   */
+  @Test
+  @DisplayName(
+      "Every section heading in the index is one this repository has decided to have, and none twice")
+  void shouldRejectAnUnknownOrDuplicatedSectionHeadingWhenTheIndexIsRead() {
+    List<String> headings = sectionHeadings();
+
+    List<String> unknown = headings.stream().filter(h -> !ALLOWED_SECTIONS.contains(h)).toList();
+    assertThat(unknown)
+        .as(
+            "docs/adr/README.md has `## ` heading(s) that are not sections this index has decided"
+                + " to carry (see ALLOWED_SECTIONS; the toolkit's _AXIS_DISPLAY_NAMES vocabulary is"
+                + " wider — adding a section here is the recorded decision)")
+        .isEmpty();
+
+    assertThat(claimedMoreThanOnce(headings))
+        .as("docs/adr/README.md has the same `## ` section heading more than once")
+        .isEmpty();
+  }
+
+  /** Every {@code ## } heading in the index, in file order, duplicates included. */
+  private static List<String> sectionHeadings() {
+    List<String> headings = new ArrayList<>();
+    for (String line : INDEX.lines().toList()) {
+      Matcher heading = SECTION.matcher(line);
+      if (heading.matches()) {
+        headings.add(heading.group(1));
+      }
+    }
+    return headings;
   }
 
   @Test

@@ -50,10 +50,13 @@ jobs:
           google-chrome --version
 
       - name: Check
-        # Not a preference: with this set, a missing browser fails the build instead of skipping
-        # the only executable check on deck.html.
+        # Neither is a preference: with these set, a missing dependency fails the build instead of
+        # skipping the only executable check on deck.html, or on what Graphviz writes into an SVG
+        # and an imagemap. The installs above exist for those tests, and issue #164 is what happens
+        # when one of them degrades — a green run that rendered nothing.
         env:
           SEGUE_REQUIRE_BROWSER: "true"
+          SEGUE_REQUIRE_GRAPHVIZ: "true"
         run: ./gradlew --no-daemon check
 
       # build/reports/netlog/ carries the NetLog HeadlessChromeNetworkTest measured, on green runs
