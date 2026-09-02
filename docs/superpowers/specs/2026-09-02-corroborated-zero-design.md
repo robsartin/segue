@@ -27,10 +27,26 @@ sources**, so an owner-only edge appears with n = 0 and every other count is wha
 claims *"Both adapters return identical results on all four"* queries and names Jena the cross-check
 that keeps the port honest; at N = 0 that claim was false.
 
+## Correction (2026-09-02, at Task 1's first red that was not red)
+
+This spec assumed the shared `Fixture` contains an owner-only edge. It does not: its one owner claim,
+`owner(CAVE, "AUTHORED", ASS_SAW_ANGEL)`, is layered on a Wikidata assertion of the same triple — the
+fixture's own javadoc says so — so that edge's corroboration is **1**, Jena keeps its group, and both
+engines agree at every N on today's fixture. The widened guard came up green on arrival. The issue's
+divergence came from a different seeding (a review's throwaway), and Jena's bug is real: an owner-only
+edge planted into both stores reproduces it exactly (`N=0 tinker=23 jena=22`, `N=1 22/22`).
+
+**Decision:** the shared `Fixture` gains a genuine owner-only edge, with local-shape ids (two leading
+zeros, ADR 58), so every contract test can see the third layer's uncorroborated case rather than the
+guard alone planting it. `edgeCount` moves 22 → 23 and any test that enumerates edges follows. The
+shape assertions below are restated for the fixture as it now is: the owner-only edge is present in
+both engines at N = 0 and in neither at N = 1; the layered `CAVE` edge (corroboration 1) is present at
+0 and 1 and absent at 2; both sets are empty at 3.
+
 ## The guard, widened
 
 The differential comparison runs at **every N the fixture makes meaningful** — 0 through one past the
-fixture's maximum corroboration (its most-corroborated edges have two independent sources, so 0..3) —
+fixture's maximum corroboration (its most-corroborated edges have two independent sources, so 0..3; the owner-only edge is the new fixture entry above) —
 not at one value. It asserts the two engines' edge-key sets are equal at each N, and it also asserts the
 *shape* the fixture guarantees, so the loop cannot pass by comparing two identical mistakes: at N = 0
 the owner-only edge is present in both; at N = 1 it is absent from both; at N = 3 both are empty.
