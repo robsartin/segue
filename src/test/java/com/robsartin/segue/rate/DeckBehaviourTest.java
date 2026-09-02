@@ -362,9 +362,52 @@ class DeckBehaviourTest {
     return chrome.text("problem");
   }
 
-  /** Long enough for anything the page was going to do to have happened. */
+  /**
+   * Waits until neither side has anything outstanding: the page's own guards say it is idle with a
+   * card on screen ({@code !busy && current !== null}), and the stub is serving nothing.
+   *
+   * <p><strong>The condition, and why those two halves are it.</strong> Every request this page
+   * makes goes out of {@code rate()} or {@code show()}, and both hold {@code busy} from before
+   * their first {@code await} until the {@code finally} that ends them — so an unsettled fetch,
+   * including every attempt Chrome makes inside one, is a {@code busy} that is still {@code true}.
+   * {@code current !== null} is the other end of the same statement: after a rating lands, refused
+   * or accepted, the page deals again, and {@code current} is only set back when that deal has
+   * rendered. So "the page reports it is done" is a positive observation, not an interval — and
+   * {@code inFlight == 0} adds the half the page cannot see, an exchange the stub has begun and not
+   * yet finished. Bounded and polled, in {@link #untilSent(int)}'s shape and for its reason.
+   *
+   * <p>This used to be {@code sleep(600)}, which is the thing {@link #untilSent(int)}'s javadoc
+   * argues against in this very file: after a fixed sleep, an ordering or absence assertion says
+   * only "nothing had arrived <em>yet</em>", and a straggler on a loaded runner reads exactly like
+   * a straggler the page correctly never sent. The evidence is what makes a condition sufficient
+   * here: {@code docs/retry-precondition-evidence.md} traced 59 runs and 3 forced failures and saw
+   * <em>no</em> request arrive in the 2500 ms after the assertion point, because Chrome's retries
+   * all happen inside the one {@code fetch} that {@code busy} is held across. So the last attempt
+   * is always spent before the page reports done — and waiting for the page to report done is
+   * therefore enough, where waiting 600 ms was only long enough so far.
+   */
   private void settle() {
-    HeadlessChrome.sleep(600);
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
+    while (System.nanoTime() < deadline) {
+      if (inFlight.get() == 0
+          && Boolean.TRUE.equals(chrome.eval("!!(!busy && current !== null)"))) {
+        return;
+      }
+      HeadlessChrome.sleep(20);
+    }
+    // Both halves, for untilQuiet()'s reason: "0 in flight" alone would not say whether the page
+    // is still working or the stub is, and only one of those is a hung page.
+    throw new AssertionError(
+        "the page never reported it had finished, so nothing here can be said to be in its final"
+            + " order: busy = "
+            + chrome.eval("busy")
+            + ", current = "
+            + chrome.eval("current === null ? 'null' : current.qid")
+            + ", "
+            + inFlight.get()
+            + " still in flight at the stub (last "
+            + lastPath.get()
+            + ")");
   }
 
   /**
@@ -733,7 +776,9 @@ class DeckBehaviourTest {
         "document.querySelector('#card h1').textContent === " + quoted(LABELS.get(1)),
         "the re-rating to land and the deck to move");
     // A retry arriving after everything else has finished is the whole hazard, so the assertions
-    // below must not run while one could still be on its way.
+    // below must not run while one could still be on its way. What holds them back is the page
+    // saying it has nothing outstanding, not a length of time having passed — see settle(), and
+    // issue #187 for the control that plants a late attempt and watches this go red on it.
     settle();
 
     List<Integer> order;
