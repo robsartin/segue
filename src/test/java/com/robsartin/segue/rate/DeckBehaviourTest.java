@@ -120,8 +120,8 @@ class DeckBehaviourTest {
    * socket that had carried an earlier request — and Chrome declined to resend on it, which is the
    * browser changing — or on a brand new one, which means the pool was empty and the control never
    * had its precondition. Round 2 saw the second happen for a reason no server-side counter can
-   * observe: Chrome closing every socket it held, browser-wide, without an exchange to count
-   * ({@code .superpowers/sdd/169b-evidence.md}, and the amendment to ADR 46).
+   * observe: Chrome closing every socket it held, browser-wide, without an exchange to count (ADR
+   * 46's 2026-09-01 amendments, which carry the measurement).
    */
   private record Served(int port, String path) {}
 
@@ -213,8 +213,7 @@ class DeckBehaviourTest {
         // On entry rather than on completion, because the exchange this most needs to record is
         // the one whose handler throws — the abandoned POST, whose port is the whole question.
         portsServed.add(
-            new Served(
-                exchange.getRemoteAddress().getPort(), exchange.getRequestURI().getPath()));
+            new Served(exchange.getRemoteAddress().getPort(), exchange.getRequestURI().getPath()));
         try {
           chain.doFilter(exchange);
         } finally {
@@ -301,7 +300,7 @@ class DeckBehaviourTest {
    * measured the way silence fails to imply that: in 225 ms of genuine quiet, Chrome closed every
    * socket it held, across every origin, in a single browser-wide flush. A flush is not an
    * exchange, so the stub's counter saw nothing and {@code untilQuiet()} returned truthfully with a
-   * false conclusion ({@code .superpowers/sdd/169b-evidence.md}; the rule itself is in {@code
+   * false conclusion (ADR 46's 2026-09-01 amendments; the resend rule itself is in {@code
    * docs/retry-precondition-evidence.md} §4).
    *
    * <p>So rather than wait for a socket and hope, the test makes one: a same-origin GET issued
@@ -749,16 +748,20 @@ class DeckBehaviourTest {
     // the re-rating is in this list too.
     //
     // What this control needs from the fixture, and what issue #169 was: Chrome resends only on a
-    // socket already in its pool, so it resends nothing if some other request is holding them all
-    // when the key is pressed. `start()` now waits for the stub to go quiet (see `untilQuiet`),
-    // which is what makes the message below true — before that wait existed, this assertion could
-    // fail because Chrome's favicon request had got there first, and it did, seven times.
+    // socket already in its pool, so it resends nothing if there is no such socket when the key is
+    // pressed. Two different things used to take it away. One is another request holding it —
+    // Chrome's favicon, which got there first seven times, and which `start()`'s `untilQuiet` now
+    // waits out. The other is Chrome closing the socket for reasons of its own, which produces no
+    // exchange and which no length of silence excludes; `warmUp()` above answers that one by
+    // making a socket instead of waiting for one.
+    //
+    // Neither is perfect, so this control says which case a red is rather than asserting the
+    // browser changed — see `whyNoRetryHappened`.
     assertThat(order.stream().filter(rating -> rating == 1).count())
         .as(
             "the abandoned rating must actually have been retried, or there is nothing to order —"
-                + " and the stub was quiet before the keypress, so Chrome had an idle pooled socket"
-                + " to resend on and did not use it: this browser no longer retries a POST whose"
-                + " connection died, which ADR 46's 2026-09-01 amendment says how to read")
+                + " %s",
+            whyNoRetryHappened())
         .isGreaterThan(1);
 
     // The finding. Every attempt at the abandoned rating reached the server before the re-rating
@@ -774,6 +777,58 @@ class DeckBehaviourTest {
     assertThat(ratedThisSession())
         .as("and only the re-rating counts as written: the unanswered one never could be")
         .isOne();
+  }
+
+  /**
+   * Why {@code aRetriedRatingCannotOverwriteAReRating}'s positive control just went red, in the two
+   * cases that are worth telling apart.
+   *
+   * <p>A red means Chrome did not resend an abandoned POST, and by itself that reads as "the
+   * browser stopped retrying" — the finding ADR 46's 2026-09-01 amendment asks to be told about. It
+   * is usually not. Chrome resends only on a socket already in its pool, so the same red also
+   * appears whenever the pool was empty at the keypress, and round 2 measured Chrome emptying it
+   * browser-wide in a single millisecond for reasons of its own (ADR 46's 2026-09-01 amendments).
+   * Before {@link #warmUp()} that was common; after it, it is a few milliseconds' window rather
+   * than a couple of hundred, but it is not gone.
+   *
+   * <p>The client port separates them, which is why the stub records one for every exchange. A POST
+   * on a port that had already served a request was given a pooled socket and not resent on it —
+   * the browser changing. A POST on a port never seen before was given a socket the pool had to
+   * connect, so there was nothing pooled to resend on, and the red says nothing about the page or
+   * the browser.
+   */
+  private String whyNoRetryHappened() {
+    List<Served> served = servedSoFar();
+    int post = -1;
+    for (int i = 0; i < served.size(); i++) {
+      if ("/api/rate".equals(served.get(i).path())) {
+        post = i;
+        break;
+      }
+    }
+    if (post < 0) {
+      return "no rating reached the stub at all, so there was never anything to resend: " + served;
+    }
+    int port = served.get(post).port();
+    List<String> alreadyServed =
+        served.subList(0, post).stream()
+            .filter(earlier -> earlier.port() == port)
+            .map(Served::path)
+            .toList();
+    if (alreadyServed.isEmpty()) {
+      return "the pool was flushed between the warm-up and the keypress: the POST arrived on a"
+          + " fresh connection (port "
+          + port
+          + ", never seen before this), so Chrome had no pooled socket to resend on. This is"
+          + " Chrome's network-change handling, not the browser ceasing to resend — rerun, and"
+          + " see ADR 46's 2026-09-01 amendments if it keeps happening";
+    }
+    return "Chrome was bound to a pooled socket (port "
+        + port
+        + ", which served "
+        + String.join(", ", alreadyServed)
+        + ") and still did not resend: this browser no longer retries a POST whose connection"
+        + " died, which ADR 46's 2026-09-01 amendment says how to read";
   }
 
   private static String quoted(String text) {
