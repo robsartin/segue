@@ -1,6 +1,7 @@
 package com.robsartin.segue.musicbrainz;
 
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.domain.Qid;
 import java.util.List;
 import java.util.Objects;
 
@@ -20,29 +21,32 @@ import java.util.Objects;
  * that whitelist's answer for these classes at the time the bridge asked, carried alongside rather
  * than instead.
  *
- * <p><b>The QID is checked for presence, not for allocatability.</b> {@code Qid.checkAllocatable}
- * is ADR 58's rule about <i>stand-in</i> identifiers — a stand-in must take a shape Wikidata cannot
- * allocate — so a record that demanded an allocatable QID would refuse every {@code Q09000xx} the
- * test suite is required to use, this file's own fixtures included. The shape of a bridged value is
- * already guarded where the values arrive: {@code WikidataMusicBrainzIdentity} drops a binding
- * whose item is not a QID, and {@code MusicBrainzSourceAdapter}'s GAP 9 guard drops one again on
- * the way to a {@code NodeRecord}. What is left for this constructor is that there is a QID at all.
+ * <p><b>{@code Qid.check}, not {@code Qid.checkAllocatable}.</b> ADR 58's rule is that a
+ * <i>stand-in</i> identifier must take a shape Wikidata cannot allocate, so a record demanding an
+ * allocatable QID would refuse every {@code Q09000xx} the test suite is required to use — this
+ * type's own fixtures included. {@code Qid.check}'s {@code Q\d+} is exactly the two shapes ADR 58
+ * permits: allocatable, or a leading-zero stand-in. The values are guarded again where they arrive
+ * ({@code WikidataMusicBrainzIdentity} drops a binding whose item is not a QID, and {@code
+ * MusicBrainzSourceAdapter}'s GAP 9 guard drops one on the way to a {@code NodeRecord}), but a
+ * value type the adapter is about to trust should carry its own shape rather than borrow theirs.
  *
- * @param qid the Wikidata item this MBID bridges to, never blank
+ * @param qid the Wikidata item this MBID bridges to, always a QID
  * @param kind the kind those classes imply, never null — {@link NodeKind#CONCEPT} where they imply
  *     nothing, which is ADR 22's "we could not place this"
  * @param label the entity's own label, or <b>null</b> where the bridge has none worth believing.
- *     Null is the undescribed answer and is not the same as a blank one: {@code SegueService} falls
- *     back to a real fetch for it, which is the behaviour that already exists.
+ *     Null is the one undescribed answer: a blank label is normalised to it here, exactly where a
+ *     bare-QID label is refused in {@code WikidataMusicBrainzIdentity.rememberLabel}, so {@code
+ *     MusicBrainzSourceAdapter}'s guard is {@code label != null} and nothing more. An undescribed
+ *     neighbour is one that adapter omits from {@code neighbors()}, leaving {@code SegueService} to
+ *     fall back to a real fetch — the behaviour that already exists.
  * @param instanceOf the {@code P31} classes, possibly empty, never null
  */
 public record BridgedIdentity(String qid, NodeKind kind, String label, List<String> instanceOf) {
 
   public BridgedIdentity {
-    if (qid == null || qid.isBlank()) {
-      throw new IllegalArgumentException("a bridged identity needs a qid, got: " + qid);
-    }
+    Qid.check(qid);
     Objects.requireNonNull(kind, "kind");
+    label = label == null || label.isBlank() ? null : label;
     instanceOf = List.copyOf(Objects.requireNonNull(instanceOf, "instanceOf"));
   }
 }
