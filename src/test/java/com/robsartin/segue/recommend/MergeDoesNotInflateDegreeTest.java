@@ -66,6 +66,13 @@ import org.junit.jupiter.params.provider.ValueSource;
  * cannot notice a score change smaller than 5e-5. That is deliberate: the guard is written against
  * the artefact the operator compares, the same way ADR 45's amendment method compares two runs.
  *
+ * <p><b>The guard below is committed {@code @Disabled}, and Task 4 is what removes the
+ * annotation.</b> It is not a pending test and not a known-failure to live with: it is the
+ * definition of done for the fold, parked red for exactly as long as the defect stands. The gate is
+ * what says so — today it reports <b>1 skipped</b>, and when Task 4 lands the fold that count must
+ * read <b>0</b>. A skip count that stayed at 1 would mean the fold shipped with its own guard still
+ * switched off, which is the one way this test could be worthless.
+ *
  * <p>Every QID and label here is invented and no known-list is behind them (ADR 40, ADR 51). The
  * canonical side of a merge has to be an id Wikidata could allocate ({@code SameAs} refuses
  * anything else) and the local side has to be one it never could ({@code LocalEntity}'s {@code
