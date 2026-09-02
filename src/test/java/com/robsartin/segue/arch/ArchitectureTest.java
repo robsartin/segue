@@ -99,7 +99,13 @@ class ArchitectureTest {
                   + " static registry, not a value type");
 
   /**
-   * ADR 32's adapters, in one place. Adding a source adds one entry here and nothing else.
+   * ADR 32's adapters, in one place — the readable list, not the source of truth.
+   *
+   * <p><b>The tree is the source: the packages holding a class that implements a {@code port}
+   * interface.</b> {@code PackageListsTest} derives that set through ArchUnit and asserts this list
+   * equals it, so an adapter arriving without an entry here reds the build instead of shipping
+   * unfenced (issue #165). Adding a source is still one entry here, but forgetting it is no longer
+   * silent.
    *
    * <p>Read by {@link #adaptersDoNotDependOnEachOther}, by {@link #adaptersDoNotDependUpward}, and
    * by {@code DeveloperGuideEnumerationsTest}, which holds the guide's adapter sentence to it.
@@ -113,7 +119,15 @@ class ArchitectureTest {
   }
 
   /**
-   * ADR 32's dev-side tools, in one place. Adding a tool adds one entry here and nothing else.
+   * ADR 32's dev-side tools, in one place — the readable list, not the source of truth.
+   *
+   * <p><b>The tree is the source: the {@code mainClass} packages of the {@code JavaExec} tasks, and
+   * the packages holding a {@code *Cli} with a {@code main}.</b> {@code PackageListsTest} derives
+   * that set both ways and asserts this list equals each, so a new tool arriving without an entry
+   * here reds the build. Until issue #165 it did not: a planted tool reaching {@code export},
+   * {@code recommend} and {@code IngestService} left every rule below green, because a package this
+   * list does not name is fenced by nothing. Adding a tool is still one entry here, but forgetting
+   * it is no longer silent — which is how {@code own} arrived unfenced in #92.
    *
    * <p><b>This list is why the sibling fences cannot go stale one at a time.</b> Each tool's fence
    * used to spell its siblings out by hand, and five of the six spellings were incomplete: {@code
@@ -139,7 +153,8 @@ class ArchitectureTest {
    * <p>{@code permitted} always contains the tool's own package, and contains a second entry only
    * where a decision allows one sibling — today only {@code rate → recommend} (ADR 46). Written as
    * an allowlist rather than a denylist so that the exception is the thing a reader has to justify,
-   * and so a seventh tool is fenced from all six the moment it joins {@link #DEV_TOOL_PACKAGES}.
+   * and so a new tool is fenced from every one of its siblings the moment it joins {@link
+   * #DEV_TOOL_PACKAGES}.
    *
    * @throws IllegalArgumentException if {@code permitted} names something that is not a dev tool —
    *     a typo would otherwise silently widen or invert the fence it was meant to describe
@@ -548,7 +563,7 @@ class ArchitectureTest {
    * this package inherit that sibling's fence instead of its own, and a read-only sibling has a
    * fence too. {@code ratings} may sweep the whole affinity table and {@code export} may not;
    * {@code recommend} and {@code seed} each carry clauses this rule does not. The list comes from
-   * {@link #DEV_TOOL_PACKAGES} rather than from this Javadoc, so a seventh tool is covered without
+   * {@link #DEV_TOOL_PACKAGES} rather than from this Javadoc, so a new tool is covered without
    * anyone remembering to come back here.
    */
   @ArchTest
@@ -908,10 +923,10 @@ class ArchitectureTest {
    * <p>The sibling of {@link #onlyTheRatingsToolReadsEveryRating}, one field narrower and for a
    * different reason. That rule protects a note; this one protects nothing personal at all now that
    * the score is ordinary data — what it protects is <b>ADR 26's six tools</b>. A bulk read
-   * appearing on the surface would arrive as a field on an existing tool rather than as a seventh
-   * tool, and {@code ToolSurfaceTest} counts tools, so it would not notice. ADR 45 recorded a
-   * re-open condition for a conversational recommendation and issue #85 deliberately did not
-   * exercise it; until an ADR does, {@code get_entity} answers one qid at a time.
+   * appearing on the surface would arrive as a field on an existing tool rather than as a new tool,
+   * and {@code ToolSurfaceTest} counts tools, so it would not notice. ADR 45 recorded a re-open
+   * condition for a conversational recommendation and issue #85 deliberately did not exercise it;
+   * until an ADR does, {@code get_entity} answers one qid at a time.
    *
    * <p>Widened by issue #101 (ADR 46): the deck needs the same note-free map to know which entities
    * are already rated and must not be dealt again, which is the resume mechanism {@code Deck}'s
