@@ -405,6 +405,30 @@ class WikidataMusicBrainzIdentityTest {
   }
 
   @Test
+  @DisplayName("should gather one identity from every row when an item states two classes")
+  void shouldGatherOneIdentityFromEveryRowWhenAnItemStatesTwoClasses() {
+    try (StubWikidataServer stub = new StubWikidataServer()) {
+      // The OPTIONAL P31 and the label service both multiply rows: an item stating two classes
+      // comes back as two bindings that differ only in ?type. A row is not an entity, and a
+      // parser that believed it were would keep whichever class the server happened to send
+      // first — which is the accident issue #87 removed from KindMapper's own answer.
+      stub.enqueueBody(
+          bindings(
+              describedRow(MEMBER_QID, MEMBER_MBID, MEMBER_LABEL, MUSICAL_GROUP),
+              describedRow(MEMBER_QID, MEMBER_MBID, MEMBER_LABEL, HUMAN)));
+
+      Map<String, BridgedIdentity> bridged = identity(stub).identitiesFor(List.of(MEMBER_MBID));
+
+      assertThat(bridged).containsOnlyKeys(MEMBER_MBID);
+      BridgedIdentity member = bridged.get(MEMBER_MBID);
+      assertThat(member.instanceOf()).containsExactlyInAnyOrder(HUMAN, MUSICAL_GROUP);
+      // PERSON rather than GROUP, and not because Q5 arrived second: KindMapper's precedence
+      // decides when an entity's classes disagree, which is only reachable if both got here.
+      assertThat(member.kind()).isEqualTo(NodeKind.PERSON);
+    }
+  }
+
+  @Test
   @DisplayName("should still spend one round trip when a whole neighbourhood is bridged at once")
   void shouldStillSpendOneRoundTripWhenAWholeNeighbourhoodIsBridgedAtOnce() {
     try (StubWikidataServer stub = new StubWikidataServer()) {

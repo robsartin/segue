@@ -9,10 +9,12 @@ import com.robsartin.segue.wikidata.WikidataClient;
 import com.robsartin.segue.wikidata.WikidataUnavailableException;
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -223,17 +225,16 @@ public final class WikidataMusicBrainzIdentity implements MusicBrainzIdentity {
     // which item wins an MBID that Wikidata states twice.
     Map<String, String> qidByMbid = new LinkedHashMap<>();
     Map<String, String> labelByQid = new LinkedHashMap<>();
-    Map<String, String> classByQid = new LinkedHashMap<>();
+    Map<String, Set<String>> classesByQid = new LinkedHashMap<>();
     inChunks(
         asked,
         DESCRIBED_BATCH_TEMPLATE,
-        response -> describe(response, qidByMbid, labelByQid, classByQid));
+        response -> describe(response, qidByMbid, labelByQid, classesByQid));
 
     Map<String, BridgedIdentity> bridged = new LinkedHashMap<>();
     qidByMbid.forEach(
         (mbid, qid) -> {
-          String stated = classByQid.get(qid);
-          List<String> instanceOf = stated == null ? List.of() : List.of(stated);
+          List<String> instanceOf = List.copyOf(classesByQid.getOrDefault(qid, Set.of()));
           // KindMapper is called here, in app, and never in musicbrainz: ADR 32's
           // adapters-are-siblings fence forbids that package importing wikidata, and app is the
           // only one permitted to see two adapters at once.
@@ -293,7 +294,7 @@ public final class WikidataMusicBrainzIdentity implements MusicBrainzIdentity {
       JsonNode response,
       Map<String, String> qidByMbid,
       Map<String, String> labelByQid,
-      Map<String, String> classByQid) {
+      Map<String, Set<String>> classesByQid) {
 
     for (JsonNode row : response.path("results").path("bindings")) {
       String mbid = row.at("/mbid/value").asText(null);
@@ -305,7 +306,11 @@ public final class WikidataMusicBrainzIdentity implements MusicBrainzIdentity {
       rememberLabel(labelByQid, qid, row.at("/itemLabel/value").asText(null));
       String classQid = entityQid(row.at("/type/value").asText(null));
       if (classQid != null) {
-        classByQid.putIfAbsent(qid, classQid);
+        // A set keyed on the ITEM, not the row: p:P31/ps:P31 returns one row per statement, so
+        // an entity's classes arrive spread across several bindings and an entity can state the
+        // same class twice. Insertion-ordered, so they keep the order Wikidata sent them —
+        // KindMapper does not depend on that order, and nothing here should make it start.
+        classesByQid.computeIfAbsent(qid, q -> new LinkedHashSet<>()).add(classQid);
       }
     }
   }
