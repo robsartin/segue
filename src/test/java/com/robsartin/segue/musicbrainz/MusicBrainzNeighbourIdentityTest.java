@@ -86,6 +86,11 @@ class MusicBrainzNeighbourIdentityTest {
 
   private static final String WIKIDATA_LABEL = "A Player, As Wikidata Names Them";
 
+  /**
+   * What a bridge that could describe this neighbour hands back — never what a fetch hands back.
+   */
+  private static final String BRIDGE_LABEL = "A Player, As The Bridge Names Them";
+
   private static final Instant NOW = Instant.parse("2026-08-30T12:00:00Z");
   private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
 
@@ -113,6 +118,61 @@ class MusicBrainzNeighbourIdentityTest {
     affinity.close();
     graph.close();
     log.close();
+  }
+
+  /**
+   * The guard, first half: a bridge that resolved the QID but stated no classes describes nothing
+   * this adapter may emit, because emitting it is #143's erasure (ADR 55, and ADR 61 reversing half
+   * of it — issue #163).
+   *
+   * <p><b>Watched red, and here is what it said.</b> An adapter that emits nothing passes this
+   * vacuously, so before it was trusted the adapter was planted with an <i>unguarded</i> emission —
+   * a {@link NodeAssertion} per resolved neighbour, straight from the {@link BridgedIdentity},
+   * guard omitted. It failed with {@code Expecting actual: [] to contain exactly (and in same
+   * order): ["Q5"]}, the identical message ADR 55's own tests were watched red with in 2026-08-30:
+   * the classes this node already had, gone. The plant was removed and the guarded emission arrived
+   * in its place.
+   */
+  @Test
+  @DisplayName("should leave an existing neighbour's classes alone when the bridge states none")
+  void shouldLeaveAnExistingNeighboursClassesAloneWhenTheBridgeStatesNone() {
+    seedTheNeighbourWithItsClasses();
+
+    expand(
+        bridgeAnswering(
+            new BridgedIdentity(NEIGHBOUR_QID, NodeKind.PERSON, BRIDGE_LABEL, List.of())));
+
+    assertTheEdgeWasStillRecorded();
+    NodeRecord neighbour = graph.node(NEIGHBOUR_QID).orElseThrow();
+    assertThat(neighbour.instanceOf()).containsExactly(HUMAN);
+    assertThat(neighbour.label()).isEqualTo(WIKIDATA_LABEL);
+  }
+
+  /**
+   * The guard, second half: classes without a label worth believing. {@code wikibase:label} hands
+   * back the bare QID where no English label exists, and {@link BridgedIdentity} normalises every
+   * such answer to null — so a neighbour named {@code Q0900002} is one the fetch must still be
+   * allowed to name properly. {@link NodeAssertion} requires a non-null label, so an adapter that
+   * emitted this one would not merely misname the node; it would throw out of {@code expand} and
+   * take the whole expansion with it.
+   *
+   * <p><b>Watched red against the same plant</b> (see the test above), and it did exactly that:
+   * {@code java.lang.NullPointerException: label} out of {@code NodeAssertion.<init>}, thrown
+   * through {@code MusicBrainzSourceAdapter.expand} and up through {@code
+   * SegueService.expandEntity}, which wraps nothing.
+   */
+  @Test
+  @DisplayName("should leave an existing neighbour alone when the bridge has no label to believe")
+  void shouldLeaveAnExistingNeighbourAloneWhenTheBridgeHasNoLabelToBelieve() {
+    seedTheNeighbourWithItsClasses();
+
+    expand(
+        bridgeAnswering(new BridgedIdentity(NEIGHBOUR_QID, NodeKind.PERSON, null, List.of(HUMAN))));
+
+    assertTheEdgeWasStillRecorded();
+    NodeRecord neighbour = graph.node(NEIGHBOUR_QID).orElseThrow();
+    assertThat(neighbour.instanceOf()).containsExactly(HUMAN);
+    assertThat(neighbour.label()).isEqualTo(WIKIDATA_LABEL);
   }
 
   @Test
@@ -184,22 +244,55 @@ class MusicBrainzNeighbourIdentityTest {
   }
 
   private void expand() {
+    expand(StubIdentity.of(Map.of(SEED_MBID, SEED_QID, NEIGHBOUR_MBID, NEIGHBOUR_QID)));
+  }
+
+  private void expand(MusicBrainzIdentity bridge) {
     SegueService service =
         new SegueService(
             new ResolvesWithClasses(),
             graph,
             ingest,
-            new SourceAdapters(List.of(musicBrainz())),
+            new SourceAdapters(List.of(musicBrainz(bridge))),
             affinity,
             CLOCK);
     service.expandEntity(SEED_QID, 200);
   }
 
-  private static SourceAdapter musicBrainz() {
-    return new MusicBrainzSourceAdapter(
-        MusicBrainzClient.readingFrom(fixture()),
-        StubIdentity.of(Map.of(SEED_MBID, SEED_QID, NEIGHBOUR_MBID, NEIGHBOUR_QID)),
-        CLOCK);
+  private static SourceAdapter musicBrainz(MusicBrainzIdentity bridge) {
+    return new MusicBrainzSourceAdapter(MusicBrainzClient.readingFrom(fixture()), bridge, CLOCK);
+  }
+
+  /**
+   * A describing bridge over the fixture's seed and the one neighbour these tests follow. The seed
+   * itself is left undescribed: {@code expandEntity} reads it out of the graph, so what the bridge
+   * says about it is only ever the MBID it resolves back to.
+   */
+  private static MusicBrainzIdentity bridgeAnswering(BridgedIdentity neighbour) {
+    return StubIdentity.describing(
+        Map.of(SEED_MBID, StubIdentity.undescribed(SEED_QID), NEIGHBOUR_MBID, neighbour));
+  }
+
+  /** The neighbour as Wikidata already described it, in the graph before the expansion runs. */
+  private void seedTheNeighbourWithItsClasses() {
+    ingest.record(
+        new NodeAssertion(
+            NEIGHBOUR_QID,
+            NodeKind.PERSON,
+            WIKIDATA_LABEL,
+            List.of(HUMAN),
+            new Provenance("wikidata", NEIGHBOUR_QID, NOW, 1.00)));
+  }
+
+  /**
+   * The control every guard test needs: "the classes survived" is equally true of an expansion that
+   * asserted nothing at all, so without this a test would stay green if the fixture, the bridge or
+   * the whitelist quietly stopped producing an edge over this neighbour.
+   */
+  private void assertTheEdgeWasStillRecorded() {
+    assertThat(graph.edges(SEED_QID))
+        .extracting(edge -> edge.fromQid() + " " + edge.typeCode() + " " + edge.toQid())
+        .contains(NEIGHBOUR_QID + " MEMBER_OF " + SEED_QID);
   }
 
   /**
