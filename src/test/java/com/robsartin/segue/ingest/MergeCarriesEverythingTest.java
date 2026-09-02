@@ -29,6 +29,15 @@ import org.junit.jupiter.api.Test;
  * <p>Every store here is a real one - the SQLite log and the TinkerGraph engine - for the reason
  * {@code OwnerClaimProjectionTest} gives: a double would pass while the thing the owner actually
  * runs still lost the claim.
+ *
+ * <p><b>The edge half is asserted against the replayed graph, not the live one</b> (#178). It used
+ * to be asserted against the graph {@code ingest.record} had just written, and that graph is not
+ * the one the owner ever looks at: {@code OwnCli} appends through {@code IngestService.claim} and
+ * the graph is rebuilt from the log at the next boot (ADR 24), so <b>no {@code SameAs} reaches a
+ * live graph in production</b>. Asserting the live path pinned a code path nothing runs, and it
+ * would have gone on passing while the path that matters broke. The rating half below still reads
+ * the live stores, because affinity is durable and is rebuilt by nothing - it is the one half where
+ * "immediately after {@code record}" is the real question.
  */
 class MergeCarriesEverythingTest {
 
@@ -69,13 +78,20 @@ class MergeCarriesEverythingTest {
   }
 
   @Test
-  @DisplayName("should carry an owner edge to the canonical id when a merge is asserted")
-  void shouldCarryAnOwnerEdgeToTheCanonicalIdWhenAMergeIsAsserted() {
+  @DisplayName("should carry an owner edge to the canonical id when the merged log is replayed")
+  void shouldCarryAnOwnerEdgeToTheCanonicalIdWhenTheMergedLogIsReplayed() {
     mintAndClaimAnEdge();
-
     ingest.record(SameAs.declared(MINTED, CANONICAL, NOW));
 
-    assertThat(graph.edges(CANONICAL)).hasSize(1);
+    try (GraphStore rebuilt = new TinkerGraphStore()) {
+      GraphProjector.project(log, rebuilt, IdentityMerge.NONE);
+
+      assertThat(rebuilt.edges(CANONICAL))
+          .singleElement()
+          .extracting(EdgeRecord::fromQid, EdgeRecord::toQid)
+          .as("the from-side of an edge out of the local id is what the canonical id inherits")
+          .containsExactly(CANONICAL, NEIGHBOUR);
+    }
   }
 
   @Test
@@ -92,14 +108,21 @@ class MergeCarriesEverythingTest {
   @DisplayName("should carry the owner's own provenance, so the merge invents no second witness")
   void shouldCarryTheOwnersOwnProvenanceSoTheMergeInventsNoSecondWitness() {
     mintAndClaimAnEdge();
-
     ingest.record(SameAs.declared(MINTED, CANONICAL, NOW));
 
-    EdgeRecord carried = graph.edges(CANONICAL).get(0);
-    assertThat(carried.sources()).singleElement().matches(Provenance::isOwner);
-    assertThat(carried.corroboration())
-        .as("the owner does not vouch, and a merge must not turn one claim into two")
-        .isZero();
+    try (GraphStore rebuilt = new TinkerGraphStore()) {
+      GraphProjector.project(log, rebuilt, IdentityMerge.NONE);
+
+      assertThat(rebuilt.edges(CANONICAL))
+          .singleElement()
+          .satisfies(
+              carried -> {
+                assertThat(carried.sources()).singleElement().matches(Provenance::isOwner);
+                assertThat(carried.corroboration())
+                    .as("the owner does not vouch, and a merge must not turn one claim into two")
+                    .isZero();
+              });
+    }
   }
 
   @Test
@@ -176,14 +199,17 @@ class MergeCarriesEverythingTest {
     ingest.record(new NodeAssertion(NEIGHBOUR, NodeKind.PERSON, "a sourced person", SOURCE));
     ingest.record(LocalEntity.minted(MINTED, NodeKind.PERSON, "a minted person", NOW));
     ingest.record(OwnerEdge.claimed(NEIGHBOUR, MINTED, "INFLUENCED_BY", NOW));
-
     ingest.record(SameAs.declared(MINTED, CANONICAL, NOW));
 
-    assertThat(graph.edges(CANONICAL))
-        .singleElement()
-        .extracting(EdgeRecord::fromQid, EdgeRecord::toQid)
-        .as("half a carry is a half-merge - the to-side has to be rewritten as well as the from")
-        .containsExactly(NEIGHBOUR, CANONICAL);
+    try (GraphStore rebuilt = new TinkerGraphStore()) {
+      GraphProjector.project(log, rebuilt, IdentityMerge.NONE);
+
+      assertThat(rebuilt.edges(CANONICAL))
+          .singleElement()
+          .extracting(EdgeRecord::fromQid, EdgeRecord::toQid)
+          .as("half a carry is a half-merge - the to-side has to be rewritten as well as the from")
+          .containsExactly(NEIGHBOUR, CANONICAL);
+    }
   }
 
   @Test
