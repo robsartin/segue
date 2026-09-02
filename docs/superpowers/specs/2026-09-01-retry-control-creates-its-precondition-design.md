@@ -81,9 +81,20 @@ Three properties of this decision are worth stating exactly:
   query.
 - **Warm up without draining the body.** An undrained response keeps the socket checked out
   (#188); the socket must be *idle* in the pool at keypress, or the POST needs a second one.
+  *Corrected 2026-09-01 by measurement during Task 1:* at the committed 4-byte warm-up body an
+  undrained response passed 3/3 — Chrome drains a body that small itself — and draining becomes
+  load-bearing only around 200 KB. The drain is kept as insurance against a larger body, and is
+  labelled as such in the code, not as the thing that makes the test pass.
 - **Warm up and then wait for silence again.** Re-creates the window the warm-up exists to close.
 
 ## Testing
+
+*Corrected 2026-09-01 during Task 1:* the warm-up does not need an idle socket — Chrome connects one
+and the drained body returns it — and it may land on the **never-used preconnect spare** (6 of 60
+runs), whose port is not yet in the served set. A test asserting the warm-up's port was previously
+seen is therefore a 1-in-10 flake; the committed test asserts two consecutive warm-ups land on the
+same port (0 of 40 failures). The control's classification is unaffected: the spare is pooled, so
+a POST bound to it is resent, and its port becomes *seen* the moment the warm-up uses it.
 
 - Red: with the §6 occupancy probe from round 1, remove the warm-up and observe the existing
   failure; with the warm-up in place, observe green — then, the sharper red: **plant a pool flush**
