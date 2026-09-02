@@ -947,33 +947,33 @@ class SegueServiceTest {
     // eleven, which is above HUB_DEGREE. On the real graph the two populations interleave
     // exactly like this, so a rule reading degree would have demoted the band and kept the
     // academy — the wrong way round.
-    ingest.record(new NodeAssertion("Q900601", NodeKind.PERSON, "Ada Vance", WIKIDATA));
-    ingest.record(new NodeAssertion("Q900602", NodeKind.PERSON, "Bruno Kell", WIKIDATA));
+    ingest.record(new NodeAssertion("Q0900601", NodeKind.PERSON, "Ada Vance", WIKIDATA));
+    ingest.record(new NodeAssertion("Q0900602", NodeKind.PERSON, "Bruno Kell", WIKIDATA));
     ingest.record(
         new NodeAssertion(
-            "Q900603", NodeKind.GROUP, "Northwood Academy", List.of("Q955824"), WIKIDATA));
+            "Q0900603", NodeKind.GROUP, "Northwood Academy", List.of("Q955824"), WIKIDATA));
     ingest.record(
         new NodeAssertion(
-            "Q900604", NodeKind.GROUP, "The Quiet Ferry", List.of("Q5741069"), WIKIDATA));
-    ingest.record(new NodeAssertion("Q900605", NodeKind.PERSON, "Cyd Rowe", WIKIDATA));
-    ingest.record(edge("Q900605", "MEMBER_OF", "Q900603", 1.00));
+            "Q0900604", NodeKind.GROUP, "The Quiet Ferry", List.of("Q5741069"), WIKIDATA));
+    ingest.record(new NodeAssertion("Q0900605", NodeKind.PERSON, "Cyd Rowe", WIKIDATA));
+    ingest.record(edge("Q0900605", "MEMBER_OF", "Q0900603", 1.00));
     for (int i = 0; i < PathRanking.HUB_DEGREE; i++) {
       String player = "Q09006" + (10 + i);
       ingest.record(new NodeAssertion(player, NodeKind.PERSON, "Player " + i, WIKIDATA));
-      ingest.record(edge(player, "MEMBER_OF", "Q900604", 1.00));
+      ingest.record(edge(player, "MEMBER_OF", "Q0900604", 1.00));
     }
     // Election is the better-evidenced claim, exactly as a referenced award statement is, and
     // under confidence alone it therefore won.
-    ingest.record(edge("Q900601", "MEMBER_OF", "Q900603", 1.00));
-    ingest.record(edge("Q900602", "MEMBER_OF", "Q900603", 1.00));
-    ingest.record(edge("Q900601", "MEMBER_OF", "Q900604", 0.80));
-    ingest.record(edge("Q900602", "MEMBER_OF", "Q900604", 0.80));
+    ingest.record(edge("Q0900601", "MEMBER_OF", "Q0900603", 1.00));
+    ingest.record(edge("Q0900602", "MEMBER_OF", "Q0900603", 1.00));
+    ingest.record(edge("Q0900601", "MEMBER_OF", "Q0900604", 0.80));
+    ingest.record(edge("Q0900602", "MEMBER_OF", "Q0900604", 0.80));
 
-    ToolResult<List<PathView>> result = service().findPaths("Q900601", "Q900602", 2);
+    ToolResult<List<PathView>> result = service().findPaths("Q0900601", "Q0900602", 2);
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
     assertThat(result.payload()).hasSize(2);
-    assertThat(result.payload().get(0).hops().get(0).to().qid()).isEqualTo("Q900604");
+    assertThat(result.payload().get(0).hops().get(0).to().qid()).isEqualTo("Q0900604");
   }
 
   private static AssertionRecord edge(String from, String type, String to, double confidence) {
@@ -992,16 +992,16 @@ class SegueServiceTest {
     // Issue #65. Every entity below is invented. One pair joined by MAX_PATHS + 1 distinct
     // two-hop routes, which is one more than the ranking is allowed to return.
     int routes = PathRanking.MAX_PATHS + 1;
-    ingest.record(new NodeAssertion("Q900501", NodeKind.PERSON, "Cleo Marsh", WIKIDATA));
-    ingest.record(new NodeAssertion("Q900502", NodeKind.PERSON, "Dov Ellery", WIKIDATA));
+    ingest.record(new NodeAssertion("Q0900501", NodeKind.PERSON, "Cleo Marsh", WIKIDATA));
+    ingest.record(new NodeAssertion("Q0900502", NodeKind.PERSON, "Dov Ellery", WIKIDATA));
     for (int i = 0; i < routes; i++) {
       String middle = "Q09005" + (10 + i);
       ingest.record(new NodeAssertion(middle, NodeKind.WORK, "Reel " + i, WIKIDATA));
-      ingest.record(edge("Q900501", "ACTED_IN", middle, 1.00));
-      ingest.record(edge("Q900502", "ACTED_IN", middle, 1.00));
+      ingest.record(edge("Q0900501", "ACTED_IN", middle, 1.00));
+      ingest.record(edge("Q0900502", "ACTED_IN", middle, 1.00));
     }
 
-    ToolResult<List<PathView>> result = service().findPaths("Q900501", "Q900502", 2);
+    ToolResult<List<PathView>> result = service().findPaths("Q0900501", "Q0900502", 2);
 
     // The cap still applies; what changes is that the caller is told it did.
     assertThat(result.payload()).hasSize(PathRanking.MAX_PATHS);
@@ -1011,7 +1011,7 @@ class SegueServiceTest {
     assertThat(result.detail())
         .isEqualTo(
             routes
-                + " route(s) from Q900501 to Q900502, more than the cap of "
+                + " route(s) from Q0900501 to Q0900502, more than the cap of "
                 + PathRanking.MAX_PATHS
                 + ": the "
                 + PathRanking.MAX_PATHS
@@ -1023,20 +1023,20 @@ class SegueServiceTest {
   void findPathsAtTheCapIsUnchanged() {
     // The boundary the truncation report must not claim: MAX_PATHS routes is a complete
     // answer that happens to fill the cap. Invented entities, as above.
-    ingest.record(new NodeAssertion("Q900601", NodeKind.PERSON, "Esme Faro", WIKIDATA));
-    ingest.record(new NodeAssertion("Q900602", NodeKind.PERSON, "Fitz Loew", WIKIDATA));
+    ingest.record(new NodeAssertion("Q0900601", NodeKind.PERSON, "Esme Faro", WIKIDATA));
+    ingest.record(new NodeAssertion("Q0900602", NodeKind.PERSON, "Fitz Loew", WIKIDATA));
     for (int i = 0; i < PathRanking.MAX_PATHS; i++) {
       String middle = "Q09006" + (10 + i);
       ingest.record(new NodeAssertion(middle, NodeKind.WORK, "Take " + i, WIKIDATA));
-      ingest.record(edge("Q900601", "ACTED_IN", middle, 1.00));
-      ingest.record(edge("Q900602", "ACTED_IN", middle, 1.00));
+      ingest.record(edge("Q0900601", "ACTED_IN", middle, 1.00));
+      ingest.record(edge("Q0900602", "ACTED_IN", middle, 1.00));
     }
 
-    ToolResult<List<PathView>> result = service().findPaths("Q900601", "Q900602", 2);
+    ToolResult<List<PathView>> result = service().findPaths("Q0900601", "Q0900602", 2);
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
     assertThat(result.payload()).hasSize(PathRanking.MAX_PATHS);
-    assertThat(result.detail()).isEqualTo("50 route(s) from Q900601 to Q900602");
+    assertThat(result.detail()).isEqualTo("50 route(s) from Q0900601 to Q0900602");
   }
 
   @Test

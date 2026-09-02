@@ -324,10 +324,10 @@ class PathRankingTest {
    * "elected, not collaborating" through a {@code Predicate}, so its own tests need no Wikidata
    * vocabulary at all. The real class table is pinned by {@code RecognitionInstitutionsTest}.
    */
-  private static final String ELECTED_TO = "Q900801";
+  private static final String ELECTED_TO = "Q0900801";
 
-  private static final String PLAYED_IN = "Q900802";
-  private static final String MADE = "Q900803";
+  private static final String PLAYED_IN = "Q0900802";
+  private static final String MADE = "Q0900803";
 
   private static final java.util.function.Predicate<String> INSTITUTIONS = ELECTED_TO::equals;
 

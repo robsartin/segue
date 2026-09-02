@@ -55,7 +55,7 @@ final class InventedWorld {
   static final String JUST_DISCOVERED = "Q900308";
 
   /** The invented Wikidata class that means "elected, not collaborating" (issue #66). */
-  static final String ELECTED_TO = "Q900801";
+  static final String ELECTED_TO = "Q0900801";
 
   static final Predicate<String> INSTITUTIONS = ELECTED_TO::equals;
 

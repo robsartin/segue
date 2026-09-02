@@ -120,9 +120,9 @@ class DeckTest {
   @DisplayName(
       "a candidate's routes reach the dealt card intact, not just Card.candidate's own constructor")
   void candidateRoutesSurviveDealing() {
-    NodeRecord knownEnd = new NodeRecord("Q900501", NodeKind.PERSON, "Route Known", List.of());
+    NodeRecord knownEnd = new NodeRecord("Q0900501", NodeKind.PERSON, "Route Known", List.of());
     NodeRecord candidateEnd =
-        new NodeRecord("Q900502", NodeKind.GROUP, "Route Candidate", List.of());
+        new NodeRecord("Q0900502", NodeKind.GROUP, "Route Candidate", List.of());
     EdgeRecord edge =
         new EdgeRecord(
             knownEnd.qid(),

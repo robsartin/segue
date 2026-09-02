@@ -119,7 +119,7 @@ class AffinityIsNeverLoggedTest {
   void refusalsAreNotLogged() {
     // The three refusals noteAffinity models: not a QID, not in the graph, off the scale.
     service.noteAffinity("not-a-qid", 5, NOTE);
-    service.noteAffinity("Q900404", 5, NOTE);
+    service.noteAffinity("Q0900404", 5, NOTE);
     service.noteAffinity("Q0900001", 9, NOTE);
 
     assertNothingWasLogged();

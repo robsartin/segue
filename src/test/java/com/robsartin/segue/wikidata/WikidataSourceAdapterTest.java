@@ -316,7 +316,7 @@ class WikidataSourceAdapterTest {
       assertThat(result.assertions())
           .filteredOn(a -> a.typeCode().equals("PERFORMED"))
           .extracting(AssertionRecord::toQid)
-          .containsExactly("Q900790");
+          .containsExactly("Q0900790");
       assertThat(result.sourceUnavailable()).isFalse();
     }
   }
