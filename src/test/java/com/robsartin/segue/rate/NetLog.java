@@ -60,6 +60,23 @@ final class NetLog {
   private static final String CERT_VERIFIER_CREATED = "CERT_VERIFY_PROC_CREATED";
 
   /**
+   * Chrome's own names for one socket coming into existence — as opposed to the pool bookkeeping
+   * around it.
+   *
+   * <p>Matched by exact name rather than by the prefixes {@link #kindOf} uses, and that is the
+   * whole point of the pair. {@code SOCKET_POOL_CONNECTING_N_SOCKETS} and {@code
+   * TCP_CLIENT_SOCKET_POOL_REQUESTED_SOCKETS} both satisfy those prefixes and both precede any
+   * socket by several events, so a prefix rule would answer "the page had a socket" before it had
+   * one. Reading a socket as earlier than it was is exactly the error that would make {@link
+   * Tail#markerPosition()} report a flush as late when it was not, and a false late reading costs a
+   * test that skips on it its coverage, silently. {@code SOCKET_ALIVE} is logged as one socket
+   * object is created and {@code TCP_CONNECT} as one connection is made; either is a socket.
+   */
+  private static final String SOCKET_ALIVE = "SOCKET_ALIVE";
+
+  private static final String TCP_CONNECT = "TCP_CONNECT";
+
+  /**
    * A NetLog read while Chrome is still writing it, answering one question: has the startup
    * cert-verifier flush passed?
    *
@@ -85,11 +102,42 @@ final class NetLog {
     private long offset;
     private int goingAwayId = -1;
     private int certVerifierId = -1;
+    private int socketAliveId = -1;
+    private int tcpConnectId = -1;
+    private boolean idsResolved;
     private boolean goingAwaySeen;
     private int certVerifierSeen;
+    private int eventsSeen;
+    private int markerPosition;
+    private int firstSocketPosition;
 
     Tail(Path netLog) {
       this.netLog = netLog;
+    }
+
+    /**
+     * A tail that carries on from where this one has read, counting from zero.
+     *
+     * <p>{@code HeadlessChrome.open} makes one of these immediately before {@code Page.navigate},
+     * so that "the page's first socket" means the first socket in the log the browser writes from
+     * there on, and not one of the several Chrome opens for itself during startup. Every position
+     * either tail reports is an ordinal within its own stretch.
+     *
+     * <p>The flush counters reset with it, deliberately. A cert-verifier pair split across the
+     * navigate — one before, one after — is not evidence that a flush happened while the page held
+     * a socket, and this reports the late case only on evidence that lies wholly after the page
+     * began loading. The resolved ids are kept, because they are a property of the log's constants
+     * block and re-reading it would cost a full parse of a file that is still growing.
+     */
+    Tail resumed() {
+      Tail next = new Tail(netLog);
+      next.offset = offset;
+      next.goingAwayId = goingAwayId;
+      next.certVerifierId = certVerifierId;
+      next.socketAliveId = socketAliveId;
+      next.tcpConnectId = tcpConnectId;
+      next.idsResolved = idsResolved;
+      return next;
     }
 
     /**
@@ -99,31 +147,68 @@ final class NetLog {
      * while neither the going-away marker nor a second cert-verifier creation has been logged.
      */
     boolean flushHasPassed() {
-      if (goingAwaySeen || certVerifierSeen >= 2) {
-        return true;
-      }
-      if (goingAwayId < 0 && certVerifierId < 0 && !resolveIds()) {
-        return false;
+      poll();
+      return goingAwaySeen || certVerifierSeen >= 2;
+    }
+
+    /**
+     * Reads whatever Chrome has appended since the last call, and counts it.
+     *
+     * <p>Unconditionally, even once the flush has passed: the positions below are the reason this
+     * class exists after {@code Page.navigate} as well as before it, and a poll that returned early
+     * on a condition already met would stop counting exactly when the interesting events arrive.
+     */
+    void poll() {
+      if (!idsResolved && !resolveIds()) {
+        return;
       }
       for (String line : appendedLines()) {
         int type = typeOf(line);
         if (type < 0) {
           continue;
         }
+        eventsSeen++;
         if (type == goingAwayId) {
           goingAwaySeen = true;
         } else if (type == certVerifierId) {
           certVerifierSeen++;
+        } else if (type == socketAliveId || type == tcpConnectId) {
+          if (firstSocketPosition == 0) {
+            firstSocketPosition = eventsSeen;
+          }
+          continue;
+        }
+        if (markerPosition == 0 && (goingAwaySeen || certVerifierSeen >= 2)) {
+          markerPosition = eventsSeen;
         }
       }
-      return goingAwaySeen || certVerifierSeen >= 2;
     }
 
     /**
-     * Reads the two ids out of the log's own constants block, which Chrome writes before any event.
+     * Where in this tail the flush condition was satisfied, or 0 while it has not been.
      *
-     * <p>Both names are looked up independently and either is enough: a Chrome that renamed one of
-     * them should cost the caller its condition, not its ability to see the other.
+     * <p>The ordinal of the event that satisfied it — the going-away marker, or the second
+     * cert-verifier creation, whichever came first — because that is the event the wait itself acts
+     * on, so this and {@link #flushHasPassed()} can never disagree about when the flush was.
+     */
+    int markerPosition() {
+      return markerPosition;
+    }
+
+    /** Where in this tail the first socket appeared, or 0 while none has. */
+    int firstSocketPosition() {
+      return firstSocketPosition;
+    }
+
+    /**
+     * Reads the event ids out of the log's own constants block, which Chrome writes before any
+     * event.
+     *
+     * <p>Every name is looked up independently and any one of them is enough: a Chrome that renamed
+     * one should cost the caller that one observation, not its ability to make the others. Once the
+     * block has been read at all this does not run again — a constants block that named none of
+     * them will not name them later, and the retry would cost a full parse of a growing file on
+     * every poll.
      */
     private boolean resolveIds() {
       JsonNode types;
@@ -134,7 +219,11 @@ final class NetLog {
       }
       goingAwayId = types.path(GOING_AWAY).asInt(-1);
       certVerifierId = types.path(CERT_VERIFIER_CREATED).asInt(-1);
-      return goingAwayId >= 0 || certVerifierId >= 0;
+      socketAliveId = types.path(SOCKET_ALIVE).asInt(-1);
+      tcpConnectId = types.path(TCP_CONNECT).asInt(-1);
+      idsResolved =
+          goingAwayId >= 0 || certVerifierId >= 0 || socketAliveId >= 0 || tcpConnectId >= 0;
+      return idsResolved;
     }
 
     /** Every line completed since the last call, and the file position moved past them. */
