@@ -156,3 +156,14 @@ projection of the log (ADR 19, ADR 24), and the join is made above both ports in
   statement it executes through SLF4J at TRACE — the SQL text, never the bound parameters. Building
   that SQL by concatenating values would put a rating and a note into a log line without anyone
   writing a logging call at all.
+
+**Amendment (2026-09-02, issue #157): "the taste layer's four classes" above was a dated
+observation, not a fact about the present, and code has already moved it.**
+
+`ArchitectureTest.AFFINITY_TYPES` — the predicate `affinityNeverTouchesTheWorldFactLayer` and
+`theWorldFactLayerNeverTouchesAffinity` both enforce — is the taste layer's authority, by type
+rather than by package: any class whose simple name contains `Affinity`, plus `TasteTools`. Its own
+javadoc already says why a bare count was never going to hold: "a fifth package for four classes
+would have made the rule easier to write." The taste layer holds seven such classes today
+(`AffinityRecord`, `AffinityStore`, `SqliteAffinityStore`, `AffinityView`, `AffinityOverlay`,
+`AffinityRow`, `TasteTools`), not four. Nothing else here is corrected.

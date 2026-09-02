@@ -1,0 +1,9 @@
+{"constants":{"logEventTypes":{"QUIC_SESSION_POOL_MARK_ALL_ACTIVE_SESSIONS_GOING_AWAY":309,"CERT_VERIFY_PROC_CREATED":483,"SOCKET_ALIVE":44,"TCP_CONNECT":50}},
+"events": [
+{"params":{"should_wait":false},"phase":1,"source":{"id":21,"start_time":"80059488","type":17},"time":"80059488","type":182},
+{"params":{"group_id":"http://127.0.0.1:50004 \u003Chttp://127.0.0.1 same_site>"},"phase":0,"source":{"id":21,"start_time":"80059488","type":17},"time":"80059488","type":122},
+{"phase":1,"source":{"id":22,"start_time":"80059488","type":7},"time":"80059488","type":100},
+{"params":{"source_dependency":{"id":22,"type":7}},"phase":1,"source":{"id":23,"start_time":"80059488","type":10},"time":"80059488","type":44},
+{"params":{"address_list":["127.0.0.1:50004"],"aliases":[]},"phase":1,"source":{"id":23,"start_time":"80059488","type":10},"time":"80059488","type":50},
+{"params":{"local_address":"127.0.0.1:50008","remote_address":"127.0.0.1:50004"},"phase":2,"source":{"id":23,"start_time":"80059488","type":10},"time":"80059488","type":50},
+{"phase":2,"source":{"id":22,"start_time":"80059488","type":7},"time":"80059488","type":100},

@@ -324,3 +324,21 @@ prove. **No production code was changed.**
     version passes with the guard deleted, this one fails.
 - The driver is test-only and lives beside the test that uses it. It is not a general browser
   harness and should not grow into one without a decision.
+
+**Amendment (2026-09-02, issue #157): every count of "ten tests" above — the guard's ten skipped
+tests when no browser is installed, and the ten tests the fifteen-second measurement divides by —
+was a dated observation, not a fact about the present, and it was already wrong by the time this
+sentence describes anything a reader can check today.**
+
+`DeckBehaviourTest`, in `src/test/java/com/robsartin/segue/rate`, is the browser suite this ADR is
+about; its guards are the eight rows of the mutation table above. It ran ten tests when this ADR
+was written, eleven before issue #154 added a guard and twelve after #154 split one. Nothing in
+this ADR updates itself when a test is added, removed or split, so the number was never going to
+stay true — an ADR is immutable, a test class is not. The count of tests this suite carries, and
+whether the CI-required-browser property still reports it as skipped, is read from
+`DeckBehaviourTest` and its sibling browser-driven classes in the same package
+(`HeadlessChromeNetworkTest`, `HeadlessChromeFlushWaitTest`, `HeadlessChromeCleanupTest`) — from
+`./gradlew test`'s own output, never from this or any other ADR.
+
+Nothing else here is corrected: the mutation table, the guard, the posture, the flags and every
+other figure recorded above and in the two notes stand as written.
