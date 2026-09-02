@@ -271,3 +271,51 @@ and 35 s of idleness was not enough to reap one.
 ## 9. Artefacts
 
 The per-run artefacts listed in the original working notes were not retained; see the note at the top of this page.
+
+---
+
+## 10. The undrained-body question, settled (2026-09-02, issue #188)
+
+§6 above forces this page's failure by holding a socket, and `untilQuiet()`'s javadoc names a second
+way the precondition could be lost: `deck.html` returns on `!response.ok` without reading the body,
+on both its card path and its rating path, and the stub answers refusals with a body. Chrome keeps a
+socket checked out until a response body has been read, so the javadoc reasons that such a refusal
+would strand a socket while the stub's counter — which brackets the *exchange* — reported quiet.
+The precondition would then hold only because every refusal in that file is set up after the load
+wait has returned, an ordering nothing asserts.
+
+**Measured, and it does not.** Method, in two sentences: the deck page was driven to issue seven
+consecutive refused card fetches (503 with a twenty-byte JSON body), and the stub recorded the
+client port of every exchange it served, a reused port being a socket that went back to Chrome's
+pool. The same run was then repeated with the two draining `await response.text()` lines added to
+the page, and again with the refusal body grown to 4 MB.
+
+| page | refusal body | card exchanges | distinct client ports |
+|---|---|---|---|
+| unchanged | 20 B | 7 | **1** |
+| unchanged + both drain lines | 20 B | 7 | **1** |
+| unchanged | 4 MB | 7 | 2 |
+
+Row 1 is the finding: seven undrained refusals in a row came back on one and the same pooled socket,
+reused immediately each time. Row 2 is the control that matters — draining changes nothing
+observable. Row 3 is the positive control for the instrument, without which row 1 would be a dead
+measurement rather than an observation: at a body large enough to still be streaming, the same
+diagnostic does report a socket lost.
+
+The mechanism is that a small response is already buffered when `fetch` resolves, and the page drops
+its reference to the `Response` at once, so Chrome releases the socket without the body ever being
+read. Stranding needs a body still in flight, and no refusal in this codebase produces one.
+
+**What this changes.** The javadoc's reasoning is kept, because it is right in general and right
+about the counter's limits; what is now known is that the specific hazard does not bite at the body
+sizes this suite uses. The page was left unchanged (issue #188 chose its second option on this
+evidence), and the javadoc remains the guard. Anyone tempted to add the draining lines as a *fix*
+should read this section first: there is no red to be had, and a test that can only be green is not
+a guard.
+
+The diagnostic itself is not in the repository, deliberately. It asserts on pooled-socket identity,
+which is the assertion `shouldServeOneCompletedExchangeWhenTheWarmUpRuns`'s javadoc records failing
+twice — at about one run in ten, and one in sixty — because which pooled socket Chrome hands a
+request is Chrome's choice. Committing it would trade a documented assumption for an intermittent
+red. Like the traces above, this is a dated measurement on one machine, not something the build
+regenerates; §8's environment applies, on Chrome 152.0.7977.65.
