@@ -114,3 +114,39 @@ value-shaped checks, alongside the ADR 16 logging check that the "resists mechan
 sentence had also outlived. (4) The table was written as a complete list of ArchUnit rules and had
 not stayed one; it now records the decisions defended and points at `ArchitectureTest` for the
 roster, so the next rule added does not silently make this ADR false again.*
+
+*Amendment (2026-09-02, issue #165): the roster the correction above points at — `ArchitectureTest`'s
+`DEV_TOOL_PACKAGES` and `ADAPTER_PACKAGES` — was itself the only source of truth for every sibling
+fence that reads it, and a package neither constant named was fenced by nothing. Issue #165 measured
+it: a seventh dev tool planted under `src/main`, reaching `export`, `recommend` and `IngestService`,
+left every one of `ArchitectureTest`'s 36 rules green.*
+
+*Both sets are now derived from the tree rather than typed by hand, and the constants are checked
+against the derivation instead of being it. The dev-tool set is derived two ways: the `mainClass`
+package of every `JavaExec` registration in `build.gradle.kts`, parsed strictly enough that an
+unrecognised registration form or a non-literal `mainClass` reds naming the line rather than being
+silently skipped, and the packages of every class named `*Cli` that declares `main`, read from
+ArchUnit's imported class graph. The adapter set is derived one way, also from the class graph: the
+packages of every class assignable to an interface in `port`, minus `port` itself. `PackageListsTest`
+asserts `DEV_TOOL_PACKAGES` and `ADAPTER_PACKAGES` equal their derivations in both directions — a
+package the tree has that a constant does not name reds, and a constant naming a package the tree no
+longer has reds too. `build.gradle.kts` is now a declared input of the `test` task, so an edit to a
+`mainClass` line cannot go unseen by the check that reads it.*
+
+*The constants stay: they remain the readable list this ADR's table, twenty other javadocs, and the
+developer guide cite, and adding or removing an entry is still a deliberate one-line edit. What
+changed is which side of the equality is authoritative.*
+
+*One exception is deliberately not derived. `otherDevToolsAnd`'s `rate → recommend` allowance (ADR
+46) says which sibling tools may see each other; that is a decision about the tools, not a fact the
+tree states, so it stays hand-written rather than derived.*
+
+*Three alternatives were rejected. Deriving the sets and dropping the constants would turn the list
+twenty javadocs and the guide cite into a computed value nobody can read without running a test, and
+would let a predicate that stops matching silently un-fence everything rather than red. A single
+dev-tool signal — the Gradle registrations alone, or the `*Cli` classes alone — is sufficient today,
+but discards the disagreement between the two as information: a tool with a task and no `*Cli`, or a
+`*Cli` nobody can run, is itself a finding a single signal cannot surface. Grepping `src/main`'s text
+for patterns like `implements GraphStore` was rejected as the same parser hole this repository keeps
+finding elsewhere — ArchUnit already holds the typed class graph, so the derivation reads that
+instead of source text.*
