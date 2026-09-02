@@ -481,8 +481,10 @@ public final class JenaGraphStore implements GraphStore {
    * because SPARQL makes the un-filtered version easy. {@code
    * com.robsartin.segue.tinker.TinkerGraphStoreContractTest#enginesAgreeOnEdgeSets} compares the
    * two across the range of N, not at one value, because a divergence at 0 hid beside a comparison
-   * at 2. That reference is unchecked - the test source set is not on {@code :javadoc}'s classpath,
-   * so {@code @link} cannot reach it - and is fully qualified so a rename's grep finds it.
+   * at 2. That reference is {@code @code} and not {@code @link} because the test source set is not
+   * on {@code :javadoc}'s classpath, but it is checked all the same: {@code JavadocCitationsTest}
+   * resolves it against {@code src/test} and reds if the method is renamed away. It stays fully
+   * qualified so a rename's grep finds it too.
    */
   @Override
   public List<EdgeRecord> corroborated(int minDistinctSources) {
