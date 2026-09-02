@@ -107,6 +107,15 @@ tasks.test {
         "segue.requireBrowser",
         providers.environmentVariable("SEGUE_REQUIRE_BROWSER").getOrElse("false"),
     )
+    // The same rule for the same reason, one dependency over (issue #164). WhatAHoverShowsTest and
+    // ImagemapRecipeTest render through the real `dot` — the <title> a browser shows and the
+    // imagemap recipe the guide ships are both written by Graphviz, so nothing here can assert them
+    // — and they skipped themselves where it was absent. #93 installed Graphviz in CI precisely so
+    // they run; without this flag a degraded install left the suite green having rendered nothing.
+    systemProperty(
+        "segue.requireGraphviz",
+        providers.environmentVariable("SEGUE_REQUIRE_GRAPHVIZ").getOrElse("false"),
+    )
     systemProperty(
         "segue.database",
         layout.buildDirectory.file("test-data/segue-test.db").get().asFile.absolutePath,
