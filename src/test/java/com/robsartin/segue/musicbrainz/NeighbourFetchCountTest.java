@@ -37,37 +37,37 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Issue #163, Task 1: how many {@link EntityResolver#fetch} calls a MusicBrainz expansion spends
- * today over the committed fixture — <b>observed</b>, before {@code
+ * today over the committed fixture — <b>observed on 2026-09-02</b>, before {@code
  * docs/superpowers/specs/2026-09-02-mb-identity-classes-design.md} widens anything. The number this
  * class asserts is not a prediction copied from that spec; it is what the counting harness below
- * saw, the first time it was run against today's code.
+ * saw on that date, the first time it was run against today's code.
  *
- * <p><b>The baseline.</b> Of the fixture's 24 relations, 22 are mappable — {@code "member of
- * band"}, a stated direction, an MBID target — and every one of those 22 names a distinct target
- * MBID, and every target MusicBrainz types {@code Person}. With all 22 bridged to distinct QIDs,
- * expanding the seed costs the counting {@link EntityResolver} <b>22</b> {@code fetch} calls — one
- * per newly discovered neighbour, because none of them already carries an identity {@code
- * MusicBrainzSourceAdapter} can hand {@code SegueService} in place of a fetch — against <b>1</b>
- * bridge round trip ({@link MusicBrainzIdentity#qidsFor}, batched once for the whole
- * neighbourhood). ADR 55 records the same shape measured on the live graph — 214 of 461 resolved
- * neighbours were the entire round-trip saving on offer — and this fixture is the reproducible
- * stand-in that number cannot be re-run against; its own table is not restated here.
+ * <p><b>The baseline, as measured on 2026-09-02.</b> Of the fixture's 24 relations, 22 are mappable
+ * — {@code "member of band"}, a stated direction, an MBID target — and every one of those 22 names
+ * a distinct target MBID, and every target MusicBrainz types {@code Person}. With all 22 bridged to
+ * distinct QIDs, expanding the seed costs the counting {@link EntityResolver} <b>22</b> {@code
+ * fetch} calls — one per newly discovered neighbour, because none of them already carries an
+ * identity {@code MusicBrainzSourceAdapter} can hand {@code SegueService} in place of a fetch —
+ * against <b>1</b> bridge round trip ({@link MusicBrainzIdentity#qidsFor}, batched once for the
+ * whole neighbourhood). ADR 55 records the same shape measured on the live graph — 214 of 461
+ * resolved neighbours were the entire round-trip saving on offer — and this fixture is the
+ * reproducible stand-in that number cannot be re-run against; its own table is not restated here.
  *
- * <p><b>Loop B, the instrument proved able to fail.</b> Before this count was trusted, the fetch
- * assertion was changed to expect 23 and run again. It went red with: {@code [EntityResolver.fetch
- * calls over the committed fixture's 22 mappable neighbours] expected: 23 but was: 22}. Restored to
- * 22 and green again — a counter that had not yet been seen to disagree had not been shown to be
- * counting anything.
+ * <p><b>Loop B, the instrument proved able to fail (2026-09-02).</b> Before this count was trusted,
+ * the fetch assertion was changed to expect 23 and run again. It went red with: {@code
+ * [EntityResolver.fetch calls over the committed fixture's 22 mappable neighbours] expected: 23 but
+ * was: 22}. Restored to 22 and green again — a counter that had not yet been seen to disagree had
+ * not been shown to be counting anything.
  *
- * <p><b>Loop C, the shape controls.</b> A fetch count can fall for the wrong reason — the fixture,
- * the whitelist or the stub mapping could quietly stop producing neighbours, and an emptied
- * expansion would report 0 fetches and look like a saving instead of a break. Two assertions below
- * exist only to rule that out: the 22 edges are actually recorded (each neighbour {@code MEMBER_OF}
- * the seed), and each neighbour node the fetch resolver described actually landed in the graph
- * carrying {@code Q5}. Both were run wrong first and both went red quoting the real value: the edge
- * assertion against 21 said {@code Expected size: 21 but was: 22}, and the class assertion against
- * {@code "Q999"} said {@code Expecting actual: ["Q5"] to contain exactly (and in same order):
- * ["Q999"]} — then both were restored to what the expansion actually produced.
+ * <p><b>Loop C, the shape controls (2026-09-02).</b> A fetch count can fall for the wrong reason —
+ * the fixture, the whitelist or the stub mapping could quietly stop producing neighbours, and an
+ * emptied expansion would report 0 fetches and look like a saving instead of a break. Two
+ * assertions below exist only to rule that out: the 22 edges are actually recorded (each neighbour
+ * {@code MEMBER_OF} the seed), and each neighbour node the fetch resolver described actually landed
+ * in the graph carrying {@code Q5}. Both were run wrong first and both went red quoting the real
+ * value: the edge assertion against 21 said {@code Expected size: 21 but was: 22}, and the class
+ * assertion against {@code "Q999"} said {@code Expecting actual: ["Q5"] to contain exactly (and in
+ * same order): ["Q999"]} — then both were restored to what the expansion actually produced.
  */
 class NeighbourFetchCountTest {
 
@@ -109,8 +109,9 @@ class NeighbourFetchCountTest {
   }
 
   @Test
-  @DisplayName("should spend one fetch per mappable neighbour and one bridge round trip today")
-  void shouldSpendOneFetchPerMappableNeighbourAndOneBridgeRoundTripToday() {
+  @DisplayName(
+      "should spend one fetch per mappable neighbour when the bridge answers with bare QIDs")
+  void shouldSpendOneFetchPerMappableNeighbourWhenTheBridgeAnswersWithBareQids() {
     CountingResolver resolver = new CountingResolver();
     CountingIdentity identity = new CountingIdentity(StubIdentity.of(mbidToQid()));
     SourceAdapter musicBrainz =
