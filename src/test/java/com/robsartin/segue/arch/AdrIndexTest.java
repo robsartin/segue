@@ -58,6 +58,26 @@ class AdrIndexTest {
 
   private static final List<Row> ROWS = parseRows();
 
+  /**
+   * The section names the adr-toolkit's {@code build_index} can produce: the values of {@code
+   * _AXIS_DISPLAY_NAMES} in {@code adr_toolkit/index.py}, plus {@code "Uncategorized"} — the
+   * heading {@code build_index} renders for entries whose axis it does not recognize. Copied here
+   * by hand, not read from the toolkit, because this repository does not depend on the toolkit's
+   * Python package at build time.
+   */
+  private static final List<String> ALLOWED_SECTIONS =
+      List.of(
+          "Project",
+          "Universal",
+          "Language",
+          "Framework",
+          "App shape",
+          "UI tech",
+          "Library",
+          "Concern",
+          "Interaction",
+          "Uncategorized");
+
   /** One index row. The description and {@code Related:} lines beneath it are not parsed. */
   private record Row(String section, int number, String title, String file, String status) {}
 
@@ -128,6 +148,52 @@ class AdrIndexTest {
                 + " and the next section may start below it; only two rows sharing a section are"
                 + " compared.")
         .isEmpty();
+  }
+
+  /**
+   * {@link #shouldAscendByNumberWithinASectionWhenTheRowsAreGrouped} checks ordering only within a
+   * section, comparing consecutive rows that share a {@code section} string — so a typo'd {@code ##
+   * } heading opens a second, unrelated section whose rows ascend on their own, and that test never
+   * sees the split. This test catches the split at the heading itself: every {@code ## } line in
+   * {@code docs/adr/README.md} must be one of {@link #ALLOWED_SECTIONS}, and no heading may appear
+   * twice (a repeated heading is the same split by a different route — two runs of rows that belong
+   * together, told apart).
+   *
+   * <p>{@link #ALLOWED_SECTIONS} is hand-held rather than read from the toolkit: the names are
+   * owned by {@code adr_toolkit/index.py}'s {@code _AXIS_DISPLAY_NAMES}, not by this repository,
+   * and this repository has no dependency through which to read that Python dict at build time. The
+   * accepted cost is that a rename or a new axis in the toolkit does not fail this test on its own
+   * — it surfaces only when {@code build_index} is next run against this repo and writes a heading
+   * {@link #ALLOWED_SECTIONS} does not recognize, at which point this list needs the same edit.
+   */
+  @Test
+  @DisplayName("Every section heading in the index is one the toolkit can produce, and none twice")
+  void shouldRejectAnUnknownOrDuplicatedSectionHeadingWhenTheIndexIsRead() {
+    List<String> headings = sectionHeadings();
+
+    List<String> unknown = headings.stream().filter(h -> !ALLOWED_SECTIONS.contains(h)).toList();
+    assertThat(unknown)
+        .as(
+            "docs/adr/README.md has `## ` heading(s) not among adr_toolkit/index.py"
+                + " _AXIS_DISPLAY_NAMES (plus \"Uncategorized\"), the toolkit's authority for"
+                + " section names")
+        .isEmpty();
+
+    assertThat(claimedMoreThanOnce(headings))
+        .as("docs/adr/README.md has the same `## ` section heading more than once")
+        .isEmpty();
+  }
+
+  /** Every {@code ## } heading in the index, in file order, duplicates included. */
+  private static List<String> sectionHeadings() {
+    List<String> headings = new ArrayList<>();
+    for (String line : INDEX.lines().toList()) {
+      Matcher heading = SECTION.matcher(line);
+      if (heading.matches()) {
+        headings.add(heading.group(1));
+      }
+    }
+    return headings;
   }
 
   @Test
