@@ -43,12 +43,21 @@ import org.junit.jupiter.api.Test;
  * a template — whereupon the fix somebody reaches for is to weaken the check.
  *
  * <p><b>Nothing link-shaped escapes quietly.</b> The strict pattern below reads one shape, {@code
- * [text](target)}, and a wider <i>mention</i> predicate reds on every {@code ](}, {@code ][} and
- * reference definition it did not consume. Three CommonMark shapes the strict pattern cannot read —
- * a link text containing {@code ]}, a titled {@code [t](path "Title")}, and the reference-style
- * {@code [t][ref]} — occur zero times today and would otherwise have vanished with no output. They
- * now fail loudly, which is the difference between "not present" and "not seen": a lenient matcher
- * feeding a guard turns "cannot read this" into "there is nothing here".
+ * [text](target)}, and a wider <i>mention</i> predicate reds on every {@code ](}, {@code ][},
+ * reference definition and raw-HTML {@code href=}/{@code src=} it did not consume. Five shapes the
+ * strict pattern cannot read — a link text containing {@code ]}, a titled {@code [t](path
+ * "Title")}, the reference-style {@code [t][ref]}, a link wrapped across a line break, and a raw
+ * HTML {@code <a href="relative.md">} — occur zero times today and would otherwise have vanished
+ * with no output. They now fail loudly, which is the difference between "not present" and "not
+ * seen": a lenient matcher feeding a guard turns "cannot read this" into "there is nothing here".
+ *
+ * <p><b>A link must be whole and on one line</b>, and a raw HTML link is refused rather than
+ * resolved. Both are the same rule: matching is per line, so a link split across a break is one
+ * this class cannot read, and guessing at half a link — or at an HTML attribute it has no parser
+ * for — would be the lenient matcher again. {@code README.md} carried exactly such a wrapped link
+ * into the user guide, unchecked by anything until the mention predicate found it. Refusing a shape
+ * is the house rule, and it puts the choice where it belongs: rewrite the link, or widen this class
+ * and control the new shape.
  *
  * <p>What is deliberately NOT checked, so nobody reads more assurance into this class than it
  * gives: {@code http}, {@code https} and {@code mailto} targets reach the network and are skipped,
@@ -79,6 +88,18 @@ class DocumentationLinksTest {
 
   /** {@code [ref]: target} at the head of a line — a reference definition, which is not read. */
   private static final Pattern REFERENCE_DEFINITION = Pattern.compile("^ {0,3}\\[[^\\]]*]:");
+
+  /**
+   * {@code href=} or {@code src=} in raw HTML. Markdown allows raw HTML and GitHub renders {@code
+   * <a href="relative.md">} as a working repository-relative link, so the attribute is link-shaped;
+   * this class has no HTML parser, and refuses rather than guesses.
+   */
+  private static final Pattern RAW_HTML_LINK = Pattern.compile("\\b(?:href|src)\\s*=");
+
+  /** What a raw HTML link is told to become. */
+  private static final String NO_RAW_HTML =
+      "unsupported link shape — write a markdown link [text](target); raw HTML links are not"
+          + " checked";
 
   /** What every supported shape is written as, quoted back when an unsupported one is found. */
   private static final String SUPPORTED =
@@ -250,7 +271,8 @@ class DocumentationLinksTest {
 
   /**
    * Everything on this line that looks like a link but is not one the strict pattern read: a {@code
-   * ](} it did not consume, any {@code ][}, and a line-leading reference definition.
+   * ](} it did not consume, any {@code ][}, a line-leading reference definition, and any raw-HTML
+   * {@code href=} or {@code src=}.
    */
   private static List<String> mentions(String line, Set<Integer> consumed) {
     List<String> found = new ArrayList<>();
@@ -264,6 +286,10 @@ class DocumentationLinksTest {
     }
     if (REFERENCE_DEFINITION.matcher(line).find()) {
       found.add(SUPPORTED);
+    }
+    Matcher rawHtml = RAW_HTML_LINK.matcher(line);
+    while (rawHtml.find()) {
+      found.add(NO_RAW_HTML);
     }
     return found;
   }
