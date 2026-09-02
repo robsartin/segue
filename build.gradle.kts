@@ -359,6 +359,29 @@ tasks.jacocoTestCoverageVerification {
     }
 }
 
+tasks.javadoc {
+    // Javadoc is a gate, not a report nobody runs (issue #195). Before this it was outside `check`,
+    // and it had been failing for some time on two `invalid use of @param` errors that nothing on
+    // the way to a merge would have shown anybody. Every doclint group is on — a `{@link}` naming a
+    // class that no longer exists, malformed HTML, a tag in a place the tool rejects — and `-Werror`
+    // makes a warning stop the build, because a gate that prints a warning and exits 0 is a report.
+    //
+    // `missing` is off, and that is a decision rather than an oversight: as measured on 2026-09-02
+    // the whole of the rest of the output was `no @param for <record component>` on this project's
+    // records plus one `no main description`. Requiring a doc comment on every record component is
+    // a defensible choice, but it is a different piece of work — with `missing` on, this task could
+    // not join `check` until all of it was done, and none of the errors above would have been
+    // caught in the meantime. Turning it on later is a matter of deleting `-missing` here once the
+    // components are documented.
+    //
+    // The two options are added separately because `addStringOption` writes `-name value` and
+    // `-Werror` takes no value; passing it as a string option puts the next argument where javadoc
+    // expects a flag. `-quiet` is the value carried on the doclint option for the same reason: it
+    // is javadoc's own no-argument flag, and this is the one-argument slot it fits in.
+    (options as StandardJavadocDocletOptions).addStringOption("Xdoclint:all,-missing", "-quiet")
+    (options as StandardJavadocDocletOptions).addBooleanOption("Werror", true)
+}
+
 tasks.check {
-    dependsOn(tasks.jacocoTestReport, tasks.jacocoTestCoverageVerification)
+    dependsOn(tasks.jacocoTestReport, tasks.jacocoTestCoverageVerification, tasks.javadoc)
 }

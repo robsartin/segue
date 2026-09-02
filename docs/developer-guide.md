@@ -1052,7 +1052,7 @@ target and the coverage thresholds all live in `build.gradle.kts`; read them the
 
 ### What `./gradlew check` actually runs
 
-`check` is Gradle's standard lifecycle task, and this build attaches four things to it:
+`check` is Gradle's standard lifecycle task, and this build attaches to it:
 
 1. **`spotlessCheck`** — google-java-format over `src/**/*.java`, plus unused-import removal,
    trailing-whitespace and final-newline checks. It is a separate gate from compilation: formatting
@@ -1061,8 +1061,13 @@ target and the coverage thresholds all live in `build.gradle.kts`; read them the
 3. **`jacocoTestReport`** — attached to `check` explicitly in `build.gradle.kts`.
 4. **`jacocoTestCoverageVerification`** — line, instruction and branch minimums, also attached
    explicitly. The thresholds are in `build.gradle.kts`.
+5. **`javadoc`** — every doclint group except `missing`, with `-Werror`, so a `{@link}` that no
+   longer resolves, malformed HTML or a misplaced tag fails the build. `missing` is excluded on
+   purpose: this project's records do not document their components, and requiring that is separate
+   work. The options and the reasoning are in `build.gradle.kts`.
 
-`ArchitectureTest` is an ordinary JUnit test class, so the architecture rules run as part of step 2.
+`ArchitectureTest` is an ordinary JUnit test class, so the architecture rules run as part of the
+`test` step.
 There is no separate arch task.
 
 The `test` task also sets things that are easy to break:
