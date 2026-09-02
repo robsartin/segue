@@ -111,6 +111,16 @@ tasks.test {
         "segue.database",
         layout.buildDirectory.file("test-data/segue-test.db").get().asFile.absolutePath,
     )
+    // HeadlessChromeNetworkTest keeps the NetLog it measured at build/reports/netlog/<test>.json,
+    // inside the tree the CI workflow uploads as the `reports` artifact. Its allowlist is
+    // per-platform — CI run 33655745937 reddened on redirector.gvt1.com, which Linux Chrome asks
+    // for and macOS Chrome does not — and without the log in the artifact the CI host set could be
+    // read only out of an assertion message. Passed rather than assumed relative to the working
+    // directory, so the copy follows a relocated build directory.
+    systemProperty(
+        "segue.reports",
+        layout.buildDirectory.dir("reports").get().asFile.absolutePath,
+    )
     // DeveloperGuideEnumerationsTest re-derives the guide's enumerations from the tree and
     // compares them to docs/developer-guide.md (issue #145). Gradle's up-to-date check knows
     // about compiled classes, not about that file — without this line, falsifying the guide and
@@ -135,7 +145,12 @@ tasks.test {
         excludeTags("live")
     }
     testLogging {
-        events("failed")
+        // stderr as well as failures: HeadlessChrome prints one line there when a launch's wait for
+        // Chrome's startup cert-verifier flush ended on its fallback bound instead of on the marker
+        // (issue #186). That is the case where the deck tests are back to surviving the flush by
+        // luck, it is not a failure and must not become one, and a green run that only says so in
+        // build/test-results/**.xml says it to nobody.
+        events("failed", "standardError")
     }
 }
 

@@ -67,6 +67,190 @@ host, that the ratings are real `<button>` elements, that the region a screen re
 watch is the region the script rewrites, that the card is built as text rather than markup, and
 that the revision banner has a background fill rather than merely a colour.
 
+**Amendment (2026-09-02, issue #186): the test browser's network posture is loopback-only, and
+enforced rather than commented — and the #169 flush was measured against it.**
+
+Until now this class carried `--disable-background-networking` and `--disable-component-update`
+under a comment saying "nothing here should reach the network: the deck is offline by design."
+Every NetLog captured for issue #169 shows that comment was false: Chrome reached
+`clients2.google.com`, `accounts.google.com` and `gstatic.com` on each launch, opened QUIC sessions
+to them, and — the reason it stopped being a hygiene question — tore all of that down at once when
+it settled, taking the loopback sockets with it
+([the retry pool-flush evidence](../retry-pool-flush-evidence.md) §4–§5).
+
+**The posture.** `HeadlessChrome.launch()` adds
+`--host-resolver-rules="MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1"`. Every hostname
+outside loopback fails at DNS, so no socket, no TLS handshake and no QUIC session to a non-loopback
+host can exist. `EXCLUDE 127.0.0.1` is load-bearing and was not obvious: the spec for #186 assumed
+an IP literal is never resolved, and it is — with `EXCLUDE localhost` alone Chrome 152 maps
+`127.0.0.1` to `~NOTFOUND` like any other name and the deck never deals a card. That is the first of
+two claims this work falsified by measurement.
+
+**The flags, and only the flags a NetLog justified.** On top of the resolver rule, the flags that
+stop an attempt being *made* were added one at a time against the NetLog, keeping only those that
+removed something. Of the **28 candidates** measured that way — Puppeteer's set and a dozen more,
+each named in the comment on `HeadlessChrome.flags`, which is the list rather than this page —
+**one** removed anything:
+`--disable-features=NetworkTimeServiceQuerying,SafeBrowsingHashPrefixRealTimeLookups`, which removes
+`clients2.google.com/time` (the request round 2 caught sharing the flush's millisecond) and
+`www.gstatic.com/ohttp_gateway/…`. That is the second falsified claim: the spec expected Puppeteer's
+set to suppress these attempts, and not one of them did. No flag is kept on belief; a flag that
+removes nothing is a flag nobody can explain later.
+
+**The guard.** `HeadlessChromeNetworkTest` launches the harness's Chrome exactly as the deck test
+does, loads the stub page, issues one warm-up, closes the browser, parses the NetLog through
+`NetLog` and asserts two things of different strengths, because "reaches nothing but loopback" is
+not one fact:
+
+- **Zero reached** — no `TCP_CONNECT`, no `SSL_` event, no QUIC session and no byte in either
+  direction to any host but `127.0.0.1`. This is the property the flush and the offline claim
+  depend on, and the one the positive control makes fail: remove the resolver rule and the test
+  names `clients2.google.com`.
+- **An exact allowlist of what is asked for** — `KNOWN_ATTEMPTS`, checked with `isSubsetOf`, naming
+  the attempts that survive every flag and die at DNS: `accounts.google.com`, `www.google.com`,
+  `android.clients.google.com`, `~notfound` (the rule's own target, which Chrome logs in the host
+  position) and `2001:4860:4860::8888` (Chromium's hardcoded IPv6 reachability probe — a UDP
+  `connect()` on :443 with no byte or packet event, and not Secure DNS). The list is a **debt, not
+  a design**: it can only over-list, an attempt that stops happening will never announce itself, and
+  it is re-derived when the browser changes rather than trimmed on a hunch. The comment on the
+  constant carries the per-host measurement; it is not restated here.
+
+The claim in this ADR's own `DeckPageTest` paragraph above — that the *page* reaches no external
+host — is unchanged and is about `deck.html`. What is new is that the *browser* the suite launches
+is now held to the same standard, by an assertion instead of a comment.
+
+**What the measurement found, and why no wait was added.** Round 2 could not tell whether the flush
+was driven by the phone-home or fired anyway. With the phone-home dead at DNS, 80 traced launches
+running the retry scenario say **both, separately**: the
+`QUIC_SESSION_POOL_MARK_ALL_ACTIVE_SESSIONS_GOING_AWAY` marker still fires, once per launch, in
+80 of 80 — so the notification does not need the phone-home — and it closed **nothing** in 80 of 80,
+because by then there is no Google socket to tear down and the page's own sockets do not yet exist.
+No `SOCKET_POOL_CLOSING_SOCKET` burst occurred in any run; the marker preceded the page's first
+socket in every one; the abandoned rating was attempted three times in every one; and
+`aRetriedRatingCannotOverwriteAReRating` passed 60 of 60 under load.
+
+**So the destructive event is gone from this harness's timeline, and it is not gone from the
+browser.** A control that plants the page load on Chrome's own command line — so a loopback socket
+is idle in the pool when the marker fires — had that socket closed by the marker in **16 of 20
+runs**, each close carrying Chrome's own reason for it, `"Cert verifier changed"`, with two
+`CERT_VERIFY_PROC_CREATED` events in the same millisecond ahead of it — which names the handler
+round 2 could only describe. The flush is alive; what saves the deck tests is that the page now
+loads 57–140 ms after the marker in 69 of the 80 traced runs, and 574–683 ms after it in the other
+eleven, and nothing enforces that ordering: the gap is about one 50 ms poll interval of
+`HeadlessChrome`'s own DevTools handshake. **No wait was added**, because the licensed shape of one
+is a condition rather than a bound and the two candidate conditions came out as follows —
+`Network.enable` on Chrome 152's browser target does not exist (`-32601`, 3 probes of 3), while
+tailing the NetLog live *does* work and is recorded, with its measured latency, for whoever needs it
+if that margin ever narrows. Adding a wait now would also be adding one that cannot be shown red in
+the fixture it protects: nothing in the harness produces a late flush on demand.
+
+The full study, with every raw per-run figure behind the numbers above, is
+[docs/loopback-only-evidence.md](../loopback-only-evidence.md), a dated measurement kept the same
+way as its two siblings. [ADR 46](0046-the-rating-deck.md)'s second retry amendment carries a dated
+note pointing at it.
+
+**What this amendment does not do.** No production change: `deck.html` and `RateServer` are
+untouched, and `HeadlessChrome` is test-only. No claim that the phone-home *caused* the flush — the
+measurement says it did not. No new dependency, and no NetLog capture on the ordinary launch path:
+`HeadlessChrome.launch()` without a path builds exactly the command line it always did.
+
+**Note (2026-09-02, issue #186, Task 3): the page is now loaded only after the flush has passed.**
+This note corrects two sentences in the amendment above — "**No wait was added**", and "no NetLog
+capture on the ordinary launch path: `HeadlessChrome.launch()` without a path builds exactly the
+command line it always did". Both stopped being true the same day. Nothing else in the amendment
+moves: the posture, the flags, the guard and every figure it reports stand as written.
+
+**The condition.** `HeadlessChrome.open` does not send `Page.navigate` until Chrome's startup
+cert-verifier flush has passed, and it learns that from Chrome's own NetLog — the
+`QUIC_SESSION_POOL_MARK_ALL_ACTIVE_SESSIONS_GOING_AWAY` line, or a second `CERT_VERIFY_PROC_CREATED`
+— matched by a name resolved through the log's own `constants` block, never a hardcoded id, and read
+from the tail of a file that is not valid JSON until the browser exits (`NetLog.Tail`). That is why
+`launch()` now writes a NetLog: to a temporary file it owns and deletes on `close()`, on a command
+line otherwise identical to the one the guard measures, deliberately so that the guard keeps
+measuring the browser the deck tests run.
+
+**In Chrome's default capture mode.** This note's first draft kept the `--net-log-capture-mode=
+IncludeSensitive` the guard had been passing since the amendment above, on that flag's stated
+reasoning — the default "strips URLs and headers it judges private". Measured on this flag set the
+two modes name the **identical** host set and both carry the flush marker, because every parameter
+`NetLog` reads is in the default capture. So the sensitive mode was buying nothing and costing every
+launch a temporary file that may hold cookies and credentials; it is gone, and the sentence in
+`HeadlessChrome` that claimed otherwise is corrected there.
+
+**What the wait is worth, given that it never fired on this machine.** In 20 measured launches the
+marker was already in the file at the first poll, so the wait confirmed an ordering that already
+held (§9 says so plainly). Its value is the case this machine did not produce: §6 saw the marker
+take **1262 ms** to become visible once in five, and any machine slower than this one — or any
+change that speeds the DevTools handshake — narrows the 57 ms of slack §6 measured until it is gone.
+The wait costs 16 ms to remove that dependence on luck.
+
+**The fallback bound, and that it is a bound.** **2500 ms**, counted from the browser's launch,
+after which `open` **proceeds** and the launch prints which of the two ended the wait. The value is
+the measured p100 of the marker's visibility in the file (§6 of the study) plus about 45%. It is
+deliberately **not** a timeout: a Chrome that never creates a certificate verifier has no flush to
+wait for, and that is the outcome this whole line of work wants — failing there would make good news
+red. Planted and observed, the line it prints is `proceeded on the 2500 ms fallback bound after
+2512 ms — this NetLog never showed the flush, which is the good outcome, not an error`.
+
+The bound is a deadline measured from the browser's launch, not a stopwatch started at `awaitFlush`, so the wait it reports shrinks by whatever ran before the wait began — 2512 ms in the planted run and a shorter figure on a live launch are the same 2500 ms bound seen from different starting points.
+
+**The red.** The wait was made to fail before it was written, on the shape §4's independent driver
+used: the stub's URL on Chrome's own command line, a bare page with neither favicon nor preconnect
+in the race for the pool, and the harness's own flags read by reflection so they could not drift.
+**20 runs of 20 had the page's loopback socket closed by the marker**, in the marker's own
+millisecond, each carrying `SOCKET_POOL_CLOSING_SOCKET {"reason": "Cert verifier changed"}` — and
+none carried the `"Socket generation out of date"` that §4 attributes to the deck driver's own race,
+which is what removing the favicon and the preconnect was for. With the wait in place and the page
+loaded through `open`, **0 of 20**: the page's socket outlives the flush and is closed only by the
+browser exiting.
+
+**What it costs.** 15–20 ms per launch over those 20 runs, **p50 16.5 ms, p100 20 ms**, and **no
+launch reached the bound**. Most of it is the single parse of the log's constants block: by the time
+the DevTools handshake is done, the marker is already in the file. The raw list is in §9 of the
+study.
+
+**What this note does not do.** No production change, and no new dependency. It does not claim the
+flush is gone — §4's mechanism is exactly as alive as it was, and 20 of 20 above is the proof. What
+it removes is the **luck**: the 57 ms of accidental slack §6 measured is no longer what stands
+between Chrome's cert verifier and the deck's sockets. Separately, `android.clients.google.com` came
+**out** of `KNOWN_ATTEMPTS` on the rule the constant's own javadoc now states — the list is what
+*this test's scenario* asks for, and hosts that only other scenarios ask for are recorded in the
+study's §5, where a red naming one means the guard's scenario changed rather than that the list is
+short.
+
+**Note (2026-09-02, issue #186, PR #194): the allowlist is per-platform, and the NetLog now ships
+in CI's `reports` artifact.** An addition to the two notes above; nothing in them moves.
+
+**What CI found.** The guard's first run on `ubuntu-latest` — Google Chrome stable, installed from
+`google-chrome-stable_current_amd64.deb`, CI run 33655745937 — went red naming
+**`redirector.gvt1.com`**, Google's component/download redirector. Everything else in that run held:
+the **zero reached** assertion passed (nothing left the runner), the instrument control passed
+(`accounts.google.com` and `www.google.com` were asked for and refused), and the new host died at
+DNS under the resolver rule like every other entry. `--disable-component-update` is already on the
+command line and does not stop it, which is the lesson `update.googleapis.com` taught in a different
+scenario. Chrome 152 on macOS does not ask for it in this scenario, in any run measured.
+
+So `KNOWN_ATTEMPTS` is now **per-scenario *and* per-platform**, and every entry names where it was
+measured — the constant's own javadoc carries the per-host, per-platform figures and is not restated
+here. This costs what a per-platform list always costs: `redirector.gvt1.com` is admitted on macOS
+too, where no run can produce it, so **there is no local red for that entry**. The red was the CI
+run and the green is the next one. **No flag was added to suppress it**: doing that would need a
+before/after NetLog from a Linux runner, and no flag in this harness is kept on reasoning.
+
+**Why that host set had to be read out of an assertion message, and why the next one will not be.**
+The guard's NetLog was a temporary file the browser owned, and the workflow's `reports` artifact
+carried the test XML and the coverage HTML and nothing else — so the only record of what Linux
+Chrome asked for was the two lists AssertJ happened to print in the failure. `NetLog.keep` now copies
+the guard's log to `build/reports/netlog/<test>.json`, the workflow's artifact `path:` includes that
+directory, and the guard **asserts on the copy** rather than on the temporary file, so what CI
+uploads is provably the log the run asserted against. The copy is made on **every** run, not only on
+a red: the interesting question about a new platform is what its *green* run named, and a baseline
+that exists only after a failure is not a baseline. `tasks.test` passes `segue.reports` from Gradle's
+own build directory so the copy follows a relocated `build/`.
+
+The host set the CI run named, and the standing list of hosts other scenarios ask for, are in
+[docs/loopback-only-evidence.md](../loopback-only-evidence.md) §5.
+
 ## Alternatives considered
 
 **HtmlUnit — a pure-Java browser, needing nothing installed.** The preferred answer, and it does
