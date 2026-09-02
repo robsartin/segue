@@ -56,13 +56,13 @@ class DeveloperGuideRetractionExamplesTest {
   }
 
   @Test
-  @DisplayName("every line mentioning retractEntity --args= is read as an example")
+  @DisplayName("every line naming retractEntity is read as a command, or is prose with no --args")
   void shouldNameTheLineWhenARetractionExampleCannotBeRead() {
     assertThat(RUNBOOK.unreadableExamples())
         .as(
-            "docs/developer-guide.md — a line mentioning retractEntity --args= that this test"
-                + " cannot read is a line nothing checks, and skipping it silently is the hole this"
-                + " assertion exists to close")
+            "docs/developer-guide.md — a line naming retractEntity that this test cannot read is"
+                + " a line nothing checks, and skipping it silently is the hole this assertion"
+                + " exists to close. A line with no --args at all is prose and is allowed")
         .isEmpty();
   }
 

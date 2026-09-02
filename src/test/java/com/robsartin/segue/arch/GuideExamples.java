@@ -17,14 +17,26 @@ import java.util.regex.Pattern;
  * RepositoryTree}'s own reason for existing.
  *
  * <p><b>A continued line is joined before it is read, and anything this class cannot read is a
- * failure rather than a skip.</b> That rule was reached twice, by measurement. A {@code merge}
- * example wrapped with a trailing backslash, carrying a flag belonging to another operation, was
- * extracted by nothing and passed silently - and the guide's example lines already run to 118
- * columns, so wrapping one is the likely next edit. Joining fixed that shape, and a single-quoted
- * {@code --args='…'} carrying the same wrong flag then passed just as silently. Narrowing the
- * recogniser is what keeps producing the hole, so the loud check is the widest one available:
- * <b>every line mentioning {@code ./gradlew <task> --args=} must be one this class fully
- * consumed</b>, and everything else lands in {@link #unreadableExamples()} naming the line.
+ * failure rather than a skip.</b> That rule was reached three times, by measurement, and each time
+ * the recogniser had been written as "the shapes I can parse". A {@code merge} example wrapped with
+ * a trailing backslash slipped past; joining fixed that one. A single-quoted {@code --args='…'}
+ * slipped past next. Then {@code --args ="…"}, with a space before the equals, slipped past the fix
+ * for <em>that</em> - each time carrying a flag belonging to another operation, and each time green
+ * in seconds.
+ *
+ * <p><b>So {@code mention} is deliberately wider than any argument syntax, and nothing about {@code
+ * --args} belongs in it.</b> A line is a mention when it contains {@code ./gradlew} and the task
+ * name as a whole word, colon-prefixed or not, whatever follows. <b>The only way a task invocation
+ * escapes this check is by not naming the task.</b> {@code complete} stays strict - a double-quoted
+ * {@code --args="…"}, closed on the line or continued with a backslash - and every mention that is
+ * not complete lands in {@link #unreadableExamples()} naming the line and the shape required.
+ *
+ * <p><b>A mention with no {@code --args} anywhere on it is prose, and is allowed.</b> The guide
+ * genuinely says things like "run as {@code ./gradlew ownClaim}" in its package table and "{@code
+ * ./gradlew own} resolves to {@code :ownClaim}" in the layering section. Those sentences describe
+ * the task rather than showing a command, there is nothing in them to run through a parser, and
+ * failing them would be a check nobody could keep green. Anything carrying an {@code --args} token
+ * in any spelling is a command, and is held to {@code complete}.
  *
  * <p><b>Single-quoted outer strings are refused rather than supported</b>, and the guide's own rule
  * is why: {@code $HOME} does not expand inside single quotes in either zsh or bash, so {@code
@@ -58,18 +70,19 @@ public final class GuideExamples {
 
   /** Every example the guide shows for one Gradle task, in the order it shows them. */
   public static GuideExamples of(String taskName) {
-    // The widest recogniser there is: any mention of the task and --args= at all. A narrower one
-    // is what let a wrapped example and then a single-quoted one through, each time by failing to
-    // match rather than by failing.
-    String mention = "./gradlew " + taskName + " --args=";
+    // The widest true statement, and no argument syntax in it at all: this names the task. Three
+    // rounds of "the shapes I can parse" each left the next shape invisible.
+    Pattern mention =
+        Pattern.compile("(?<![A-Za-z0-9_])" + Pattern.quote(taskName) + "(?![A-Za-z0-9_])");
+    // A colon-prefixed task is a legitimate invocation, so it is parsed rather than refused.
     Pattern complete =
-        Pattern.compile("\\./gradlew " + Pattern.quote(taskName) + " --args=\"(.*)\"");
+        Pattern.compile("\\./gradlew :?" + Pattern.quote(taskName) + " --args=\"(.*)\"");
     String[] lines = RepositoryTree.read(RepositoryTree.root().resolve(GUIDE)).split("\n", -1);
 
     List<Example> examples = new ArrayList<>();
     List<String> unreadable = new ArrayList<>();
     for (int i = 0; i < lines.length; i++) {
-      if (!lines[i].contains(mention)) {
+      if (!lines[i].contains("./gradlew") || !mention.matcher(lines[i]).find()) {
         continue;
       }
       StringBuilder joined = new StringBuilder(lines[i]);
@@ -85,16 +98,21 @@ public final class GuideExamples {
       Matcher matcher = complete.matcher(text);
       if (matcher.find()) {
         examples.add(new Example(i + 1, matcher.group(), split(matcher.group(1))));
+      } else if (!text.contains("--args")) {
+        // Prose naming the task rather than showing a command - see the class javadoc.
+        i = last;
+        continue;
       } else {
         unreadable.add(
             "line "
                 + (i + 1)
                 + ": "
                 + text
-                + "\n    not read. An example must be a double-quoted --args=\"…\", closed on the"
-                + " same line or continued with a trailing backslash. Single quotes are refused:"
-                + " $HOME does not expand inside them in zsh or bash, so the line would not be"
-                + " pasteable.");
+                + "\n    not read. A command must be spelled --args=\"…\" - double quotes, no"
+                + " space around the equals - closed on the same line or continued with a trailing"
+                + " backslash. Single quotes are refused: $HOME does not expand inside them in zsh"
+                + " or bash, so the line would not be pasteable. A line naming the task with no"
+                + " --args at all is prose and is allowed.");
       }
       i = last;
     }

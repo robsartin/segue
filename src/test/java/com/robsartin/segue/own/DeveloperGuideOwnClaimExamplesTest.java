@@ -70,14 +70,16 @@ class DeveloperGuideOwnClaimExamplesTest {
   }
 
   @Test
-  @DisplayName("every line mentioning ownClaim --args= is read as an example")
+  @DisplayName("every line naming ownClaim is read as a command, or is prose with no --args")
   void shouldNameTheLineWhenAnOwnClaimExampleCannotBeRead() {
     assertThat(RUNBOOK.unreadableExamples())
         .as(
-            "docs/developer-guide.md — a line mentioning ownClaim --args= that this test cannot"
-                + " read is a line nothing checks. A wrapped example and then a single-quoted one"
-                + " each carried a wrong flag past a narrower recogniser, so anything but the"
-                + " double-quoted form reds here rather than being skipped")
+            "docs/developer-guide.md — a line naming ownClaim that this test cannot read is a"
+                + " line nothing checks. A wrapped example, then a single-quoted one, then one with"
+                + " a space before the equals each carried a wrong flag past a recogniser written"
+                + " as \"the shapes I can parse\", so the recogniser is now \"names the task\" and"
+                + " anything but the double-quoted form reds. A line with no --args at all is"
+                + " prose")
         .isEmpty();
   }
 
