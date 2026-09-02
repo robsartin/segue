@@ -1,6 +1,9 @@
 package com.robsartin.segue.musicbrainz;
 
+import com.robsartin.segue.domain.NodeKind;
 import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -85,4 +88,31 @@ public interface MusicBrainzIdentity {
    */
   Map<String, String> qidsFor(Collection<String> mbids)
       throws MusicBrainzIdentityUnavailableException;
+
+  /**
+   * The same question as {@link #qidsFor}, answered with whatever description the bridge could see
+   * on the round trip it was already making (issue #163).
+   *
+   * <p><b>Same keys, same drops, same failure.</b> An MBID absent from the result carries no QID,
+   * for the reason {@link #qidsFor} states; a bridge that could not be asked throws rather than
+   * answering short.
+   *
+   * <p><b>The default describes nothing, and that is the honest answer.</b> An implementation that
+   * only maps identifiers is not being asked to invent a label or a class: it delegates to {@link
+   * #qidsFor} and hands back {@link NodeKind#CONCEPT} with a null label and no classes, which is
+   * exactly what a caller must treat as "fetch this one properly". Five of this seam's six
+   * implementors are test doubles that do precisely that, and this default is why widening the seam
+   * did not have to touch them.
+   *
+   * @throws MusicBrainzIdentityUnavailableException if the bridge could not be asked at all
+   */
+  default Map<String, BridgedIdentity> identitiesFor(Collection<String> mbids)
+      throws MusicBrainzIdentityUnavailableException {
+    Map<String, BridgedIdentity> bridged = new LinkedHashMap<>();
+    qidsFor(mbids)
+        .forEach(
+            (mbid, qid) ->
+                bridged.put(mbid, new BridgedIdentity(qid, NodeKind.CONCEPT, null, List.of())));
+    return Map.copyOf(bridged);
+  }
 }
