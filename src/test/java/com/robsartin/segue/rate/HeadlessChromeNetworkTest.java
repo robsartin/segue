@@ -279,18 +279,32 @@ class HeadlessChromeNetworkTest {
    * browser changes, not trimmed on a hunch. Shortening it for real is work left undone.
    *
    * <p><b>The rule for what belongs here: what this test's own scenario asks for, and nothing
-   * else.</b> Other scenarios ask for more — a browser held open past about 2.3 s adds {@code
-   * android.clients.google.com} and past about 2.8 s adds {@code update.googleapis.com}, both
-   * measured over 80 deck-scenario NetLogs in {@code docs/loopback-only-evidence.md} §5, which is
-   * where hosts outside this scenario are recorded. Neither is listed here, because neither can
-   * make this test red: an entry admitted on evidence from a different scenario widens an {@code
-   * isSubsetOf} allowlist by one host for a red nobody can produce, and it is silent forever after.
-   * So <b>a red naming one of them is not a flake to be silenced by adding it</b> — it means the
-   * guard's scenario has changed, most likely by keeping its browser alive longer, and the list has
-   * to be re-derived against that scenario rather than extended to fit the failure.
+   * else.</b> Hosts that only <em>other</em> scenarios ask for are recorded in {@code
+   * docs/loopback-only-evidence.md} §5, not admitted here — an entry taken on evidence from a
+   * different scenario widens an {@code isSubsetOf} allowlist by one host for a red nobody can
+   * produce, and it is silent forever after. {@code update.googleapis.com}, first named at
+   * 2839–3090 ms across 80 deck-scenario NetLogs, is the standing example and stays out.
+   *
+   * <p><b>And the rule is what puts {@code android.clients.google.com} back.</b> It was taken out
+   * under the same rule and that was right for the scenario as it then stood: absent below about
+   * 2.3 s, and this test's browser did not live that long. Issue #186's Task 3 changed the scenario
+   * — {@link HeadlessChrome#open} now waits for Chrome's startup cert-verifier flush, and its
+   * fallback bound is {@value HeadlessChrome#FLUSH_BOUND_MILLIS} ms, so a launch that waits it out
+   * carries this browser well past 2.3 s. Measured on these flags, a browser held open for four
+   * seconds asks for it. That is the whole rule working as intended: the scenario moved, so the
+   * list was re-derived against the scenario it now is, rather than left to red on a slow machine.
+   *
+   * <p>So <b>a red naming a host from §5 is not a flake to be silenced by adding it</b> — it means
+   * this scenario has changed again, most likely by keeping the browser alive longer still, and the
+   * list has to be re-derived against that scenario rather than extended to fit the failure.
    */
   private static final List<String> KNOWN_ATTEMPTS =
-      List.of("accounts.google.com", "www.google.com", "~notfound", "2001:4860:4860::8888");
+      List.of(
+          "accounts.google.com",
+          "www.google.com",
+          "android.clients.google.com",
+          "~notfound",
+          "2001:4860:4860::8888");
 
   /**
    * Whether an event means the browser actually got onto the network, rather than merely asked.

@@ -265,6 +265,18 @@ failing to notice; it is an attempt the *deck* scenario provokes and the guard's
 adding a host on evidence from a different scenario would widen it by one host for a red nobody can
 produce. Recorded here instead, which is where the next person will look.
 
+> **Note added 2026-09-02 (Task 3).** "The guard's browser does not live that long" is now
+> *conditional*, and the condition is this task's own. `HeadlessChrome.open` waits for the startup
+> cert-verifier flush before it navigates, and its fallback bound is 2500 ms — so a launch that
+> waits the bound out carries the guard's browser past the 2254 ms at which
+> `android.clients.google.com` is first named. Measured on these flags, a browser held open for four
+> seconds asks for it. `android.clients.google.com` is therefore back in `KNOWN_ATTEMPTS`, under the
+> same rule that took it out: the list is what *this test's own scenario* asks for, and the scenario
+> changed. `update.googleapis.com`, first named at 2839–3090 ms, is still outside the reach of a
+> browser bounded at 2500 ms and stays out. The guard's own scenario names
+> `accounts.google.com`, `www.google.com`, `~notfound` and `2001:4860:4860::8888` and neither of
+> these two, in 3 runs of 3 under Chrome's default capture mode.
+
 ---
 
 ## 6. What is left
@@ -448,6 +460,15 @@ gate. It is set at 2500 ms against §6's measured p100 of 1718 ms for the marker
 file, plus about 45%, counted from the browser's launch rather than from the wait's own start —
 because that is how §6 measured it, and because a launch whose handshake was slow has had *longer*
 for the marker to arrive, not less.
+
+### One thing these runs were not
+
+The 40 launches above were captured with `--net-log-capture-mode=IncludeSensitive`, which the
+harness passed at the time and no longer does: measured on this flag set after the fact, the default
+mode names the identical host set and carries the same marker, so the sensitive capture was buying
+nothing and leaving a cookie-bearing temp file behind on every launch. Nothing in the tables depends
+on the difference — the marker and the closing reasons are in both — but the harness these numbers
+were taken from is one flag away from the harness that shipped.
 
 ### What this section does not show
 

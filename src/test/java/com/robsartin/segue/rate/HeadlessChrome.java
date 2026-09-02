@@ -134,9 +134,16 @@ final class HeadlessChrome implements AutoCloseable {
    * with the NetLog flags removed were indistinguishable from the rest (§2, "Instrument control") —
    * so capturing it neither causes nor masks what the guard asserts on.
    *
-   * <p>{@code IncludeSensitive} rather than the default: the default strips URLs and headers it
-   * judges private, and a guard that asserts on what Chrome reached must see everything Chrome
-   * reached. Nothing sensitive is in reach — the only origin is a loopback stub this test started.
+   * <p><b>Chrome's default capture mode, not {@code IncludeSensitive}.</b> This class used to pass
+   * {@code --net-log-capture-mode=IncludeSensitive} on the reasoning that the default "strips URLs
+   * and headers it judges private", so a guard asserting on what Chrome reached had to see
+   * everything. Measured on this flag set, both modes name the identical host set — {@code
+   * accounts.google.com}, {@code www.google.com}, {@code ~notfound}, {@code 2001:4860:4860::8888},
+   * {@code android.clients.google.com} — and both carry the flush marker, because every parameter
+   * {@link NetLog} reads ({@code host}, {@code hostname}, {@code dns_query_name}, {@code domain},
+   * {@code url}, {@code original_url} and the address params) is in the default capture. So the
+   * sensitive mode bought the guard nothing and cost every launch a temporary file that may carry
+   * cookies and credentials. Removed.
    */
   static HeadlessChrome launch(Path netLog) {
     return launch(netLog, false);
@@ -152,7 +159,6 @@ final class HeadlessChrome implements AutoCloseable {
       command.add(exe.toString());
       command.addAll(flags(userData));
       command.add("--log-net-log=" + netLog);
-      command.add("--net-log-capture-mode=IncludeSensitive");
       command.add("about:blank");
       long launchedAt = System.nanoTime();
       Process process =
@@ -383,7 +389,12 @@ final class HeadlessChrome implements AutoCloseable {
    */
   void open(String url) {
     flushWait = awaitFlush(netLog, launchedAt, FLUSH_BOUND_MILLIS);
-    System.out.println("[HeadlessChrome] " + flushWait);
+    if (!flushWait.sawMarker()) {
+      // The abnormal case only, and on stderr, which the build's testLogging shows on the console.
+      // A line per launch would be noise nobody reads; a line only when the ordering stopped being
+      // observable is the one thing a run needs to be told without being asked.
+      System.err.println("[HeadlessChrome] " + flushWait);
+    }
     send("Page.enable", Map.of());
     send("Page.navigate", Map.of("url", url));
     until("document.readyState === 'complete'", "the page to load");
@@ -575,16 +586,16 @@ final class HeadlessChrome implements AutoCloseable {
   public void close() {
     socket.abort();
     kill();
-    if (netLogIsOurs) {
-      deleteQuietly(netLog);
-    }
   }
 
   /**
-   * Ends the browser and removes its throwaway profile.
+   * Ends the browser and removes what the launch created for it — the throwaway profile, and the
+   * NetLog where this browser owns it.
    *
    * <p>Separate from {@link #close()} because the constructor needs it before there is a socket to
-   * abort.
+   * abort, and the NetLog is deleted <em>here</em> rather than there for exactly that reason: a
+   * DevTools handshake that never completes reaches this and never reaches {@code close()}, so a
+   * launch that failed would otherwise leave one log behind per failing test.
    */
   private void kill() {
     process.destroy();
@@ -602,6 +613,9 @@ final class HeadlessChrome implements AutoCloseable {
       Thread.currentThread().interrupt();
     }
     deleteTree(userData);
+    if (netLogIsOurs) {
+      deleteQuietly(netLog);
+    }
   }
 
   /**

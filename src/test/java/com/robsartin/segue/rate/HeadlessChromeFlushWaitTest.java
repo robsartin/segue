@@ -3,6 +3,7 @@ package com.robsartin.segue.rate;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -15,11 +16,12 @@ import org.junit.jupiter.api.io.TempDir;
  * The wait {@link HeadlessChrome#open} makes before it navigates, and the bound it gives up on.
  *
  * <p>No browser is launched here, and that is the point. The wait's two outcomes are a condition
- * that arrives and a condition that never does, and only one of them can be produced by a real
- * Chrome on this machine — every launch measured for {@code docs/loopback-only-evidence.md} wrote
- * the marker, 80 of 80. So the NetLog is planted rather than captured: a log the marker reaches,
- * and a log it never reaches, which is what a browser that has stopped firing it would leave
- * behind.
+ * that arrives late and a condition that never arrives, and neither can be produced on demand by a
+ * real Chrome on this machine — every launch measured for {@code docs/loopback-only-evidence.md}
+ * wrote the marker, 80 of 80, and wrote it before the harness got round to looking. So the NetLog
+ * is planted rather than captured: one the marker reaches <em>after the wait has begun</em>, so
+ * that blocking for it is the only way to see it, and one it never reaches, which is what a browser
+ * that has stopped firing it would leave behind.
  *
  * <p><b>The bound is not a timeout.</b> A Chrome that never creates its certificate verifier is the
  * good outcome — there is no flush to wait out — so the wait ends by <em>proceeding</em>, and says
@@ -43,21 +45,51 @@ class HeadlessChromeFlushWaitTest {
   private static final String GOING_AWAY_LINE =
       "{\"type\":311,\"source\":{\"id\":7,\"type\":42}},\n";
 
-  @Test
-  @DisplayName("the wait ends on the flush marker, not on the clock")
-  void shouldEndOnTheConditionWhenTheMarkerReachesTheNetLog() throws IOException {
-    Path netLog = Files.writeString(scratch.resolve("net-log.json"), STREAMING_HEAD);
-    Files.writeString(netLog, GOING_AWAY_LINE, StandardOpenOption.APPEND);
+  /**
+   * How long the marker is withheld. The assertion below is deliberately 100 ms under it: the
+   * writer's own clock starts at {@link Thread#start()} and the wait's starts a moment later, so an
+   * exact comparison could flake on thread scheduling, while 500 ms is already two orders of
+   * magnitude past the single poll a wait that did not block would cost.
+   */
+  private static final long MARKER_DELAY_MILLIS = 600;
 
+  @Test
+  @DisplayName("the wait blocks until the marker arrives, rather than looking once and giving up")
+  void shouldBlockUntilTheMarkerReachesTheNetLog() throws Exception {
+    Path netLog = Files.writeString(scratch.resolve("net-log.json"), STREAMING_HEAD);
+    Thread writer =
+        new Thread(
+            () -> {
+              try {
+                Thread.sleep(MARKER_DELAY_MILLIS);
+                Files.writeString(netLog, GOING_AWAY_LINE, StandardOpenOption.APPEND);
+              } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+              } catch (IOException e) {
+                throw new UncheckedIOException(e);
+              }
+            });
+    writer.setDaemon(true);
+    // Touch the class before the clock starts. Its static initialiser builds a Jackson mapper,
+    // which cost 122 ms on the first call here and came off the measured wait — a warm-up artefact
+    // reading as a wait that did not block.
+    HeadlessChrome.available();
+
+    writer.start();
     HeadlessChrome.FlushWait wait = HeadlessChrome.awaitFlush(netLog, System.nanoTime(), 5000);
+    writer.join();
 
     assertThat(wait.sawMarker())
-        .as(
-            "the marker is in the log, so the wait has its condition and must not sit out the bound")
+        .as("the marker did arrive, well inside the bound, so the wait ended on the condition")
         .isTrue();
     assertThat(wait.waitedMillis())
-        .as("a condition already met costs one poll at most, not the bound")
-        .isLessThan(5000L);
+        .as(
+            "the marker was not in the log when the wait began and arrived %s ms later. A wait that"
+                + " read the file once and returned would answer in a single poll and be just as"
+                + " green as one that blocks — which is the whole difference between an ordering"
+                + " that is enforced and an ordering that happened to hold",
+            MARKER_DELAY_MILLIS)
+        .isGreaterThanOrEqualTo(500L);
   }
 
   @Test

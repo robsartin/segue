@@ -135,7 +135,12 @@ tasks.test {
         excludeTags("live")
     }
     testLogging {
-        events("failed")
+        // stderr as well as failures: HeadlessChrome prints one line there when a launch's wait for
+        // Chrome's startup cert-verifier flush ended on its fallback bound instead of on the marker
+        // (issue #186). That is the case where the deck tests are back to surviving the flush by
+        // luck, it is not a failure and must not become one, and a green run that only says so in
+        // build/test-results/**.xml says it to nobody.
+        events("failed", "standardError")
     }
 }
 

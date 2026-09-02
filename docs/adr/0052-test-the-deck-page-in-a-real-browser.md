@@ -169,6 +169,21 @@ from the tail of a file that is not valid JSON until the browser exits (`NetLog.
 line otherwise identical to the one the guard measures, deliberately so that the guard keeps
 measuring the browser the deck tests run.
 
+**In Chrome's default capture mode.** This note's first draft kept the `--net-log-capture-mode=
+IncludeSensitive` the guard had been passing since the amendment above, on that flag's stated
+reasoning — the default "strips URLs and headers it judges private". Measured on this flag set the
+two modes name the **identical** host set and both carry the flush marker, because every parameter
+`NetLog` reads is in the default capture. So the sensitive mode was buying nothing and costing every
+launch a temporary file that may hold cookies and credentials; it is gone, and the sentence in
+`HeadlessChrome` that claimed otherwise is corrected there.
+
+**What the wait is worth, given that it never fired on this machine.** In 20 measured launches the
+marker was already in the file at the first poll, so the wait confirmed an ordering that already
+held (§9 says so plainly). Its value is the case this machine did not produce: §6 saw the marker
+take **1262 ms** to become visible once in five, and any machine slower than this one — or any
+change that speeds the DevTools handshake — narrows the 57 ms of slack §6 measured until it is gone.
+The wait costs 16 ms to remove that dependence on luck.
+
 **The fallback bound, and that it is a bound.** **2500 ms**, counted from the browser's launch,
 after which `open` **proceeds** and the launch prints which of the two ended the wait. The value is
 the measured p100 of the marker's visibility in the file (§6 of the study) plus about 45%. It is
