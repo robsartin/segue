@@ -315,9 +315,18 @@ public final class WikidataMusicBrainzIdentity implements MusicBrainzIdentity {
     }
   }
 
-  /** The label the label service returned, where it returned one. */
+  /**
+   * The label, unless it is the bare QID.
+   *
+   * <p>{@code wikibase:label} hands back the QID itself when no English label exists, so believing
+   * it would fill the graph with nodes called {@code Q121998451}. Leaving the entity unlabelled is
+   * what keeps it undescribed, and an undescribed neighbour is one {@code SegueService} still
+   * fetches properly — the behaviour that already exists. The rule is {@code
+   * ReverseClaims.rememberLabel}'s, against the same service and for the same reason; two answers
+   * to it would be two graphs.
+   */
   private static void rememberLabel(Map<String, String> labels, String qid, String label) {
-    if (label == null || label.isBlank()) {
+    if (label == null || label.isBlank() || label.equals(qid)) {
       return;
     }
     labels.putIfAbsent(qid, label);

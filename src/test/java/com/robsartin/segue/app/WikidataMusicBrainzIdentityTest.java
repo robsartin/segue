@@ -429,6 +429,26 @@ class WikidataMusicBrainzIdentityTest {
   }
 
   @Test
+  @DisplayName("should leave the identity unlabelled when the label service hands back the QID")
+  void shouldLeaveTheIdentityUnlabelledWhenTheLabelServiceHandsBackTheQid() {
+    try (StubWikidataServer stub = new StubWikidataServer()) {
+      // wikibase:label answers with the bare QID when no English label exists. Believing it fills
+      // the graph with nodes called "Q121998451" — ReverseClaims.rememberLabel refuses the same
+      // string against the same service, and the rule cannot have two answers here.
+      stub.enqueueBody(bindings(describedRow(MEMBER_QID, MEMBER_MBID, MEMBER_QID, HUMAN)));
+
+      Map<String, BridgedIdentity> bridged = identity(stub).identitiesFor(List.of(MEMBER_MBID));
+
+      BridgedIdentity member = bridged.get(MEMBER_MBID);
+      assertThat(member.label()).isNull();
+      // Undescribed, not dropped: the QID is still bridged and the classes are still here, so the
+      // caller can fall back to a real fetch rather than lose the neighbour altogether.
+      assertThat(member.qid()).isEqualTo(MEMBER_QID);
+      assertThat(member.instanceOf()).containsExactly(HUMAN);
+    }
+  }
+
+  @Test
   @DisplayName("should still spend one round trip when a whole neighbourhood is bridged at once")
   void shouldStillSpendOneRoundTripWhenAWholeNeighbourhoodIsBridgedAtOnce() {
     try (StubWikidataServer stub = new StubWikidataServer()) {
