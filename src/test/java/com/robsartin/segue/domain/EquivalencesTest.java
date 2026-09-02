@@ -3,6 +3,7 @@ package com.robsartin.segue.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
@@ -15,6 +16,7 @@ class EquivalencesTest {
   private static final String OTHER_MINTED = "Q00900043";
   private static final String CANONICAL = "Q900";
   private static final String OTHER_CANONICAL = "Q901";
+  private static final String NEIGHBOUR = "Q902";
   private static final Instant WHEN = Instant.parse("2026-08-31T09:00:00Z");
 
   @Test
@@ -121,5 +123,121 @@ class EquivalencesTest {
 
     assertThat(Equivalences.in(log).canonicalByLocal().keySet())
         .containsExactly("Q00900050", "Q00900010", "Q00900040", "Q00900020", "Q00900030");
+  }
+
+  @Test
+  @DisplayName("an edge claim out of a merged local id comes back on the canonical id")
+  void shouldFoldTheFromSideOfAnEdgeOntoTheCanonicalId() {
+    Equivalences merges = Equivalences.in(List.of(SameAs.declared(MINTED, CANONICAL, WHEN)));
+    AssertionRecord claim = edge(MINTED, NEIGHBOUR);
+
+    assertThat(merges.foldEndpoints(claim).fromQid()).isEqualTo(CANONICAL);
+  }
+
+  @Test
+  @DisplayName("an edge claim pointing AT a merged local id comes back on the canonical id")
+  void shouldFoldTheToSideOfAnEdgeOntoTheCanonicalId() {
+    Equivalences merges = Equivalences.in(List.of(SameAs.declared(MINTED, CANONICAL, WHEN)));
+    AssertionRecord claim = edge(NEIGHBOUR, MINTED);
+
+    assertThat(merges.foldEndpoints(claim).toQid())
+        .as("half a fold is a half-merge - the to-side moves as well as the from-side")
+        .isEqualTo(CANONICAL);
+  }
+
+  @Test
+  @DisplayName("an edge between two merged local ids folds both ends at once")
+  void shouldFoldBothEndsOfAnEdgeBetweenTwoMergedLocalIds() {
+    Equivalences merges =
+        Equivalences.in(
+            List.of(
+                SameAs.declared(MINTED, CANONICAL, WHEN),
+                SameAs.declared(OTHER_MINTED, OTHER_CANONICAL, WHEN)));
+
+    assertThat(merges.foldEndpoints(edge(MINTED, OTHER_MINTED)))
+        .extracting(AssertionRecord::fromQid, AssertionRecord::toQid)
+        .containsExactly(CANONICAL, OTHER_CANONICAL);
+  }
+
+  @Test
+  @DisplayName("the fold moves the endpoints and touches nothing else the claim carries")
+  void shouldKeepEverythingButTheEndpointsWhenAnEdgeIsFolded() {
+    Equivalences merges = Equivalences.in(List.of(SameAs.declared(MINTED, CANONICAL, WHEN)));
+    Provenance source = new Provenance("invented", "invented:1", WHEN, 0.7);
+    AssertionRecord claim =
+        new AssertionRecord(
+            MINTED,
+            NEIGHBOUR,
+            "INFLUENCED_BY",
+            LocalDate.parse("1998-01-01"),
+            LocalDate.parse("2004-12-31"),
+            source);
+
+    assertThat(merges.foldEndpoints(claim))
+        .as("an equivalence says which id, not what was claimed, when, or by whom")
+        .isEqualTo(
+            new AssertionRecord(
+                CANONICAL,
+                NEIGHBOUR,
+                "INFLUENCED_BY",
+                LocalDate.parse("1998-01-01"),
+                LocalDate.parse("2004-12-31"),
+                source));
+  }
+
+  @Test
+  @DisplayName("an owner edge folds and stays an owner edge, so replay still attributes it")
+  void shouldFoldAnOwnerEdgeWithoutChangingWhatKindOfClaimItIs() {
+    Equivalences merges = Equivalences.in(List.of(SameAs.declared(MINTED, CANONICAL, WHEN)));
+    LoggedAssertion owned = OwnerEdge.claimed(MINTED, NEIGHBOUR, "INFLUENCED_BY", WHEN);
+
+    assertThat(merges.foldEndpoints(owned))
+        .as(
+            "IngestService.apply switches on the kind of claim: an owner edge that folded into a"
+                + " sourced one would be attributed to a witness who never said it")
+        .isEqualTo(OwnerEdge.claimed(CANONICAL, NEIGHBOUR, "INFLUENCED_BY", WHEN));
+  }
+
+  @Test
+  @DisplayName("a claim naming no merged id comes back as the very same object")
+  void shouldReturnTheSameClaimWhenNeitherEndpointWasMerged() {
+    Equivalences merges = Equivalences.in(List.of(SameAs.declared(MINTED, CANONICAL, WHEN)));
+    AssertionRecord claim = edge(NEIGHBOUR, CANONICAL);
+
+    assertThat(merges.foldEndpoints(claim))
+        .as("most of the log names no merged id at all, and a copy of it would be waste")
+        .isSameAs(claim);
+  }
+
+  @Test
+  @DisplayName("a claim that is not an edge is not an endpoint question, and comes back untouched")
+  void shouldLeaveClaimsThatAreNotEdgesAlone() {
+    Equivalences merges = Equivalences.in(List.of(SameAs.declared(MINTED, CANONICAL, WHEN)));
+    LoggedAssertion minted = LocalEntity.minted(MINTED, NodeKind.WORK, "a minted work", WHEN);
+    LoggedAssertion merge = SameAs.declared(MINTED, CANONICAL, WHEN);
+
+    assertThat(merges.foldEndpoints(minted))
+        .as("the local node stays exactly where it was - ADR 59's merge bullet, and #178 keeps it")
+        .isSameAs(minted);
+    assertThat(merges.foldEndpoints(merge))
+        .as("folding the merge onto itself would rewrite the claim that states the equivalence")
+        .isSameAs(merge);
+  }
+
+  @Test
+  @DisplayName("a retracted merge folds no endpoint, the way it carries nothing into the graph")
+  void shouldFoldNothingWhenTheMergeWasRetracted() {
+    Equivalences merges =
+        Equivalences.in(
+            List.of(
+                SameAs.declared(MINTED, CANONICAL, WHEN),
+                new Retraction(CANONICAL, "the merge named the wrong item", WHEN)));
+
+    assertThat(merges.foldEndpoints(edge(MINTED, NEIGHBOUR)).fromQid()).isEqualTo(MINTED);
+  }
+
+  private static AssertionRecord edge(String from, String to) {
+    return new AssertionRecord(
+        from, to, "INFLUENCED_BY", null, null, new Provenance("invented", "invented:1", WHEN, 1.0));
   }
 }
