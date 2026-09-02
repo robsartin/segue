@@ -1,6 +1,7 @@
 package com.robsartin.segue.fixture;
 
 import com.robsartin.segue.domain.AssertionRecord;
+import com.robsartin.segue.domain.EdgeRecord;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.Provenance;
@@ -161,6 +162,16 @@ public final class Fixture {
         // corroborated(0) has to return (#176). Both engines have to say so, which is why the
         // differential guard compares them across the range and not at one value.
         owner(LOCAL_NOVELIST, "AUTHORED", LOCAL_NOVEL));
+  }
+
+  /**
+   * The owner's standalone claim (#176), as a predicate the fixture owns rather than one every
+   * caller spells out. The port contract and the differential guard both ask about this edge, and a
+   * predicate defined beside the assertion that creates it stays true when the fixture moves -
+   * which two copies naming {@link #LOCAL_NOVELIST} and {@link #LOCAL_NOVEL} themselves would not.
+   */
+  public static boolean isOwnerOnlyEdge(EdgeRecord edge) {
+    return edge.fromQid().equals(LOCAL_NOVELIST) && edge.toQid().equals(LOCAL_NOVEL);
   }
 
   // --- helpers -----------------------------------------------------------

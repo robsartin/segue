@@ -479,8 +479,10 @@ public final class JenaGraphStore implements GraphStore {
    * <p>Two independent implementations of one port method is exactly the seam ADR 18 exists to
    * cross-check, and this is that seam - not a query this store gets to answer differently just
    * because SPARQL makes the un-filtered version easy. {@code
-   * TinkerGraphStoreContractTest.enginesAgreeOnEdgeSets} compares the two across the range of N,
-   * not at one value, because a divergence at 0 hid beside a comparison at 2.
+   * com.robsartin.segue.tinker.TinkerGraphStoreContractTest#enginesAgreeOnEdgeSets} compares the
+   * two across the range of N, not at one value, because a divergence at 0 hid beside a comparison
+   * at 2. That reference is unchecked - the test source set is not on {@code :javadoc}'s classpath,
+   * so {@code @link} cannot reach it - and is fully qualified so a rename's grep finds it.
    */
   @Override
   public List<EdgeRecord> corroborated(int minDistinctSources) {

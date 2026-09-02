@@ -198,13 +198,8 @@ public abstract class GraphStoreContract {
     // This sits beside the N = 2 case above for the same reason that one exists: it pins the rule
     // on WHICHEVER engine runs the contract, so a third adapter would inherit it. The differential
     // guard in TinkerGraphStoreContractTest hardcodes Tinker and Jena and could not.
-    assertThat(store.corroborated(0)).anyMatch(GraphStoreContract::isTheOwnerOnlyEdge);
-    assertThat(store.corroborated(1)).noneMatch(GraphStoreContract::isTheOwnerOnlyEdge);
-  }
-
-  private static boolean isTheOwnerOnlyEdge(EdgeRecord edge) {
-    return edge.fromQid().equals(Fixture.LOCAL_NOVELIST)
-        && edge.toQid().equals(Fixture.LOCAL_NOVEL);
+    assertThat(store.corroborated(0)).anyMatch(Fixture::isOwnerOnlyEdge);
+    assertThat(store.corroborated(1)).noneMatch(Fixture::isOwnerOnlyEdge);
   }
 
   @Test

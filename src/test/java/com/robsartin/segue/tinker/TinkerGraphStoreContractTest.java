@@ -83,9 +83,7 @@ class TinkerGraphStoreContractTest extends GraphStoreContract {
 
   private static void assertCorroborationShape(String engine, GraphStore store) {
     java.util.function.Predicate<com.robsartin.segue.domain.EdgeRecord> ownerOnly =
-        e ->
-            e.fromQid().equals(com.robsartin.segue.fixture.Fixture.LOCAL_NOVELIST)
-                && e.toQid().equals(com.robsartin.segue.fixture.Fixture.LOCAL_NOVEL);
+        com.robsartin.segue.fixture.Fixture::isOwnerOnlyEdge;
     java.util.function.Predicate<com.robsartin.segue.domain.EdgeRecord> layered =
         e ->
             e.fromQid().equals(com.robsartin.segue.fixture.Fixture.CAVE)
