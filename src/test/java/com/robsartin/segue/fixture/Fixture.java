@@ -42,6 +42,10 @@ import java.util.List;
  *       witness, on {@code EdgeRecord.corroboration()}'s reasoning, and both {@code GraphStore}
  *       implementations have to agree on that or {@code GraphStoreContract} would not catch a
  *       divergence between them
+ *   <li>An owner claim standing <b>alone</b>, over two local entities no source has ever mentioned
+ *       - corroboration 0. The layered claim above pins what the owner does not add; this one pins
+ *       that an uncorroborated owner claim is still an edge, present in {@code corroborated(0)} and
+ *       absent from {@code corroborated(1)} (#176, ADR 59)
  * </ul>
  */
 public final class Fixture {
@@ -62,6 +66,12 @@ public final class Fixture {
   public static final String MCCARTHY = "Q0900013";
   public static final String ROAD_NOVEL = "Q0900014";
   public static final String PJ_HARVEY = "Q0900015";
+
+  // The owner's own entities, which Wikidata does not model. TWO leading zeros, not one: ADR 58
+  // reserves the single-zero shape for stand-ins like the fifteen above, and LocalEntity takes
+  // Q00... so the two families cannot collide as either one grows (issue #171).
+  public static final String LOCAL_NOVELIST = "Q00900016";
+  public static final String LOCAL_NOVEL = "Q00900017";
 
   // --- sources -----------------------------------------------------------
   private static final Instant STRUCTURED_PULL = Instant.parse("2026-08-01T09:00:00Z");
@@ -92,7 +102,9 @@ public final class Fixture {
         new NodeRecord(ROAD_FILM, NodeKind.WORK, "The Road (film)"),
         new NodeRecord(MCCARTHY, NodeKind.PERSON, "Cormac McCarthy"),
         new NodeRecord(ROAD_NOVEL, NodeKind.WORK, "The Road (novel)"),
-        new NodeRecord(PJ_HARVEY, NodeKind.PERSON, "PJ Harvey"));
+        new NodeRecord(PJ_HARVEY, NodeKind.PERSON, "PJ Harvey"),
+        new NodeRecord(LOCAL_NOVELIST, NodeKind.PERSON, "A self-published novelist"),
+        new NodeRecord(LOCAL_NOVEL, NodeKind.WORK, "A novel Wikidata does not model"));
   }
 
   public static List<AssertionRecord> assertions() {
@@ -140,7 +152,15 @@ public final class Fixture {
         // The dangerous one: a plausible model claim that creates a ONE-HOP
         // shortcut between Cave and McCarthy, competing with the real
         // three-hop route through The Road. Shortest is not most trustworthy.
-        llm(CAVE, "INFLUENCED_BY", MCCARTHY, "chat-2026-08-22#a2"));
+        llm(CAVE, "INFLUENCED_BY", MCCARTHY, "chat-2026-08-22#a2"),
+
+        // ---- the owner's own, uncorroborated ------------------------
+        // An owner claim over two local entities, with NO source-asserted assertion of the same
+        // triple - unlike the layered one above. Its corroboration is 0, because the owner is
+        // not a witness, and 0 is a real answer rather than an absence: this edge is what
+        // corroborated(0) has to return (#176). Both engines have to say so, which is why the
+        // differential guard compares them across the range and not at one value.
+        owner(LOCAL_NOVELIST, "AUTHORED", LOCAL_NOVEL));
   }
 
   // --- helpers -----------------------------------------------------------

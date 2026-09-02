@@ -56,12 +56,14 @@ public abstract class GraphStoreContract {
   }
 
   @Test
-  @DisplayName("26 assertions fold into exactly 22 edges")
+  @DisplayName("27 assertions fold into exactly 23 edges")
   void ingestCollapsesAssertions() {
-    // 26 assertions: 3 pairs sharing a (from, type, to) triple from two real sources
+    // 27 assertions: 3 pairs sharing a (from, type, to) triple from two real sources
     // (corroboration()), plus the owner's claim folding onto a fourth triple a real source
-    // already asserted (#92) — four folds, 26 assertions fold to 22 edges.
-    assertThat(store.edgeCount()).isEqualTo(22);
+    // already asserted (#92) — four folds, 27 assertions fold to 23 edges. The 27th is the
+    // owner's standalone claim over two local entities (#176), which folds onto nothing: it is
+    // an edge in its own right, and its corroboration is 0 rather than absent.
+    assertThat(store.edgeCount()).isEqualTo(23);
   }
 
   @Test
