@@ -340,7 +340,7 @@ one that had to declare its identity seam rather than import the adapter that co
 `port` and `domain`, plus one dotted edge to `wikidata`:
 `GraphProjector` re-derives each node's kind from the `P31` its claim stored, through
 `KindMapper.rederive`, which is what makes a mapper improvement reach nodes the graph already holds
-([ADR 42](adr/0042-store-p31-and-rederive-kind.md)). `mcp` depends on `ingest`, `port`, `domain`
+([ADR 42](adr/0042-store-p31-and-rederive-kind-at-projection.md)). `mcp` depends on `ingest`, `port`, `domain`
 and `support`, plus its own dotted edge to `wikidata` (explained below). `app` depends on almost
 everything, because wiring is its job. `support` depends on nothing, and the packages that use it
 are the ones the diagram below draws an edge to it from — that half is derivation-checked by
@@ -456,7 +456,7 @@ line is drawn there.
 | `sqlite` | `SqliteAssertionLog` and `SqliteAffinityStore` — two tables in one file, two connections. | `port`, `domain` |
 | `wikidata` | The first source: resolution, expansion, and the two mapping passes. Plain Java, no Spring. | `port`, `domain` |
 | `musicbrainz` | The second source ([ADR 54](adr/0054-musicbrainz-as-the-second-source.md)): `MusicBrainzClient` over `ws/2`, `MusicBrainzSourceAdapter`, and `MusicBrainzIdentity` — the MBID-to-QID seam it declares and may not implement, because an adapter may not import another adapter. Expansion only; no `EntityResolver`. Plain Java, no Spring. | `port`, `domain` |
-| `ingest` | `IngestService` (the only write path) and `GraphProjector` (boot replay). | `port`, `domain`, `wikidata` (`KindMapper` only, [ADR 42](adr/0042-store-p31-and-rederive-kind.md)) |
+| `ingest` | `IngestService` (the only write path) and `GraphProjector` (boot replay). | `port`, `domain`, `wikidata` (`KindMapper` only, [ADR 42](adr/0042-store-p31-and-rederive-kind-at-projection.md)) |
 | `support` | Cross-cutting plain-Java helpers with no project dependencies — `UuidV7` (request correlation), `QidList` (the QID-file reader `export`, `recommend` and `rate` share), `ClassLabels` (the offline `P31` label table `export` and `rate` share; it moved here from `export` when `rate` needed it), `DefaultDatabase` (the one `--db`/`SEGUE_DB`/`${user.home}` resolution `export`, `ratings`, `recommend` and `rate` share — issue #179; the live list is whoever calls `resolve`, so grep rather than trust these four names), and `RequiredDatabase` (the refusal `retract` and `own` give when `--db` was not typed; it calls `DefaultDatabase` for the path it quotes back and hands out a `String`, never a `Path`, so neither claim tool can take a default from it). | nothing |
 | `mcp` | The tool classes, `SegueService`, the view records, `CorrelationId`. Spring-aware. | `ingest`, `port`, `domain`, `support` |
 | `app` | Entry point, all bean wiring, `application.yaml`, transport profiles, and `WikidataMusicBrainzIdentity` — the P434 bridge that implements `musicbrainz`'s identity seam, placed here because it is the only package ADR 32 lets see two adapters at once. Spring-aware. | everything it wires |
@@ -1002,7 +1002,7 @@ The suite is layered on purpose, and each layer catches something the layer belo
 | Spring context | `mcp/ToolSurfaceTest`, `app/*Test` | That the starter's own annotation scanner actually finds the tool beans, and that the transports are configured as intended |
 | **Real subprocess** | `app/StdioPurityTest` | Output written by a *dependency* or by the framework's own startup. See below |
 | Architecture | `arch/ArchitectureTest` | An invariant an ADR states being quietly abandoned |
-| Documentation | `arch/DeveloperGuideEnumerationsTest`, `own/DeveloperGuideOwnClaimExamplesTest`, `retract/DeveloperGuideRetractionExamplesTest` | This guide's enumerations drifting from the code — the ArchUnit rule table, the layering diagram's packages and edges, the package table's rows, and the live-tagged and stub-server names in the row above. Each set is re-derived from the tree and compared in both directions ([issue #145](https://github.com/robsartin/segue/issues/145)) |
+| Documentation | `arch/DeveloperGuideEnumerationsTest`, `arch/DocumentationLinksTest`, `own/DeveloperGuideOwnClaimExamplesTest`, `retract/DeveloperGuideRetractionExamplesTest` | This guide's enumerations drifting from the code — the ArchUnit rule table, the layering diagram's packages and edges, the package table's rows, and the live-tagged and stub-server names in the row above. Each set is re-derived from the tree and compared in both directions ([issue #145](https://github.com/robsartin/segue/issues/145)); and every relative link in `README.md` and `docs/**/*.md` naming a file or an anchor that does not exist ([issue #168](https://github.com/robsartin/segue/issues/168)) |
 | **Live, tagged and excluded** | `@Tag("live")` on `WikidataLiveSmokeTest`, `PersonSeededRouteLiveTest`, `SharedAwardRouteLiveTest`, `MusicBrainzLiveSmokeTest`, `WikidataMusicBrainzIdentityLiveTest` — five classes, and `liveTest` includes any `live` tag, so a new one joins with no build change | Either upstream API changing, a wrong identifier baked into a fixture, and a P434 bridge that agrees with a stub but not with Wikidata |
 
 Three of those deserve more than a table row.
