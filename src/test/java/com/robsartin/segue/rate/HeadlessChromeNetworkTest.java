@@ -46,10 +46,11 @@ import org.junit.jupiter.api.io.TempDir;
  *       buys, and it is the one the positive control fails: drop {@code --host-resolver-rules} from
  *       {@code HeadlessChrome.flags} and this goes red naming {@code www.google.com} and Google's
  *       addresses.
- *   <li><b>Attempts are inventoried.</b> Chrome still asks its resolver for three of its own hosts,
- *       and is refused. That is not a zero and this test does not pretend it is: the hosts named
- *       must be a subset of {@link #KNOWN_ATTEMPTS}, which lists each one, what it was asking for,
- *       and that it is unfinished work. A phone-home nobody has accounted for fails here.
+ *   <li><b>Attempts are inventoried.</b> Chrome still asks its resolver for a handful of its own
+ *       hosts, and is refused. That is not a zero and this test does not pretend it is: the hosts
+ *       named must be a subset of {@link #KNOWN_ATTEMPTS}, which lists each one, what it was asking
+ *       for, <b>on which platform it was measured</b>, and that it is unfinished work. A phone-home
+ *       nobody has accounted for fails here.
  * </ol>
  *
  * <p>Issue #186's spec asked for one assertion — no request, resolution <em>or</em> socket, all
@@ -253,41 +254,66 @@ class HeadlessChromeNetworkTest {
    * {@code HeadlessChrome.flags}). Two flags outside that set did, and they are the two this
    * harness keeps.
    *
-   * <p>Re-derived from this parser, over six runs of this very test, after the RFC 2396 hole that
-   * had been hiding {@code ~notfound} was fixed. Every entry below appeared in <b>6 of 6</b> runs:
+   * <p><b>Every entry names the platform it was measured on, because this list is per-platform as
+   * well as per-scenario.</b> The macOS figures come from this parser over six runs of this very
+   * test, after the RFC 2396 hole that had been hiding {@code ~notfound} was fixed. The Linux
+   * figures come from <b>CI run 33655745937</b> — Google Chrome stable, installed from {@code
+   * google-chrome-stable_current_amd64.deb} on {@code ubuntu-latest} — which named its host set in
+   * a red, one run:
    *
    * <ul>
-   *   <li>{@code accounts.google.com} — 30 sightings; {@code /ListAccounts}, the account
-   *       reconcilor's cookie-jar read, on a profile with no account in it
-   *   <li>{@code www.google.com} — 30 sightings; {@code /async/folae}, the omnibox's AI-mode
-   *       eligibility fetch
-   *   <li>{@code ~notfound} — 61 sightings, all {@code HOST_RESOLVER_MANAGER_REQUEST}. Not a host:
-   *       Chrome logs the name the resolver rule <em>mapped it to</em>, so this entry is the rule
-   *       working rather than anything escaping. It is kept because the parser reports it in the
-   *       host position, which is where Chrome put it
-   *   <li>{@code 2001:4860:4860::8888} — 12 sightings, all {@code UDP_CONNECT} / {@code
-   *       SOCKET_CONNECT} on port <b>443</b>. Chromium's hardcoded IPv6 reachability probe: a UDP
-   *       {@code connect()} that asks the kernel for a route. Read off a captured NetLog, the
-   *       socket's entire life is {@code SOCKET_OPEN}, {@code UDP_CONNECT}, {@code
-   *       UDP_LOCAL_ADDRESS}, {@code SOCKET_ALIVE} end — <b>no byte or packet event of any
-   *       kind</b>. Not Secure DNS: the same log records {@code doh_config: {servers: []}} and
-   *       {@code can_use_secure_dns_transactions: false}, and never names {@code dns.google}.
-   *       {@code --disable-features=DnsOverHttpsUpgrade}, {@code DnsOverHttps} and {@code
-   *       --dns-over-https-mode=off} were each measured against it and removed nothing
+   *   <li>{@code accounts.google.com} — <b>macOS 6/6</b> (30 sightings; {@code /ListAccounts}, the
+   *       account reconcilor's cookie-jar read, on a profile with no account in it) and <b>Linux
+   *       1/1</b>
+   *   <li>{@code www.google.com} — <b>macOS 6/6</b> (30 sightings; {@code /async/folae}, the
+   *       omnibox's AI-mode eligibility fetch) and <b>Linux 1/1</b>
+   *   <li>{@code ~notfound} — <b>macOS 6/6</b> (61 sightings, all {@code
+   *       HOST_RESOLVER_MANAGER_REQUEST}) and <b>Linux 1/1</b>. Not a host: Chrome logs the name
+   *       the resolver rule <em>mapped it to</em>, so this entry is the rule working rather than
+   *       anything escaping. It is kept because the parser reports it in the host position, which
+   *       is where Chrome put it
+   *   <li>{@code 2001:4860:4860::8888} — <b>macOS 6/6</b> (12 sightings, all {@code UDP_CONNECT} /
+   *       {@code SOCKET_CONNECT} on port <b>443</b>) and <b>Linux 1/1</b>. Chromium's hardcoded
+   *       IPv6 reachability probe: a UDP {@code connect()} that asks the kernel for a route. Read
+   *       off a captured NetLog, the socket's entire life is {@code SOCKET_OPEN}, {@code
+   *       UDP_CONNECT}, {@code UDP_LOCAL_ADDRESS}, {@code SOCKET_ALIVE} end — <b>no byte or packet
+   *       event of any kind</b>. Not Secure DNS: the same log records {@code doh_config: {servers:
+   *       []}} and {@code can_use_secure_dns_transactions: false}, and never names {@code
+   *       dns.google}. {@code --disable-features=DnsOverHttpsUpgrade}, {@code DnsOverHttps} and
+   *       {@code --dns-over-https-mode=off} were each measured against it and removed nothing
+   *   <li>{@code android.clients.google.com} — <b>macOS only</b>; see the paragraph on it below.
+   *       <b>Not named in the one Linux run</b>, whose whole test took 0.489 s — short of the 2254
+   *       ms at which macOS first names it, which is the likeliest reason and is an inference
+   *       rather than a measurement
+   *   <li>{@code redirector.gvt1.com} — <b>Linux 1/1, and never on macOS.</b> Google's
+   *       component/download redirector. It is the host CI run 33655745937 reddened on, and this
+   *       entry is the whole reason the list is now per-platform: Chrome 152 on macOS does not ask
+   *       for it in this scenario, in any run measured, so <b>there is no local red for it</b> —
+   *       the red was that CI run and the green is the next one. Like every other entry it dies at
+   *       DNS: the resolver rule refuses it and nothing is reached. {@code
+   *       --disable-component-update} is already on the command line and does <b>not</b> stop it,
+   *       which is the same lesson {@code update.googleapis.com} taught. No flag has been added to
+   *       stop it, because adding one would need a before/after NetLog from a Linux runner and this
+   *       list is not extended on reasoning
    * </ul>
    *
    * <p>Each entry is stopped at DNS, so none of them reaches anything; that is the assertion above,
    * and it is the one that matters. <b>The check is {@code isSubsetOf}, so this list can only
    * over-list.</b> An attempt that stops happening will never announce itself here, and a stale
    * entry silently weakens the guard by the width of one host — so it is re-derived when the
-   * browser changes, not trimmed on a hunch. Shortening it for real is work left undone.
+   * browser changes, not trimmed on a hunch. Shortening it for real is work left undone. A
+   * per-platform list widens that debt by one platform's worth: {@code redirector.gvt1.com} is
+   * admitted on every platform though only one asks for it.
    *
-   * <p><b>The rule for what belongs here: what this test's own scenario asks for, and nothing
-   * else.</b> Hosts that only <em>other</em> scenarios ask for are recorded in {@code
-   * docs/loopback-only-evidence.md} §5, not admitted here — an entry taken on evidence from a
-   * different scenario widens an {@code isSubsetOf} allowlist by one host for a red nobody can
-   * produce, and it is silent forever after. {@code update.googleapis.com}, first named at
-   * 2839–3090 ms across 80 deck-scenario NetLogs, is the standing example and stays out.
+   * <p><b>The rule for what belongs here: what this test's own scenario asks for, on the platforms
+   * it runs on, and nothing else.</b> Hosts that only <em>other</em> scenarios ask for are recorded
+   * in {@code docs/loopback-only-evidence.md} §5, not admitted here — an entry taken on evidence
+   * from a different scenario widens an {@code isSubsetOf} allowlist by one host for a red nobody
+   * can produce, and it is silent forever after. {@code update.googleapis.com}, first named at
+   * 2839–3090 ms across 80 deck-scenario NetLogs, is the standing example and stays out. A host a
+   * <em>different platform</em> asks for in this same scenario is a different case, and it is
+   * admitted — with the platform named, because the alternative is a guard that cannot be green on
+   * both.
    *
    * <p><b>And the rule is what puts {@code android.clients.google.com} back.</b> It was taken out
    * under the same rule and that was right for the scenario as it then stood: absent below about
@@ -300,7 +326,11 @@ class HeadlessChromeNetworkTest {
    *
    * <p>So <b>a red naming a host from §5 is not a flake to be silenced by adding it</b> — it means
    * this scenario has changed again, most likely by keeping the browser alive longer still, and the
-   * list has to be re-derived against that scenario rather than extended to fit the failure.
+   * list has to be re-derived against that scenario rather than extended to fit the failure. <b>A
+   * red naming a host on a platform not listed above is the other case</b>, and it is re-derived
+   * from that platform's own NetLog: every run now keeps its log at {@code build/reports/netlog/},
+   * which the CI workflow uploads as the {@code reports} artifact, so the next platform's host set
+   * is read off a file rather than out of an assertion message.
    */
   private static final List<String> KNOWN_ATTEMPTS =
       List.of(
@@ -308,7 +338,12 @@ class HeadlessChromeNetworkTest {
           "www.google.com",
           "android.clients.google.com",
           "~notfound",
-          "2001:4860:4860::8888");
+          "2001:4860:4860::8888",
+          // Linux only (ubuntu-latest, Google Chrome stable, CI run 33655745937): Google's
+          // component/download redirector. Dies at DNS like the rest; NOT asked for by Chrome 152
+          // on macOS in this scenario, so no local run can redden on it. --disable-component-update
+          // is already passed and does not stop it. See the javadoc above.
+          "redirector.gvt1.com");
 
   /**
    * Whether an event means the browser actually got onto the network, rather than merely asked.
@@ -329,7 +364,8 @@ class HeadlessChromeNetworkTest {
 
   /**
    * The subset of {@link #KNOWN_ATTEMPTS} used as a live control on the instrument. Both were asked
-   * for in 6 of 6 re-derivation runs.
+   * for in 6 of 6 macOS re-derivation runs, and both appear in the Linux host set CI run
+   * 33655745937 reported — so the control is not one platform's habit.
    */
   private static final List<String> PHONE_HOME_CONTROL =
       List.of("accounts.google.com", "www.google.com");
@@ -346,7 +382,8 @@ class HeadlessChromeNetworkTest {
    *
    * <p>So this asserts the one thing the harness knows to be true and cannot fake: Chrome phones
    * home, is refused at DNS, and the parser sees it. Both hosts in {@link #PHONE_HOME_CONTROL} were
-   * asked for in 6 of 6 re-derivation runs; the control needs either.
+   * asked for in 6 of 6 macOS re-derivation runs and both were named on {@code ubuntu-latest} in CI
+   * run 33655745937; the control needs either.
    *
    * <p>Package-private and static so {@code NetLogTest} can plant a NetLog with the phone-home
    * events stripped and watch this fail. A control never seen to fail is not a control.

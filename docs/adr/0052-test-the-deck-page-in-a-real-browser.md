@@ -218,6 +218,39 @@ between Chrome's cert verifier and the deck's sockets. Separately, `android.clie
 study's §5, where a red naming one means the guard's scenario changed rather than that the list is
 short.
 
+**Note (2026-09-02, issue #186, PR #194): the allowlist is per-platform, and the NetLog now ships
+in CI's `reports` artifact.** An addition to the two notes above; nothing in them moves.
+
+**What CI found.** The guard's first run on `ubuntu-latest` — Google Chrome stable, installed from
+`google-chrome-stable_current_amd64.deb`, CI run 33655745937 — went red naming
+**`redirector.gvt1.com`**, Google's component/download redirector. Everything else in that run held:
+the **zero reached** assertion passed (nothing left the runner), the instrument control passed
+(`accounts.google.com` and `www.google.com` were asked for and refused), and the new host died at
+DNS under the resolver rule like every other entry. `--disable-component-update` is already on the
+command line and does not stop it, which is the lesson `update.googleapis.com` taught in a different
+scenario. Chrome 152 on macOS does not ask for it in this scenario, in any run measured.
+
+So `KNOWN_ATTEMPTS` is now **per-scenario *and* per-platform**, and every entry names where it was
+measured — the constant's own javadoc carries the per-host, per-platform figures and is not restated
+here. This costs what a per-platform list always costs: `redirector.gvt1.com` is admitted on macOS
+too, where no run can produce it, so **there is no local red for that entry**. The red was the CI
+run and the green is the next one. **No flag was added to suppress it**: doing that would need a
+before/after NetLog from a Linux runner, and no flag in this harness is kept on reasoning.
+
+**Why that host set had to be read out of an assertion message, and why the next one will not be.**
+The guard's NetLog was a temporary file the browser owned, and the workflow's `reports` artifact
+carried the test XML and the coverage HTML and nothing else — so the only record of what Linux
+Chrome asked for was the two lists AssertJ happened to print in the failure. `NetLog.keep` now copies
+the guard's log to `build/reports/netlog/<test>.json`, the workflow's artifact `path:` includes that
+directory, and the guard **asserts on the copy** rather than on the temporary file, so what CI
+uploads is provably the log the run asserted against. The copy is made on **every** run, not only on
+a red: the interesting question about a new platform is what its *green* run named, and a baseline
+that exists only after a failure is not a baseline. `tasks.test` passes `segue.reports` from Gradle's
+own build directory so the copy follows a relocated `build/`.
+
+The host set the CI run named, and the standing list of hosts other scenarios ask for, are in
+[docs/loopback-only-evidence.md](../loopback-only-evidence.md) §5.
+
 ## Alternatives considered
 
 **HtmlUnit — a pure-Java browser, needing nothing installed.** The preferred answer, and it does

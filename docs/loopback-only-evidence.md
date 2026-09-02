@@ -277,6 +277,34 @@ produce. Recorded here instead, which is where the next person will look.
 > `accounts.google.com`, `www.google.com`, `~notfound` and `2001:4860:4860::8888` and neither of
 > these two, in 3 runs of 3 under Chrome's default capture mode.
 
+> **Note added 2026-09-02 (PR #194, CI run 33655745937).** The table above is **macOS** — Chrome
+> 152.0.7977.65, 80 NetLogs on this machine. The guard's first run on `ubuntu-latest`, against
+> Google Chrome stable installed from `google-chrome-stable_current_amd64.deb`, named a host that
+> appears in none of those 80:
+>
+> | host | Linux (`ubuntu-latest`), 1 run | reached anything |
+> |---|---|---|
+> | `redirector.gvt1.com` | 1 / 1 | no — died at DNS |
+>
+> Google's component/download redirector, asked for despite `--disable-component-update`, which is
+> already on the command line and does not stop it. The rest of that run's host set was
+> `accounts.google.com`, `www.google.com`, `~notfound` and `2001:4860:4860::8888` — the macOS set
+> minus `android.clients.google.com`, which the 0.489 s run was very likely too short to reach.
+> **Nothing was reached on Linux either**: the zero-reached assertion passed, and so did the
+> instrument control.
+>
+> This is **not** the §5 case above. `update.googleapis.com` stays out because a *different
+> scenario* asks for it and no run of the guard's own scenario can produce it. `redirector.gvt1.com`
+> is the guard's own scenario on a *different platform*, so it goes into `KNOWN_ATTEMPTS` with the
+> platform named — and the list is per-platform from here on, every entry saying where it was
+> measured. The cost is honest and stated in the constant's javadoc: on macOS that entry can never
+> redden, so **there is no local red for it**.
+>
+> **How the next one will be derived.** Not from an assertion message, which is all this one had:
+> the guard now copies its NetLog to `build/reports/netlog/<test>.json` on every run, green or red,
+> and the CI workflow's artifact `path:` carries that directory. The next platform's host set is
+> read off the file.
+
 ---
 
 ## 6. What is left
