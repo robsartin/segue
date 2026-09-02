@@ -366,15 +366,26 @@ class DeckBehaviourTest {
    * Waits until neither side has anything outstanding: the page's own guards say it is idle with a
    * card on screen ({@code !busy && current !== null}), and the stub is serving nothing.
    *
-   * <p><strong>The condition, and why those two halves are it.</strong> Every request this page
-   * makes goes out of {@code rate()} or {@code show()}, and both hold {@code busy} from before
-   * their first {@code await} until the {@code finally} that ends them — so an unsettled fetch,
-   * including every attempt Chrome makes inside one, is a {@code busy} that is still {@code true}.
-   * {@code current !== null} is the other end of the same statement: after a rating lands, refused
-   * or accepted, the page deals again, and {@code current} is only set back when that deal has
-   * rendered. So "the page reports it is done" is a positive observation, not an interval — and
-   * {@code inFlight == 0} adds the half the page cannot see, an exchange the stub has begun and not
-   * yet finished. Bounded and polled, in {@link #untilSent(int)}'s shape and for its reason.
+   * <p><strong>The condition, and why those two halves are it.</strong> {@code rate()} sets {@code
+   * busy} before it issues the POST and clears it in the {@code finally} that ends <em>that
+   * fetch</em> — not the handler, which goes on to {@code problem()} and {@code show()} afterwards
+   * — so what {@code busy} covers is the fetch itself, and every attempt Chrome makes inside one,
+   * retries included. {@code current} covers the rest: {@code rate()} nulls it before its first
+   * {@code await} and only {@code show()} sets it again, after the next card has been dealt and
+   * rendered, and nothing yields between {@code rate()}'s {@code finally} and {@code show()}'s own
+   * {@code busy = true}. Together they are "the page has nothing outstanding", which is a positive
+   * observation rather than an interval — and {@code inFlight == 0} adds the half the page cannot
+   * see, an exchange the stub has begun and not yet finished. Bounded and polled, in {@link
+   * #untilSent(int)}'s shape and for its reason.
+   *
+   * <p><strong>The limit of this instrument: a request on the wire is in neither half.</strong> One
+   * that has left Chrome and not yet reached the stub is not an unsettled {@code fetch} the page is
+   * holding and not an exchange the stub has begun, so nothing here excludes it — and the two
+   * halves are read a moment apart, {@code inFlight} first and the page after, as {@link
+   * #untilQuiet()} reads its own two. No sleep excluded it either; a fixed 600 ms merely made the
+   * window a different length. What closes it is the measurement below rather than the instrument,
+   * and if that measurement ever stopped holding, nothing here would go red — the first sign would
+   * be the retried-rating test's ordering assertion failing intermittently.
    *
    * <p>This used to be {@code sleep(600)}, which is the thing {@link #untilSent(int)}'s javadoc
    * argues against in this very file: after a fixed sleep, an ordering or absence assertion says
