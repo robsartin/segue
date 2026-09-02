@@ -449,6 +449,27 @@ class WikidataMusicBrainzIdentityTest {
   }
 
   @Test
+  @DisplayName("should bridge an identity with no classes when the item states no P31")
+  void shouldBridgeAnIdentityWithNoClassesWhenTheItemStatesNoP31() {
+    try (StubWikidataServer stub = new StubWikidataServer()) {
+      // The OPTIONAL leaves ?type unbound, so the binding simply lacks the key. Not every item
+      // Wikidata knows states a class.
+      stub.enqueueBody(bindings(describedRow(MEMBER_QID, MEMBER_MBID, MEMBER_LABEL, null)));
+
+      Map<String, BridgedIdentity> bridged = identity(stub).identitiesFor(List.of(MEMBER_MBID));
+
+      // Present with nothing in it, rather than absent: an unclassified neighbour is one the
+      // caller must decline to describe, and it can only decline what it was told about. Dropping
+      // the entry here would hide a resolved QID behind ADR 22 clause 2's ordinary silence.
+      assertThat(bridged).containsOnlyKeys(MEMBER_MBID);
+      BridgedIdentity member = bridged.get(MEMBER_MBID);
+      assertThat(member.instanceOf()).isEmpty();
+      assertThat(member.label()).isEqualTo(MEMBER_LABEL);
+      assertThat(member.kind()).isEqualTo(NodeKind.CONCEPT);
+    }
+  }
+
+  @Test
   @DisplayName("should still spend one round trip when a whole neighbourhood is bridged at once")
   void shouldStillSpendOneRoundTripWhenAWholeNeighbourhoodIsBridgedAtOnce() {
     try (StubWikidataServer stub = new StubWikidataServer()) {
