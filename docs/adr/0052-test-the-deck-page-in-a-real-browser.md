@@ -154,6 +154,53 @@ untouched, and `HeadlessChrome` is test-only. No claim that the phone-home *caus
 measurement says it did not. No new dependency, and no NetLog capture on the ordinary launch path:
 `HeadlessChrome.launch()` without a path builds exactly the command line it always did.
 
+**Note (2026-09-02, issue #186, Task 3): the page is now loaded only after the flush has passed.**
+This note corrects two sentences in the amendment above — "**No wait was added**", and "no NetLog
+capture on the ordinary launch path: `HeadlessChrome.launch()` without a path builds exactly the
+command line it always did". Both stopped being true the same day. Nothing else in the amendment
+moves: the posture, the flags, the guard and every figure it reports stand as written.
+
+**The condition.** `HeadlessChrome.open` does not send `Page.navigate` until Chrome's startup
+cert-verifier flush has passed, and it learns that from Chrome's own NetLog — the
+`QUIC_SESSION_POOL_MARK_ALL_ACTIVE_SESSIONS_GOING_AWAY` line, or a second `CERT_VERIFY_PROC_CREATED`
+— matched by a name resolved through the log's own `constants` block, never a hardcoded id, and read
+from the tail of a file that is not valid JSON until the browser exits (`NetLog.Tail`). That is why
+`launch()` now writes a NetLog: to a temporary file it owns and deletes on `close()`, on a command
+line otherwise identical to the one the guard measures, deliberately so that the guard keeps
+measuring the browser the deck tests run.
+
+**The fallback bound, and that it is a bound.** **2500 ms**, counted from the browser's launch,
+after which `open` **proceeds** and the launch prints which of the two ended the wait. The value is
+the measured p100 of the marker's visibility in the file (§6 of the study) plus about 45%. It is
+deliberately **not** a timeout: a Chrome that never creates a certificate verifier has no flush to
+wait for, and that is the outcome this whole line of work wants — failing there would make good news
+red. Planted and observed, the line it prints is `proceeded on the 2500 ms fallback bound after
+2512 ms — this NetLog never showed the flush, which is the good outcome, not an error`.
+
+**The red.** The wait was made to fail before it was written, on the shape §4's independent driver
+used: the stub's URL on Chrome's own command line, a bare page with neither favicon nor preconnect
+in the race for the pool, and the harness's own flags read by reflection so they could not drift.
+**20 runs of 20 had the page's loopback socket closed by the marker**, in the marker's own
+millisecond, each carrying `SOCKET_POOL_CLOSING_SOCKET {"reason": "Cert verifier changed"}` — and
+none carried the `"Socket generation out of date"` that §4 attributes to the deck driver's own race,
+which is what removing the favicon and the preconnect was for. With the wait in place and the page
+loaded through `open`, **0 of 20**: the page's socket outlives the flush and is closed only by the
+browser exiting.
+
+**What it costs.** 15–20 ms per launch over those 20 runs, **p50 16.5 ms, p100 20 ms**, and **no
+launch reached the bound**. Most of it is the single parse of the log's constants block: by the time
+the DevTools handshake is done, the marker is already in the file. The raw list is in §9 of the
+study.
+
+**What this note does not do.** No production change, and no new dependency. It does not claim the
+flush is gone — §4's mechanism is exactly as alive as it was, and 20 of 20 above is the proof. What
+it removes is the **luck**: the 57 ms of accidental slack §6 measured is no longer what stands
+between Chrome's cert verifier and the deck's sockets. Separately, `android.clients.google.com` came
+**out** of `KNOWN_ATTEMPTS` on the rule the constant's own javadoc now states — the list is what
+*this test's scenario* asks for, and hosts that only other scenarios ask for are recorded in the
+study's §5, where a red naming one means the guard's scenario changed rather than that the list is
+short.
+
 ## Alternatives considered
 
 **HtmlUnit — a pure-Java browser, needing nothing installed.** The preferred answer, and it does

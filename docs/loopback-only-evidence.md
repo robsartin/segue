@@ -1,5 +1,10 @@
 # The flush, measured with the browser on loopback only — round 3
 
+> **Note added 2026-09-02 (Task 3).** §6's "A wait was considered and not added" no longer describes
+> the harness: the wait it names — the NetLog tailed live — was built the same day, and §9 below
+> carries its red, its measured cost and the bound it falls back on. Nothing above §9 has been
+> changed; §6 is left standing as the state of the question when it was asked.
+
 **Evidence only. No fix is proposed here, and none was made.** Round 1
 ([the retry-precondition measurement](retry-precondition-evidence.md)) found the resend rule; round 2
 ([the retry pool-flush evidence](retry-pool-flush-evidence.md)) found the residual — a browser-wide
@@ -317,3 +322,137 @@ Branch `186-loopback-only`, worktree isolated from the main checkout, on top of 
 commits (`cc68a59..0ad4d96`). Chrome 152.0.7977.65, macOS 26.6.2, 28 cores, JDK 25, Gradle 9.7.1,
 `SEGUE_REQUIRE_BROWSER=true` throughout. All scratch instrumentation was deleted; the working tree
 carried only this page and the records it supports at the end of the study.
+
+
+---
+
+## 9. Task 3 — the wait, built and measured
+
+*Added 2026-09-02, after this page's §6 was written. Same machine, same Chrome build, quiet box, **no
+load lever** — §3's two batches show that load moves both sides of the margin, and nothing here
+reproduces that.*
+
+`HeadlessChrome.open` now waits for the flush before it sends `Page.navigate`, reading the marker
+out of a NetLog every `launch()` writes to a temporary file of its own. The decision and its shape
+are in [ADR 52](adr/0052-test-the-deck-page-in-a-real-browser.md)'s second dated note; the raw runs
+are here.
+
+### The red — a planted early load, 20 runs
+
+The shape §4's *independent* driver used, not §4's own: the stub's URL on Chrome's command line, a
+**bare page** — no favicon link, no preconnect — served by a loopback stub, and the harness's flags
+read out of `HeadlessChrome.flags` by reflection. Offsets are milliseconds from the browser's first
+logged event, as everywhere on this page.
+
+| run | marker | first page socket | what closed the page's socket |
+|---|---|---|---|
+| 1 | 671 | 657 | `Cert verifier changed` |
+| 2 | 669 | 654 | `Cert verifier changed` |
+| 3 | 673 | 661 | `Cert verifier changed` |
+| 4 | 666 | 652 | `Cert verifier changed` |
+| 5 | 671 | 653 | `Cert verifier changed` |
+| 6 | 668 | 656 | `Cert verifier changed` |
+| 7 | 684 | 666 | `Cert verifier changed` |
+| 8 | 675 | 660 | `Cert verifier changed` |
+| 9 | 669 | 655 | `Cert verifier changed` |
+| 10 | 664 | 653 | `Cert verifier changed` |
+| 11 | 667 | 651 | `Cert verifier changed` |
+| 12 | 152 | 139 | `Cert verifier changed` |
+| 13 | 673 | 655 | `Cert verifier changed` |
+| 14 | 672 | 659 | `Cert verifier changed` |
+| 15 | 668 | 652 | `Cert verifier changed` |
+| 16 | 158 | 147 | `Cert verifier changed` |
+| 17 | 688 | 672 | `Cert verifier changed` |
+| 18 | 146 | 134 | `Cert verifier changed` |
+| 19 | 684 | 666 | `Cert verifier changed` |
+| 20 | 675 | 662 | `Cert verifier changed` |
+
+**20 of 20**, each in the marker's own millisecond. Run 3, the three events that matter, with the
+offsets and the socket source id the driver read out of that log:
+
+```
+ 661 TCP_CONNECT                     src=19   (the page's socket to the stub)
+ 673 SOCKET_POOL_CLOSING_SOCKET      src=19   {"reason": "Cert verifier changed"}
+ 673 QUIC_SESSION_POOL_MARK_ALL_ACTIVE_SESSIONS_GOING_AWAY
+```
+
+`"Socket generation out of date"` — the second reason string §4 records, which four of §4's twenty
+runs carried instead — appeared in **0 of these 20**. That is the point of the bare page: §4 read
+those four as its own driver's favicon and preconnect racing for the pool, and removing both removed
+them, which is as close as this study comes to testing that reading. Nothing in this batch is
+counted in both columns, because nothing landed in the second one.
+
+### The green — the same assertion through the harness, 20 runs
+
+The page loaded by `HeadlessChrome.launch()` and `open()`, wait in place. Same stub, same bare page.
+
+| run | marker | first page socket | what closed the page's socket | wait added (ms) |
+|---|---|---|---|---|
+| 1 | 684 | 756 | `Socket pool destroyed` (browser exit) | 15 |
+| 2 | 689 | 773 | `Socket pool destroyed` | 16 |
+| 3 | 676 | 761 | `Socket pool destroyed` | 16 |
+| 4 | 702 | 787 | `Socket pool destroyed` | 17 |
+| 5 | 676 | 760 | `Socket pool destroyed` | 17 |
+| 6 | 701 | 786 | `Socket pool destroyed` | 17 |
+| 7 | 684 | 769 | `Socket pool destroyed` | 20 |
+| 8 | 678 | 741 | `Socket pool destroyed` | 16 |
+| 9 | 693 | 771 | `Socket pool destroyed` | 16 |
+| 10 | 699 | 784 | `Socket pool destroyed` | 16 |
+| 11 | 688 | 770 | `Socket pool destroyed` | 15 |
+| 12 | 169 | 783 | `Socket pool destroyed` | 17 |
+| 13 | 684 | 761 | `Socket pool destroyed` | 17 |
+| 14 | 702 | 790 | `Socket pool destroyed` | 18 |
+| 15 | 700 | 787 | `Socket pool destroyed` | 17 |
+| 16 | 689 | 773 | `Socket pool destroyed` | 16 |
+| 17 | 679 | 755 | `Socket pool destroyed` | 15 |
+| 18 | 685 | 768 | `Socket pool destroyed` | 17 |
+| 19 | 688 | 772 | `Socket pool destroyed` | 16 |
+| 20 | 680 | 777 | `Socket pool destroyed` | 18 |
+
+**Closed by the flush: 0 of 20.** Every page socket survives to the browser's own exit. The margin
+`marker − page socket` runs −63 … −97 ms, with run 12's early marker at −614.
+
+### The cost, and the bound
+
+The added wait per launch, sorted:
+
+```
+15 15 15 16 16 16 16 16 16 16 17 17 17 17 17 17 17 18 18 20
+```
+
+**p50 16.5 ms, p100 20 ms. Launches that reached the fallback bound: 0 of 20**, and a launch that
+did would say so in its own line — the wait prints which of the two ended it, and the runs above all
+print `flush marker seen after …`.
+
+**Almost all of that is one parse, not one wait.** The tail resolves the marker's event id out of
+the log's `constants` block on its first look, and by the time `HeadlessChrome`'s DevTools handshake
+has finished, Chrome has long since written the marker — so in these 20 runs the condition was
+already true at the first poll and the cost is the cost of reading the block. **Which is to say the
+ordering these runs show is the ordering §3 already showed; what is new is that it is now checked
+rather than assumed.** The 24–41 ms §6 leads one to expect is the same number seen from the other
+side, and the fat tail it records — 1262 ms once — is the case this wait exists for and which this
+batch did not produce.
+
+**The bound, planted.** A NetLog that never receives the marker — the constants block and one
+ordinary socket event, nothing else — pointed at the wait with the harness's real bound. It
+proceeds, and says so:
+
+```
+[HeadlessChrome] proceeded on the 2500 ms fallback bound after 2512 ms — this NetLog never showed
+the flush, which is the good outcome, not an error
+```
+
+That is a **bound and not a timeout** by design: a Chrome that stops creating a certificate verifier
+on startup is the outcome §6 hopes for, and a wait that failed on it would turn good news into a red
+gate. It is set at 2500 ms against §6's measured p100 of 1718 ms for the marker's visibility in the
+file, plus about 45%, counted from the browser's launch rather than from the wait's own start —
+because that is how §6 measured it, and because a launch whose handshake was slow has had *longer*
+for the marker to arrive, not less.
+
+### What this section does not show
+
+No load lever, so nothing here speaks to the −683 … −81 ms spread §3 measured under load, nor to how
+much of the bound a loaded machine would use. Twenty runs each side, on one machine and one Chrome
+build, on one day — the same caveat as every other section of this page, and nothing regenerates
+these numbers either.
+
