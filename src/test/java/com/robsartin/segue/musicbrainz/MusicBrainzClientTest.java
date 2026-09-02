@@ -39,25 +39,39 @@ class MusicBrainzClientTest {
   private static final String HOT_CLUB_QUINTET = "ee55e4e8-807d-49b1-8470-d1c0898ed7cb";
 
   /**
-   * How much under {@link MusicBrainzClient#MIN_REQUEST_INTERVAL} an observed gap may fall before
-   * {@link #concurrentCallersDoNotLeaveTogether} calls it a violation, for two reasons that are
-   * both about the last fraction of a millisecond and neither about concurrency.
+   * How much under {@link #concurrentCallersDoNotLeaveTogether}'s client's own {@code
+   * minRequestInterval} an observed gap may fall before that test calls it a violation, for two
+   * reasons that are both about scheduling and neither about the property under test.
    *
    * <p>The first is the measurement. The invariant is about when a request <i>leaves</i>; what a
    * stub server can observe is when one <i>arrives</i>, and the send latency between the two varies
-   * per request — the run that established this number saw two arrivals 0.99966s apart, 0.00034s
-   * short, on a client whose slots were exactly a second apart. The second is real and is written
-   * down in {@code MusicBrainzClient.reserve}'s javadoc: slots are issued a second apart and no
-   * request leaves before its own, but a thread descheduled past its slot sends late and can land
-   * nearer the caller behind it. Serialising every send behind one lock is the only thing that
-   * would close that, at the cost of the non-blocking path the compare-and-set leaves open.
+   * per request. The second is real and is written down in {@code MusicBrainzClient.reserve}'s
+   * javadoc: slots are issued a fixed interval apart and no request leaves before its own, but a
+   * thread descheduled past its slot sends late and can land nearer the caller behind it.
+   * Serialising every send behind one lock is the only thing that would close that, at the cost of
+   * the non-blocking path the compare-and-set leaves open.
    *
-   * <p><b>It is nowhere near wide enough to admit the defect.</b> The same burst against the
-   * check-then-act version measured gaps of {@code [1.002961S, 0.001552083S]} — the second and
-   * third callers left 1.6 <i>milliseconds</i> apart. This allowance is 100ms, so the floor it
-   * leaves is 0.9s: over five hundred times the gap the defect produced.
+   * <p><b>This is the spec's fallback scale, not its primary one, and the reason is measured, not
+   * guessed.</b> {@code docs/superpowers/specs/2026-09-02-mb-concurrency-design.md} calls for a
+   * 50ms interval with a 10ms allowance first. On this machine, shared with other agents' builds
+   * (load average 110–166, well above the design's own ≥100 reference scenario), the
+   * <em>correct</em> client reproducibly failed at that scale — descheduling gaps of 0.0161s and
+   * 0.0237s against a 0.04s floor, absolute overruns an order of magnitude past what a quiet
+   * machine showed. That is the real behaviour {@code reserve}'s javadoc already predicts, not the
+   * #146 defect: the planted #146 defect's own signature at this same 50ms scale was sub-24ms and
+   * absolute regardless of load ({@code [0.0119S, 0.0236S, 0.0136S]}), which is indistinguishable
+   * from ordinary scheduling jitter once contention is this heavy — the two can no longer be told
+   * apart at 50ms on a machine this busy. Widening to 100ms/20ms does not change the absolute
+   * scheduling jitter a busy machine imposes, but it does buy back the ratio: the same class of
+   * overrun stayed clear of an 0.08s floor across repeated runs once contention eased, which the
+   * 0.04s floor could not tolerate.
+   *
+   * <p><b>It is nowhere near wide enough to admit the defect.</b> The #146 check-then-act defect's
+   * signature is absolute and sub-25ms regardless of scale (see above); this allowance is 20ms at a
+   * 100ms interval, leaving an 80ms floor — over three times the worst gap the defect produced in
+   * six runs across both scales.
    */
-  private static final Duration SLOT_OVERRUN_ALLOWANCE = Duration.ofMillis(100);
+  private static final Duration SLOT_OVERRUN_ALLOWANCE = Duration.ofMillis(20);
 
   @Test
   @DisplayName("should return every artist relation when the response states several")
@@ -122,7 +136,8 @@ class MusicBrainzClientTest {
     Instant now = Instant.parse("2026-08-30T00:00:00.900Z");
 
     // 500ms elapsed of the required 1000ms — 500ms still owed.
-    assertThat(MusicBrainzClient.throttleDelay(last, now)).isEqualTo(Duration.ofMillis(500));
+    assertThat(MusicBrainzClient.throttleDelay(last, now, Duration.ofSeconds(1)))
+        .isEqualTo(Duration.ofMillis(500));
   }
 
   @Test
@@ -131,7 +146,21 @@ class MusicBrainzClientTest {
     Instant last = Instant.parse("2026-08-30T00:00:00.000Z");
     Instant now = Instant.parse("2026-08-30T00:00:01.500Z");
 
-    assertThat(MusicBrainzClient.throttleDelay(last, now)).isEqualTo(Duration.ZERO);
+    assertThat(MusicBrainzClient.throttleDelay(last, now, Duration.ofSeconds(1)))
+        .isEqualTo(Duration.ZERO);
+  }
+
+  @Test
+  @DisplayName("a default-constructed client keeps MusicBrainz's real one-second pace")
+  void shouldKeepTheDefaultRequestIntervalWhenNoInstanceOverrideIsGiven() {
+    // Control 3 (spec, "the definition of done"): the interval seam Step 4 added must not move
+    // production's pace. SegueConfiguration:139 builds a client with the no-argument constructor,
+    // which never overrides minRequestInterval, so this pins that path directly rather than only
+    // pinning the constant it is supposed to equal.
+    MusicBrainzClient client = new MusicBrainzClient();
+
+    assertThat(client.minRequestInterval()).isEqualTo(Duration.ofSeconds(1));
+    assertThat(MusicBrainzClient.DEFAULT_MIN_REQUEST_INTERVAL).isEqualTo(Duration.ofSeconds(1));
   }
 
   @Test
@@ -139,7 +168,8 @@ class MusicBrainzClientTest {
   void aWaitIsAskedForInFullRatherThanTruncated() {
     // The defect this guards is not the concurrency one; it was found by it. sleep() passed
     // delay.toMillis() to Thread.sleep, and toMillis() truncates, so 999.5ms of owed wait became a
-    // 999ms sleep and the request left half a millisecond inside MIN_REQUEST_INTERVAL — measured,
+    // 999ms sleep and the request left half a millisecond inside DEFAULT_MIN_REQUEST_INTERVAL —
+    // measured,
     // as a 0.999339625s gap, on the first run of the concurrency test below.
     //
     // Driven through an injected sleeper rather than asserted end to end, because the shortfall is
@@ -188,7 +218,7 @@ class MusicBrainzClientTest {
     assertThatThrownBy(
             () ->
                 MusicBrainzClient.sleep(
-                    MusicBrainzClient.MIN_REQUEST_INTERVAL,
+                    MusicBrainzClient.DEFAULT_MIN_REQUEST_INTERVAL,
                     delay -> {
                       throw new InterruptedException("stopped mid-wait");
                     }))
@@ -308,7 +338,8 @@ class MusicBrainzClientTest {
     // reproduces "never gets a response" instantly and repeatably: connection-refused needs no
     // real network and no timeout to wait out.
     //
-    // With the fix, four attempts against a dead port are spaced by ~MIN_REQUEST_INTERVAL each
+    // With the fix, four attempts against a dead port are spaced by ~DEFAULT_MIN_REQUEST_INTERVAL
+    // each
     // (the backoff sleep between attempts is topped up to a full second by reserve()), so total
     // wall time is close to 3 seconds. The bug this guards would finish in the backoff time alone
     // — 200+400+800ms, about 1.4 seconds — so 2.5s is a lower bound that separates the two
@@ -337,12 +368,14 @@ class MusicBrainzClientTest {
     //
     // The assertion is on the SPACING between arrivals, not on total elapsed time, because
     // Thread.sleep only ever runs long: a slow machine can only push a correct implementation's
-    // gaps further above MIN_REQUEST_INTERVAL, never below it, so it cannot turn this test green
+    // gaps further above the client's minRequestInterval, never below it, so it cannot turn this
+    // test green
     // for the broken code. Three callers rather than two for the same reason from the other side —
     // the broken code fails every gap at once, so scheduling jitter would have to fake a full
     // second twice over to hide it.
     try (StubMusicBrainzServer stub = new StubMusicBrainzServer()) {
-      MusicBrainzClient client = new MusicBrainzClient(stub.baseUri());
+      MusicBrainzClient client =
+          new MusicBrainzClient(stub.baseUri(), Clock.systemUTC(), Duration.ofMillis(100));
       int callers = 3;
       CountDownLatch release = new CountDownLatch(1);
       CountDownLatch finished = new CountDownLatch(callers);
@@ -380,7 +413,7 @@ class MusicBrainzClientTest {
       }
       // allSatisfy rather than a loop of assertions: a loop stops at the first gap that fails and
       // would report one number, where the defect's signature is every gap at once.
-      Duration floor = MusicBrainzClient.MIN_REQUEST_INTERVAL.minus(SLOT_OVERRUN_ALLOWANCE);
+      Duration floor = client.minRequestInterval().minus(SLOT_OVERRUN_ALLOWANCE);
       assertThat(gaps)
           .as("gaps between consecutive requests, in arrival order")
           .allSatisfy(gap -> assertThat(gap).isGreaterThanOrEqualTo(floor));
