@@ -1,5 +1,15 @@
 # The retry precondition under load — round 2
 
+**Note (2026-09-02, issue #186, round 3).** §5 below closes by naming Chrome's requests to
+`clients2.google.com`, `accounts.google.com`, `www.google.com` and `gstatic.com` as **the trigger**
+for the flush. Round 3 measured that directly, with the browser unable to resolve any of them, and
+it is wrong: the browser-wide notification fires in 80 of 80 launches with nothing to fetch, and a
+planted early page load still had its loopback socket closed by it in 16 of 20 runs. Those requests
+were present at the sighting; they are not what drives the flush. What round 3 did find is that the
+flush no longer reaches the deck's sockets — it lands 57–140 ms before the page's first socket, in
+80 of 80 — and the rest of this page stands. See
+[the loopback-only flush measurement](loopback-only-evidence.md) and ADR 52's 2026-09-02 amendment.
+
 **Evidence only. No fix is proposed here, and none was made.** Round 1
 ([the retry-precondition measurement](retry-precondition-evidence.md)) found that
 Chrome resends a POST only when the attempt was bound to a socket already in its pool, identified

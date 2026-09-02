@@ -162,6 +162,7 @@ covers building, testing and extending segue in detail.
 | [The engine bake-off](docs/engine-bake-off.md) | The two-engine comparison that chose the graph database |
 | [The retry-precondition measurement](docs/retry-precondition-evidence.md) | The sixty-run trace study behind ADR 46's retry precondition |
 | [The retry pool-flush evidence](docs/retry-pool-flush-evidence.md) | Round 2: the eighty-one-run trace study behind ADR 46's second retry amendment |
+| [The loopback-only flush measurement](docs/loopback-only-evidence.md) | Round 3: what the flush does once the test browser can reach nothing but loopback |
 
 ### Why the bake-off has its own page
 

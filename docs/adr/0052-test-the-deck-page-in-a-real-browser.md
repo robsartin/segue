@@ -67,6 +67,90 @@ host, that the ratings are real `<button>` elements, that the region a screen re
 watch is the region the script rewrites, that the card is built as text rather than markup, and
 that the revision banner has a background fill rather than merely a colour.
 
+**Amendment (2026-09-02, issue #186): the test browser's network posture is loopback-only, and
+enforced rather than commented — and the #169 flush was measured against it.**
+
+Until now this class carried `--disable-background-networking` and `--disable-component-update`
+under a comment saying "nothing here should reach the network: the deck is offline by design."
+Every NetLog captured for issue #169 shows that comment was false: Chrome reached
+`clients2.google.com`, `accounts.google.com` and `gstatic.com` on each launch, opened QUIC sessions
+to them, and — the reason it stopped being a hygiene question — tore all of that down at once when
+it settled, taking the loopback sockets with it
+([the retry pool-flush evidence](../retry-pool-flush-evidence.md) §4–§5).
+
+**The posture.** `HeadlessChrome.launch()` adds
+`--host-resolver-rules="MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1"`. Every hostname
+outside loopback fails at DNS, so no socket, no TLS handshake and no QUIC session to a non-loopback
+host can exist. `EXCLUDE 127.0.0.1` is load-bearing and was not obvious: the spec for #186 assumed
+an IP literal is never resolved, and it is — with `EXCLUDE localhost` alone Chrome 152 maps
+`127.0.0.1` to `~NOTFOUND` like any other name and the deck never deals a card. That is the first of
+two claims this work falsified by measurement.
+
+**The flags, and only the flags a NetLog justified.** On top of the resolver rule, the flags that
+stop an attempt being *made* were added one at a time against the NetLog, keeping only those that
+removed something. Of the **28 candidates** measured that way — Puppeteer's set and a dozen more,
+each named in the comment on `HeadlessChrome.flags`, which is the list rather than this page —
+**one** removed anything:
+`--disable-features=NetworkTimeServiceQuerying,SafeBrowsingHashPrefixRealTimeLookups`, which removes
+`clients2.google.com/time` (the request round 2 caught sharing the flush's millisecond) and
+`www.gstatic.com/ohttp_gateway/…`. That is the second falsified claim: the spec expected Puppeteer's
+set to suppress these attempts, and not one of them did. No flag is kept on belief; a flag that
+removes nothing is a flag nobody can explain later.
+
+**The guard.** `HeadlessChromeNetworkTest` launches the harness's Chrome exactly as the deck test
+does, loads the stub page, issues one warm-up, closes the browser, parses the NetLog through
+`NetLog` and asserts two things of different strengths, because "reaches nothing but loopback" is
+not one fact:
+
+- **Zero reached** — no `TCP_CONNECT`, no `SSL_` event, no QUIC session and no byte in either
+  direction to any host but `127.0.0.1`. This is the property the flush and the offline claim
+  depend on, and the one the positive control makes fail: remove the resolver rule and the test
+  names `clients2.google.com`.
+- **An exact allowlist of what is asked for** — `KNOWN_ATTEMPTS`, checked with `isSubsetOf`, naming
+  the attempts that survive every flag and die at DNS: `accounts.google.com`, `www.google.com`,
+  `android.clients.google.com`, `~notfound` (the rule's own target, which Chrome logs in the host
+  position) and `2001:4860:4860::8888` (Chromium's hardcoded IPv6 reachability probe — a UDP
+  `connect()` on :443 with no byte or packet event, and not Secure DNS). The list is a **debt, not
+  a design**: it can only over-list, an attempt that stops happening will never announce itself, and
+  it is re-derived when the browser changes rather than trimmed on a hunch. The comment on the
+  constant carries the per-host measurement; it is not restated here.
+
+The claim in this ADR's own `DeckPageTest` paragraph above — that the *page* reaches no external
+host — is unchanged and is about `deck.html`. What is new is that the *browser* the suite launches
+is now held to the same standard, by an assertion instead of a comment.
+
+**What the measurement found, and why no wait was added.** Round 2 could not tell whether the flush
+was driven by the phone-home or fired anyway. With the phone-home dead at DNS, 80 traced launches
+running the retry scenario say **both, separately**: the
+`QUIC_SESSION_POOL_MARK_ALL_ACTIVE_SESSIONS_GOING_AWAY` marker still fires, once per launch, in
+80 of 80 — so the notification does not need the phone-home — and it closed **nothing** in 80 of 80,
+because by then there is no Google socket to tear down and the page's own sockets do not yet exist.
+No `SOCKET_POOL_CLOSING_SOCKET` burst occurred in any run; the marker preceded the page's first
+socket in every one; the abandoned rating was attempted three times in every one; and
+`aRetriedRatingCannotOverwriteAReRating` passed 60 of 60 under load.
+
+**So the destructive event is gone from this harness's timeline, and it is not gone from the
+browser.** A control that plants the page load on Chrome's own command line — so a loopback socket
+is idle in the pool when the marker fires — had that socket closed by the marker in **16 of 20
+runs**. The flush is alive; what saves the deck tests is that the page now loads 57–140 ms after the
+marker, and nothing enforces that ordering: the gap is about one 50 ms poll interval of
+`HeadlessChrome`'s own DevTools handshake. **No wait was added**, because the licensed shape of one
+is a condition rather than a bound and the two candidate conditions came out as follows —
+`Network.enable` on Chrome 152's browser target does not exist (`-32601`, 3 probes of 3), while
+tailing the NetLog live *does* work and is recorded, with its measured latency, for whoever needs it
+if that margin ever narrows. Adding a wait now would also be adding one that cannot be shown red in
+the fixture it protects: nothing in the harness produces a late flush on demand.
+
+The full study, with every raw per-run figure behind the numbers above, is
+[docs/loopback-only-evidence.md](../loopback-only-evidence.md), a dated measurement kept the same
+way as its two siblings. [ADR 46](0046-the-rating-deck.md)'s second retry amendment carries a dated
+note pointing at it.
+
+**What this amendment does not do.** No production change: `deck.html` and `RateServer` are
+untouched, and `HeadlessChrome` is test-only. No claim that the phone-home *caused* the flush — the
+measurement says it did not. No new dependency, and no NetLog capture on the ordinary launch path:
+`HeadlessChrome.launch()` without a path builds exactly the command line it always did.
+
 ## Alternatives considered
 
 **HtmlUnit — a pure-Java browser, needing nothing installed.** The preferred answer, and it does

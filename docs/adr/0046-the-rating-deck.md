@@ -584,6 +584,24 @@ change: the warm-up request is issued by the test through the page, not by `deck
 above either 2026-09-01 amendment is withdrawn; this one narrows what "the stub saw nothing" is
 allowed to mean.
 
+**Note (2026-09-02, issue #186): the confound named above was removed, and the residual re-measured
+against it.** The test browser now reaches nothing but `127.0.0.1` — every other name fails at DNS —
+and the flush was traced again under that posture, 80 launches running this very scenario plus 60
+runs of `aRetriedRatingCannotOverwriteAReRating` under load. Two findings bear on the residual
+stated above. **The phone-home was not the flush's cause**: the browser-wide notification still
+fires, once per launch, in 80 of 80 — so those Google requests were present at the sighting and are
+not what drives the flush, and `docs/retry-pool-flush-evidence.md` §5's "they are the trigger"
+carries a dated note to that effect. And **the flush no longer finds the deck's sockets**:
+it closed nothing in 80 of 80 runs, landing 57–140 ms before the page's first socket every time, and
+the retry control passed 60 of 60. So the residual this amendment measured is **closed within what
+those runs bound** — 0 failures in 60 is consistent with rates up to about 4.9%, and round 2's own
+1-in-81 would have produced a clean 60 about half the time — which is not the same as fixed. It is
+also not enforced: a control that plants the page load early had the flush close its loopback socket
+in 16 of 20 runs, so the mechanism is intact and the deck tests are protected by an incidental
+margin. Nothing above is withdrawn. The measurement is
+[docs/loopback-only-evidence.md](../loopback-only-evidence.md) and the decision it supports is
+[ADR 52](0052-test-the-deck-page-in-a-real-browser.md)'s 2026-09-02 amendment.
+
 ## Alternatives considered
 
 - **A controller in the Spring app** — the server and the port already exist. Refused because it

@@ -1072,4 +1072,7 @@ Captured on 2026-08-26 against the jar built from this branch by `./gradlew boot
 - [The retry pool-flush evidence](retry-pool-flush-evidence.md) — round 2: the eighty-one-run trace
   study behind ADR 46's second retry amendment, and why a socket existing in Chrome's pool is not
   something silence can prove.
+- [The loopback-only flush measurement](loopback-only-evidence.md) — round 3: the eighty-run study
+  behind ADR 52's 2026-09-02 amendment, taken with the test browser unable to reach anything but
+  loopback, and what it found the flush still does.
 - [The project README](../README.md) — the short version of everything above.
