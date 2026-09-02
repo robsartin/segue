@@ -5,6 +5,7 @@ import com.robsartin.segue.musicbrainz.BridgedIdentity;
 import com.robsartin.segue.musicbrainz.MusicBrainzIdentity;
 import com.robsartin.segue.musicbrainz.MusicBrainzIdentityUnavailableException;
 import com.robsartin.segue.wikidata.KindMapper;
+import com.robsartin.segue.wikidata.WikibaseLabels;
 import com.robsartin.segue.wikidata.WikidataClient;
 import com.robsartin.segue.wikidata.WikidataUnavailableException;
 import java.util.Collection;
@@ -114,13 +115,19 @@ public final class WikidataMusicBrainzIdentity implements MusicBrainzIdentity {
    * <p>Both riders multiply rows — an item stating three classes returns three bindings — so a row
    * is not an entity and the parser keys on the item, exactly as {@code ReverseClaims} does.
    *
+   * <p>{@code DISTINCT} for the same reason {@code ReverseClaims} uses it against the same service:
+   * duplicate {@code P31} statements would otherwise each cost a row of response body. The parser
+   * does not need it — it dedupes into a set, and Loop C's test proves that against duplicate rows
+   * — so this is bandwidth, not correctness, and the request line pays for it in the table on
+   * {@link #MAX_MBIDS_PER_QUERY}.
+   *
    * <p>The {@code OPTIONAL} is what keeps an item with no {@code P31} in the answer at all: an
    * unbound {@code ?type} is a binding without the key, not a dropped row. An entity the bridge can
    * name but not classify is still a resolved QID.
    */
   private static final String DESCRIBED_BATCH_TEMPLATE =
       """
-      SELECT ?item ?mbid ?itemLabel ?type WHERE {
+      SELECT DISTINCT ?item ?mbid ?itemLabel ?type WHERE {
         VALUES ?mbid { %s }
         ?item wdt:%s ?mbid .
         OPTIONAL { ?item p:P31/ps:P31 ?type }
@@ -140,25 +147,26 @@ public final class WikidataMusicBrainzIdentity implements MusicBrainzIdentity {
    * <table border="1">
    *   <caption>Request-URI bytes against {@code https://query.wikidata.org/sparql?}</caption>
    *   <tr><th>MBIDs</th><th>{@link #BATCH_TEMPLATE}</th><th>{@link #DESCRIBED_BATCH_TEMPLATE}</th></tr>
-   *   <tr><td>50</td><td>2,330</td><td>2,492</td></tr>
-   *   <tr><td>100</td><td>4,480</td><td>4,642</td></tr>
-   *   <tr><td>182</td><td>8,006</td><td>8,168</td></tr>
-   *   <tr><td>183</td><td>8,049</td><td>8,211</td></tr>
-   *   <tr><td>200</td><td>8,780</td><td>8,942</td></tr>
+   *   <tr><td>50</td><td>2,330</td><td>2,501</td></tr>
+   *   <tr><td>100</td><td>4,480</td><td>4,651</td></tr>
+   *   <tr><td>182</td><td>8,006</td><td>8,177</td></tr>
+   *   <tr><td>183</td><td>8,049</td><td>8,220</td></tr>
+   *   <tr><td>200</td><td>8,780</td><td>8,951</td></tr>
    * </table>
    *
    * <p>The narrow figures are {@code 180 + 43n}, measured 2026-08-30 and re-measured unchanged on
-   * 2026-09-02. The widened ones are {@code 342 + 43n}, measured 2026-09-02: the label service and
-   * the {@code OPTIONAL p:P31/ps:P31} cost <b>162 bytes, once</b>, and nothing per MBID. Issue
-   * #163's re-measurement is that number and this table; neither was inherited, and neither was
-   * derived from the other by arithmetic.
+   * 2026-09-02. The widened ones are {@code 351 + 43n}, measured 2026-09-02: the label service, the
+   * {@code OPTIONAL p:P31/ps:P31} and the {@code DISTINCT} cost <b>171 bytes, once</b>, and nothing
+   * per MBID. Issue #163's re-measurement is that number and this table; neither was inherited, and
+   * neither was derived from the other by arithmetic — the table was measured a second time when
+   * fix round 1 added {@code DISTINCT}, rather than adjusted by the nine bytes it looked like.
    *
    * <p>The classic ceiling on a request line is 8,192 bytes. The widened template's last batch to
    * fit under it is <b>182</b> rather than the narrow one's 186 — measured at both ends, 182 fits
-   * and 183 does not — and {@code application.yaml} ships {@code segue.expand.max-new-edges: 200},
-   * a bound {@code MusicBrainzSourceAdapter} spends on relations <i>before</i> it resolves any
-   * neighbour. So the shipped configuration could hand this method 200 MBIDs and exceed the limit
-   * in one go.
+   * at 8,177 and 183 does not at 8,220 — and {@code application.yaml} ships {@code
+   * segue.expand.max-new-edges: 200}, a bound {@code MusicBrainzSourceAdapter} spends on relations
+   * <i>before</i> it resolves any neighbour. So the shipped configuration could hand this method
+   * 200 MBIDs and exceed the limit in one go.
    *
    * <p><b>What that would have cost is a whole seed's neighbourhood.</b> A 414 is not transient, so
    * {@link WikidataClient} does not retry it: it throws at once. Before issue #148 {@link #ask}
@@ -170,14 +178,14 @@ public final class WikidataMusicBrainzIdentity implements MusicBrainzIdentity {
    * still a failure.
    *
    * <p><b>100 rather than 182, and 100 still.</b> The headroom that argument bought was spent on
-   * exactly the event it anticipated — "the template never gaining a line" — and it covered it:
-   * 4,642 bytes leaves <b>3,550</b> under the ceiling, so the widened query at the shipped batch
-   * size is no closer to the limit than a reader of the old figure would have assumed. Raising the
-   * number to 182 would save one round trip per two hundred neighbours and would leave 24 bytes;
-   * the cost of not doing so is one extra round trip per 100 neighbours against a service that
-   * answers in tenths of a second. Each chunk is its own {@link WikidataClient#get}, so the retry
-   * policy, the honoured {@code Retry-After} and its ceiling apply per request exactly as they did
-   * when there was one.
+   * exactly the event it anticipated — "the template never gaining a line" — and it covered it
+   * twice over, the second time for a line added in review: 4,651 bytes leaves <b>3,541</b> under
+   * the ceiling, so the widened query at the shipped batch size is no closer to the limit than a
+   * reader of the old figure would have assumed. Raising the number to 182 would save one round
+   * trip per two hundred neighbours and would leave 15 bytes; the cost of not doing so is one extra
+   * round trip per 100 neighbours against a service that answers in tenths of a second. Each chunk
+   * is its own {@link WikidataClient#get}, so the retry policy, the honoured {@code Retry-After}
+   * and its ceiling apply per request exactly as they did when there was one.
    */
   private static final int MAX_MBIDS_PER_QUERY = 100;
 
@@ -339,20 +347,18 @@ public final class WikidataMusicBrainzIdentity implements MusicBrainzIdentity {
   }
 
   /**
-   * The label, unless it is the bare QID.
+   * The label, unless {@code wikibase:label} handed back the bare QID.
    *
-   * <p>{@code wikibase:label} hands back the QID itself when no English label exists, so believing
-   * it would fill the graph with nodes called {@code Q121998451}. Leaving the entity unlabelled is
-   * what keeps it undescribed, and an undescribed neighbour is one {@code SegueService} still
-   * fetches properly — the behaviour that already exists. The rule is {@code
-   * ReverseClaims.rememberLabel}'s, against the same service and for the same reason; two answers
-   * to it would be two graphs.
+   * <p>{@link WikibaseLabels} owns that rule, and {@code ReverseClaims} asks it the same question
+   * about the same service. It was a verbatim copy here until fix round 1, kept equal by a comment
+   * in each saying two answers would be two graphs — which was true, and is now enforced by there
+   * being one answer.
    */
   private static void rememberLabel(Map<String, String> labels, String qid, String label) {
-    if (label == null || label.isBlank() || label.equals(qid)) {
-      return;
+    String believable = WikibaseLabels.believable(qid, label);
+    if (believable != null) {
+      labels.putIfAbsent(qid, believable);
     }
-    labels.putIfAbsent(qid, label);
   }
 
   /**

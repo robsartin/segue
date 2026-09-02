@@ -100,9 +100,10 @@ public interface MusicBrainzIdentity {
    * <p><b>The default describes nothing, and that is the honest answer.</b> An implementation that
    * only maps identifiers is not being asked to invent a label or a class: it delegates to {@link
    * #qidsFor} and hands back {@link NodeKind#CONCEPT} with a null label and no classes, which is
-   * exactly what a caller must treat as "fetch this one properly". Five of this seam's six
-   * implementors are test doubles that do precisely that, and this default is why widening the seam
-   * did not have to touch them.
+   * exactly what a caller must treat as "fetch this one properly". Every implementor of this seam
+   * but {@code WikidataMusicBrainzIdentity} is a test double that does precisely that, and this
+   * default is why widening the seam did not have to touch a single one of them. The count is left
+   * out on purpose: it was written here as six and was already seven on the branch that wrote it.
    *
    * @throws MusicBrainzIdentityUnavailableException if the bridge could not be asked at all
    */

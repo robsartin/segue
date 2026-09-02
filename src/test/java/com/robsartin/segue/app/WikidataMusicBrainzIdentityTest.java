@@ -195,9 +195,10 @@ class WikidataMusicBrainzIdentityTest {
       identity(stub).identitiesFor(mbids);
 
       // The widened template's own measurement, 2026-09-02, driven through WikidataClient's
-      // encoding: the request URI is 342 + 43n bytes, so 200 MBIDs in one VALUES clause is 8,942
-      // — over the limit, and a 414 is not transient. The label service and the OPTIONAL P31 cost
-      // 162 bytes once and nothing per MBID; MAX_MBIDS_PER_QUERY holds the full table. This test
+      // encoding: the request URI is 351 + 43n bytes, so 200 MBIDs in one VALUES clause is 8,951
+      // — over the limit, and a 414 is not transient. The label service, the OPTIONAL P31 and the
+      // DISTINCT cost 171 bytes once and nothing per MBID; MAX_MBIDS_PER_QUERY holds the full
+      // table, re-measured when review added the DISTINCT rather than adjusted by nine. This test
       // is the guard that a later line added to the query cannot quietly push a shipped batch
       // over, which is exactly what happened to the figures this replaces.
       assertThat(stub.queries()).isNotEmpty();
