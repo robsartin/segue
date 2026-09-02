@@ -35,40 +35,53 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Why {@code MusicBrainzSourceAdapter} returns no {@link
- * com.robsartin.segue.port.ExpandResult#neighbors()}, held by a test rather than by a paragraph (<a
- * href="https://github.com/robsartin/segue/issues/143">issue #143</a>).
+ * <b>Which neighbours {@code MusicBrainzSourceAdapter} may emit, and which it must not</b> — held
+ * by tests rather than by a paragraph (<a
+ * href="https://github.com/robsartin/segue/issues/163">issue #163</a>; ADR 61, which reverses half
+ * of ADR 55).
  *
- * <p>#143's premise is that the MusicBrainz response has already paid for the neighbour's identity,
- * so the {@code EntityResolver.fetch} {@code SegueService} spends per newly discovered neighbour is
- * avoidable. <b>It has paid for two thirds of it.</b> A MusicBrainz relation carries the
- * neighbour's MBID, name and artist type; what it does not carry — and cannot, because MusicBrainz
- * states no Wikidata classes — is {@code instanceOf}, the raw {@code P31} that {@link
- * NodeAssertion}'s javadoc says the log keeps so a derivation can be revisited (ADR 42), and that
- * {@code PathRanking.isHub}, {@code CandidateSweep}, {@code rate/Card}, {@code DotWriter} and
- * {@code GraphMlWriter} all read.
+ * <p><b>The guard, which is the whole of the decision.</b> A neighbour is emitted only when the
+ * bridge behind {@link MusicBrainzIdentity} answered with <i>both</i> a label {@link
+ * BridgedIdentity} did not normalise to null <i>and</i> at least one class. An identity that clears
+ * neither is omitted, and {@code SegueService} falls back to {@code EntityResolver.fetch} exactly
+ * as it did before this change — so the round trip is skipped only where it had nothing left to
+ * buy.
  *
- * <p>{@code SegueService} prefers an adapter's neighbour to a fetch, and records it whether or not
- * the node already exists (issue #55). {@code TinkerGraphStore.upsertNode} writes {@code
- * instanceOf} on every upsert, <b>empty included and deliberately so</b> — its own comment says a
- * later claim stating no classes must not leave an earlier claim's behind. Put those three together
- * and a MusicBrainz {@code neighbors()} does not merely decline to add classes: it removes the ones
- * already there.
+ * <p><b>What this class used to say, because it is still true and is still asserted.</b> #143's
+ * premise was that a MusicBrainz response has already paid for a neighbour's identity. It has paid
+ * for two thirds of it: a relation carries the neighbour's MBID, name and artist type, and what it
+ * does not carry — and cannot, because MusicBrainz states no Wikidata classes — is {@code
+ * instanceOf}, the raw {@code P31} that {@link NodeAssertion}'s javadoc says the log keeps so a
+ * derivation can be revisited (ADR 42), and that {@code PathRanking.isHub}, {@code CandidateSweep},
+ * {@code rate/Card}, {@code DotWriter} and {@code GraphMlWriter} all read. {@code SegueService}
+ * prefers an adapter's neighbour to a fetch and records it whether or not the node already exists
+ * (issue #55), and {@code TinkerGraphStore.upsertNode} writes {@code instanceOf} on every upsert,
+ * <b>empty included and deliberately so</b> — its own comment says a later claim stating no classes
+ * must not leave an earlier claim's behind. Put those three together and a class-less {@code
+ * neighbors()} does not merely decline to add classes: it removes the ones already there. <b>That
+ * is unchanged, and the first two tests below are exactly it</b>, watched red on 2026-09-02 against
+ * an adapter planted with an unguarded emission — {@code Expecting actual: [] to contain exactly
+ * (and in same order): ["Q5"]}, the identical message ADR 55's own tests were watched red with on
+ * 2026-08-30. What this class no longer says is that <i>therefore no neighbour may be emitted</i>.
  *
- * <p><b>Both tests below were watched red, and here is what they said.</b> The adapter was changed
- * to emit a {@code NodeAssertion} per resolved neighbour — {@code artist.type} read into {@link
- * ArtistRelation}, {@code Person}/{@code Group} mapped onto {@link NodeKind} — and both failed with
- * {@code Expecting actual: [] to contain exactly (and in same order): ["Q5"]}: the first because
- * the class it had was erased, the second because the class it should have been given never
- * arrived. The change was then reverted (ADR 4), and these tests are what stops it coming back by
- * accident. The message is quoted here rather than cited elsewhere because it is short enough to
- * carry, and ADR 55 records the decision it settled.
+ * <p><b>What changed is where the classes come from, not whether they are required.</b> ADR 55's
+ * own closing sentence named the route that collects the saving without the cost: a bridge that
+ * returns classes alongside QIDs, one batched Query Service round trip per 100 neighbours, the
+ * shape {@code ReverseClaims} already uses for Wikidata's own neighbours. That is what {@link
+ * MusicBrainzIdentity#identitiesFor} now is. So the described neighbour arrives with the {@code
+ * instanceOf} #143 could not supply, and the two tests that hold it are green <i>for a new
+ * reason</i> — the classes come from the bridge, not from a fetch that no longer happens. {@link
+ * RefusesToFetch} is what says so.
  *
- * <p><b>What this is not.</b> It is not an argument that the saving is imaginary. It is measured
- * and real, and the route that collects it without this cost is a bridge that returns classes
- * alongside QIDs — one batched Query Service round trip per 100 neighbours, the shape {@code
- * ReverseClaims} already uses for Wikidata's own neighbours. That crosses into {@code app}, so it
- * is a separate change rather than this one.
+ * <p><b>The claim is Wikidata's, and is stamped so.</b> Kind, label and classes are read from
+ * Wikidata on the bridge's round trip, so the neighbour claim carries {@code Provenance("wikidata",
+ * qid, assertedAt, 1.00)} while the edge keeps {@code "musicbrainz"} at 0.80. {@code
+ * SourceAdapter.id()}'s javadoc is amended to govern {@code assertions()} for that reason, and the
+ * third test below is the assertion.
+ *
+ * <p><b>GAP 7 is untouched.</b> The last test still holds the half of #143 that was always safe: an
+ * empty {@code instanceOf} does not throw, it erases. Nothing here makes an empty list illegal — it
+ * makes it a reason not to emit.
  */
 class MusicBrainzNeighbourIdentityTest {
 

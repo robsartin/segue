@@ -94,53 +94,54 @@ import java.util.regex.Pattern;
  * all, so the n kept here are simply the n MusicBrainz listed first. {@link ExpandResult#truncated}
  * reports both the same way (GAP 6).
  *
- * <p><b>No {@code neighbors}, and neither because the data is missing nor because it was never
- * examined</b> (<a href="https://github.com/robsartin/segue/issues/143">issue #143</a>). {@link
- * ExpandResult} treats them as an optimisation an adapter may supply and is explicit that one which
- * does not know is not obliged to guess, so an absent neighbour falls back to the caller's own
- * fetch. This adapter takes that fallback <i>deliberately</i>, and the reason is not the one an
- * earlier version of this javadoc gave. That version said the response carries a name but not the
- * neighbour's type, and it was false: every relation in the committed fixture carries {@code
- * artist.type} — 22 {@code Person} and 2 {@code Group}, which map one-to-one onto {@link
- * #DESCRIBED}.
+ * <p><b>{@code neighbors()} is filled, but only from an identity that says enough</b> (<a
+ * href="https://github.com/robsartin/segue/issues/163">issue #163</a>; ADR 61, which reverses half
+ * of ADR 55 and leaves its {@code subgroup} half standing). {@link ExpandResult} treats neighbours
+ * as an optimisation an adapter may supply and is explicit that one which does not know is not
+ * obliged to guess. This adapter now knows, sometimes, and the guard is what "sometimes" means: see
+ * {@link #describes}.
  *
- * <p><b>The response pays for two thirds of a neighbour's identity, and the missing third is the
- * expensive one.</b> With the QID from {@link MusicBrainzIdentity#qidsFor} and the label from
- * {@link ArtistRelation#targetName}, a {@code NodeAssertion} is constructible at zero extra network
- * cost. What MusicBrainz cannot supply is {@code instanceOf}: it classifies an artist as {@code
- * Person} or {@code Group} without stating Wikidata classes, so the list would be empty. {@code
- * SegueService} prefers an adapter's neighbour to a fetch and records it <b>whether or not the node
- * already exists</b> (issue #55), and {@code TinkerGraphStore.upsertNode} writes {@code instanceOf}
- * on every upsert, empty included and deliberately so — its own comment says a later claim stating
- * no classes must not leave an earlier claim's behind. So this adapter's {@code neighbors()} would
- * not merely decline to add classes; it would remove the ones already there, and give the ones it
- * discovered none. {@code PathRanking.isHub}, {@code CandidateSweep}, {@code rate/Card}, {@code
- * DotWriter} and {@code GraphMlWriter} all read that field, and ADR 42 is the decision that the log
- * keeps the raw classes so a derivation can be revisited at all.
+ * <p><b>The history is worth carrying, because the guard is the whole of what it taught.</b> #143
+ * asked for a {@code neighbors()} built from the MusicBrainz response alone, and the response does
+ * pay for two thirds of a neighbour's identity — every relation in the committed fixture carries
+ * {@code artist.type} (22 {@code Person} and 2 {@code Group}, mapping one-to-one onto {@link
+ * #DESCRIBED}), and {@link ArtistRelation#targetName} carries the label. The missing third is the
+ * expensive one: MusicBrainz classifies an artist without stating Wikidata classes, so {@code
+ * instanceOf} would be empty. {@code SegueService} prefers an adapter's neighbour to a fetch and
+ * records it <b>whether or not the node already exists</b> (issue #55), and {@code
+ * TinkerGraphStore.upsertNode} writes {@code instanceOf} on every upsert, empty included and
+ * deliberately so — its own comment says a later claim stating no classes must not leave an earlier
+ * claim's behind. So #143's neighbour would not merely decline to add classes; it would remove the
+ * ones already there, and give the ones it discovered none. {@code PathRanking.isHub}, {@code
+ * CandidateSweep}, {@code rate/Card}, {@code DotWriter} and {@code GraphMlWriter} all read that
+ * field, and ADR 42 is the decision that the log keeps the raw classes so a derivation can be
+ * revisited at all. <b>ADR 55 refused #143 on that, measured</b>: of the neighbours this adapter
+ * resolved, 44% were already in the graph — where the fetch is not spent at all, because it is
+ * gated on {@code isNew} — and a further tenth were described by Wikidata's own reverse pass in the
+ * same call, against nodes losing or never gaining their classes at a greater rate than that. That
+ * refusal still stands, and {@code MusicBrainzNeighbourIdentityTest} still holds it.
  *
- * <p><b>Both halves of that are measured rather than argued, and the saving is smaller than #143
- * assumed.</b> A dev-side probe drove this adapter and the shipped bridge over a sample of the real
- * graph's {@code PERSON} and {@code GROUP} nodes and ran the production Wikidata adapter beside it,
- * on 2026-08-30; the figures and the method are in ADR 55. Of the neighbours this adapter resolved,
- * 44% were already in the graph — where the fetch is not spent at all, because it is gated on
- * {@code isNew} — and a further tenth were described by Wikidata's own reverse pass in the same
- * call. Fewer than half were fetches a {@code neighbors()} would actually have saved, at a median
- * of one per expansion, against nodes losing or never gaining their classes at a greater rate than
- * that.
+ * <p><b>What ADR 61 changes is where the classes come from.</b> ADR 55's own closing sentence named
+ * the route that collects the saving without the cost — a bridge that returns classes alongside
+ * QIDs, one batched Query Service round trip per 100 neighbours, the shape {@code ReverseClaims}
+ * already uses for Wikidata's own neighbours — and said it was a change of its own because it
+ * widens {@link MusicBrainzIdentity} and the {@code app} class behind it. That is what {@link
+ * MusicBrainzIdentity#identitiesFor} is. So this adapter emits a neighbour when, and only when, the
+ * bridge could see a real label and at least one class; anything less is omitted and the caller's
+ * fetch happens exactly as before. Measured over the committed fixture's 22 mappable neighbours,
+ * that is 22 fetches saved at the same one bridge round trip, and 22 fetches still spent when the
+ * bridge describes none of them — {@code NeighbourFetchCountTest} is the measurement and its own
+ * positive control.
  *
- * <p><b>The route that collects the saving without the cost is a bridge that returns classes
- * alongside QIDs</b> — one batched Query Service round trip per 100 neighbours, which is the shape
- * {@code ReverseClaims} already uses for Wikidata's own neighbours, rather than one fetch each.
- * That widens {@link MusicBrainzIdentity} and the {@code app} class behind it, so it is a change of
- * its own and not a line here. ADR 55 records the decision and {@code
- * MusicBrainzNeighbourIdentityTest} holds it: those tests were watched red against an adapter that
- * did emit neighbours, and they are what stops that coming back by accident.
+ * <p><b>The neighbour claim is stamped {@code "wikidata"}, not {@link #SOURCE_ID}.</b> See {@link
+ * #toNeighbour}, and {@link SourceAdapter#id()}, whose sentence is scoped to {@link
+ * ExpandResult#assertions()} for this reason.
  *
- * <p><b>No stated classes, so {@code instanceOf} stays empty.</b> MusicBrainz classifies an artist
- * as {@code Person} or {@code Group} without stating Wikidata classes, which is exactly the case
- * {@code KindMapper.rederive} leaves untouched (ADR 42). {@code instanceOf} is a list of QIDs
- * enforced by {@code NodeRecord}'s constructor, so a MusicBrainz type id put there would build a
- * {@code NodeAssertion} cleanly and blow up later inside {@code IngestService.apply} (GAP 7).
+ * <p><b>GAP 7 is unchanged and is the reason the guard is a guard rather than a throw.</b> {@code
+ * instanceOf} is a list of QIDs enforced by {@code NodeRecord}'s constructor, so a MusicBrainz type
+ * id put there would build a {@code NodeAssertion} cleanly and blow up later inside {@code
+ * IngestService.apply}. An <i>empty</i> list has no element to fail on: it goes through, and
+ * erases. That is why an undescribed neighbour is omitted rather than emitted class-less.
  *
  * <p><b>Failures degrade rather than propagate</b>, as {@link SourceAdapter#expand} requires: an
  * unreachable MusicBrainz yields a flagged empty result, not a thrown error. <b>So does an
