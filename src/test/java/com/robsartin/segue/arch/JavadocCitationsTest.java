@@ -54,12 +54,17 @@ import org.junit.jupiter.api.Test;
  * gives. The ~110 {@code MainClass.member} citations of <i>main</i> classes are out of scope: now
  * that {@code javadoc} gates, those can become real {@code @link} tags and be checked by the
  * compiler, which is a better guarantee than this one and a separate piece of work. A package
- * prefix is not verified against the file's directory — the class is found by simple name, which is
- * unambiguous today because no two test files share one. A member is matched by declaration text, a
- * {@code void name(} method or a {@code static final … name =} field, not by loading the class:
- * matching the source keeps the rule readable in the failure message, and a citation of an
- * inherited or generated member would red rather than pass. And a {@code @code} span is read
- * wherever it occurs in a main source file, javadoc or string literal alike; that errs strict.
+ * prefix is not verified against the file's directory — the class is found by simple name, and a
+ * name two test files share resolves to neither: the citation reds as ambiguous, naming both files,
+ * because a map that answered it with whichever file sorted last would be a guard that lies. A
+ * duplicate nobody cites is not this class's business and passes. Only a braced span is swept, so a
+ * citation in bare prose or a line comment is invisible to it — {@link
+ * com.robsartin.segue.mcp.ToolResults} names {@code ToolResultsTest} in a {@code //} comment, and
+ * bracing it is what would bring it in. A member is matched by declaration text, a {@code void
+ * name(} method or a {@code static final … name =} field, not by loading the class: matching the
+ * source keeps the rule readable in the failure message, and a citation of an inherited or
+ * generated member would red rather than pass. And a {@code @code} span is read wherever it occurs
+ * in a main source file, javadoc or string literal alike; that errs strict.
  */
 class JavadocCitationsTest {
 
@@ -67,9 +72,10 @@ class JavadocCitationsTest {
 
   /**
    * An inline code span and everything up to its closing brace. Reluctant, so nested spans on one
-   * line stay separate; the brace is what ends it, as javadoc has no escape for one inside.
+   * line stay separate; the brace is what ends it, as javadoc has no escape for one inside. The
+   * word boundary is load-bearing: without it {@code @codex} would be read as a span of {@code x}.
    */
-  private static final Pattern CODE_SPAN = Pattern.compile("\\{@code(.*?)}", Pattern.DOTALL);
+  private static final Pattern CODE_SPAN = Pattern.compile("\\{@code\\b(.*?)}", Pattern.DOTALL);
 
   /**
    * The one citation shape this class reads: an optional package prefix of lowercase segments, a
@@ -114,8 +120,11 @@ class JavadocCitationsTest {
   /** Every {@code .java} under {@code src/main/java}, walked once, sorted. */
   private static final List<Path> MAIN_SOURCES = sources("src/main/java");
 
-  /** Simple class name to source file, for everything under {@code src/test/java}. */
-  private static final Map<String, Path> TEST_CLASSES = testClasses();
+  /**
+   * Simple class name to <i>every</i> file declaring it under {@code src/test/java}. A list, not a
+   * path, because a last-one-wins map would answer a cited name with an arbitrary file.
+   */
+  private static final Map<String, List<Path>> TEST_CLASSES = testClasses();
 
   private static final Scan SCAN = scan();
   private static final List<Citation> CITATIONS = SCAN.citations();
@@ -173,10 +182,17 @@ class JavadocCitationsTest {
 
   /** The problem with this citation, or {@code null} if it resolves. */
   private static String resolve(Citation citation) {
-    Path file = TEST_CLASSES.get(citation.className());
-    if (file == null) {
+    List<Path> files = TEST_CLASSES.getOrDefault(citation.className(), List.of());
+    if (files.isEmpty()) {
       return "no test class %s.java under src/test/java".formatted(citation.className());
     }
+    if (files.size() > 1) {
+      return "ambiguous citation — %s is declared in %s — qualify it with its package or rename one"
+          .formatted(
+              citation.className(),
+              files.stream().map(ROOT::relativize).map(Path::toString).toList());
+    }
+    Path file = files.get(0);
     if (!citation.namesMember()) {
       return null;
     }
@@ -228,11 +244,11 @@ class JavadocCitationsTest {
     return (int) source.substring(0, offset).chars().filter(c -> c == '\n').count() + 1;
   }
 
-  private static Map<String, Path> testClasses() {
-    Map<String, Path> byName = new LinkedHashMap<>();
+  private static Map<String, List<Path>> testClasses() {
+    Map<String, List<Path>> byName = new LinkedHashMap<>();
     for (Path file : sources("src/test/java")) {
       String name = file.getFileName().toString().replace(".java", "");
-      byName.put(name, file);
+      byName.computeIfAbsent(name, unused -> new ArrayList<>()).add(file);
     }
     return Map.copyOf(byName);
   }
