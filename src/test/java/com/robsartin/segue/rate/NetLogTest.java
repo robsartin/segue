@@ -132,4 +132,56 @@ class NetLogTest {
     assertThat(sightings).isNotEmpty();
     assertThat(NetLog.hostsContacted(truncated)).contains("93.184.216.34");
   }
+
+  /**
+   * The same log with Chrome's own phone-home events taken out — a browser that reached nothing and
+   * asked for nothing, which is also what a parser blinded by a NetLog format change looks like
+   * from the outside.
+   */
+  private static final String NO_PHONE_HOME =
+      """
+      {
+        "constants": {
+          "logEventTypes": {"URL_REQUEST_START_JOB": 402, "TCP_CONNECT": 91},
+          "logSourceType": {"URL_REQUEST": 1, "SOCKET": 42}
+        },
+        "events": [
+          {"type":402,"source":{"id":1,"type":1},
+           "params":{"url":"http://127.0.0.1:8080/api/card?i=0"}},
+          {"type":91,"source":{"id":2,"type":42},
+           "params":{"address_list":["127.0.0.1:8080"]}}
+        ]
+      }
+      """;
+
+  @Test
+  @DisplayName(
+      "the guard's instrument control fails when the parser sees none of Chrome's attempts")
+  void shouldFailTheInstrumentControlWhenNoPhoneHomeIsSeen() throws IOException {
+    Path stripped = Files.writeString(scratch.resolve("no-phone-home.json"), NO_PHONE_HOME);
+
+    assertThatThrownBy(
+            () ->
+                HeadlessChromeNetworkTest.requireTheParserStillSeesChromesAttempts(
+                    NetLog.sightings(stripped)))
+        .as(
+            "a NetLog with no non-loopback attempt in it must not let the guard's zero pass"
+                + " unremarked — that is a blind instrument, not a quiet browser")
+        .isInstanceOf(AssertionError.class)
+        .hasMessageContaining("re-derive KNOWN_ATTEMPTS");
+  }
+
+  @Test
+  @DisplayName("the instrument control passes when Chrome's attempts are in the log")
+  void shouldPassTheInstrumentControlWhenAPhoneHomeIsSeen() throws IOException {
+    Path withAttempt =
+        Files.writeString(
+            scratch.resolve("with-phone-home.json"),
+            NO_PHONE_HOME.replace(
+                "\"url\":\"http://127.0.0.1:8080/api/card?i=0\"",
+                "\"url\":\"https://accounts.google.com/ListAccounts\""));
+
+    HeadlessChromeNetworkTest.requireTheParserStillSeesChromesAttempts(
+        NetLog.sightings(withAttempt));
+  }
 }

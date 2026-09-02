@@ -160,6 +160,7 @@ class HeadlessChromeNetworkTest {
     assertThat(kinds(sightings, LOOPBACK))
         .as("the NetLog should show both the page's requests and its sockets, or it saw too little")
         .contains(NetLog.Kind.REQUEST, NetLog.Kind.SOCKET);
+    requireTheParserStillSeesChromesAttempts(sightings);
 
     // The guarantee. Nothing leaves this machine for a non-loopback host: no TCP connect, no TLS
     // or QUIC handshake, no byte sent or received. This is the assertion the resolver rule makes
@@ -201,6 +202,12 @@ class HeadlessChromeNetworkTest {
    *       reconcilor's cookie-jar read, on a profile with no account in it
    *   <li>{@code www.google.com} — 30 sightings; {@code /async/folae}, the omnibox's AI-mode
    *       eligibility fetch
+   *   <li>{@code android.clients.google.com} — {@code /checkin}, GCM's device check-in. <b>0 of
+   *       6</b> in this test's own runs, and listed anyway: it is seen from browsers left running
+   *       longer than this test keeps one, and under load this test's browser may live that long.
+   *       The asymmetry decides it — with {@code isSubsetOf}, an over-listed host is silent while
+   *       an under-listed one reds the gate, so a residual that <em>appears</em> is a flake and one
+   *       that <em>disappears</em> is not
    *   <li>{@code ~notfound} — 61 sightings, all {@code HOST_RESOLVER_MANAGER_REQUEST}. Not a host:
    *       Chrome logs the name the resolver rule <em>mapped it to</em>, so this entry is the rule
    *       working rather than anything escaping. It is kept because the parser reports it in the
@@ -216,11 +223,6 @@ class HeadlessChromeNetworkTest {
    *       --dns-over-https-mode=off} were each measured against it and removed nothing
    * </ul>
    *
-   * <p>{@code android.clients.google.com} ({@code /checkin}, GCM) is deliberately <b>not</b> here:
-   * 0 of 6 runs. It does appear when a browser is left running for six seconds on {@code
-   * about:blank}, so if this guard ever reds naming it, the browser lived longer than this test
-   * keeps it — not a regression.
-   *
    * <p>Each entry is stopped at DNS, so none of them reaches anything; that is the assertion above,
    * and it is the one that matters. <b>The check is {@code isSubsetOf}, so this list can only
    * over-list.</b> An attempt that stops happening will never announce itself here, and a stale
@@ -228,7 +230,12 @@ class HeadlessChromeNetworkTest {
    * browser changes, not trimmed on a hunch. Shortening it for real is work left undone.
    */
   private static final List<String> KNOWN_ATTEMPTS =
-      List.of("accounts.google.com", "www.google.com", "~notfound", "2001:4860:4860::8888");
+      List.of(
+          "accounts.google.com",
+          "www.google.com",
+          "android.clients.google.com",
+          "~notfound",
+          "2001:4860:4860::8888");
 
   /**
    * Whether an event means the browser actually got onto the network, rather than merely asked.
@@ -245,6 +252,56 @@ class HeadlessChromeNetworkTest {
         || event.contains("PACKET_RECEIVED")
         || event.startsWith("SSL_")
         || "QUIC_SESSION".equals(event);
+  }
+
+  /**
+   * The subset of {@link #KNOWN_ATTEMPTS} used as a live control on the instrument. Both were asked
+   * for in 6 of 6 re-derivation runs.
+   */
+  private static final List<String> PHONE_HOME_CONTROL =
+      List.of("accounts.google.com", "www.google.com");
+
+  /**
+   * A live control on the instrument: the parser must still see Chrome asking for its own hosts.
+   *
+   * <p>The two assertions this guard rests on are both about <em>absence</em>, and absence is what
+   * a broken instrument produces for free. {@code NetLogTest} pins the parser against a fixture
+   * transcribed from a real capture, but a fixture cannot notice a future Chrome that keeps its
+   * event <em>names</em> and changes its parameter <em>shapes</em> — that Chrome would sail through
+   * {@code NetLogTest} while every non-loopback sighting quietly vanished here, and the guard would
+   * report a browser that reaches nothing because it had stopped being able to see.
+   *
+   * <p>So this asserts the one thing the harness knows to be true and cannot fake: Chrome phones
+   * home, is refused at DNS, and the parser sees it. Both hosts in {@link #PHONE_HOME_CONTROL} were
+   * asked for in 6 of 6 re-derivation runs; the control needs either.
+   *
+   * <p>Package-private and static so {@code NetLogTest} can plant a NetLog with the phone-home
+   * events stripped and watch this fail. A control never seen to fail is not a control.
+   */
+  static void requireTheParserStillSeesChromesAttempts(List<NetLog.Sighting> sightings) {
+    assertThat(hostsAskedFor(sightings))
+        .as(
+            "the parser no longer sees Chrome's own attempts — re-derive KNOWN_ATTEMPTS against a"
+                + " fresh NetLog before trusting the zero this test reports. Every run so far has"
+                + " shown at least one of %s asked for and refused; a run showing none means either"
+                + " this NetLog's shape moved under the parser or Chrome stopped phoning home, and"
+                + " until that is settled an empty non-loopback set is a blind instrument rather"
+                + " than a quiet browser",
+            PHONE_HOME_CONTROL)
+        .containsAnyElementsOf(PHONE_HOME_CONTROL);
+  }
+
+  /** Non-loopback hosts Chrome named to its resolver or asked for by URL, however it went. */
+  private static List<String> hostsAskedFor(List<NetLog.Sighting> sightings) {
+    return sightings.stream()
+        .filter(
+            sighting ->
+                sighting.kind() == NetLog.Kind.RESOLUTION || sighting.kind() == NetLog.Kind.REQUEST)
+        .map(NetLog.Sighting::host)
+        .filter(host -> !LOOPBACK.equals(host))
+        .distinct()
+        .sorted()
+        .toList();
   }
 
   /** Every non-loopback sighting matching a predicate, as one readable line each. */
