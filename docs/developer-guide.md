@@ -2091,22 +2091,27 @@ prefixed `llm:`, so `PathRanking` does not demote it either.
 
 ### A merge is said, not done — and it lands in two places at two times
 
-`merge` appends one `SameAs` and edits nothing. Its local side must be something **you** minted:
-pointing one at a sourced entity would assert that two real Wikidata ids are the same thing, which is
-a different claim this tool does not make, so the refusal is `nothing in the projection minted
-Q12345 — check the id, or it may already be retracted`.
+`merge` appends one `SameAs` and edits nothing. Its local side must be something **you** minted —
+a `Q00…` id — because pointing one at a sourced entity would assert that two real Wikidata ids are
+the same thing, which is a different claim this tool does not make. Anything the projection does not
+hold as a minted entity, a sourced QID and a retracted local id alike, gets the same refusal:
+`nothing in the projection minted Q00900043 — check the id, or it may already be retracted`.
 
 The two report lines say what happens: `merging Q00900042 "A Self-Pressed Record" into Q12345: you
 are saying they are the same thing`, then `nothing is deleted — the local id stays resolvable, and
 its edges and rating are carried onto the canonical id (ADR 19, ADR 44)`.
 
-Those two halves do not happen at the same time. Ingest and every boot replay **carry** it:
-`IngestService.carry` copies the local node's edges onto the canonical id, gives the canonical id a
-node only when nothing has claimed one, and leaves the local node exactly where it was — which is
-what "stays resolvable" means, since a route recorded last month still names it. The `IdentityMerge`
-port carries the rating. `Equivalences` **resolves** it at read time instead, for a single run of
-`recommend` or `rate`, which replay with no carry wired: two affinity rows naming one thing become
-one view, and the last surviving merge wins for the rating.
+Those two halves do not happen at the same time. **Every replay carries the edges.**
+`IngestService.apply` calls `carry` on any `SameAs` it meets, so ingest, boot and a dev tool's
+throwaway projection all copy the local node's edges onto the canonical id, give the canonical id a
+node only when nothing has claimed one, and leave the local node exactly where it was — which is
+what "stays resolvable" means, since a route recorded last month still names it.
+
+**The rating half is the one that is not always wired.** It goes through the `IdentityMerge` port,
+and `recommend` and `rate` both replay with `IdentityMerge.NONE`, so their projection carries the
+edges and no rating at all. That is why `Equivalences` **resolves** the merge at read time instead,
+for that single run: two affinity rows naming one thing become one view, and the last surviving
+merge wins for the rating.
 
 A second merge of one local id is **said, not refused**, because that is how a wrong merge is
 corrected: `Q00900042 was already merged into Q12345 — the last merge wins for the rating; the graph
@@ -2135,8 +2140,11 @@ ends of a merge are not the same act:
 - **Retract the local id** and its node claim, its owner edges and the merge all stop projecting.
   What a source claimed about the canonical id is untouched.
 - **Retract the canonical id** and the world entity's whole expansion goes — every node and edge
-  claim naming it — and the merge with it. The local node stays standing, with its own edges, no
-  longer merged into anything.
+  claim naming it — and the merge with it. The local node stays standing, and so does every edge of
+  its own that does *not* name the retracted id: `Retractions.survives` drops an `OwnerEdge` when
+  **either** endpoint is retracted, so an edge you asserted from the local entity straight to the
+  canonical one goes too. What is left is the local entity and its other edges, no longer merged
+  into anything.
 
 It reaches backwards only, by position in the log, so a claim appended after the retraction stands
 and re-adding is how something comes back. The rest is

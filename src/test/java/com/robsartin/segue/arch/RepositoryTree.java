@@ -13,9 +13,9 @@ import java.nio.file.Path;
  * AdrIndexTest} needed them too. They live here rather than being copied because the second copy of
  * a rule is the one a future editor misses.
  *
- * <p><b>Public because the fourth caller is not in this package</b> (#183). {@code
- * own.DeveloperGuideRunbooksTest} checks the guide's {@code ownClaim} examples against {@code
- * OwnCli.parse}, which is package-private in {@code own} - so that test cannot live here, and the
+ * <p><b>Public because not every caller is in this package</b> (#183). {@link GuideExamples} reads
+ * the developer guide for the two runbook tests, which live in {@code own} and {@code retract}
+ * because the parsers they drive are package-private there - so neither can live here, and the
  * alternative was the copy this class exists to prevent. Widening a test helper is the cheaper of
  * the two, and it widens nothing in {@code src/main}.
  */

@@ -1,0 +1,103 @@
+package com.robsartin.segue.own;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.robsartin.segue.arch.GuideExamples;
+import com.robsartin.segue.arch.GuideExamples.Example;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+/**
+ * The developer guide's {@code ownClaim} runbook shows commands the owner is meant to paste. This
+ * runs every one of them through {@link OwnCli#parse}, which is the boundary that decides whether a
+ * line is correct to type — issue #183, on issue #145's precedent that a committed document is
+ * checked against the code rather than trusted.
+ *
+ * <p><b>Why {@code parse} and not the tool.</b> Running the examples end to end would mint into a
+ * database on every {@code check}, and what a runbook has to get right is the command line: the
+ * operation, its flags, and {@code --db}. {@code parse} enforces exactly that and opens nothing, so
+ * an example that forgot {@code --db} is red here by construction. {@code --dry-run} examples parse
+ * like any other; nothing is opened and nothing is run.
+ *
+ * <p><b>Two things {@code parse} cannot see, asserted separately.</b> A tilde is a valid path
+ * character, so {@code --db ~/.segue/segue.db} parses cleanly and then dies in the shell — the
+ * guide's own "Write {@code $HOME}, not {@code ~}" rule needs its own assertion. And a guide with
+ * no examples at all would pass every parse, so the count of subcommands shown is the vacuity
+ * guard.
+ *
+ * <p><b>This class lives in {@code own} rather than beside the other document tests in {@code
+ * arch}</b>, because {@link OwnCli#parse} is package-private — the seam {@code OwnCliTest} drives,
+ * and widening it to suit a test would undo the reason it is a seam. {@code
+ * retract.DeveloperGuideRetractionExamplesTest} is its twin, in that package for the same reason,
+ * and {@link GuideExamples} holds the extraction both of them share.
+ */
+class DeveloperGuideOwnClaimExamplesTest {
+
+  private static final GuideExamples RUNBOOK = GuideExamples.of("ownClaim");
+
+  @Test
+  @DisplayName("the guide shows at least one ownClaim example of each of the three subcommands")
+  void shouldShowEverySubcommandWhenTheGuideRunsThroughOwnClaim() {
+    Set<String> shown =
+        RUNBOOK.examples().stream()
+            .filter(example -> !example.arguments().isEmpty())
+            .map(example -> example.arguments().get(0))
+            .collect(Collectors.toCollection(TreeSet::new));
+
+    assertThat(shown)
+        .as(
+            "docs/developer-guide.md — the ownClaim runbook, one ./gradlew ownClaim --args=\"…\""
+                + " line per operation. Without this the other checks pass vacuously on a guide"
+                + " that shows nothing")
+        .contains("mint", "assert", "merge");
+  }
+
+  @Test
+  @DisplayName("no ownClaim example writes a tilde where $HOME belongs")
+  void shouldWriteHomeRatherThanATildeWhenAnExampleNamesADatabase() {
+    assertThat(RUNBOOK.withATilde())
+        .as(
+            "docs/developer-guide.md — a tilde does not expand inside the double quotes of"
+                + " --args=\"…\", so the example arrives at the tool as a literal ~ and dies with"
+                + " \"no segue database at ~/.segue/segue.db\". OwnCli.parse cannot see this,"
+                + " because a tilde is a valid path character")
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("no ownClaim example opens an argument string it never closes")
+  void shouldNameTheLineWhenAnOwnClaimExampleIsNeverFinished() {
+    assertThat(RUNBOOK.unfinishedOpenings())
+        .as(
+            "docs/developer-guide.md — an example whose --args=\"…\" is never closed, even after"
+                + " joining backslash-continued lines, is one this test cannot run. Skipping it"
+                + " silently is how a wrapped example carrying a wrong flag passed unnoticed")
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("every ownClaim example parses through the tool's own parser")
+  void shouldParseEveryExampleWhenTheGuideShowsAnOwnClaimCommand() {
+    List<String> refused = new ArrayList<>();
+    for (Example example : RUNBOOK.examples()) {
+      try {
+        OwnCli.parse(example.arguments().toArray(String[]::new), null, GuideExamples.INVENTED_HOME);
+      } catch (RuntimeException refusal) {
+        refused.add(
+            "line " + example.line() + ": " + example.text() + "\n    " + refusal.getMessage());
+      }
+    }
+
+    assertThat(refused)
+        .as(
+            "docs/developer-guide.md — every ownClaim example is run through OwnCli.parse, the"
+                + " boundary that decides whether a line is correct to type. --db is enforced"
+                + " there, so an example that forgot it fails here")
+        .isEmpty();
+  }
+}
