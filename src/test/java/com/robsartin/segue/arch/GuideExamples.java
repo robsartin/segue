@@ -124,11 +124,13 @@ public final class GuideExamples {
   }
 
   /**
-   * Every line mentioning {@code ./gradlew <task> --args=} that this class could not read as an
-   * example - an unclosed double quote, a single-quoted outer string, no quote at all.
+   * Every line that names the task and carries an {@code --args} token in any spelling but that
+   * this class could not read as a complete example - an unclosed double quote, a single-quoted
+   * outer string, no quote at all, a space around the equals.
    *
    * <p>Not a skip, deliberately. An example this class cannot read is an example nothing checks,
-   * which is the silent hole both the wrapped-line and the single-quoted plants found.
+   * which is the silent hole the wrapped-line, single-quoted and {@code --args =} plants each found
+   * in turn; recognising the task rather than the argument syntax is what closed the class.
    */
   public List<String> unreadableExamples() {
     return unreadableExamples;
