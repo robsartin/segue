@@ -99,7 +99,13 @@ class ArchitectureTest {
                   + " static registry, not a value type");
 
   /**
-   * ADR 32's adapters, in one place. Adding a source adds one entry here and nothing else.
+   * ADR 32's adapters, in one place — the readable list, not the source of truth.
+   *
+   * <p><b>The tree is the source: the packages holding a class that implements a {@code port}
+   * interface.</b> {@code PackageListsTest} derives that set through ArchUnit and asserts this list
+   * equals it, so an adapter arriving without an entry here reds the build instead of shipping
+   * unfenced (issue #165). Adding a source is still one entry here, but forgetting it is no longer
+   * silent.
    *
    * <p>Read by {@link #adaptersDoNotDependOnEachOther}, by {@link #adaptersDoNotDependUpward}, and
    * by {@code DeveloperGuideEnumerationsTest}, which holds the guide's adapter sentence to it.
@@ -113,7 +119,15 @@ class ArchitectureTest {
   }
 
   /**
-   * ADR 32's dev-side tools, in one place. Adding a tool adds one entry here and nothing else.
+   * ADR 32's dev-side tools, in one place — the readable list, not the source of truth.
+   *
+   * <p><b>The tree is the source: the {@code mainClass} packages of the {@code JavaExec} tasks, and
+   * the packages holding a {@code *Cli} with a {@code main}.</b> {@code PackageListsTest} derives
+   * that set both ways and asserts this list equals each, so a seventh tool arriving without an
+   * entry here reds the build. Until issue #165 it did not: a planted tool reaching {@code export},
+   * {@code recommend} and {@code IngestService} left every rule below green, because a package this
+   * list does not name is fenced by nothing. Adding a tool is still one entry here, but forgetting
+   * it is no longer silent — which is how {@code own} arrived unfenced in #92.
    *
    * <p><b>This list is why the sibling fences cannot go stale one at a time.</b> Each tool's fence
    * used to spell its siblings out by hand, and five of the six spellings were incomplete: {@code

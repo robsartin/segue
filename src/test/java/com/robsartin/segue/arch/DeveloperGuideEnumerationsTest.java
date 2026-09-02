@@ -159,6 +159,36 @@ class DeveloperGuideEnumerationsTest {
   }
 
   @Test
+  @DisplayName("the guide names exactly the dev-side tools the build registers, and counts them")
+  void shouldNameEveryDevToolWhenTheGuideDescribesTheLayering() {
+    Matcher sentence =
+        Pattern.compile(
+                "^(`\\w+`(?:, `\\w+`)* and `\\w+`) are the (\\w+) dev-side tools",
+                Pattern.MULTILINE)
+            .matcher(section("## The layering"));
+    assertThat(sentence.find())
+        .as(
+            "docs/developer-guide.md, 'The layering' — a sentence beginning a line, reading '`a`,"
+                + " `b`, ... and `z` are the <count> dev-side tools'")
+        .isTrue();
+
+    Set<String> registered = PackageListsTest.devToolsFromGradle();
+
+    assertThat(new TreeSet<>(backticked(sentence.group(1))))
+        .as(
+            "the tool list in that sentence, compared as a set because the guide's order is"
+                + " chronological, against the packages build.gradle.kts registers a JavaExec task"
+                + " for. Against the derivation and not against"
+                + " ArchitectureTest.DEV_TOOL_PACKAGES, so that a stale sentence cannot agree with"
+                + " a stale constant (issue #165); PackageListsTest holds the constant to the same"
+                + " set")
+        .isEqualTo(registered);
+    assertThat(sentence.group(2))
+        .as("the count word in front of it")
+        .isEqualTo(NUMBER_WORDS.get(registered.size()));
+  }
+
+  @Test
   @DisplayName("the guide's package table has one row per package under src/main")
   void shouldGiveEveryPackageARowWhenTheGuideTabulatesWhatEachIsFor() {
     Set<String> tabulated =
