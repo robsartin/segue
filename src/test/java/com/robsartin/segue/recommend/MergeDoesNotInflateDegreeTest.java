@@ -68,10 +68,12 @@ import org.junit.jupiter.params.provider.ValueSource;
  *
  * <p><b>The guard below is committed {@code @Disabled}, and Task 4 is what removes the
  * annotation.</b> It is not a pending test and not a known-failure to live with: it is the
- * definition of done for the fold, parked red for exactly as long as the defect stands. The gate is
- * what says so — today it reports <b>1 skipped</b>, and when Task 4 lands the fold that count must
- * read <b>0</b>. A skip count that stayed at 1 would mean the fold shipped with its own guard still
- * switched off, which is the one way this test could be worthless.
+ * definition of done for the fold, parked red for exactly as long as the defect stands. It is one
+ * of <b>two</b> such guards — the other is {@code MergedIdIsDrawnAsAnOrphanTest}, which holds
+ * controller ruling 3 — and the gate is what says both came off: today it reports <b>2 skipped</b>,
+ * and when Task 4 lands the fold that count must read <b>0</b>. A skip count that stayed above zero
+ * would mean the fold shipped with its own guards still switched off, which is the one way these
+ * tests could be worthless.
  *
  * <p>Every QID and label here is invented and no known-list is behind them (ADR 40, ADR 51). The
  * canonical side of a merge has to be an id Wikidata could allocate ({@code SameAs} refuses
