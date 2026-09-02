@@ -91,6 +91,13 @@ class DeckBehaviourTest {
 
   private static final long SLOW_MILLIS = 400;
 
+  /**
+   * What {@link #warmUp()} asks for. Small, and not empty: the page has to read it to completion
+   * for the socket to go back into the pool, and a zero-length body would let a test that never
+   * read anything pass that check.
+   */
+  private static final byte[] WARM_UP_BODY = "warm".getBytes(StandardCharsets.UTF_8);
+
   private HttpServer server;
   private ExecutorService handlers;
   private HeadlessChrome chrome;
@@ -145,6 +152,10 @@ class DeckBehaviourTest {
     List<HttpContext> contexts = new ArrayList<>();
     contexts.add(server.createContext("/api/card", this::card));
     contexts.add(server.createContext("/api/rate", this::rate));
+    contexts.add(
+        server.createContext(
+            "/warm-up",
+            exchange -> send(exchange, 200, "text/plain; charset=utf-8", WARM_UP_BODY)));
     contexts.add(
         server.createContext(
             "/", exchange -> send(exchange, 200, "text/html; charset=utf-8", page)));
@@ -279,6 +290,59 @@ class DeckBehaviourTest {
   private int ratedThisSession() {
     Matcher count = Pattern.compile("(\\d+) rated").matcher(chrome.text("progress"));
     return count.find() ? Integer.parseInt(count.group(1)) : 0;
+  }
+
+  /**
+   * Puts a socket in Chrome's pool, used and idle, and returns how many bytes the page read.
+   *
+   * <p><strong>This creates the precondition {@link #untilQuiet()} can only infer.</strong> Chrome
+   * resends an abandoned POST only on a socket already in its pool, so {@code
+   * aRetriedRatingCannotOverwriteAReRating} needs one to exist at the keypress — and round 2
+   * measured the way silence fails to imply that: in 225 ms of genuine quiet, Chrome closed every
+   * socket it held, across every origin, in a single browser-wide flush. A flush is not an
+   * exchange, so the stub's counter saw nothing and {@code untilQuiet()} returned truthfully with a
+   * false conclusion ({@code .superpowers/sdd/169b-evidence.md}; the rule itself is in {@code
+   * docs/retry-precondition-evidence.md} §4).
+   *
+   * <p>So rather than wait for a socket and hope, the test makes one: a same-origin GET issued
+   * <em>from the page</em>, whose body the page reads to the end. Draining matters — an undrained
+   * response keeps the socket checked out (#188) — and so does what the caller does next, which
+   * must be to press the key immediately. Every millisecond between this returning and the POST is
+   * a millisecond a flush can land in; the residual is small but it is not zero, and when it
+   * happens the control now says so rather than blaming the browser.
+   *
+   * <p>Waits on both sides: the page's promise has resolved (so the body is read and the socket
+   * released) and the stub has seen the exchange end.
+   */
+  private int warmUp() {
+    Object read =
+        chrome.eval(
+            "fetch('/warm-up', {cache: 'no-store'}).then(r => r.text()).then(body => body.length)");
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+    while (inFlight.get() != 0 && System.nanoTime() < deadline) {
+      HeadlessChrome.sleep(1);
+    }
+    if (inFlight.get() != 0) {
+      throw new AssertionError(
+          "the warm-up's own exchange never finished at the stub, so nothing can be said about"
+              + " Chrome's pool: "
+              + inFlight.get()
+              + " still in flight, last "
+              + lastPath.get());
+    }
+    if (!(read instanceof Integer bytes)) {
+      throw new AssertionError("the page did not report reading the warm-up's body: " + read);
+    }
+    return bytes;
+  }
+
+  /** The most recent exchange the stub served. */
+  private Served lastServed() {
+    List<Served> served = servedSoFar();
+    if (served.isEmpty()) {
+      throw new AssertionError("the stub has served nothing at all");
+    }
+    return served.get(served.size() - 1);
   }
 
   /** Every exchange served so far, safe to read while the stub is still running. */
@@ -708,6 +772,42 @@ class DeckBehaviourTest {
 
   private static String quoted(String text) {
     return "'" + text + "'";
+  }
+
+  @Test
+  @DisplayName("the warm-up leaves a socket the page has used, idle again in Chrome's pool")
+  void shouldLeaveAUsedIdleSocketWhenTheWarmUpFinishes() {
+    int before = servedSoFar().size();
+
+    int bodyRead = warmUp();
+    Served firstWarmUp = lastServed();
+
+    assertThat(bodyRead)
+        .as(
+            "the page must read the warm-up's body to completion — an undrained response keeps the"
+                + " socket checked out (#188), which is the opposite of what this is for")
+        .isEqualTo(WARM_UP_BODY.length);
+    assertThat(firstWarmUp.path()).isEqualTo("/warm-up");
+    assertThat(servedSoFar()).as("exactly one more exchange, the warm-up's").hasSize(before + 1);
+    assertThat(inFlight.get())
+        .as("and the stub has finished with it, so the socket is idle rather than checked out")
+        .isZero();
+
+    // The assertion this test exists for, and the only server-side way to see it: a socket that
+    // is idle in the pool is a socket the next request gets given. Asserted with a second
+    // warm-up rather than against the page's own earlier ports, because Chrome will sometimes
+    // hand the first warm-up the preconnect spare it opened alongside the page's socket and
+    // never used — measured at 6 of 60 runs here. That is not a failure of the warm-up: the
+    // spare is a pooled socket too, and after the exchange it is a *used* pooled socket. What
+    // must hold either way is that whichever socket the warm-up used comes back.
+    warmUp();
+
+    assertThat(lastServed().port())
+        .as(
+            "the next request must land on the warm-up's own socket — that is what it means for it"
+                + " to be back in the pool, and it is the precondition"
+                + " aRetriedRatingCannotOverwriteAReRating needs at its keypress")
+        .isEqualTo(firstWarmUp.port());
   }
 
   @Test
