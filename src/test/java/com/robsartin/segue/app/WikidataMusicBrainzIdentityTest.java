@@ -187,6 +187,30 @@ class WikidataMusicBrainzIdentityTest {
   }
 
   @Test
+  @DisplayName("should split the widened batch too when one query would outgrow the limit")
+  void shouldSplitTheWidenedBatchTooWhenOneQueryWouldOutgrowTheLimit() {
+    try (StubWikidataServer stub = new StubWikidataServer()) {
+      List<String> mbids = mbids(SHIPPED_MAX_NEW_EDGES);
+
+      identity(stub).identitiesFor(mbids);
+
+      // The widened template's own measurement, 2026-09-02, driven through WikidataClient's
+      // encoding: the request URI is 342 + 43n bytes, so 200 MBIDs in one VALUES clause is 8,942
+      // — over the limit, and a 414 is not transient. The label service and the OPTIONAL P31 cost
+      // 162 bytes once and nothing per MBID; MAX_MBIDS_PER_QUERY holds the full table. This test
+      // is the guard that a later line added to the query cannot quietly push a shipped batch
+      // over, which is exactly what happened to the figures this replaces.
+      assertThat(stub.queries()).isNotEmpty();
+      for (String query : stub.queries()) {
+        assertThat(PRODUCTION_QUERY_URI.length() + query.length())
+            .as("request-line bytes for one widened batched query")
+            .isLessThanOrEqualTo(REQUEST_LINE_LIMIT);
+      }
+      assertThat(everyDecodedQuery(stub)).contains(mbids.toArray(String[]::new));
+    }
+  }
+
+  @Test
   @DisplayName("should resolve MBIDs from every chunk when the batch is split")
   void shouldResolveMbidsFromEveryChunkWhenTheBatchIsSplit() {
     try (StubWikidataServer stub = new StubWikidataServer()) {

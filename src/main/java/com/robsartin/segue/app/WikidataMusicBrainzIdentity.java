@@ -133,13 +133,32 @@ public final class WikidataMusicBrainzIdentity implements MusicBrainzIdentity {
    * The most MBIDs one {@code VALUES} clause may carry, because a {@code GET} spends its query on
    * the request line.
    *
-   * <p><b>Measured, not estimated.</b> Driven through {@link WikidataClient}'s own encoding on
-   * 2026-08-30 with {@link #BATCH_TEMPLATE} and MBIDs of the shape MusicBrainz sends, the request
-   * URI comes to {@code 180 + 43n} bytes: 50 MBIDs is 2,330, 100 is 4,480, 200 is 8,780. The
-   * classic ceiling on a request line is 8,192 bytes, which 186 MBIDs is the last batch to fit
-   * under — and {@code application.yaml} ships {@code segue.expand.max-new-edges: 200}, a bound
-   * {@code MusicBrainzSourceAdapter} spends on relations <i>before</i> it resolves any neighbour.
-   * So the shipped configuration could hand this method 200 MBIDs and exceed the limit in one go.
+   * <p><b>Measured, not estimated — and re-measured when the template grew.</b> Driven through
+   * {@link WikidataClient}'s own encoding with MBIDs of the shape MusicBrainz sends, the request
+   * URI is linear in the batch size and the two templates differ only in their fixed part:
+   *
+   * <table border="1">
+   *   <caption>Request-URI bytes against {@code https://query.wikidata.org/sparql?}</caption>
+   *   <tr><th>MBIDs</th><th>{@link #BATCH_TEMPLATE}</th><th>{@link #DESCRIBED_BATCH_TEMPLATE}</th></tr>
+   *   <tr><td>50</td><td>2,330</td><td>2,492</td></tr>
+   *   <tr><td>100</td><td>4,480</td><td>4,642</td></tr>
+   *   <tr><td>182</td><td>8,006</td><td>8,168</td></tr>
+   *   <tr><td>183</td><td>8,049</td><td>8,211</td></tr>
+   *   <tr><td>200</td><td>8,780</td><td>8,942</td></tr>
+   * </table>
+   *
+   * <p>The narrow figures are {@code 180 + 43n}, measured 2026-08-30 and re-measured unchanged on
+   * 2026-09-02. The widened ones are {@code 342 + 43n}, measured 2026-09-02: the label service and
+   * the {@code OPTIONAL p:P31/ps:P31} cost <b>162 bytes, once</b>, and nothing per MBID. Issue
+   * #163's re-measurement is that number and this table; neither was inherited, and neither was
+   * derived from the other by arithmetic.
+   *
+   * <p>The classic ceiling on a request line is 8,192 bytes. The widened template's last batch to
+   * fit under it is <b>182</b> rather than the narrow one's 186 — measured at both ends, 182 fits
+   * and 183 does not — and {@code application.yaml} ships {@code segue.expand.max-new-edges: 200},
+   * a bound {@code MusicBrainzSourceAdapter} spends on relations <i>before</i> it resolves any
+   * neighbour. So the shipped configuration could hand this method 200 MBIDs and exceed the limit
+   * in one go.
    *
    * <p><b>What that would have cost is a whole seed's neighbourhood.</b> A 414 is not transient, so
    * {@link WikidataClient} does not retry it: it throws at once. Before issue #148 {@link #ask}
@@ -150,11 +169,15 @@ public final class WikidataMusicBrainzIdentity implements MusicBrainzIdentity {
    * outsized request and unflagged data loss; the batching stays because a reported failure is
    * still a failure.
    *
-   * <p><b>100 rather than 186.</b> 4,480 bytes is a batch whose safety does not depend on having
-   * got the arithmetic exactly right, or on the template never gaining a line; the cost of the
-   * headroom is one extra round trip per 100 neighbours against a service that answers in tenths of
-   * a second. Each chunk is its own {@link WikidataClient#get}, so the retry policy, the honoured
-   * {@code Retry-After} and its ceiling apply per request exactly as they did when there was one.
+   * <p><b>100 rather than 182, and 100 still.</b> The headroom that argument bought was spent on
+   * exactly the event it anticipated — "the template never gaining a line" — and it covered it:
+   * 4,642 bytes leaves <b>3,550</b> under the ceiling, so the widened query at the shipped batch
+   * size is no closer to the limit than a reader of the old figure would have assumed. Raising the
+   * number to 182 would save one round trip per two hundred neighbours and would leave 24 bytes;
+   * the cost of not doing so is one extra round trip per 100 neighbours against a service that
+   * answers in tenths of a second. Each chunk is its own {@link WikidataClient#get}, so the retry
+   * policy, the honoured {@code Retry-After} and its ceiling apply per request exactly as they did
+   * when there was one.
    */
   private static final int MAX_MBIDS_PER_QUERY = 100;
 
