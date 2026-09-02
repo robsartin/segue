@@ -8,6 +8,19 @@ invisible to the counter this page's fix added. §8's "incidental observation" b
 `clients2.google.com` traffic as unrelated to the flake, is corrected: round 2 saw the flush fire
 in the same millisecond that request completed (#186). See ADR 46's 2026-09-01 round-2 amendment.
 
+**Note (2026-09-02, issue #187).** §3's "any request arriving after the assertion point (2500 ms
+window): 0 / 59" is what `DeckBehaviourTest.settle()` now rests on. It was `sleep(600)`; it is a
+bounded condition — the page's own guards reporting it has nothing outstanding (`!busy && current
+!== null`) and the stub serving no exchange — polled to a 15 s deadline, in `untilSent()`'s shape.
+The measurement is what makes that sufficient: every attempt Chrome makes is inside the one `fetch`
+the page holds `busy` across, so the last attempt is spent before the page reports done. Verified by
+a planted late attempt, issued 700 ms after the page reported done from an operation still holding
+`busy`: under the 600 ms sleep the ordering assertion ran on `[1, 1, 1, 4]` and passed while the
+fourth attempt was still in flight (it landed as `[1, 1, 1, 4, 1]`); under the condition the same
+plant reds it. The condition was also seen to block — with the stub stalling the card fetch 800 ms,
+`settle()` waited 807/820/826 ms and the state was absent on entry and present on return — and the
+test passed 20 consecutive isolated runs with the sleep gone.
+
 **This page is a finished measurement, kept because an amendment rests on it.** On 2026-09-01 a
 positive control in `DeckBehaviourTest` — that Chrome retries a POST whose connection died — had
 failed seven times in two days and passed on every rerun. The test was traced sixty times with
