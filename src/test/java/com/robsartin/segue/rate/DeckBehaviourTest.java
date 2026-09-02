@@ -319,7 +319,7 @@ class DeckBehaviourTest {
             "fetch('/warm-up', {cache: 'no-store'}).then(r => r.text()).then(body => body.length)");
     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
     while (inFlight.get() != 0 && System.nanoTime() < deadline) {
-      HeadlessChrome.sleep(1);
+      HeadlessChrome.sleep(20);
     }
     if (inFlight.get() != 0) {
       throw new AssertionError(
@@ -793,9 +793,16 @@ class DeckBehaviourTest {
    *
    * <p>The client port separates them, which is why the stub records one for every exchange. A POST
    * on a port that had already served a request was given a pooled socket and not resent on it —
-   * the browser changing. A POST on a port never seen before was given a socket the pool had to
-   * connect, so there was nothing pooled to resend on, and the red says nothing about the page or
-   * the browser.
+   * the browser changing, and that half is observed.
+   *
+   * <p>The other half is an observation and an inference, and the message keeps them apart. What is
+   * observed is that the POST went out on a port never seen before, so the pool had to connect a
+   * socket for it and there was nothing pooled to resend on. <em>Why</em> the pool was empty is not
+   * observed here: a flush is the only cause ever seen, but a socket held open by something else
+   * looks exactly the same from this side — the controls for this classifier produced the
+   * first-seen port by holding sockets, with nothing flushed at all. Either way the red is
+   * environmental and says nothing about the page or the browser; a NetLog is what tells them
+   * apart.
    */
   private String whyNoRetryHappened() {
     List<Served> served = servedSoFar();
@@ -816,12 +823,13 @@ class DeckBehaviourTest {
             .map(Served::path)
             .toList();
     if (alreadyServed.isEmpty()) {
-      return "the pool was flushed between the warm-up and the keypress: the POST arrived on a"
-          + " fresh connection (port "
+      return "the POST arrived on a fresh connection (port "
           + port
-          + ", never seen before this), so Chrome had no pooled socket to resend on. This is"
-          + " Chrome's network-change handling, not the browser ceasing to resend — rerun, and"
-          + " see ADR 46's 2026-09-01 amendments if it keeps happening";
+          + ", never seen before this), so Chrome had no pooled socket to resend on. The one cause"
+          + " ever observed is Chrome's network-change pool flush (ADR 46's 2026-09-01"
+          + " amendments; docs/retry-pool-flush-evidence.md); a socket held open by something"
+          + " else would look identical from here. Environmental, not the browser ceasing to"
+          + " resend — rerun, and if it repeats, capture a NetLog";
     }
     return "Chrome was bound to a pooled socket (port "
         + port
@@ -835,40 +843,53 @@ class DeckBehaviourTest {
     return "'" + text + "'";
   }
 
+  /**
+   * What {@link #warmUp()} can be held to, run for run.
+   *
+   * <p><strong>Not asserted here: that a used socket is idle in Chrome's pool afterwards.</strong>
+   * That is the property the warm-up exists for, and it is not observable from this side. Which
+   * pooled socket Chrome hands a request — the one the page used, or the preconnect spare it opened
+   * alongside and never used — is Chrome's choice, and both are pooled, so no port this stub
+   * records can be equal to anything run after run. Two attempts to assert it that way each flaked
+   * at about one run in sixty, which is the one outcome this round cannot ship: a spurious red
+   * introduced to remove a spurious red.
+   *
+   * <p>It is established instead where it can be. The Loop C and D controls demonstrate it — with
+   * round 1's occupancy probe holding every pooled socket, the retry control fails without this
+   * warm-up and passes with it — and {@code aRetriedRatingCannotOverwriteAReRating} enforces it on
+   * every run, since Chrome's resend is exactly the observable that depends on it.
+   *
+   * <p>What is left here is what the stub genuinely sees, and it is worth having: each call puts
+   * exactly one exchange through, that exchange finishes, and the page read the whole body back.
+   */
   @Test
-  @DisplayName("the warm-up leaves a socket the page has used, idle again in Chrome's pool")
-  void shouldLeaveAUsedIdleSocketWhenTheWarmUpFinishes() {
+  @DisplayName("each warm-up puts exactly one drained exchange through the stub, and finishes it")
+  void shouldServeOneCompletedExchangeWhenTheWarmUpRuns() {
     int before = servedSoFar().size();
 
     int bodyRead = warmUp();
-    Served firstWarmUp = lastServed();
 
+    assertThat(servedSoFar())
+        .as("one exchange per call — a warm-up that reached no socket at all is not a warm-up")
+        .hasSize(before + 1);
+    assertThat(lastServed().path()).isEqualTo("/warm-up");
     assertThat(bodyRead)
         .as(
             "the page must read the warm-up's body to completion — an undrained response keeps the"
                 + " socket checked out (#188), which is the opposite of what this is for")
         .isEqualTo(WARM_UP_BODY.length);
-    assertThat(firstWarmUp.path()).isEqualTo("/warm-up");
-    assertThat(servedSoFar()).as("exactly one more exchange, the warm-up's").hasSize(before + 1);
     assertThat(inFlight.get())
         .as("and the stub has finished with it, so the socket is idle rather than checked out")
         .isZero();
 
-    // The assertion this test exists for, and the only server-side way to see it: a socket that
-    // is idle in the pool is a socket the next request gets given. Asserted with a second
-    // warm-up rather than against the page's own earlier ports, because Chrome will sometimes
-    // hand the first warm-up the preconnect spare it opened alongside the page's socket and
-    // never used — measured at 6 of 60 runs here. That is not a failure of the warm-up: the
-    // spare is a pooled socket too, and after the exchange it is a *used* pooled socket. What
-    // must hold either way is that whichever socket the warm-up used comes back.
-    warmUp();
+    // Again, because "exactly one" is a claim about every call and not just the first: a warm-up
+    // that Chrome served from its cache, or that opened two connections, would show up here.
+    int second = warmUp();
 
-    assertThat(lastServed().port())
-        .as(
-            "the next request must land on the warm-up's own socket — that is what it means for it"
-                + " to be back in the pool, and it is the precondition"
-                + " aRetriedRatingCannotOverwriteAReRating needs at its keypress")
-        .isEqualTo(firstWarmUp.port());
+    assertThat(servedSoFar()).as("and one more for the second call").hasSize(before + 2);
+    assertThat(lastServed().path()).isEqualTo("/warm-up");
+    assertThat(second).isEqualTo(WARM_UP_BODY.length);
+    assertThat(inFlight.get()).isZero();
   }
 
   @Test
