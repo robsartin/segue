@@ -63,3 +63,48 @@
 **Placeholders.** None: each loop names what is quoted and what decides the next step; Task 2's wait is conditional on a stated measurement, not a TODO.
 
 **Type consistency.** `HeadlessChrome.launch(Path)` / `NetLog.hostsContacted(Path)` named in Task 1 and consumed by Task 2.
+
+---
+
+### Task 3: Load the page only after the cert-verifier flush has passed
+
+*Added 2026-09-02 after Task 2's review.* Task 2 measured outcome 2 of the spec's §3: with loopback
+enforced the **burst** is gone (0/80) but the configuration-change **marker** — `CERT_VERIFY_PROC_CREATED`
+×2 then `QUIC_SESSION_POOL_MARK_ALL_ACTIVE_SESSIONS_GOING_AWAY`, and on any pooled socket that exists,
+`SOCKET_POOL_CLOSING_SOCKET {"reason": "Cert verifier changed"}` — fires **80/80** on Chrome's startup
+clock, and a planted early page load had its loopback socket closed by it **16/20** (reviewer: 6/6).
+The natural fixture survives by an incidental margin: 57–140 ms in 69 of 80 runs, 574–683 ms in 11.
+The spec's rule for that outcome is an ordering rule — *the page must not be loaded until it has
+passed* — and the observable exists: the marker appears in the NetLog file 24–41 ms after DevTools is
+ready in the common case, with a fat tail (1262 ms once). Browser-target `Network.enable` does not
+exist on Chrome 152 (`-32601`).
+
+**Files:**
+- Modify: `src/test/java/com/robsartin/segue/rate/HeadlessChrome.java` — `launch()` always writes a
+  NetLog to a temp file (cleaned up on close); before `Page.navigate`, `open()` waits for the marker
+  in that file: **a condition** (the `MARK_ALL_ACTIVE_SESSIONS_GOING_AWAY` line, or the cert-verifier
+  pair, seen in the tail), **with a labelled fallback bound** — a deadline past the measured p100 plus
+  margin, after which `open()` proceeds and records that it proceeded on the bound, not the condition.
+  The fallback is a bound and the code says so; a *timeout* that fails loudly is wrong here, because a
+  Chrome that never fires the marker is the good outcome, not an error.
+- Modify: `src/test/java/com/robsartin/segue/rate/HeadlessChromeNetworkTest.java` —
+  `android.clients.google.com` comes **out** of `KNOWN_ATTEMPTS`, on the rule Task 2's review stated
+  for `update.googleapis.com`: the list is what **this test's own scenario** asks for; hosts other
+  scenarios ask for are recorded on the evidence page, and a red naming one means the guard's scenario
+  changed — re-derive. Say that rule in the javadoc; both hosts stay in the page's §5.
+- Modify: `docs/adr/0052-*.md` (dated note only: the condition, its fallback bound, its measured cost,
+  its red), `docs/loopback-only-evidence.md` (addition only: Task 3's raw lists).
+
+- [ ] **Loop A — the red the plan prescribed.** Plant the early page load as Task 2 §4 did (stub URL on
+  Chrome's command line) and assert the page's loopback socket **survives** the marker: red — quote one
+  run's `SOCKET_POOL_CLOSING_SOCKET {"reason": "Cert verifier changed"}`. Then implement the wait in
+  `open()` and observe **0/20** closed. Raw list of 20.
+- [ ] **Loop B — the cost, measured.** Twenty launches: the added wait per launch as a raw list (expect
+  tens of ms, with a fat tail); state the p50/p100 beside the list. If the fat tail makes a test slower
+  than the fallback bound, the bound is what fired — the run must say so in the NetLog or a log line.
+- [ ] **Loop C — the fallback is labelled.** Plant a NetLog with no marker (a Chrome that never fires
+  it): `open()` proceeds after the bound and reports that it did. Quote.
+- [ ] **Step 4 — the allowlist rule.** `android.clients.google.com` out; javadoc states the rule; the
+  guard 5/5.
+- [ ] **Step 5 — record and gate.** ADR 52 note (addition only); the page's raw lists; `AdrIndexTest`
+  green; full gate.
