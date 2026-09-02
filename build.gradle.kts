@@ -121,26 +121,30 @@ tasks.test {
         "segue.reports",
         layout.buildDirectory.dir("reports").get().asFile.absolutePath,
     )
-    // DeveloperGuideEnumerationsTest re-derives the guide's enumerations from the tree and
-    // compares them to docs/developer-guide.md (issue #145). Gradle's up-to-date check knows
-    // about compiled classes, not about that file — without this line, falsifying the guide and
-    // running `./gradlew check` reports BUILD SUCCESSFUL because `test` is skipped entirely.
-    // Measured, not assumed: that is exactly what happened before this was added.
+    // Documents this suite reads and checks. Gradle's up-to-date check knows about compiled
+    // classes, not about Markdown — without these two lines, falsifying a document and running
+    // `./gradlew check` reports BUILD SUCCESSFUL because `test` is skipped entirely. That has now
+    // been measured on a real commit shape for each guard that reads a document:
+    //   - DeveloperGuideEnumerationsTest re-derives the guide's enumerations from the tree and
+    //     compares them to docs/developer-guide.md (issue #145) — falsifying the guide passed.
+    //   - AdrIndexTest reads docs/adr/README.md and the ADR files beside it (issue #170) — an
+    //     index-only commit, exactly the commit that guard exists to check, printed
+    //     `Task :test UP-TO-DATE`.
+    //   - DocumentationLinksTest follows every link in README.md and docs/**/*.md (issue #168) —
+    //     breaking the README's anchor into docs/user-guide.md printed `Task :test UP-TO-DATE`
+    //     and BUILD SUCCESSFUL, because the two narrower declarations this replaces — the guide
+    //     file and the docs/adr directory — covered neither README.md nor docs/user-guide.md.
+    // So the declaration is the whole docs tree plus README.md, not a list of the documents that
+    // happen to be read today: a narrower list is this same bug waiting for the next test that
+    // reads a document nobody listed. `docs` subsumes the developer-guide and docs/adr
+    // declarations this replaces, so they are folded in rather than left to overlap.
+    inputs.dir("docs").withPropertyName("docs").withPathSensitivity(PathSensitivity.RELATIVE)
     inputs
-        .file("docs/developer-guide.md")
-        .withPropertyName("developerGuide")
-        .withPathSensitivity(PathSensitivity.RELATIVE)
-    // AdrIndexTest reads docs/adr/README.md and the ADR files beside it (issue #170), and has
-    // the same blind spot: an index-only commit is exactly the commit this guard exists to
-    // check, and without this line `test` reports UP-TO-DATE on it. Measured here too —
-    // deleting a row and running `./gradlew check` printed `Task :test UP-TO-DATE` and
-    // BUILD SUCCESSFUL before this was added.
-    inputs
-        .dir("docs/adr")
-        .withPropertyName("adrDirectory")
+        .file("README.md")
+        .withPropertyName("readme")
         .withPathSensitivity(PathSensitivity.RELATIVE)
     // PackageListsTest derives the dev-tool packages from this file's own JavaExec registrations
-    // (issue #165), and `test` is blind to it for the third time: measured — with a mainClass the
+    // (issue #165), and `test` is blind to it the same way: measured — with a mainClass the
     // parser must refuse planted in a registration below, `./gradlew test` printed
     // `Task :test UP-TO-DATE` and BUILD SUCCESSFUL before this was added. The cost is that any
     // edit to this file re-runs the suite, which is the same price the two lines above pay.
