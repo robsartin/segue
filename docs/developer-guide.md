@@ -28,6 +28,7 @@ Everything here was checked against the source in `src/main/java/com/robsartin/s
 - [Taking something back out](#taking-something-back-out)
 - [What to explore next](#what-to-explore-next)
 - [Rating one card at a time](#rating-one-card-at-a-time)
+- [Claiming something no source has](#claiming-something-no-source-has)
 - [How to read an ADR against the code](#how-to-read-an-adr-against-the-code)
 
 ## What segue is, in one pass
@@ -1001,7 +1002,7 @@ The suite is layered on purpose, and each layer catches something the layer belo
 | Spring context | `mcp/ToolSurfaceTest`, `app/*Test` | That the starter's own annotation scanner actually finds the tool beans, and that the transports are configured as intended |
 | **Real subprocess** | `app/StdioPurityTest` | Output written by a *dependency* or by the framework's own startup. See below |
 | Architecture | `arch/ArchitectureTest` | An invariant an ADR states being quietly abandoned |
-| Documentation | `arch/DeveloperGuideEnumerationsTest` | This guide's enumerations drifting from the code — the ArchUnit rule table, the layering diagram's packages and edges, the package table's rows, and the live-tagged and stub-server names in the row above. Each set is re-derived from the tree and compared in both directions ([issue #145](https://github.com/robsartin/segue/issues/145)) |
+| Documentation | `arch/DeveloperGuideEnumerationsTest`, `own/DeveloperGuideOwnClaimExamplesTest`, `retract/DeveloperGuideRetractionExamplesTest` | This guide's enumerations drifting from the code — the ArchUnit rule table, the layering diagram's packages and edges, the package table's rows, and the live-tagged and stub-server names in the row above. Each set is re-derived from the tree and compared in both directions ([issue #145](https://github.com/robsartin/segue/issues/145)) |
 | **Live, tagged and excluded** | `@Tag("live")` on `WikidataLiveSmokeTest`, `PersonSeededRouteLiveTest`, `SharedAwardRouteLiveTest`, `MusicBrainzLiveSmokeTest`, `WikidataMusicBrainzIdentityLiveTest` — five classes, and `liveTest` includes any `live` tag, so a new one joins with no build change | Either upstream API changing, a wrong identifier baked into a fixture, and a P434 bridge that agrees with a stub but not with Wikidata |
 
 Three of those deserve more than a table row.
@@ -2009,6 +2010,176 @@ a single reason; read it. ADR 46's own ground is the one it takes from ADR 45:
 `rate` reuses the recommender's `CandidateSweep`, `Routes` and `Sweep` for its candidate cards
 without reopening the question, because the input is still ADR 40's file of everything you already
 have, and handing that to a model is what ADR 40 already refused.
+
+## Claiming something no source has
+
+```bash
+# which id would this take, and what would it say? Nothing is written.
+./gradlew ownClaim --args="mint --db $HOME/.segue/segue.db --kind WORK --label 'A Self-Pressed Record' --dry-run"
+
+# do it — the tool answers with the id it allocated
+./gradlew ownClaim --args="mint --db $HOME/.segue/segue.db --kind WORK --label 'A Self-Pressed Record'"
+
+# join it to something the graph already holds
+./gradlew ownClaim --args="assert --db $HOME/.segue/segue.db --from Q00900042 --to Q12345 --type INFLUENCED_BY --dry-run"
+./gradlew ownClaim --args="assert --db $HOME/.segue/segue.db --from Q00900042 --to Q12345 --type INFLUENCED_BY"
+
+# Wikidata caught up: say the local id was that item all along
+./gradlew ownClaim --args="merge --db $HOME/.segue/segue.db --local Q00900042 --canonical Q12345 --dry-run"
+./gradlew ownClaim --args="merge --db $HOME/.segue/segue.db --local Q00900042 --canonical Q12345"
+```
+
+Every example above is executed by `DeveloperGuideOwnClaimExamplesTest`, which splits each `--args`
+string the way a shell would and hands it to `OwnCli.parse` — the boundary that decides whether a
+line is correct to type. A flag renamed in the tool reds this chapter, and so does an example this
+guide writes in a shape the test cannot read. `DeveloperGuideRetractionExamplesTest` does the same
+for [Taking something back out](#taking-something-back-out); `arch.GuideExamples` is the extraction
+they share.
+
+`--db` is required, `SEGUE_DB` does not satisfy it, and `./gradlew own` resolves to `:ownClaim` and
+runs rather than reporting an unknown task. All three are the subject of
+[The two claim tools require `--db`](#the-two-claim-tools-require---db-and-gradlew-own-will-not-say-task-not-found)
+above and are not restated here. Read
+[ADR 59](adr/0059-owner-claims-as-a-third-layer.md) before changing anything in this chapter: owner
+claims are a third layer, first-person like affinity and projected to the graph like a world fact,
+and that combination is the whole decision.
+
+### Three operations, one per run
+
+`mint` says "this exists, and Wikidata does not model it". `assert` says "I know this relationship
+holds". `merge` says "this local entity turned out to be that Wikidata item". One operation per
+invocation, exactly as `retractEntity` does one retraction per run — so minting something and then
+asserting an edge to it is two commands, and the second sees the first because it replays the log.
+
+**The report comes before the append**, `RetractRun`'s order for `RetractRun`'s reason: you are told
+the *labels* of everything the claim touches while the log is still untouched, because the failure
+being guarded is a QID that is not the entity somebody thought it was. `--dry-run` stops there and
+says `dry run: nothing was appended`. Without it the last line is `appended. The running graph is
+rebuilt from the log at the next boot (ADR 24), so a server that is up does not see this claim until
+it restarts` — ADR 24's contract reached from the other side, the same way a retraction reaches it.
+
+### A mint costs an id, and the id is never handed back
+
+`mint` allocates the identifier itself: `Q00` and the smallest number **no row in the log has ever
+named**. Ever named, not "currently in the projection" — the log is append-only (ADR 19) and a
+retraction is a claim rather than a deletion (ADR 44), so a retracted row still names its id forever,
+and re-issuing it would make every earlier row ambiguous about which of the two entities it meant.
+Ids are never recycled. `OwnRun.anIdNothingHasNamed` asks membership rather than taking one past the
+largest, because `Q0010` and `Q00010` parse to the same number while being different ids.
+
+The report names what you are about to own: `minting Q001 "A Self-Pressed Record" (WORK) — no source
+claims this entity; you are the source`. The two leading zeros are the local-entity shape and the
+discriminator against ADR 58's stand-ins, which keep exactly one; `LocalEntity` holds that rule and
+the argument for it.
+
+`--kind` is one of the six `NodeKind` constants, and a role is the first mistake anybody makes here,
+so a wrong one is refused with the list: `--kind must be one of PERSON|GROUP|WORK|PLACE|EVENT|CONCEPT,
+got: MUSICIAN`.
+
+### An owner edge routes, and never vouches
+
+`assert` joins two ids that are **already** in the projection this invocation replays. An endpoint
+that is not there is refused rather than created: `nothing in the projection is Q12345 — an owner
+edge joins two entities that are already there, so mint or seed it first (it may also have been
+retracted)`. A local id you have already merged away is refused by name instead, because it is still
+in the graph and "mint it first" would be false advice: `Q00900042 was merged into Q12345 — claim
+this against Q12345, which is the id the merge retired it in favour of (#92)`.
+
+The second report line is the epistemology in one sentence: `this is your own claim, not a source's:
+it is exempt from the corroboration count, so it routes but never vouches for anything (#92)`. The
+mechanism is a reserved source id — `Provenance.owner` carries `owner` rather than a real source's
+id, and `EdgeRecord.corroboration()` filters it out before counting distinct sources, so an edge a
+source asserted and you also claimed corroborates once and not twice. It is deliberately not
+prefixed `llm:`, so `PathRanking` does not demote it either.
+
+### A merge is said, not done — and it lands in two places at two times
+
+`merge` appends one `SameAs` and edits nothing. Its local side must be something **you** minted —
+a `Q00…` id — because pointing one at a sourced entity would assert that two real Wikidata ids are
+the same thing, which is a different claim this tool does not make. Anything the projection does not
+hold as a minted entity, a sourced QID and a retracted local id alike, gets the same refusal:
+`nothing in the projection minted Q00900043 — check the id, or it may already be retracted`.
+
+The two report lines say what happens: `merging Q00900042 "A Self-Pressed Record" into Q12345: you
+are saying they are the same thing`, then `nothing is deleted — the local id stays resolvable, and
+its edges and rating are carried onto the canonical id (ADR 19, ADR 44)`.
+
+Those two halves do not happen at the same time. **Every replay carries the edges.**
+`IngestService.apply` calls `carry` on any `SameAs` it meets, so ingest, boot and a dev tool's
+throwaway projection all copy the local node's edges onto the canonical id, give the canonical id a
+node only when nothing has claimed one, and leave the local node exactly where it was — which is
+what "stays resolvable" means, since a route recorded last month still names it.
+
+**The rating half is the one that is not always wired.** It goes through the `IdentityMerge` port,
+and `recommend` and `rate` both replay with `IdentityMerge.NONE`, so their projection carries the
+edges and no rating at all. That is why `Equivalences` **resolves** the merge at read time instead,
+for that single run: two affinity rows naming one thing become one view, and the last surviving
+merge wins for the rating.
+
+A second merge of one local id is **said, not refused**, because that is how a wrong merge is
+corrected: `Q00900042 was already merged into Q12345 — the last merge wins for the rating; the graph
+keeps both carries`.
+
+**The graph half is open, and no fold reaches it.** After a merge the graph holds two nodes carrying
+the same edges, so every neighbour the local entity touched has one more incident edge than the world
+justifies, and `lift` divides by the candidate's own degree (ADR 45). That is
+[#178](https://github.com/robsartin/segue/issues/178), measured at roughly 3% on a test-sized
+fixture, silent, and compounding with every merge. Task 4b of #92 folded the *ratings* so a merged
+entity counts once; this one is the graph half and nothing folds it yet.
+
+### Undoing one, and why it matters which id you retract
+
+**There is no edge-level retraction.** `retractEntity`'s unit is the entity, so a wrong `assert` is
+undone only by retracting one of its two endpoints — which takes every other claim naming that
+endpoint with it. That is the heaviest act in this guide, not a lighter one, and there is no
+narrower verb to reach for.
+
+`RetractRun` counts a `LocalEntity` as a node claim, an `OwnerEdge` with the qid at either end as an
+edge claim, and a `SameAs` naming the qid on *either* side as an edge claim — matching
+`Retractions.survives`, which drops a merge on the **edge** rule rather than the node's, because a
+`SameAs` holds a relationship between two ids rather than asserting that either exists. So the two
+ends of a merge are not the same act:
+
+- **Retract the local id** and its node claim, its owner edges and the merge all stop projecting.
+  What a source claimed about the canonical id is untouched.
+- **Retract the canonical id** and the world entity's whole expansion goes — every node and edge
+  claim naming it — and the merge with it. The local node stays standing, and so does every edge of
+  its own that does *not* name the retracted id: `Retractions.survives` drops an `OwnerEdge` when
+  **either** endpoint is retracted, so an edge you asserted from the local entity straight to the
+  canonical one goes too. What is left is the local entity and its other edges, no longer merged
+  into anything.
+
+It reaches backwards only, by position in the log, so a claim appended after the retraction stands
+and re-adding is how something comes back. The rest is
+[Taking something back out](#taking-something-back-out).
+
+### Four things this is not allowed to do
+
+| it cannot | rule | why |
+| --- | --- | --- |
+| hold a `GraphStore` | `theOwnerClaimToolOpensNothingElse` | an owner claim *does* have a graph half — `IngestService.apply` has a case for each of the three — but this tool has no *running* graph to apply it to, so the projection catches up at the next boot (ADR 24) and the append goes through `IngestService.claim`, which is static so that satisfying a constructor could never become the reason this tool held a graph |
+| reach the taste layer at all | `theOwnerClaimToolOpensNothingElse` | `AffinityStore` is named as a type, covering both taste-layer writes and both taste-layer reads. A merge does carry ratings, but through `IdentityMerge` on the machine that holds the graph; a rating is the one thing in segue that cannot be regenerated from a source, and the tool whose `merge` subcommand is the most plausible reason to reach the affinity table must be unable to |
+| default its database, by any route | `theClaimToolsHaveNoDefaultDatabase`, `theClaimToolsTakeTheirDatabaseFromTheFlagAlone` | the first forbids `own` from depending on `support.DefaultDatabase` at all; the second forbids taking a `java.nio.file.Path` out of `support`, because `support.RequiredDatabase` is the one bridge this package has and a `Path`-returning method added there would restore the default without the first rule noticing (ADR 60) |
+| build a claim through its constructor | `ownerClaimsAreMadeThroughTheirFactories` | `LocalEntity.minted`, `OwnerEdge.claimed` and `SameAs.declared` are where this project's conventions live; the canonical constructors enforce only what Wikidata's grammar fixes, because they are also the path `SqliteAssertionLog.readRow` rebuilds an old row through. Only `domain` and `sqlite` may reach past the factories |
+
+**There is deliberately no `…WritesOnlyOwnerClaims` rule**, and its absence is a decision rather than
+a gap. `ArchitectureTest`'s javadoc on `theOwnerClaimToolOpensNothingElse` is where it is argued:
+naming `AffinityStore` as a type covers both taste-layer writes and both taste-layer reads at once,
+which is why this package needs no second rule in the shape of
+`theRetractionToolWritesOnlyRetractions`.
+
+### Why this is not a seventh MCP tool
+
+`ToolSurfaceTest` has a `retractIsNotATool` and an `assertEdgeIsNotAToolYet`; it has **no**
+`ownIsNotATool`, so no test in this repo says this in so many words.
+[ADR 59](adr/0059-owner-claims-as-a-third-layer.md)'s last decision bullet does, beside
+`assertEdgeIsNotAToolYet`'s reasoning. [ADR 26](adr/0026-mcp-tool-surface.md) held `assert_edge`
+back until corroboration was visibly working and [ADR 56](adr/0056-attribute-a-shortfall-to-its-source.md)
+made it work — but the reason now cuts the other way. The caller of an MCP tool is a language model,
+and owner claims are exempt from the corroboration ladder by design, so an MCP `assert_edge` would
+let a model launder model-generated structure into the one tier that skips quarantine, which is
+exactly what [ADR 23](adr/0023-quarantine-model-generated-assertions.md) exists to prevent.
+Dev-side keeps it the owner's.
 
 ## How to read an ADR against the code
 
