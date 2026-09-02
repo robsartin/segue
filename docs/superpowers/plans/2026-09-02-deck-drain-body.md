@@ -24,6 +24,8 @@
 
 ### Task 1: The test, red on the page as it is; then the two lines
 
+> **NOT EXECUTED (2026-09-02).** Step 1's own stop condition fired: the test was green on the unchanged page, so the premise was false and the plan was abandoned there. See the superseding section at the foot of the spec.
+
 **Files:** Modify: `src/main/resources/rate/deck.html` (two `return` sites); the deck browser test class under `src/test/java/com/robsartin/segue/rate/` (find `DeckBehaviourTest` and the stub with the in-flight counter); `docs/retry-precondition-evidence.md` (one dated line). Read: #169's harness javadoc about the precondition.
 
 - [ ] **Step 1 — the test, RED.** `shouldLeaveNoExchangeInFlightWhenTheServerRefuses`: stub refuses (non-2xx with a small JSON body) the card fetch, then the rating POST; after each, poll the in-flight counter briefly (bounded, not a fixed sleep) and assert it reaches zero. Run blocking with `SEGUE_REQUIRE_BROWSER=true`: red on the unchanged page — quote the counter value. If it is green on arrival, the premise is wrong: stop and report (it may mean Chrome drains small bodies itself, in which case the issue's option 2 wins and the spec must change).
