@@ -57,6 +57,10 @@ import org.junit.jupiter.api.Test;
  *   <li>a name the build can load — <b>skipped</b>. See below.
  * </ul>
  *
+ * "Loadable" is judged against the classpath of the JVM running this test ({@code
+ * java.class.path}), so a citation can be skipped under Gradle's test worker and reported under a
+ * runner with a narrower classpath, or the reverse; the gate's verdict is Gradle's.
+ *
  * <p><b>{@code System.out} is not a typo and {@code SomeTest.gone} is.</b> Both are the same shape,
  * so shape cannot separate them and the rule is loadability: a simple name that the test JVM can
  * load — from a system module or from a jar on the runtime classpath — is a type this code names,
