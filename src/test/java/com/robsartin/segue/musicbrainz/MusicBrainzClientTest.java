@@ -179,6 +179,27 @@ class MusicBrainzClientTest {
   }
 
   @Test
+  @DisplayName("a default-constructed client waits for real, not through a test's no-op")
+  void shouldKeepARealSleeperWhenNoInstanceOverrideIsGiven() throws InterruptedException {
+    // Control 3's other half, for the second seam. Three tests in this class now pass a sleeper
+    // that returns at once; the thing that must never happen is that one reaching production.
+    // SegueConfiguration:139 builds a client with the no-argument constructor, which passes
+    // Thread::sleep, so this pins that path directly.
+    //
+    // Fifty milliseconds against a floor of forty, and the asymmetry is the point: the defect this
+    // guards is a sleeper that does not wait at all, so the signal is the whole 50ms and the noise
+    // is system-timer precision, well under a millisecond. Thread.sleep can only overrun. That is
+    // the reverse of the ratio that made the arrival-spacing assertion unsound.
+    MusicBrainzClient client = new MusicBrainzClient();
+
+    long startNanos = System.nanoTime();
+    client.sleeper().sleep(Duration.ofMillis(50));
+    Duration elapsed = Duration.ofNanos(System.nanoTime() - startNanos);
+
+    assertThat(elapsed).isGreaterThanOrEqualTo(Duration.ofMillis(40));
+  }
+
+  @Test
   @DisplayName("a wait is asked for in full, with its sub-millisecond remainder intact")
   void aWaitIsAskedForInFullRatherThanTruncated() {
     // The defect this guards is not the concurrency one; it was found by it. sleep() passed
@@ -289,8 +310,7 @@ class MusicBrainzClientTest {
       stub.enqueueStatus(200);
       stub.enqueueBody(memberOfBandBody());
 
-      List<ArtistRelation> relations =
-          new MusicBrainzClient(stub.baseUri()).artistRelations(HOT_CLUB_QUINTET);
+      List<ArtistRelation> relations = retryClient(stub).artistRelations(HOT_CLUB_QUINTET);
 
       assertThat(relations).hasSize(1);
       assertThat(stub.requestCount()).isEqualTo(2);
@@ -305,7 +325,7 @@ class MusicBrainzClientTest {
         stub.enqueueStatus(503);
         stub.enqueueBody("{}");
       }
-      MusicBrainzClient client = new MusicBrainzClient(stub.baseUri());
+      MusicBrainzClient client = retryClient(stub);
 
       assertThatThrownBy(() -> client.artistRelations(HOT_CLUB_QUINTET))
           .isInstanceOf(MusicBrainzUnavailableException.class);
@@ -335,7 +355,7 @@ class MusicBrainzClientTest {
         stub.enqueueStatus(200);
         stub.enqueueBody("this is not JSON");
       }
-      MusicBrainzClient client = new MusicBrainzClient(stub.baseUri());
+      MusicBrainzClient client = retryClient(stub);
 
       assertThatThrownBy(() -> client.artistRelations(HOT_CLUB_QUINTET))
           .isInstanceOf(MusicBrainzUnavailableException.class);
@@ -432,6 +452,32 @@ class MusicBrainzClientTest {
           .as("gaps between consecutive requests, in arrival order")
           .allSatisfy(gap -> assertThat(gap).isGreaterThanOrEqualTo(floor));
     }
+  }
+
+  /**
+   * A client against {@code stub} that keeps production's request interval and asks for every wait
+   * production would, but never waits for one.
+   *
+   * <p><b>Admissible here because none of the three tests that use it asserts a duration.</b>
+   * {@code retriesRateLimit} asserts a relation count and a request count, {@code
+   * givesUpEventually} an exception type and a request count, {@code
+   * unparseableBodyIsReportedAsUnavailable} an exception type. Each of those outcomes is produced
+   * by the same code paths whether the waits between attempts are real or not, and each was
+   * re-planted with its own defect after this sleeper was injected to prove exactly that (Task 2
+   * Step 4). What is <em>not</em> admissible is a test whose assertion is elapsed time: {@code
+   * throttleAppliesEvenAfterAConnectionFailure} keeps a real sleeper for that reason and is now the
+   * only test in this class that waits.
+   *
+   * <p>The interval stays {@link MusicBrainzClient#DEFAULT_MIN_REQUEST_INTERVAL} rather than being
+   * shrunk alongside: with nothing waiting there is nothing to shrink, and leaving production's
+   * number in place keeps these three exercising the arithmetic production runs.
+   */
+  private static MusicBrainzClient retryClient(StubMusicBrainzServer stub) {
+    return new MusicBrainzClient(
+        stub.baseUri(),
+        Clock.systemUTC(),
+        MusicBrainzClient.DEFAULT_MIN_REQUEST_INTERVAL,
+        delay -> {});
   }
 
   /** A single valid, minimal {@code artist-rels} response body, for the stub-server tests. */
