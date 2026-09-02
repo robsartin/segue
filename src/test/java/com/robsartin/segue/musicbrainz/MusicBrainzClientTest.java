@@ -51,9 +51,11 @@ class MusicBrainzClientTest {
    * Serialising every send behind one lock is the only thing that would close that, at the cost of
    * the non-blocking path the compare-and-set leaves open.
    *
-   * <p><b>This is the spec's fallback scale, not its primary one, and the reason is measured, not
+   * <p><b>This is the fallback scale, not the primary one, and the reason is measured, not
    * guessed.</b> {@code docs/superpowers/specs/2026-09-02-mb-concurrency-design.md} calls for a
-   * 50ms interval with a 10ms allowance first. On this machine, shared with other agents' builds
+   * 50ms interval with a 10ms allowance first; the 100ms/20ms fallback is the <i>plan's</i> ({@code
+   * docs/superpowers/plans/2026-09-02-mb-concurrency.md}, Step 6), which is what sanctions it — the
+   * word "fallback" appears nowhere in the spec. On this machine, shared with other agents' builds
    * (load average 110–166, well above the design's own ≥100 reference scenario), the
    * <em>correct</em> client reproducibly failed at that scale — descheduling gaps of 0.0161s and
    * 0.0237s against a 0.04s floor, absolute overruns an order of magnitude past what a quiet
@@ -63,8 +65,21 @@ class MusicBrainzClientTest {
    * from ordinary scheduling jitter once contention is this heavy — the two can no longer be told
    * apart at 50ms on a machine this busy. Widening to 100ms/20ms does not change the absolute
    * scheduling jitter a busy machine imposes, but it does buy back the ratio: the same class of
-   * overrun stayed clear of an 0.08s floor across repeated runs once contention eased, which the
+   * overrun stayed clear of an 0.08s floor across repeated runs <b>of the full class</b>, which the
    * 0.04s floor could not tolerate.
+   *
+   * <p><b>Contention is not the variable, and this allowance does not survive the correction.</b>
+   * An earlier draft of this javadoc said the 0.08s floor was cleared "once contention eased". It
+   * was not: Task 1's review re-measured at load average 125–152 throughout and found the
+   * <em>correct</em> client 0/5 when this test runs alone in a fresh JVM and 5/5 inside the full
+   * class, at this same 100ms/20ms scale. The variable is a cold JVM versus a warm one — caller 1's
+   * first ever send costs 40–60ms to reach the socket where caller 2's, on a path 18 other tests
+   * have already JIT-compiled, costs about 1ms — so the allowance is absorbing send-latency
+   * variance an order of magnitude larger than the arithmetic error it is meant to bound. That is
+   * this repository's "proxy assertion clean on a small sample": arrival spacing is not departure
+   * spacing, and no width of allowance fixes an assertion whose noise term is bigger than its
+   * signal. Recorded here rather than quietly deleted, because the number below was shipped on the
+   * strength of the sentence it corrects.
    *
    * <p><b>It is nowhere near wide enough to admit the defect.</b> The #146 check-then-act defect's
    * signature is absolute and sub-25ms regardless of scale (see above); this allowance is 20ms at a
@@ -169,13 +184,12 @@ class MusicBrainzClientTest {
     // The defect this guards is not the concurrency one; it was found by it. sleep() passed
     // delay.toMillis() to Thread.sleep, and toMillis() truncates, so 999.5ms of owed wait became a
     // 999ms sleep and the request left half a millisecond inside DEFAULT_MIN_REQUEST_INTERVAL —
-    // measured,
-    // as a 0.999339625s gap, on the first run of the concurrency test below.
+    // measured, as a 0.999339625s gap, on the first run of the concurrency test below.
     //
     // Driven through an injected sleeper rather than asserted end to end, because the shortfall is
-    // 0.5ms and the concurrency test allows 100ms of slack — roughly two hundred times too much to
-    // see it — while tightening that allowance would flake on scheduling jitter long before it
-    // caught anything. A recorder needs no wall clock and does not wait.
+    // 0.5ms and the concurrency test now runs at a 100ms interval allowing 20ms of slack — forty
+    // times too much to see it — while tightening that allowance would flake on scheduling jitter
+    // long before it caught anything. A recorder needs no wall clock and does not wait.
     List<Duration> asked = new ArrayList<>();
     Duration owed = Duration.ofMillis(999).plusNanos(500_000);
 
@@ -339,8 +353,8 @@ class MusicBrainzClientTest {
     // real network and no timeout to wait out.
     //
     // With the fix, four attempts against a dead port are spaced by ~DEFAULT_MIN_REQUEST_INTERVAL
-    // each
-    // (the backoff sleep between attempts is topped up to a full second by reserve()), so total
+    // each (the backoff sleep between attempts is topped up to a full second by reserve()), so
+    // total
     // wall time is close to 3 seconds. The bug this guards would finish in the backoff time alone
     // — 200+400+800ms, about 1.4 seconds — so 2.5s is a lower bound that separates the two
     // clearly without being tight enough to flake on CI scheduling jitter.
@@ -369,8 +383,8 @@ class MusicBrainzClientTest {
     // The assertion is on the SPACING between arrivals, not on total elapsed time, because
     // Thread.sleep only ever runs long: a slow machine can only push a correct implementation's
     // gaps further above the client's minRequestInterval, never below it, so it cannot turn this
-    // test green
-    // for the broken code. Three callers rather than two for the same reason from the other side —
+    // test green for the broken code. Three callers rather than two for the same reason from the
+    // other side —
     // the broken code fails every gap at once, so scheduling jitter would have to fake a full
     // second twice over to hide it.
     try (StubMusicBrainzServer stub = new StubMusicBrainzServer()) {

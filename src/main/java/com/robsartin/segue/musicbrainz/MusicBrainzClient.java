@@ -423,11 +423,12 @@ public final class MusicBrainzClient {
    * first run. Nothing could see it afterwards, which is not the same as nothing reaching it. Five
    * tests reach this method, counted by making the delegation throw and reading the names back off
    * the JUnit XML: four sleep the exact 200ms retry backoff, where a truncation changes nothing at
-   * all, and the fifth is the concurrency test, which was measured asking for 0.99997s and allows
-   * 100ms of slack — roughly two hundred times the shortfall. Reaching this method and being able
-   * to see a sub-millisecond error inside it are different things, and only the second would have
-   * caught the defect. A recorder passed in here shows what was asked for without waiting for it,
-   * which is the injected collaborator CLAUDE.md's TDD rule names beside a pure function.
+   * all, and the fifth is the concurrency test, which now asks for 0.1s and allows 20ms of slack —
+   * forty times the shortfall (it was 0.99997s and 100ms before the interval became a per-instance
+   * seam, and the ratio is what the argument rests on). Reaching this method and being able to see
+   * a sub-millisecond error inside it are different things, and only the second would have caught
+   * the defect. A recorder passed in here shows what was asked for without waiting for it, which is
+   * the injected collaborator CLAUDE.md's TDD rule names beside a pure function.
    *
    * <p><b>A {@link Duration} all the way down, not a millisecond count.</b> {@code
    * Thread.sleep(Duration)} does no millisecond conversion: in JDK 25 it is {@code
