@@ -298,3 +298,6 @@ seen red has never been tested (#93, #139).
    once both land — no cross-branch coupling now.
 5. **One differential harness for #176/#177/#178 is a separate issue**, filed when this lands, not built
    here.
+
+**Ratified by the owner, 2026-09-02:** fold at projection — keep the local node, move its edges onto
+the canonical id, in both folds in one commit; ADR 59's merge bullet gets a dated amendment.
