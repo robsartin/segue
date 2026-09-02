@@ -4,8 +4,10 @@ import static com.robsartin.segue.export.InventedGraph.ALMANAC;
 import static com.robsartin.segue.export.InventedGraph.DEMO;
 import static com.robsartin.segue.export.InventedGraph.HOLLOW_TIDE;
 import static com.robsartin.segue.export.InventedGraph.KETTLES;
+import static com.robsartin.segue.export.InventedGraph.LEDGER;
 import static com.robsartin.segue.export.InventedGraph.MARLOW;
 import static com.robsartin.segue.export.InventedGraph.PRESSING;
+import static com.robsartin.segue.export.InventedGraph.WATERMARK;
 import static com.robsartin.segue.export.InventedGraph.WREN;
 import static com.robsartin.segue.export.InventedGraph.edge;
 import static com.robsartin.segue.export.InventedGraph.merged;
@@ -70,6 +72,15 @@ class BothFoldsAgreeTest {
    * owner minted with an owner edge out of it, a merge onto an id no source has claimed, a second
    * minted entity merged onto an id a source <em>has</em> claimed, and one owner edge appended
    * after a merge - which stays on the id it was made against, in both folds.
+   *
+   * <p><b>Widened for #178, because the Mikado probe produced no evidence here at all.</b> Both
+   * merge tests below died inside {@code GraphProjector.project} before comparing anything, so the
+   * export half of the endpoint fold was entirely unexercised - and this is the only test that
+   * compares the pair. What was missing from the fixture was the case the fold is hardest on:
+   * {@code LEDGER} carries an owner edge <b>out</b> of it, one <b>in</b> to it, and one whose other
+   * end is itself a merged local id, all claimed before either merge. A fold that rewrote one
+   * direction, or that resolved only one end of an edge, would leave the two folds holding
+   * different graphs and nothing else here would say so.
    */
   private static FakeAssertionLog ownedLog() {
     return new FakeAssertionLog()
@@ -77,14 +88,24 @@ class BothFoldsAgreeTest {
             node(WREN, NodeKind.PERSON, "Wren Alderman"),
             node(MARLOW, NodeKind.PERSON, "Ines Marlow"),
             node(KETTLES, NodeKind.GROUP, "The Paper Kettles"),
+            node(HOLLOW_TIDE, NodeKind.GROUP, "Hollow Tide"),
             minted(ALMANAC, NodeKind.WORK, "The Salt Almanac"),
             owned(ALMANAC, WREN, "INFLUENCED_BY"),
+            minted(LEDGER, NodeKind.WORK, "the Watermark ledger"),
+            owned(LEDGER, HOLLOW_TIDE, "INFLUENCED_BY"),
+            owned(MARLOW, LEDGER, "INFLUENCED_BY"),
+            owned(LEDGER, ALMANAC, "INFLUENCED_BY"),
             merged(ALMANAC, PRESSING),
             minted(DEMO, NodeKind.WORK, "the Kettles demo"),
             owned(MARLOW, DEMO, "INFLUENCED_BY"),
             merged(DEMO, KETTLES),
+            merged(LEDGER, WATERMARK),
             owned(ALMANAC, MARLOW, "INFLUENCED_BY"));
   }
+
+  /** Everything {@link #ownedLog} names, including both canonical ids a merge introduces. */
+  private static final List<String> OWNED_QIDS =
+      List.of(WREN, MARLOW, KETTLES, HOLLOW_TIDE, ALMANAC, DEMO, LEDGER, PRESSING, WATERMARK);
 
   @Test
   @DisplayName("both folds hold the same nodes when the owner has minted and merged an entity")
@@ -92,10 +113,14 @@ class BothFoldsAgreeTest {
     FakeAssertionLog log = ownedLog();
     LogProjection folded = LogProjection.of(log);
 
+    // Two folds that both held nothing would agree perfectly. This is what says they held the
+    // thing the merge produces - a canonical node for an id no source ever claimed.
+    assertThat(folded.nodes()).containsKeys(PRESSING, WATERMARK);
+
     try (TinkerGraphStore replayed = new TinkerGraphStore()) {
       GraphProjector.project(log, replayed, IdentityMerge.NONE);
 
-      for (String qid : List.of(WREN, MARLOW, KETTLES, ALMANAC, DEMO, PRESSING)) {
+      for (String qid : OWNED_QIDS) {
         Optional<NodeRecord> inGraph = replayed.node(qid);
         assertThat(inGraph.isPresent())
             .as("replayed graph holds %s, exported fold holds: %s", qid, folded.nodes().keySet())
@@ -118,11 +143,18 @@ class BothFoldsAgreeTest {
             .map(BothFoldsAgreeTest::key)
             .collect(Collectors.toSet());
 
+    // Same argument as the nodes test: two empty sets agree about nothing. Both ends of the
+    // merged local id have to have reached the canonical id for this comparison to mean anything,
+    // and these two are the out-side and the in-side of it.
+    assertThat(folded)
+        .contains(
+            WATERMARK + " INFLUENCED_BY " + HOLLOW_TIDE, MARLOW + " INFLUENCED_BY " + WATERMARK);
+
     try (TinkerGraphStore replayed = new TinkerGraphStore()) {
       GraphProjector.project(log, replayed, IdentityMerge.NONE);
 
       Set<String> inGraph =
-          List.of(WREN, MARLOW, KETTLES, ALMANAC, DEMO, PRESSING).stream()
+          OWNED_QIDS.stream()
               .flatMap(qid -> replayed.edges(qid).stream())
               .map(BothFoldsAgreeTest::key)
               .collect(Collectors.toSet());

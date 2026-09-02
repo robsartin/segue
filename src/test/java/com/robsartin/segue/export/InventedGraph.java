@@ -45,6 +45,12 @@ final class InventedGraph {
   static final String PRESSING = "Q900106";
 
   /**
+   * A second canonical id, for a merge whose local side carries edges on both sides of itself
+   * (#178). Same invented family, same issue #171 debt.
+   */
+  static final String WATERMARK = "Q900107";
+
+  /**
    * Two ids the owner minted. Two leading zeros, which Wikibase's item-id grammar can never
    * allocate (ADR 58, ADR 59) - so these are deliberately not from the {@code Q900xxx} family, and
    * issue #171 does not reach them.
@@ -52,6 +58,9 @@ final class InventedGraph {
   static final String ALMANAC = "Q001";
 
   static final String DEMO = "Q002";
+
+  /** A third, and the one the folds are asked the hardest question about (#178). */
+  static final String LEDGER = "Q003";
 
   private static final Instant WHEN = Instant.parse("2026-01-01T00:00:00Z");
 
