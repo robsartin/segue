@@ -332,6 +332,44 @@ class EquivalencesTest {
                 new NodeRecord(CANONICAL, NodeKind.WORK, "what the owner called it", List.of())));
   }
 
+  @Test
+  @DisplayName("a plain node claim naming the local id stands in too, whoever made it")
+  void shouldStandInWhereAPlainNodeClaimNamedTheMergedLocalId() {
+    // Spec ruling 2: the fold must not assume every claim naming a merged local id came through
+    // OwnCli. Reading LocalEntity alone made this visible to the boot replay (via carry's own
+    // graph.node(local) question) and invisible to the exporter, and the two folds disagreed.
+    List<LoggedAssertion> log =
+        List.of(
+            new NodeAssertion(
+                MINTED,
+                NodeKind.WORK,
+                "a local-shaped id a source named",
+                new Provenance("invented", "invented:1", WHEN, 1.0)),
+            SameAs.declared(MINTED, CANONICAL, WHEN));
+
+    assertThat(Equivalences.standIns(log))
+        .containsExactly(
+            Map.entry(
+                CANONICAL,
+                new NodeRecord(
+                    CANONICAL, NodeKind.WORK, "a local-shaped id a source named", List.of())));
+  }
+
+  @Test
+  @DisplayName("the merges that have a local side are named by their position in the log")
+  void shouldNameEachSurvivingMergeThatHasALocalSideByItsPosition() {
+    List<LoggedAssertion> log =
+        List.of(
+            SameAs.declared(OTHER_MINTED, OTHER_CANONICAL, WHEN),
+            LocalEntity.minted(MINTED, NodeKind.WORK, "The Salt Almanac", WHEN),
+            SameAs.declared(MINTED, CANONICAL, WHEN));
+
+    assertThat(Equivalences.localsOfMerges(log))
+        .as("the merge at position 0 names an id nothing had claimed yet, and carries nothing")
+        .containsExactly(
+            Map.entry(2, new NodeRecord(MINTED, NodeKind.WORK, "The Salt Almanac", List.of())));
+  }
+
   private static AssertionRecord edge(String from, String to) {
     return new AssertionRecord(
         from, to, "INFLUENCED_BY", null, null, new Provenance("invented", "invented:1", WHEN, 1.0));

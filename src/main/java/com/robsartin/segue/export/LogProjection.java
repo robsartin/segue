@@ -80,6 +80,10 @@ public record LogProjection(
     // it sits in the log, lands on top of the stand-in below and wins - which is the guarantee
     // that used to come from asking whether the id had been claimed yet at the merge's own row.
     Map<String, NodeRecord> nodes = new LinkedHashMap<>(Equivalences.standIns(logged));
+    // The one answer to "does this merge have a local side" - the same map the stand-ins above
+    // were built from, rather than this fold's own accumulator, so the two folds cannot answer it
+    // differently (#178, spec ruling 2).
+    Map<Integer, NodeRecord> localsOfMerges = Equivalences.localsOfMerges(logged);
     Map<String, List<AssertionRecord>> byEdge = new LinkedHashMap<>();
 
     for (int i = 0; i < logged.size(); i++) {
@@ -119,7 +123,7 @@ public record LogProjection(
           // Nothing minted under the local id: nothing to carry, and not an error - the same
           // reading IngestService.carry takes, where a retraction may have dropped the claim this
           // merge resolves while keeping the merge itself.
-          if (nodes.containsKey(merge.localQid())) {
+          if (localsOfMerges.containsKey(i)) {
             carry(byEdge, merge.localQid(), merge.canonicalQid());
           }
         }

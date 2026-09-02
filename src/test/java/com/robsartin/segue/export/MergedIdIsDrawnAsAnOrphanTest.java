@@ -38,8 +38,9 @@ import org.junit.jupiter.api.Test;
  * <p><b>The first test below is committed {@code @Disabled} and is red today, for the honest
  * opposite reason: the local id still has its edges.</b> {@code IngestService.carry} and {@code
  * LogProjection.carry} <em>copy</em> them onto the canonical id rather than moving them, so the
- * merged entity is drawn twice over. The quoted red is in {@code
- * .superpowers/sdd/2026-09-02-merge-degree/task-3-report.md}.
+ * merged entity is drawn twice over. Issue #178 and {@code
+ * docs/superpowers/specs/2026-09-02-merge-degree-design.md} carry the measurement and the ruling;
+ * running this test with the annotation removed is what shows the red.
  *
  * <p>It is the second of <b>two</b> guards parked red for exactly as long as the defect stands —
  * the other is {@code MergeDoesNotInflateDegreeTest}. Task 4 removes both annotations, and the gate

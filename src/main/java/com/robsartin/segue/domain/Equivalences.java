@@ -123,8 +123,8 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
    *
    * <p><b>Read off the log, not off a store, and that is what makes this a second pass.</b> At the
    * moment this map is wanted, nothing has been projected: the store is empty and the minted node
-   * whose kind and label the stand-in copies does not exist in it yet. So the walk below is the
-   * projection's walk done once in advance — it tracks minted entities and honours {@link
+   * whose kind and label the stand-in copies does not exist in it yet. So {@link #localsOfMerges}
+   * is the projection's walk done once in advance — it tracks node claims and honours {@link
    * Retractions} exactly as the projection will — and the projection then runs as it always did.
    * Two passes over the log, one pass over the store.
    *
@@ -134,39 +134,88 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
    * canonical id the first merge names the stand-in, matching {@code carry}'s creating a node only
    * where none exists. The returned map keeps log order for {@link #canonicalByLocal}'s reason.
    *
-   * <p><b>Only {@link LocalEntity} claims are consulted for the local side.</b> A merge's local id
-   * is unallocatable by construction ({@link LocalEntity#checkUnallocatable}, run on the
-   * reconstruction path too), and an id Wikidata can never allocate is one no source can ever have
-   * known — {@link LocalEntity#isLocal}'s own argument. So a {@link NodeAssertion} about a merge's
-   * local side cannot arise from a source, and consulting node claims here would drag {@code
-   * KindMapper}'s re-derivation into {@code domain} to answer a question that has no instances.
+   * <p><b>Derived from {@link #localsOfMerges}, and that is the point.</b> "Does this merge have a
+   * local side, and what does it look like?" is one question, asked by the stand-in here and by
+   * both folds' decision to carry. Answering it in two places is how the two folds drift — which
+   * they did, briefly, when this method read {@link LocalEntity} claims while {@code LogProjection}
+   * still read its own accumulator.
    *
    * @return each canonical id and the node to stand in for it, in log order
    */
   public static Map<String, NodeRecord> standIns(List<LoggedAssertion> log) {
+    Map<String, NodeRecord> standIns = new LinkedHashMap<>();
+    for (Map.Entry<Integer, NodeRecord> at : localsOfMerges(log).entrySet()) {
+      if (log.get(at.getKey()) instanceof SameAs merge) {
+        NodeRecord local = at.getValue();
+        // No instanceOf: a stand-in carries what it was given rather than inventing a class -
+        // LocalEntity.toNode()'s own reason, and the owner stated no classes.
+        standIns.putIfAbsent(
+            merge.canonicalQid(),
+            new NodeRecord(merge.canonicalQid(), local.kind(), local.label(), List.of()));
+      }
+    }
+    return Collections.unmodifiableMap(standIns);
+  }
+
+  /**
+   * What each surviving merge's local side looked like at the moment the merge was made (#178) —
+   * the one answer to "does this merge have a local side", for everything that has to agree about
+   * it.
+   *
+   * <p><b>One predicate, one home.</b> {@link #standIns} builds the canonical node from this, and
+   * both folds decide whether to carry a merge's edges from this; {@code IngestService.carry} asks
+   * the running graph the same question in the same words ({@code graph.node(local)}). A merge
+   * whose local id nothing has claimed is not an error and carries nothing — the log is
+   * append-only, so a merge may be replayed with the claim it resolves retracted, or with a
+   * retraction sitting between the two.
+   *
+   * <p><b>Any surviving node claim counts, not only a minted one.</b> Spec ruling 2 is explicit
+   * that the fold must not assume every claim naming a merged local id came through {@code OwnCli}:
+   * "a later claim naming the local id, by a path that bypasses the tool, folds onto the canonical
+   * id like any other". Reading {@link LocalEntity} alone made a {@link NodeAssertion} about a
+   * local-shaped id visible to one fold and not the other. It is unreachable from today's sources —
+   * no source can allocate a {@code Q00} id — which is why it is a rule to state rather than a bug
+   * to have shipped.
+   *
+   * <p><b>Node kinds are taken as the claim stated them.</b> {@code KindMapper.rederive} is the
+   * identity on a claim carrying no {@code P31} classes (ADR 42), and a claim that carries classes
+   * is a source's, about an id no source can allocate. So there is nothing here to re-derive, and
+   * {@code domain} does not learn about {@code wikidata} to say so. If that ever became false, a
+   * stand-in's kind would lag the local node's own.
+   *
+   * <p><b>Log order, in both senses.</b> A node is read as it stood <em>when the merge was
+   * made</em>, matching {@code carry}'s "order is log order" paragraph, so a claim appended after a
+   * merge is not what the merge stood in for; and the returned map keeps log order for {@link
+   * #canonicalByLocal}'s reason, which is what lets {@link #standIns} say "the first merge onto a
+   * canonical id names it".
+   *
+   * @return the log position of each surviving merge that has a local side, and that side's node
+   */
+  public static Map<Integer, NodeRecord> localsOfMerges(List<LoggedAssertion> log) {
     Objects.requireNonNull(log, "log");
     Retractions retractions = Retractions.in(log);
-    Map<String, NodeRecord> minted = new LinkedHashMap<>();
-    Map<String, NodeRecord> standIns = new LinkedHashMap<>();
+    Map<String, NodeRecord> claimed = new LinkedHashMap<>();
+    Map<Integer, NodeRecord> atMerge = new LinkedHashMap<>();
     for (int i = 0; i < log.size(); i++) {
       LoggedAssertion assertion = log.get(i);
       if (!retractions.survives(i, assertion)) {
         continue;
       }
-      if (assertion instanceof LocalEntity local) {
-        minted.put(local.qid(), local.toNode());
-      } else if (assertion instanceof SameAs merge) {
-        NodeRecord local = minted.get(merge.localQid());
-        if (local != null) {
-          // No instanceOf: the owner stated no classes, which is LocalEntity.toNode()'s own
-          // reason, and a stand-in carries what it was given rather than inventing a class.
-          standIns.putIfAbsent(
-              merge.canonicalQid(),
-              new NodeRecord(merge.canonicalQid(), local.kind(), local.label(), List.of()));
+      switch (assertion) {
+        case LocalEntity local -> claimed.put(local.qid(), local.toNode());
+        case NodeAssertion claim -> claimed.put(claim.qid(), claim.toNode());
+        case SameAs merge -> {
+          NodeRecord local = claimed.get(merge.localQid());
+          if (local != null) {
+            atMerge.put(i, local);
+          }
+        }
+        default -> {
+          // An edge claim or a retraction says nothing about which entities exist.
         }
       }
     }
-    return Collections.unmodifiableMap(standIns);
+    return Collections.unmodifiableMap(atMerge);
   }
 
   /**

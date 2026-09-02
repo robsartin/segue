@@ -1,12 +1,14 @@
 package com.robsartin.segue.export;
 
 import static com.robsartin.segue.export.InventedGraph.ALMANAC;
+import static com.robsartin.segue.export.InventedGraph.BYPASS;
 import static com.robsartin.segue.export.InventedGraph.DEMO;
 import static com.robsartin.segue.export.InventedGraph.HOLLOW_TIDE;
 import static com.robsartin.segue.export.InventedGraph.KETTLES;
 import static com.robsartin.segue.export.InventedGraph.LEDGER;
 import static com.robsartin.segue.export.InventedGraph.MARLOW;
 import static com.robsartin.segue.export.InventedGraph.PRESSING;
+import static com.robsartin.segue.export.InventedGraph.STANDING;
 import static com.robsartin.segue.export.InventedGraph.WATERMARK;
 import static com.robsartin.segue.export.InventedGraph.WREN;
 import static com.robsartin.segue.export.InventedGraph.edge;
@@ -81,6 +83,13 @@ class BothFoldsAgreeTest {
    * end is itself a merged local id, all claimed before either merge. A fold that rewrote one
    * direction, or that resolved only one end of an edge, would leave the two folds holding
    * different graphs and nothing else here would say so.
+   *
+   * <p><b>{@code BYPASS} is the local id nothing minted.</b> Spec ruling 2 says the fold must not
+   * assume that a claim naming a merged local id came through {@code OwnCli}: "a later claim naming
+   * the local id, by a path that bypasses the tool, folds onto the canonical id like any other". So
+   * one merge here has its local side named by a plain node claim, and both folds have to agree
+   * about the canonical node it stands in for - a question they answered with one expression before
+   * the stand-in was hoisted, and could quietly answer with two afterwards.
    */
   private static FakeAssertionLog ownedLog() {
     return new FakeAssertionLog()
@@ -100,12 +109,26 @@ class BothFoldsAgreeTest {
             owned(MARLOW, DEMO, "INFLUENCED_BY"),
             merged(DEMO, KETTLES),
             merged(LEDGER, WATERMARK),
+            node(BYPASS, NodeKind.WORK, "a local-shaped id a source named"),
+            owned(BYPASS, WREN, "INFLUENCED_BY"),
+            merged(BYPASS, STANDING),
             owned(ALMANAC, MARLOW, "INFLUENCED_BY"));
   }
 
   /** Everything {@link #ownedLog} names, including both canonical ids a merge introduces. */
   private static final List<String> OWNED_QIDS =
-      List.of(WREN, MARLOW, KETTLES, HOLLOW_TIDE, ALMANAC, DEMO, LEDGER, PRESSING, WATERMARK);
+      List.of(
+          WREN,
+          MARLOW,
+          KETTLES,
+          HOLLOW_TIDE,
+          ALMANAC,
+          DEMO,
+          LEDGER,
+          BYPASS,
+          PRESSING,
+          WATERMARK,
+          STANDING);
 
   @Test
   @DisplayName("both folds hold the same nodes when the owner has minted and merged an entity")
