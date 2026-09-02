@@ -762,6 +762,14 @@ class DeckBehaviourTest {
     // question is whether one of those retries can land AFTER the new rating and put the abandoned
     // value back, which nothing in segue would ever show: the write is last-writer-wins with no
     // history table and no un-rate (ADR 39, ADR 46).
+    assumeTrue(
+        !chrome.flushWait().markerAfterFirstSocket(),
+        () ->
+            "this launch's startup cert-verifier flush landed after the page had its socket, so"
+                + " Chrome's pool was flushed with that socket in it and there is nothing pooled"
+                + " to resend on — the precondition below is gone before the test begins, and a"
+                + " green here would be the vacuous pass issue #193 is about. "
+                + chrome.flushWait().order());
     answer = Answer.SLOW_NO_ANSWER;
 
     // And then press at once. `start()`'s wait for quiet establishes that nothing is *holding* a

@@ -386,10 +386,20 @@ final class HeadlessChrome implements AutoCloseable {
    *
    * <p>Until this line the ordering held by luck — 57 ms of it at quiet load, which is about one
    * poll of this class's own DevTools handshake (§6). It is a condition now.
+   *
+   * <p><b>And a bound is not a guarantee.</b> Where the bound ends the wait, the tail is resumed
+   * and kept reading past {@code Page.navigate}, so that a marker arriving late — after the page
+   * has its socket, which is the flush taking that socket — is recorded and said out loud rather
+   * than lost in a green run. See {@link MarkerOrder}; issue #193.
    */
   void open(String url) {
-    flushWait = awaitFlush(netLog, launchedAt, FLUSH_BOUND_MILLIS);
-    if (!flushWait.sawMarker()) {
+    NetLog.Tail tail = new NetLog.Tail(netLog);
+    flushWait = awaitFlush(tail, launchedAt, FLUSH_BOUND_MILLIS);
+    // Only where the bound ended the wait is there anything left to ask: a launch that saw the
+    // marker saw the flush finish before this page could hold a socket. Taken before navigate, so
+    // that the resumed tail's first event is the first the page caused.
+    NetLog.Tail afterNavigate = flushWait.sawMarker() ? null : tail.resumed();
+    if (afterNavigate != null) {
       // The abnormal case only, and on stderr, which the build's testLogging shows on the console.
       // A line per launch would be noise nobody reads; a line only when the ordering stopped being
       // observable is the one thing a run needs to be told without being asked.
@@ -398,6 +408,13 @@ final class HeadlessChrome implements AutoCloseable {
     send("Page.enable", Map.of());
     send("Page.navigate", Map.of("url", url));
     until("document.readyState === 'complete'", "the page to load");
+    if (afterNavigate != null) {
+      // Beside the line above, and the half of it that line could not carry: whether the marker
+      // this launch proceeded without then landed on top of the page's own socket. Printed either
+      // way — "the ordering held" is the thing a run that skipped nothing needs to be able to say.
+      flushWait = observeMarkerOrder(flushWait, afterNavigate, LATE_MARKER_BOUND_MILLIS);
+      System.err.println("[HeadlessChrome] " + flushWait.order());
+    }
   }
 
   /** What the last {@link #open} waited on, for a test that wants to assert on the ordering. */
@@ -422,17 +439,91 @@ final class HeadlessChrome implements AutoCloseable {
    * @param sawMarker true where the NetLog showed the flush; false where the bound ended the wait
    * @param waitedMillis how much the wait added to this launch
    * @param boundMillis the bound that was in force, deadline-counted from the browser's launch
+   * @param order where the marker fell relative to the page's first socket, once the page was
+   *     loading — {@link MarkerOrder#NOT_OBSERVED} where the wait ended on the marker and there was
+   *     therefore nothing left to observe
    */
-  record FlushWait(boolean sawMarker, long waitedMillis, long boundMillis) {
+  record FlushWait(boolean sawMarker, long waitedMillis, long boundMillis, MarkerOrder order) {
+
+    /** The same wait, carrying what the tail said after {@code Page.navigate}. */
+    FlushWait withOrder(MarkerOrder observed) {
+      return new FlushWait(sawMarker, waitedMillis, boundMillis, observed);
+    }
+
+    /** Whether the flush marker landed after the page's first socket — see {@link MarkerOrder}. */
+    boolean markerAfterFirstSocket() {
+      return order.markerAfterFirstSocket();
+    }
+
     @Override
     public String toString() {
-      return sawMarker
-          ? "flush marker seen after " + waitedMillis + " ms"
-          : "proceeded on the "
-              + boundMillis
-              + " ms fallback bound after "
-              + waitedMillis
-              + " ms — this NetLog never showed the flush, which is the good outcome, not an error";
+      String wait =
+          sawMarker
+              ? "flush marker seen after " + waitedMillis + " ms"
+              : "proceeded on the "
+                  + boundMillis
+                  + " ms fallback bound after "
+                  + waitedMillis
+                  + " ms — this NetLog never showed the flush, which is the good outcome, not an"
+                  + " error";
+      return order.wasObserved() ? wait + "; " + order : wait;
+    }
+  }
+
+  /**
+   * Where Chrome's flush marker fell relative to the page's first socket, both counted as event
+   * ordinals in the NetLog the browser wrote <em>after</em> {@code Page.navigate}.
+   *
+   * <p><b>Why this is recorded rather than failed on.</b> {@link #FLUSH_BOUND_MILLIS} is a bound
+   * and not a timeout, so a launch may navigate without having seen the marker. If the marker then
+   * arrives once the page already holds a socket, the flush takes that socket — issue #169's race,
+   * recurring under a load the measurements behind {@code docs/loopback-only-evidence.md} never
+   * reached — and every test whose precondition is a pooled socket has silently lost it. Reddening
+   * there would red on machine speed, which is the trap the bound exists to avoid. So the launch
+   * records it, says so, and lets a test that depends on the precondition skip with the reason: a
+   * skip is in {@code build/test-results/**.xml}, and a vacuous green is nowhere (issue #193).
+   *
+   * @param markerPosition the tail ordinal at which the flush condition was satisfied, 0 for never,
+   *     −1 where the question was not asked
+   * @param firstSocketPosition the tail ordinal of the page's first socket, on the same terms
+   */
+  record MarkerOrder(int markerPosition, int firstSocketPosition) {
+
+    /**
+     * The wait ended on the marker, so the flush was over before {@code Page.navigate} and cannot
+     * have been after any socket the page went on to open. Distinct from {@code (0, 0)}, which is a
+     * tail that was read and showed neither.
+     */
+    static final MarkerOrder NOT_OBSERVED = new MarkerOrder(-1, -1);
+
+    boolean wasObserved() {
+      return markerPosition >= 0;
+    }
+
+    boolean markerAfterFirstSocket() {
+      return markerPosition > 0 && firstSocketPosition > 0 && markerPosition > firstSocketPosition;
+    }
+
+    @Override
+    public String toString() {
+      if (!wasObserved()) {
+        return "the flush was over before the page began loading, so it had no socket to take";
+      }
+      String where =
+          "the flush marker was event "
+              + describe(markerPosition)
+              + " and the page's first socket was event "
+              + describe(firstSocketPosition)
+              + " of the NetLog written after Page.navigate";
+      return markerAfterFirstSocket()
+          ? where
+              + " — the marker landed AFTER the socket, so this launch's pool was flushed with"
+              + " the page's socket in it (issue #193)"
+          : where + " — the ordering held";
+    }
+
+    private static String describe(int position) {
+      return position > 0 ? String.valueOf(position) : "never logged";
     }
   }
 
@@ -452,19 +543,67 @@ final class HeadlessChrome implements AutoCloseable {
    * marker to arrive, not less.
    */
   static FlushWait awaitFlush(Path netLog, long launchedAtNanos, long boundMillis) {
+    return awaitFlush(new NetLog.Tail(netLog), launchedAtNanos, boundMillis);
+  }
+
+  /**
+   * The same wait over a tail the caller keeps, so that {@link NetLog.Tail#resumed()} can carry on
+   * from exactly where the wait stopped reading.
+   */
+  static FlushWait awaitFlush(NetLog.Tail tail, long launchedAtNanos, long boundMillis) {
     long startedWaiting = System.nanoTime();
     long deadline = launchedAtNanos + TimeUnit.MILLISECONDS.toNanos(boundMillis);
-    NetLog.Tail tail = new NetLog.Tail(netLog);
     while (true) {
       if (tail.flushHasPassed()) {
-        return new FlushWait(true, waitedMillis(startedWaiting), boundMillis);
+        return new FlushWait(
+            true, waitedMillis(startedWaiting), boundMillis, MarkerOrder.NOT_OBSERVED);
       }
       if (System.nanoTime() >= deadline) {
-        return new FlushWait(false, waitedMillis(startedWaiting), boundMillis);
+        return new FlushWait(
+            false, waitedMillis(startedWaiting), boundMillis, MarkerOrder.NOT_OBSERVED);
       }
       sleep(20);
     }
   }
+
+  /**
+   * Keeps reading the tail the page is writing into, and records where the flush marker fell
+   * relative to the page's first socket.
+   *
+   * <p>Ends as soon as both are known, so the normal shape of the late case — a marker that was a
+   * few hundred milliseconds behind the bound — costs about as long as the marker was late by. Ends
+   * on the bound otherwise, which is the case where the marker never arrives at all: that is the
+   * outcome {@link #awaitFlush} calls good news, and there is nothing further to learn by waiting
+   * on it.
+   *
+   * <p>Only ever called where the bound ended the wait. A launch that saw the marker before {@code
+   * Page.navigate} saw the flush finish before the page could hold a socket, so its answer is
+   * {@link MarkerOrder#NOT_OBSERVED} and no launch pays for a question already settled.
+   */
+  static FlushWait observeMarkerOrder(FlushWait wait, NetLog.Tail afterNavigate, long boundMillis) {
+    long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(boundMillis);
+    while (true) {
+      afterNavigate.poll();
+      boolean bothKnown =
+          afterNavigate.markerPosition() > 0 && afterNavigate.firstSocketPosition() > 0;
+      if (bothKnown || System.nanoTime() >= deadline) {
+        return wait.withOrder(
+            new MarkerOrder(afterNavigate.markerPosition(), afterNavigate.firstSocketPosition()));
+      }
+      sleep(20);
+    }
+  }
+
+  /**
+   * How long {@link #open} will keep watching for a marker that missed {@link #FLUSH_BOUND_MILLIS}.
+   *
+   * <p>Paid only by a launch that already proceeded without seeing the flush, and that already
+   * prints a line saying so — never by a launch that saw the marker, which is 80 of 80 of the
+   * launches measured for {@code docs/loopback-only-evidence.md} §6. A marker that has not arrived
+   * a second after a bound set at the measured p100 plus 45% is a browser that is not going to fire
+   * one, and that is the good outcome rather than something to wait out.
+   */
+  static final long LATE_MARKER_BOUND_MILLIS = 1000;
 
   private static long waitedMillis(long startedWaiting) {
     return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedWaiting);

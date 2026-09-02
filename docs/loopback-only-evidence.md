@@ -507,3 +507,31 @@ much of the bound a loaded machine would use. Twenty runs each side, on one mach
 build, on one day — the same caveat as every other section of this page, and nothing regenerates
 these numbers either.
 
+
+## 10. The case this page could not reach — recorded, 2026-09-02
+
+**Added 2026-09-02 (issue #193). No new measurement: this section says what the harness now
+observes, not what it observed on a day.**
+
+§9's bound is not a guarantee, and §3 is the reason to care: under load the marker's arrival moved
+by −683 … −81 ms against a quiet baseline, and nothing in these 80 launches reached a load where it
+missed the 2500 ms bound. If it ever does, the launch proceeds — correctly, since a browser that
+never fires the flush is the outcome §6 wants — and the marker may then land *after* the page has
+its socket, which is the flush taking that socket: §4's mechanism, on the page rather than on a
+planted early load. Every test whose precondition is a pooled socket would lose it and stay green,
+because a precondition that has quietly gone is indistinguishable from one that held.
+
+So `HeadlessChrome.open` no longer stops reading at `Page.navigate`. Where the bound ended the wait
+it resumes the NetLog tail from that point and keeps reading, bounded again, recording the event
+ordinal at which the flush condition was satisfied and the ordinal of the page's first socket. Both
+positions go into the line the launch prints on stderr beside the existing "proceeded on the bound"
+one, and `aRetriedRatingCannotOverwriteAReRating` — whose positive control needs a socket in
+Chrome's pool — now *skips with that reason* rather than passing on a hazard that was no longer
+there. A skip is in `build/test-results/**.xml`; a vacuous green is nowhere.
+
+Not a red, deliberately: reddening on a late marker would red on machine speed, which is the trap
+the bound exists to avoid. And the recording is proven on fixtures rather than on a browser, for
+the same reason §9 planted its red — 80 launches of 80 here wrote the marker, and wrote it early.
+Three NetLog tails trimmed verbatim out of a real capture drive the three branches (marker after
+the first socket, marker before it, no marker at all); how they were cut, and out of which capture,
+is in `src/test/resources/rate/netlog/README.md`.
