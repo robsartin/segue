@@ -60,8 +60,8 @@ class RecordInvariantsTest {
         .isThrownBy(
             () ->
                 new AssertionRecord(
-                    "Q1",
-                    "Q2",
+                    "Q01",
+                    "Q02",
                     "MEMBER_OF",
                     LocalDate.of(2000, 1, 1),
                     LocalDate.of(1990, 1, 1),
@@ -75,8 +75,8 @@ class RecordInvariantsTest {
         .isThrownBy(
             () ->
                 new AssertionRecord(
-                    "Q1",
-                    "Q2",
+                    "Q01",
+                    "Q02",
                     "MEMBER_OF",
                     LocalDate.of(1983, 1, 1),
                     null,

@@ -24,7 +24,7 @@ class LoggedAssertionTest {
   void bothKindsAreLogged() {
     LoggedAssertion node = new NodeAssertion("Q5593", NodeKind.PERSON, "Pablo Picasso", WIKIDATA);
     LoggedAssertion edge =
-        new AssertionRecord("Q5593", "Q999", "INFLUENCED_BY", null, null, WIKIDATA);
+        new AssertionRecord("Q5593", "Q0999", "INFLUENCED_BY", null, null, WIKIDATA);
 
     assertThat(node).isInstanceOf(LoggedAssertion.class);
     assertThat(edge).isInstanceOf(LoggedAssertion.class);
@@ -61,9 +61,9 @@ class LoggedAssertionTest {
 
     assertThatNullPointerException()
         .isThrownBy(() -> new NodeAssertion(null, NodeKind.PERSON, "x", WIKIDATA));
-    assertThatNullPointerException().isThrownBy(() -> new NodeAssertion("Q1", null, "x", WIKIDATA));
+    assertThatNullPointerException().isThrownBy(() -> new NodeAssertion("Q01", null, "x", WIKIDATA));
     assertThatNullPointerException()
-        .isThrownBy(() -> new NodeAssertion("Q1", NodeKind.WORK, "x", null));
+        .isThrownBy(() -> new NodeAssertion("Q01", NodeKind.WORK, "x", null));
   }
 
   @Test

@@ -96,14 +96,19 @@ class StandInQidsDenoteNothingTest {
    * review, and naming a real Wikidata entity in a test is meant to be a deliberate act.
    *
    * <p><b>An id is allowed or excluded whole, and one group straddles that.</b> {@code
-   * GraphStoreContract} numbers its questions {@code Q1} to {@code Q4} in {@code @DisplayName}, and
-   * only {@code Q4} appears nowhere else — so only {@code Q4} is here. {@code Q1}, {@code Q2} and
-   * {@code Q3} are invented identifiers elsewhere in the tree too, so they wait in {@link
-   * #NOT_YET_MIGRATED}; when those uses take the leading-zero form, the three move here with {@code
-   * Q4}'s reason rather than being deleted, because the question numbers stay.
+   * GraphStoreContract} numbers its questions {@code Q1} to {@code Q4} in {@code @DisplayName}.
+   * Every node-id use of {@code Q1}, {@code Q2} and {@code Q3} elsewhere in the tree has taken the
+   * leading-zero form — band H, issue #171 — so all four question numbers are here now, sharing one
+   * reason: the question numbers stay.
    */
   static final Map<String, String> ALLOWED =
       Map.ofEntries(
+          entry(
+              "Q1", "not an identifier — the question number in GraphStoreContract's @DisplayName"),
+          entry(
+              "Q2", "not an identifier — the question number in GraphStoreContract's @DisplayName"),
+          entry(
+              "Q3", "not an identifier — the question number in GraphStoreContract's @DisplayName"),
           entry(
               "Q4", "not an identifier — the question number in GraphStoreContract's @DisplayName"),
           entry("Q5", "class id — mapped by ClassLabels and KindMapper"),
@@ -240,8 +245,8 @@ class StandInQidsDenoteNothingTest {
    */
   static final Set<String> NOT_YET_MIGRATED =
       Set.of(
-          "Q1", "Q2", "Q3", "Q404", "Q405", "Q900", "Q901", "Q902", "Q903", "Q904", "Q905", "Q906",
-          "Q999", "Q9001", "Q9002", "Q9004", "Q9005", "Q9006", "Q9009", "Q9010", "Q90031",
+          "Q900", "Q901", "Q902", "Q903", "Q904", "Q905", "Q906", "Q9001", "Q9002", "Q9009",
+          "Q9010", "Q90031",
           "Q900042", "Q900100", "Q900101", "Q900102", "Q900103", "Q900104", "Q900105", "Q900106",
           "Q900107", "Q900108", "Q900111", "Q900112", "Q900113", "Q900114", "Q900115", "Q900116",
           "Q900117", "Q900118", "Q900119", "Q900121", "Q900122", "Q900123", "Q900124", "Q900125",

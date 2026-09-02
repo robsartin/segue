@@ -100,14 +100,14 @@ class SegueServiceTest {
   @Test
   @DisplayName("search delegates to the resolver and writes nothing")
   void searchWritesNothing() {
-    Candidate candidate = new Candidate("Q1", "Nick Cave", "musician", NodeKind.PERSON);
+    Candidate candidate = new Candidate("Q01", "Nick Cave", "musician", NodeKind.PERSON);
     resolver.withSearchResults(List.of(candidate));
 
     ToolResult<List<CandidateView>> result = service().search("nick cave", null, 5);
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
     assertThat(result.payload())
-        .containsExactly(new CandidateView("Q1", "Nick Cave", "musician", NodeKind.PERSON));
+        .containsExactly(new CandidateView("Q01", "Nick Cave", "musician", NodeKind.PERSON));
     assertThat(log.readAll()).isEmpty();
     assertThat(graph.edgeCount()).isZero();
   }
@@ -129,28 +129,28 @@ class SegueServiceTest {
   @Test
   @DisplayName("addEntity fetches and records, and is idempotent on a second call")
   void addEntityRecordsAndIsIdempotent() {
-    NodeAssertion assertion = new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA);
+    NodeAssertion assertion = new NodeAssertion("Q01", NodeKind.PERSON, "Nick Cave", WIKIDATA);
     resolver.withEntity(assertion);
 
-    ToolResult<NodeView> first = service().addEntity("Q1");
-    ToolResult<NodeView> second = service().addEntity("Q1");
+    ToolResult<NodeView> first = service().addEntity("Q01");
+    ToolResult<NodeView> second = service().addEntity("Q01");
 
     assertThat(first.outcome()).isEqualTo(ToolResult.Outcome.OK);
     assertThat(second.outcome()).isEqualTo(ToolResult.Outcome.OK);
-    NodeView expected = new NodeView("Q1", NodeKind.PERSON, "Nick Cave");
+    NodeView expected = new NodeView("Q01", NodeKind.PERSON, "Nick Cave");
     assertThat(first.payload()).isEqualTo(expected);
     assertThat(second.payload()).isEqualTo(expected);
-    assertThat(graph.node("Q1")).contains(assertion.toNode());
+    assertThat(graph.node("Q01")).contains(assertion.toNode());
   }
 
   @Test
   @DisplayName("addEntity on an unknown qid returns an error naming the qid, not an exception")
   void addEntityUnknownQidReturnsError() {
-    ToolResult<NodeView> result = service().addEntity("Q404");
+    ToolResult<NodeView> result = service().addEntity("Q0404");
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.ERROR);
-    assertThat(result.detail()).contains("Q404");
-    assertThat(graph.node("Q404")).isEmpty();
+    assertThat(result.detail()).contains("Q0404");
+    assertThat(graph.node("Q0404")).isEmpty();
     assertThat(log.readAll()).isEmpty();
   }
 
@@ -169,7 +169,7 @@ class SegueServiceTest {
   void addEntitySourceUnavailableReturnsError() {
     resolver.fetchThrows(new WikidataUnavailableException("timed out"));
 
-    ToolResult<NodeView> result = service().addEntity("Q1");
+    ToolResult<NodeView> result = service().addEntity("Q01");
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.ERROR);
     assertThat(result.detail()).containsIgnoringCase("unavailable");
@@ -210,10 +210,10 @@ class SegueServiceTest {
   @Test
   @DisplayName("expandEntity reports partial when a source is unavailable")
   void expandEntityReportsPartialWhenSourceUnavailable() {
-    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+    ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "Nick Cave", WIKIDATA));
     SourceAdapter unavailable = new StubSourceAdapter("flaky", ExpandResult.unavailable());
 
-    ToolResult<SegueService.ExpansionSummary> result = service(unavailable).expandEntity("Q1", 10);
+    ToolResult<SegueService.ExpansionSummary> result = service(unavailable).expandEntity("Q01", 10);
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.PARTIAL);
     assertThat(result.detail()).containsIgnoringCase("unavailable");
@@ -225,15 +225,15 @@ class SegueServiceTest {
       "should name the unavailable source and not the healthy one when wikidata is down"
           + " (issue #148)")
   void shouldNameTheUnavailableSourceAndNotTheHealthyOneWhenWikidataIsDown() {
-    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
-    ingest.record(new NodeAssertion("Q2", NodeKind.GROUP, "Bad Seeds", WIKIDATA));
-    AssertionRecord edge = new AssertionRecord("Q1", "Q2", "MEMBER_OF", null, null, WIKIDATA);
+    ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+    ingest.record(new NodeAssertion("Q02", NodeKind.GROUP, "Bad Seeds", WIKIDATA));
+    AssertionRecord edge = new AssertionRecord("Q01", "Q02", "MEMBER_OF", null, null, WIKIDATA);
 
     ToolResult<SegueService.ExpansionSummary> result =
         service(
                 new StubSourceAdapter("wikidata", ExpandResult.unavailable()),
                 new StubSourceAdapter("musicbrainz", ExpandResult.of(List.of(edge))))
-            .expandEntity("Q1", 10);
+            .expandEntity("Q01", 10);
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.PARTIAL);
     assertThat(result.detail()).contains("wikidata").doesNotContain("musicbrainz");
@@ -244,15 +244,15 @@ class SegueServiceTest {
       "should name the unavailable source and not the healthy one when musicbrainz is down"
           + " (issue #148)")
   void shouldNameTheUnavailableSourceAndNotTheHealthyOneWhenMusicbrainzIsDown() {
-    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
-    ingest.record(new NodeAssertion("Q2", NodeKind.GROUP, "Bad Seeds", WIKIDATA));
-    AssertionRecord edge = new AssertionRecord("Q1", "Q2", "MEMBER_OF", null, null, WIKIDATA);
+    ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+    ingest.record(new NodeAssertion("Q02", NodeKind.GROUP, "Bad Seeds", WIKIDATA));
+    AssertionRecord edge = new AssertionRecord("Q01", "Q02", "MEMBER_OF", null, null, WIKIDATA);
 
     ToolResult<SegueService.ExpansionSummary> result =
         service(
                 new StubSourceAdapter("wikidata", ExpandResult.of(List.of(edge))),
                 new StubSourceAdapter("musicbrainz", ExpandResult.unavailable()))
-            .expandEntity("Q1", 10);
+            .expandEntity("Q01", 10);
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.PARTIAL);
     assertThat(result.detail()).contains("musicbrainz").doesNotContain("wikidata");
@@ -261,13 +261,13 @@ class SegueServiceTest {
   @Test
   @DisplayName("expandEntity reports partial when the result was truncated")
   void expandEntityReportsPartialWhenTruncated() {
-    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
-    ingest.record(new NodeAssertion("Q2", NodeKind.GROUP, "Bad Seeds", WIKIDATA));
-    AssertionRecord edge = new AssertionRecord("Q1", "Q2", "MEMBER_OF", null, null, WIKIDATA);
+    ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+    ingest.record(new NodeAssertion("Q02", NodeKind.GROUP, "Bad Seeds", WIKIDATA));
+    AssertionRecord edge = new AssertionRecord("Q01", "Q02", "MEMBER_OF", null, null, WIKIDATA);
     SourceAdapter truncating =
         new StubSourceAdapter("cut-short", new ExpandResult(List.of(edge), false, true));
 
-    ToolResult<SegueService.ExpansionSummary> result = service(truncating).expandEntity("Q1", 10);
+    ToolResult<SegueService.ExpansionSummary> result = service(truncating).expandEntity("Q01", 10);
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.PARTIAL);
     assertThat(result.detail()).containsIgnoringCase("truncat");
@@ -277,15 +277,15 @@ class SegueServiceTest {
   @Test
   @DisplayName("should name the source that truncated and not the one that did not (issue #148)")
   void shouldNameTheSourceThatTruncatedAndNotTheOneThatDidNot() {
-    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
-    ingest.record(new NodeAssertion("Q2", NodeKind.GROUP, "Bad Seeds", WIKIDATA));
-    AssertionRecord edge = new AssertionRecord("Q1", "Q2", "MEMBER_OF", null, null, WIKIDATA);
+    ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+    ingest.record(new NodeAssertion("Q02", NodeKind.GROUP, "Bad Seeds", WIKIDATA));
+    AssertionRecord edge = new AssertionRecord("Q01", "Q02", "MEMBER_OF", null, null, WIKIDATA);
 
     ToolResult<SegueService.ExpansionSummary> result =
         service(
                 new StubSourceAdapter("wikidata", ExpandResult.of(List.of(edge))),
                 new StubSourceAdapter("musicbrainz", new ExpandResult(List.of(edge), false, true)))
-            .expandEntity("Q1", 10);
+            .expandEntity("Q01", 10);
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.PARTIAL);
     assertThat(result.detail()).containsIgnoringCase("truncat");
@@ -297,12 +297,12 @@ class SegueServiceTest {
       "should blame no source when it was the shared bound that cut the concatenation"
           + " (issue #148, GAP 3)")
   void shouldBlameNoSourceWhenItWasTheSharedBoundThatCutTheConcatenation() {
-    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+    ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "Nick Cave", WIKIDATA));
     List<AssertionRecord> assertions = new ArrayList<>();
     List<NodeAssertion> neighbors = new ArrayList<>();
     for (int i = 0; i < 3; i++) {
       String qid = "Q" + (700 + i);
-      assertions.add(new AssertionRecord("Q1", qid, "MEMBER_OF", null, null, WIKIDATA));
+      assertions.add(new AssertionRecord("Q01", qid, "MEMBER_OF", null, null, WIKIDATA));
       neighbors.add(new NodeAssertion(qid, NodeKind.GROUP, "Group " + i, WIKIDATA));
     }
     // Neither adapter reports truncating: each returned everything it had. What overran the bound
@@ -313,7 +313,7 @@ class SegueServiceTest {
         service(
                 new StubSourceAdapter("wikidata", whole),
                 new StubSourceAdapter("musicbrainz", whole))
-            .expandEntity("Q1", 4);
+            .expandEntity("Q01", 4);
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.PARTIAL);
     assertThat(result.payload().truncated()).isTrue();
@@ -331,27 +331,27 @@ class SegueServiceTest {
       "a CONCEPT expansion past the ceiling is capped and reported partial, naming the ceiling"
           + " (issue #112)")
   void expandEntityCapsAConceptAtTheCeiling() {
-    ingest.record(new NodeAssertion("Q1", NodeKind.CONCEPT, "Broad Concept", WIKIDATA));
+    ingest.record(new NodeAssertion("Q01", NodeKind.CONCEPT, "Broad Concept", WIKIDATA));
     int flood = ExpansionBounds.CONCEPT_CEILING + 10;
     List<AssertionRecord> assertions = new ArrayList<>();
     List<NodeAssertion> neighbors = new ArrayList<>();
     for (int i = 0; i < flood; i++) {
       String qid = "Q" + (100 + i);
-      assertions.add(new AssertionRecord("Q1", qid, "ABOUTNESS", null, null, WIKIDATA));
+      assertions.add(new AssertionRecord("Q01", qid, "ABOUTNESS", null, null, WIKIDATA));
       neighbors.add(new NodeAssertion(qid, NodeKind.WORK, "Work " + i, WIKIDATA));
     }
     SourceAdapter flooding =
         new StubSourceAdapter("flood", new ExpandResult(assertions, neighbors, false, false));
 
     // The request asks for far more than the ceiling — exactly the call this rule exists to stop.
-    ToolResult<SegueService.ExpansionSummary> result = service(flooding).expandEntity("Q1", 200);
+    ToolResult<SegueService.ExpansionSummary> result = service(flooding).expandEntity("Q01", 200);
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.PARTIAL);
     assertThat(result.detail()).containsIgnoringCase("truncat");
     assertThat(result.detail()).contains(String.valueOf(ExpansionBounds.CONCEPT_CEILING));
     assertThat(result.payload().truncated()).isTrue();
     assertThat(result.payload().edgesAdded()).isEqualTo(ExpansionBounds.CONCEPT_CEILING);
-    assertThat(graph.edges("Q1")).hasSize(ExpansionBounds.CONCEPT_CEILING);
+    assertThat(graph.edges("Q01")).hasSize(ExpansionBounds.CONCEPT_CEILING);
   }
 
   @Test
@@ -362,47 +362,47 @@ class SegueServiceTest {
     // The guard reads the SEED's kind. Nothing else on this branch would notice if it stopped
     // doing that: hard-code SegueService's lookup to NodeKind.CONCEPT and every other test still
     // passes, while every PERSON expansion silently drops to 25.
-    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Well Connected Person", WIKIDATA));
+    ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "Well Connected Person", WIKIDATA));
     int pastTheCeiling = ExpansionBounds.CONCEPT_CEILING + 10;
     List<AssertionRecord> assertions = new ArrayList<>();
     List<NodeAssertion> neighbors = new ArrayList<>();
     for (int i = 0; i < pastTheCeiling; i++) {
       String qid = "Q" + (100 + i);
-      assertions.add(new AssertionRecord("Q1", qid, "DIRECTED", null, null, WIKIDATA));
+      assertions.add(new AssertionRecord("Q01", qid, "DIRECTED", null, null, WIKIDATA));
       neighbors.add(new NodeAssertion(qid, NodeKind.WORK, "Work " + i, WIKIDATA));
     }
     SourceAdapter generous =
         new StubSourceAdapter("generous", new ExpandResult(assertions, neighbors, false, false));
 
-    ToolResult<SegueService.ExpansionSummary> result = service(generous).expandEntity("Q1", 200);
+    ToolResult<SegueService.ExpansionSummary> result = service(generous).expandEntity("Q01", 200);
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
     assertThat(result.payload().truncated()).isFalse();
     assertThat(result.payload().edgesAdded()).isEqualTo(pastTheCeiling);
-    assertThat(graph.edges("Q1")).hasSize(pastTheCeiling);
+    assertThat(graph.edges("Q01")).hasSize(pastTheCeiling);
   }
 
   @Test
   @DisplayName("expandEntity reports partial and skips an edge whose neighbour cannot be resolved")
   void expandEntitySkipsUnreachableNeighbour() {
-    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
-    resolver.withEntity(new NodeAssertion("Q2", NodeKind.GROUP, "Bad Seeds", WIKIDATA));
-    // Q3 is deliberately left unresolvable.
-    AssertionRecord resolvable = new AssertionRecord("Q1", "Q2", "MEMBER_OF", null, null, WIKIDATA);
+    ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+    resolver.withEntity(new NodeAssertion("Q02", NodeKind.GROUP, "Bad Seeds", WIKIDATA));
+    // Q03 is deliberately left unresolvable.
+    AssertionRecord resolvable = new AssertionRecord("Q01", "Q02", "MEMBER_OF", null, null, WIKIDATA);
     AssertionRecord unresolvable =
-        new AssertionRecord("Q1", "Q3", "MEMBER_OF", null, null, WIKIDATA);
+        new AssertionRecord("Q01", "Q03", "MEMBER_OF", null, null, WIKIDATA);
     SourceAdapter adapter =
         new StubSourceAdapter(
             "mixed", new ExpandResult(List.of(resolvable, unresolvable), false, false));
 
-    ToolResult<SegueService.ExpansionSummary> result = service(adapter).expandEntity("Q1", 10);
+    ToolResult<SegueService.ExpansionSummary> result = service(adapter).expandEntity("Q01", 10);
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.PARTIAL);
     assertThat(result.detail()).containsIgnoringCase("skip");
     assertThat(result.payload().skippedNeighbors()).isEqualTo(1);
     assertThat(result.payload().edgesAdded()).isEqualTo(1);
-    assertThat(graph.node("Q3")).isEmpty();
-    assertThat(graph.node("Q2")).isPresent();
+    assertThat(graph.node("Q03")).isEmpty();
+    assertThat(graph.node("Q02")).isPresent();
   }
 
   @Test
@@ -410,20 +410,20 @@ class SegueServiceTest {
       "expandEntity treats a neighbour fetch that throws like one that resolved to nothing, and"
           + " completes as partial rather than aborting the whole expansion")
   void expandEntitySkipsNeighbourWhoseResolutionThrows() {
-    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
-    resolver.withEntity(new NodeAssertion("Q2", NodeKind.GROUP, "Bad Seeds", WIKIDATA));
-    resolver.fetchThrowsFor("Q3", new WikidataUnavailableException("timed out"));
-    AssertionRecord resolvable = new AssertionRecord("Q1", "Q2", "MEMBER_OF", null, null, WIKIDATA);
-    AssertionRecord flaky = new AssertionRecord("Q1", "Q3", "MEMBER_OF", null, null, WIKIDATA);
+    ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+    resolver.withEntity(new NodeAssertion("Q02", NodeKind.GROUP, "Bad Seeds", WIKIDATA));
+    resolver.fetchThrowsFor("Q03", new WikidataUnavailableException("timed out"));
+    AssertionRecord resolvable = new AssertionRecord("Q01", "Q02", "MEMBER_OF", null, null, WIKIDATA);
+    AssertionRecord flaky = new AssertionRecord("Q01", "Q03", "MEMBER_OF", null, null, WIKIDATA);
     SourceAdapter adapter =
         new StubSourceAdapter("mixed", new ExpandResult(List.of(resolvable, flaky), false, false));
 
-    ToolResult<SegueService.ExpansionSummary> result = service(adapter).expandEntity("Q1", 10);
+    ToolResult<SegueService.ExpansionSummary> result = service(adapter).expandEntity("Q01", 10);
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.PARTIAL);
     assertThat(result.payload().skippedNeighbors()).isEqualTo(1);
     assertThat(result.payload().edgesAdded()).isEqualTo(1);
-    assertThat(graph.node("Q3")).isEmpty();
+    assertThat(graph.node("Q03")).isEmpty();
   }
 
   @Test
@@ -435,22 +435,22 @@ class SegueServiceTest {
     // When that far end cannot be resolved, exactly one entity was lost. `skippedNeighbors` and
     // the sentence it is rendered into both promise a count of neighbours, so counting the
     // assertions instead would tell a calling model that twice as much went missing as did.
-    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
-    // Q2 is deliberately left unresolvable, and is the far end of both assertions.
+    ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+    // Q02 is deliberately left unresolvable, and is the far end of both assertions.
     AssertionRecord wrote =
-        new AssertionRecord("Q1", "Q2", "WROTE_SCREENPLAY_FOR", null, null, WIKIDATA);
-    AssertionRecord scored = new AssertionRecord("Q1", "Q2", "COMPOSED_FOR", null, null, WIKIDATA);
+        new AssertionRecord("Q01", "Q02", "WROTE_SCREENPLAY_FOR", null, null, WIKIDATA);
+    AssertionRecord scored = new AssertionRecord("Q01", "Q02", "COMPOSED_FOR", null, null, WIKIDATA);
     SourceAdapter adapter =
         new StubSourceAdapter("multigraph", new ExpandResult(List.of(wrote, scored), false, false));
 
-    ToolResult<SegueService.ExpansionSummary> result = service(adapter).expandEntity("Q1", 10);
+    ToolResult<SegueService.ExpansionSummary> result = service(adapter).expandEntity("Q01", 10);
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.PARTIAL);
     assertThat(result.payload().skippedNeighbors()).isEqualTo(1);
     assertThat(result.detail()).contains("1 neighbour(s) could not be resolved");
     // Both assertions were still skipped — only the counting changes, never which edges land.
     assertThat(result.payload().edgesAdded()).isZero();
-    assertThat(graph.node("Q2")).isEmpty();
+    assertThat(graph.node("Q02")).isEmpty();
     // One failed resolution, not one per assertion: the failure is remembered for the call.
     assertThat(resolver.fetchCallCount()).isEqualTo(1);
   }
@@ -460,26 +460,26 @@ class SegueServiceTest {
   void expandEntityCountsNodesOnceAndAssertionsSeparately() {
     // The other half of #34: whether nodesAdded and edgesAdded share the conflation
     // skippedNeighbors had. They do not, and for different reasons. nodesAdded is guarded by the
-    // graph.node(neighbor).isEmpty() re-read — the first assertion records Q2, so the second one
+    // graph.node(neighbor).isEmpty() re-read — the first assertion records Q02, so the second one
     // finds it already present and cannot increment again. edgesAdded is per assertion on
     // purpose: two claims about one pair of nodes are two claims, and merging them into one edge
     // is GraphStore.record's job downstream, not a number this summary should pre-empt.
-    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
-    resolver.withEntity(new NodeAssertion("Q2", NodeKind.WORK, "The Proposition", WIKIDATA));
+    ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+    resolver.withEntity(new NodeAssertion("Q02", NodeKind.WORK, "The Proposition", WIKIDATA));
     AssertionRecord wrote =
-        new AssertionRecord("Q1", "Q2", "WROTE_SCREENPLAY_FOR", null, null, WIKIDATA);
-    AssertionRecord scored = new AssertionRecord("Q1", "Q2", "COMPOSED_FOR", null, null, WIKIDATA);
+        new AssertionRecord("Q01", "Q02", "WROTE_SCREENPLAY_FOR", null, null, WIKIDATA);
+    AssertionRecord scored = new AssertionRecord("Q01", "Q02", "COMPOSED_FOR", null, null, WIKIDATA);
     SourceAdapter adapter =
         new StubSourceAdapter("multigraph", new ExpandResult(List.of(wrote, scored), false, false));
 
-    ToolResult<SegueService.ExpansionSummary> result = service(adapter).expandEntity("Q1", 10);
+    ToolResult<SegueService.ExpansionSummary> result = service(adapter).expandEntity("Q01", 10);
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
     assertThat(result.payload().nodesAdded()).isEqualTo(1);
     assertThat(result.payload().edgesAdded()).isEqualTo(2);
     assertThat(result.payload().skippedNeighbors()).isZero();
     assertThat(resolver.fetchCallCount()).isEqualTo(1);
-    assertThat(graph.edges("Q1")).hasSize(2);
+    assertThat(graph.edges("Q01")).hasSize(2);
   }
 
   @Test
@@ -525,20 +525,20 @@ class SegueServiceTest {
     // one SPARQL query returns them alongside the backlinks. Fetching them again would undo the
     // saving: expanding Nick Cave finds seventy-odd works, and a round trip each is the cost
     // that made the reverse lookup look unaffordable in the first place.
-    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
-    NodeAssertion inline = new NodeAssertion("Q2", NodeKind.WORK, "The Proposition", WIKIDATA);
-    AssertionRecord edge = new AssertionRecord("Q1", "Q2", "COMPOSED_FOR", null, null, WIKIDATA);
+    ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+    NodeAssertion inline = new NodeAssertion("Q02", NodeKind.WORK, "The Proposition", WIKIDATA);
+    AssertionRecord edge = new AssertionRecord("Q01", "Q02", "COMPOSED_FOR", null, null, WIKIDATA);
     SourceAdapter adapter =
         new StubSourceAdapter(
             "inline", new ExpandResult(List.of(edge), List.of(inline), false, false));
 
-    ToolResult<SegueService.ExpansionSummary> result = service(adapter).expandEntity("Q1", 10);
+    ToolResult<SegueService.ExpansionSummary> result = service(adapter).expandEntity("Q01", 10);
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
     assertThat(resolver.fetchCallCount()).isZero();
     assertThat(result.payload().nodesAdded()).isEqualTo(1);
     assertThat(result.payload().edgesAdded()).isEqualTo(1);
-    assertThat(graph.node("Q2")).contains(inline.toNode());
+    assertThat(graph.node("Q02")).contains(inline.toNode());
   }
 
   @Test
@@ -547,25 +547,25 @@ class SegueServiceTest {
     // The port does not oblige an adapter to know anything about the far end (see
     // ExpandResult), so the inline map is an optimisation, never a replacement. An adapter that
     // describes some of its neighbours and not others must not silently lose the rest.
-    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
-    NodeAssertion inline = new NodeAssertion("Q2", NodeKind.WORK, "The Proposition", WIKIDATA);
-    resolver.withEntity(new NodeAssertion("Q3", NodeKind.GROUP, "Bad Seeds", WIKIDATA));
+    ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+    NodeAssertion inline = new NodeAssertion("Q02", NodeKind.WORK, "The Proposition", WIKIDATA);
+    resolver.withEntity(new NodeAssertion("Q03", NodeKind.GROUP, "Bad Seeds", WIKIDATA));
     AssertionRecord described =
-        new AssertionRecord("Q1", "Q2", "COMPOSED_FOR", null, null, WIKIDATA);
+        new AssertionRecord("Q01", "Q02", "COMPOSED_FOR", null, null, WIKIDATA);
     AssertionRecord undescribed =
-        new AssertionRecord("Q1", "Q3", "MEMBER_OF", null, null, WIKIDATA);
+        new AssertionRecord("Q01", "Q03", "MEMBER_OF", null, null, WIKIDATA);
     SourceAdapter adapter =
         new StubSourceAdapter(
             "partly-inline",
             new ExpandResult(List.of(described, undescribed), List.of(inline), false, false));
 
-    ToolResult<SegueService.ExpansionSummary> result = service(adapter).expandEntity("Q1", 10);
+    ToolResult<SegueService.ExpansionSummary> result = service(adapter).expandEntity("Q01", 10);
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
     assertThat(resolver.fetchCallCount()).isEqualTo(1);
     assertThat(result.payload().nodesAdded()).isEqualTo(2);
-    assertThat(graph.node("Q2")).isPresent();
-    assertThat(graph.node("Q3")).isPresent();
+    assertThat(graph.node("Q02")).isPresent();
+    assertThat(graph.node("Q03")).isPresent();
   }
 
   @Test
@@ -578,18 +578,18 @@ class SegueServiceTest {
     // left one class of entity holding two kinds depending on when it arrived. PathRanking's
     // hub rule then vetoed routes through a work stored as a concept — the opposite of what
     // issue #52 built it for.
-    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
-    ingest.record(new NodeAssertion("Q2", NodeKind.CONCEPT, "The Proposition", WIKIDATA));
-    NodeAssertion corrected = new NodeAssertion("Q2", NodeKind.WORK, "The Proposition", WIKIDATA);
-    AssertionRecord edge = new AssertionRecord("Q1", "Q2", "COMPOSED_FOR", null, null, WIKIDATA);
+    ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+    ingest.record(new NodeAssertion("Q02", NodeKind.CONCEPT, "The Proposition", WIKIDATA));
+    NodeAssertion corrected = new NodeAssertion("Q02", NodeKind.WORK, "The Proposition", WIKIDATA);
+    AssertionRecord edge = new AssertionRecord("Q01", "Q02", "COMPOSED_FOR", null, null, WIKIDATA);
     SourceAdapter adapter =
         new StubSourceAdapter(
             "inline", new ExpandResult(List.of(edge), List.of(corrected), false, false));
 
-    ToolResult<SegueService.ExpansionSummary> result = service(adapter).expandEntity("Q1", 10);
+    ToolResult<SegueService.ExpansionSummary> result = service(adapter).expandEntity("Q01", 10);
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
-    assertThat(graph.node("Q2")).contains(corrected.toNode());
+    assertThat(graph.node("Q02")).contains(corrected.toNode());
     // ADR 19: the correction is a new claim appended to the log, not an edit of the old one, so
     // a replay rebuilds the corrected graph rather than the stale one.
     assertThat(log.readAll()).contains(corrected);
@@ -604,21 +604,21 @@ class SegueServiceTest {
     // The other half of issue #55. The refresh above re-records an entity the graph already
     // had, and nodesAdded must not follow it: the number answers "how much did this expansion
     // grow the graph by", and a caller told 1 would read a corrected node as a discovered one.
-    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
-    ingest.record(new NodeAssertion("Q2", NodeKind.CONCEPT, "The Proposition", WIKIDATA));
-    NodeAssertion corrected = new NodeAssertion("Q2", NodeKind.WORK, "The Proposition", WIKIDATA);
-    AssertionRecord edge = new AssertionRecord("Q1", "Q2", "COMPOSED_FOR", null, null, WIKIDATA);
+    ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+    ingest.record(new NodeAssertion("Q02", NodeKind.CONCEPT, "The Proposition", WIKIDATA));
+    NodeAssertion corrected = new NodeAssertion("Q02", NodeKind.WORK, "The Proposition", WIKIDATA);
+    AssertionRecord edge = new AssertionRecord("Q01", "Q02", "COMPOSED_FOR", null, null, WIKIDATA);
     SourceAdapter adapter =
         new StubSourceAdapter(
             "inline", new ExpandResult(List.of(edge), List.of(corrected), false, false));
 
-    ToolResult<SegueService.ExpansionSummary> result = service(adapter).expandEntity("Q1", 10);
+    ToolResult<SegueService.ExpansionSummary> result = service(adapter).expandEntity("Q01", 10);
 
     assertThat(result.payload().nodesAdded()).isZero();
     assertThat(result.payload().edgesAdded()).isEqualTo(1);
     assertThat(result.detail()).contains("0 new node(s)");
     // Refreshed all the same — the count is what stays put, not the kind.
-    assertThat(graph.node("Q2").orElseThrow().kind()).isEqualTo(NodeKind.WORK);
+    assertThat(graph.node("Q02").orElseThrow().kind()).isEqualTo(NodeKind.WORK);
   }
 
   @Test
@@ -629,21 +629,21 @@ class SegueServiceTest {
     // assertion was present by the second; now that the refresh fires whether or not the node
     // exists, the same identity claim would otherwise be appended to the log once per assertion
     // and replayed that many times at boot.
-    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
-    ingest.record(new NodeAssertion("Q2", NodeKind.CONCEPT, "The Proposition", WIKIDATA));
-    NodeAssertion corrected = new NodeAssertion("Q2", NodeKind.WORK, "The Proposition", WIKIDATA);
+    ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+    ingest.record(new NodeAssertion("Q02", NodeKind.CONCEPT, "The Proposition", WIKIDATA));
+    NodeAssertion corrected = new NodeAssertion("Q02", NodeKind.WORK, "The Proposition", WIKIDATA);
     AssertionRecord wrote =
-        new AssertionRecord("Q1", "Q2", "WROTE_SCREENPLAY_FOR", null, null, WIKIDATA);
-    AssertionRecord scored = new AssertionRecord("Q1", "Q2", "COMPOSED_FOR", null, null, WIKIDATA);
+        new AssertionRecord("Q01", "Q02", "WROTE_SCREENPLAY_FOR", null, null, WIKIDATA);
+    AssertionRecord scored = new AssertionRecord("Q01", "Q02", "COMPOSED_FOR", null, null, WIKIDATA);
     SourceAdapter adapter =
         new StubSourceAdapter(
             "multigraph",
             new ExpandResult(List.of(wrote, scored), List.of(corrected), false, false));
 
-    ToolResult<SegueService.ExpansionSummary> result = service(adapter).expandEntity("Q1", 10);
+    ToolResult<SegueService.ExpansionSummary> result = service(adapter).expandEntity("Q01", 10);
 
     assertThat(result.payload().edgesAdded()).isEqualTo(2);
-    assertThat(graph.node("Q2").orElseThrow().kind()).isEqualTo(NodeKind.WORK);
+    assertThat(graph.node("Q02").orElseThrow().kind()).isEqualTo(NodeKind.WORK);
     assertThat(log.readAll()).filteredOn(corrected::equals).hasSize(1);
   }
 
@@ -654,17 +654,17 @@ class SegueServiceTest {
     // already volunteered the identity in the same response. Fetching identity for an existing
     // neighbour would turn every expansion into hundreds of extra round trips to correct nodes
     // nobody asked about, which is a different and much more expensive decision.
-    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
-    ingest.record(new NodeAssertion("Q2", NodeKind.CONCEPT, "The Proposition", WIKIDATA));
-    AssertionRecord edge = new AssertionRecord("Q1", "Q2", "COMPOSED_FOR", null, null, WIKIDATA);
+    ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+    ingest.record(new NodeAssertion("Q02", NodeKind.CONCEPT, "The Proposition", WIKIDATA));
+    AssertionRecord edge = new AssertionRecord("Q01", "Q02", "COMPOSED_FOR", null, null, WIKIDATA);
     SourceAdapter adapter =
         new StubSourceAdapter("undescribed", new ExpandResult(List.of(edge), false, false));
 
-    ToolResult<SegueService.ExpansionSummary> result = service(adapter).expandEntity("Q1", 10);
+    ToolResult<SegueService.ExpansionSummary> result = service(adapter).expandEntity("Q01", 10);
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
     assertThat(resolver.fetchCallCount()).isZero();
-    assertThat(graph.node("Q2").orElseThrow().kind()).isEqualTo(NodeKind.CONCEPT);
+    assertThat(graph.node("Q02").orElseThrow().kind()).isEqualTo(NodeKind.CONCEPT);
     assertThat(result.payload().nodesAdded()).isZero();
     assertThat(result.payload().edgesAdded()).isEqualTo(1);
   }
@@ -715,18 +715,18 @@ class SegueServiceTest {
   @Test
   @DisplayName("getEntity on an unknown qid returns an error")
   void getEntityUnknownQidReturnsError() {
-    ToolResult<EntityView> result = service().getEntity("Q404");
+    ToolResult<EntityView> result = service().getEntity("Q0404");
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.ERROR);
-    assertThat(result.detail()).contains("Q404");
+    assertThat(result.detail()).contains("Q0404");
   }
 
   @Test
   @DisplayName("getEntity reports no affinity for an entity that has never been rated")
   void getEntityWithoutAffinityReportsNone() {
-    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Unrated", WIKIDATA));
+    ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "Unrated", WIKIDATA));
 
-    ToolResult<EntityView> result = service().getEntity("Q1");
+    ToolResult<EntityView> result = service().getEntity("Q01");
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
     // Null, not a zero or a default rating: "I have never said" and "I rated it lowest" are
@@ -738,10 +738,10 @@ class SegueServiceTest {
   @Test
   @DisplayName("getEntity surfaces the rating once the entity has been rated (ADR 39's read)")
   void getEntitySurfacesAffinity() {
-    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Rated", WIKIDATA));
-    service().noteAffinity("Q1", 4, "an invented note");
+    ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "Rated", WIKIDATA));
+    service().noteAffinity("Q01", 4, "an invented note");
 
-    ToolResult<EntityView> result = service().getEntity("Q1");
+    ToolResult<EntityView> result = service().getEntity("Q01");
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
     // The rating, and nothing else the user wrote: issue #85 moved ADR 33's line to run between
@@ -755,65 +755,65 @@ class SegueServiceTest {
   @Test
   @DisplayName("noteAffinity records a rating and a note against an entity in the graph")
   void noteAffinityRecordsRatingAndNote() {
-    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Rated", WIKIDATA));
+    ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "Rated", WIKIDATA));
 
-    ToolResult<AffinityView> result = service().noteAffinity("Q1", 5, "an invented note");
+    ToolResult<AffinityView> result = service().noteAffinity("Q01", 5, "an invented note");
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
     // Stored in full; returned as the rating alone (issue #85).
     assertThat(result.payload()).isEqualTo(new AffinityView(5, RATED_AT));
-    assertThat(affinity.find("Q1"))
-        .contains(new AffinityRecord("Q1", 5, "an invented note", RATED_AT));
+    assertThat(affinity.find("Q01"))
+        .contains(new AffinityRecord("Q01", 5, "an invented note", RATED_AT));
   }
 
   @Test
   @DisplayName("the note is optional; a rating on its own is a complete entry")
   void noteAffinityAcceptsARatingWithNoNote() {
-    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Rated", WIKIDATA));
+    ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "Rated", WIKIDATA));
 
-    ToolResult<AffinityView> result = service().noteAffinity("Q1", 2, null);
+    ToolResult<AffinityView> result = service().noteAffinity("Q01", 2, null);
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
     assertThat(result.payload()).isEqualTo(new AffinityView(2, RATED_AT));
-    assertThat(affinity.find("Q1")).contains(new AffinityRecord("Q1", 2, null, RATED_AT));
+    assertThat(affinity.find("Q01")).contains(new AffinityRecord("Q01", 2, null, RATED_AT));
   }
 
   @Test
   @DisplayName("a blank note is stored as no note at all, not as whitespace")
   void noteAffinityTreatsABlankNoteAsAbsent() {
-    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Rated", WIKIDATA));
+    ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "Rated", WIKIDATA));
 
-    ToolResult<AffinityView> result = service().noteAffinity("Q1", 3, "   ");
+    ToolResult<AffinityView> result = service().noteAffinity("Q01", 3, "   ");
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
     // Asserted on the stored row rather than on the result: since issue #85 the wire view has no
     // note field to inspect, and "blank means absent" is a fact about what was written down.
-    assertThat(affinity.find("Q1")).contains(new AffinityRecord("Q1", 3, null, RATED_AT));
+    assertThat(affinity.find("Q01")).contains(new AffinityRecord("Q01", 3, null, RATED_AT));
   }
 
   @Test
   @DisplayName("re-rating overwrites in place and moves updated-at (ADR 39: no history)")
   void reRatingOverwritesAndMovesUpdatedAt() {
-    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Rated", WIKIDATA));
-    service().noteAffinity("Q1", 2, "an invented first impression");
+    ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "Rated", WIKIDATA));
+    service().noteAffinity("Q01", 2, "an invented first impression");
 
     clock.set(RE_RATED_AT);
-    ToolResult<AffinityView> second = service().noteAffinity("Q1", 5, "an invented second look");
+    ToolResult<AffinityView> second = service().noteAffinity("Q01", 5, "an invented second look");
 
     assertThat(second.outcome()).isEqualTo(ToolResult.Outcome.OK);
-    assertThat(affinity.find("Q1"))
-        .contains(new AffinityRecord("Q1", 5, "an invented second look", RE_RATED_AT));
+    assertThat(affinity.find("Q01"))
+        .contains(new AffinityRecord("Q01", 5, "an invented second look", RE_RATED_AT));
   }
 
   @Test
   @DisplayName("rating an entity the graph has never seen is a readable error, not an exception")
   void noteAffinityOnAnUnknownEntityIsAnError() {
-    ToolResult<AffinityView> result = service().noteAffinity("Q404", 4, null);
+    ToolResult<AffinityView> result = service().noteAffinity("Q0404", 4, null);
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.ERROR);
-    assertThat(result.detail()).contains("Q404").containsIgnoringCase("add it");
+    assertThat(result.detail()).contains("Q0404").containsIgnoringCase("add it");
     assertThat(result.payload()).isNull();
-    assertThat(affinity.find("Q404")).isEmpty();
+    assertThat(affinity.find("Q0404")).isEmpty();
   }
 
   @Test
@@ -828,23 +828,23 @@ class SegueServiceTest {
   @Test
   @DisplayName("a rating outside 1-5 is rejected at both ends, and nothing is stored")
   void noteAffinityRejectsRatingsOutsideTheScale() {
-    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Rated", WIKIDATA));
+    ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "Rated", WIKIDATA));
 
-    ToolResult<AffinityView> tooLow = service().noteAffinity("Q1", 0, null);
-    ToolResult<AffinityView> tooHigh = service().noteAffinity("Q1", 6, null);
+    ToolResult<AffinityView> tooLow = service().noteAffinity("Q01", 0, null);
+    ToolResult<AffinityView> tooHigh = service().noteAffinity("Q01", 6, null);
 
     assertThat(tooLow.outcome()).isEqualTo(ToolResult.Outcome.ERROR);
     assertThat(tooLow.detail()).contains("1 to 5");
     assertThat(tooHigh.outcome()).isEqualTo(ToolResult.Outcome.ERROR);
-    assertThat(affinity.find("Q1")).isEmpty();
+    assertThat(affinity.find("Q01")).isEmpty();
   }
 
   @Test
   @DisplayName("the rejection never echoes the rating back, because affinity is personal data")
   void noteAffinityRejectionDoesNotEchoTheRating() {
-    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Rated", WIKIDATA));
+    ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "Rated", WIKIDATA));
 
-    ToolResult<AffinityView> result = service().noteAffinity("Q1", 9, "an invented note");
+    ToolResult<AffinityView> result = service().noteAffinity("Q01", 9, "an invented note");
 
     assertThat(result.detail()).doesNotContain("9").doesNotContain("an invented note");
   }
@@ -852,19 +852,19 @@ class SegueServiceTest {
   @Test
   @DisplayName("affinity never reaches the graph or the assertion log — the ADR 33 invariant")
   void affinityNeverReachesTheGraphOrTheLog() {
-    NodeAssertion node = new NodeAssertion("Q1", NodeKind.PERSON, "Rated", WIKIDATA);
+    NodeAssertion node = new NodeAssertion("Q01", NodeKind.PERSON, "Rated", WIKIDATA);
     ingest.record(node);
     int logSizeBefore = log.readAll().size();
 
-    service().noteAffinity("Q1", 5, "an invented note");
+    service().noteAffinity("Q01", 5, "an invented note");
 
     // The log is byte-for-byte what it was: no rating assertion, no "me" source, no llm: prefix.
     assertThat(log.readAll()).containsExactly((LoggedAssertion) node);
     assertThat(log.readAll()).hasSize(logSizeBefore);
     // And the graph gained neither an edge nor a "me" node to hang one off.
     assertThat(graph.edgeCount()).isZero();
-    assertThat(graph.edges("Q1")).isEmpty();
-    assertThat(graph.node("Q1")).contains(node.toNode());
+    assertThat(graph.edges("Q01")).isEmpty();
+    assertThat(graph.node("Q01")).contains(node.toNode());
   }
 
   // ---- findPaths ----------------------------------------------------------
@@ -913,7 +913,7 @@ class SegueServiceTest {
     ingest.record(new NodeAssertion("Q900304", NodeKind.WORK, "The Quiet Ferry", WIKIDATA));
     // The plaque is a hub: enough other people hold one to clear HUB_DEGREE.
     for (int i = 0; i < PathRanking.HUB_DEGREE; i++) {
-      String holder = "Q9004" + (10 + i);
+      String holder = "Q09004" + (10 + i);
       ingest.record(new NodeAssertion(holder, NodeKind.PERSON, "Holder " + i, WIKIDATA));
       ingest.record(edge(holder, "RECEIVED_AWARD", "Q900303", 1.00));
     }
@@ -953,7 +953,7 @@ class SegueServiceTest {
     ingest.record(new NodeAssertion("Q900605", NodeKind.PERSON, "Cyd Rowe", WIKIDATA));
     ingest.record(edge("Q900605", "MEMBER_OF", "Q900603", 1.00));
     for (int i = 0; i < PathRanking.HUB_DEGREE; i++) {
-      String player = "Q9006" + (10 + i);
+      String player = "Q09006" + (10 + i);
       ingest.record(new NodeAssertion(player, NodeKind.PERSON, "Player " + i, WIKIDATA));
       ingest.record(edge(player, "MEMBER_OF", "Q900604", 1.00));
     }
@@ -990,7 +990,7 @@ class SegueServiceTest {
     ingest.record(new NodeAssertion("Q900501", NodeKind.PERSON, "Cleo Marsh", WIKIDATA));
     ingest.record(new NodeAssertion("Q900502", NodeKind.PERSON, "Dov Ellery", WIKIDATA));
     for (int i = 0; i < routes; i++) {
-      String middle = "Q9005" + (10 + i);
+      String middle = "Q09005" + (10 + i);
       ingest.record(new NodeAssertion(middle, NodeKind.WORK, "Reel " + i, WIKIDATA));
       ingest.record(edge("Q900501", "ACTED_IN", middle, 1.00));
       ingest.record(edge("Q900502", "ACTED_IN", middle, 1.00));
@@ -1021,7 +1021,7 @@ class SegueServiceTest {
     ingest.record(new NodeAssertion("Q900601", NodeKind.PERSON, "Esme Faro", WIKIDATA));
     ingest.record(new NodeAssertion("Q900602", NodeKind.PERSON, "Fitz Loew", WIKIDATA));
     for (int i = 0; i < PathRanking.MAX_PATHS; i++) {
-      String middle = "Q9006" + (10 + i);
+      String middle = "Q09006" + (10 + i);
       ingest.record(new NodeAssertion(middle, NodeKind.WORK, "Take " + i, WIKIDATA));
       ingest.record(edge("Q900601", "ACTED_IN", middle, 1.00));
       ingest.record(edge("Q900602", "ACTED_IN", middle, 1.00));
@@ -1037,10 +1037,10 @@ class SegueServiceTest {
   @Test
   @DisplayName("findPaths on a pair with no route returns ok with an empty payload")
   void findPathsNoRouteReturnsEmptyOk() {
-    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Alone", WIKIDATA));
-    ingest.record(new NodeAssertion("Q2", NodeKind.PERSON, "Also Alone", WIKIDATA));
+    ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "Alone", WIKIDATA));
+    ingest.record(new NodeAssertion("Q02", NodeKind.PERSON, "Also Alone", WIKIDATA));
 
-    ToolResult<List<PathView>> result = service().findPaths("Q1", "Q2", 3);
+    ToolResult<List<PathView>> result = service().findPaths("Q01", "Q02", 3);
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
     assertThat(result.payload()).isEmpty();
@@ -1049,24 +1049,24 @@ class SegueServiceTest {
   @Test
   @DisplayName("findPaths on an unadded 'from' entity returns an error, not ok-with-nothing")
   void findPathsUnknownFromReturnsError() {
-    ingest.record(new NodeAssertion("Q2", NodeKind.PERSON, "Known", WIKIDATA));
+    ingest.record(new NodeAssertion("Q02", NodeKind.PERSON, "Known", WIKIDATA));
 
-    ToolResult<List<PathView>> result = service().findPaths("Q1", "Q2", 3);
+    ToolResult<List<PathView>> result = service().findPaths("Q01", "Q02", 3);
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.ERROR);
-    assertThat(result.detail()).contains("Q1");
+    assertThat(result.detail()).contains("Q01");
     assertThat(result.payload()).isNull();
   }
 
   @Test
   @DisplayName("findPaths on an unadded 'to' entity returns an error, not ok-with-nothing")
   void findPathsUnknownToReturnsError() {
-    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "Known", WIKIDATA));
+    ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "Known", WIKIDATA));
 
-    ToolResult<List<PathView>> result = service().findPaths("Q1", "Q2", 3);
+    ToolResult<List<PathView>> result = service().findPaths("Q01", "Q02", 3);
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.ERROR);
-    assertThat(result.detail()).contains("Q2");
+    assertThat(result.detail()).contains("Q02");
   }
 
   // ---- test doubles ---------------------------------------------------------
