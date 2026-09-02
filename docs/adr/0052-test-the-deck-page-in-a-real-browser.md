@@ -192,6 +192,8 @@ wait for, and that is the outcome this whole line of work wants — failing ther
 red. Planted and observed, the line it prints is `proceeded on the 2500 ms fallback bound after
 2512 ms — this NetLog never showed the flush, which is the good outcome, not an error`.
 
+The bound is a deadline measured from the browser's launch, not a stopwatch started at `awaitFlush`, so the wait it reports shrinks by whatever ran before the wait began — 2512 ms in the planted run and a shorter figure on a live launch are the same 2500 ms bound seen from different starting points.
+
 **The red.** The wait was made to fail before it was written, on the shape §4's independent driver
 used: the stub's URL on Chrome's own command line, a bare page with neither favicon nor preconnect
 in the race for the pool, and the harness's own flags read by reflection so they could not drift.

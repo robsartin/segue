@@ -454,6 +454,8 @@ proceeds, and says so:
 the flush, which is the good outcome, not an error
 ```
 
+The bound is a deadline measured from the browser's launch, not a stopwatch started at `awaitFlush`, so the wait it reports shrinks by whatever ran before the wait began — 2512 ms in the planted run and a shorter figure on a live launch are the same 2500 ms bound seen from different starting points.
+
 That is a **bound and not a timeout** by design: a Chrome that stops creating a certificate verifier
 on startup is the outcome §6 hopes for, and a wait that failed on it would turn good news into a red
 gate. It is set at 2500 ms against §6's measured p100 of 1718 ms for the marker's visibility in the
