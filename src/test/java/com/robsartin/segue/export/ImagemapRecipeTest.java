@@ -1,7 +1,6 @@
 package com.robsartin.segue.export;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.robsartin.segue.domain.NodeKind;
 import java.io.IOException;
@@ -51,15 +50,7 @@ class ImagemapRecipeTest {
 
   @BeforeAll
   static void requireGraphviz() {
-    assumeTrue(installed(), "graphviz is not installed, so there is no render to wrap");
-  }
-
-  private static boolean installed() {
-    try {
-      return new ProcessBuilder("dot", "-V").redirectErrorStream(true).start().waitFor() == 0;
-    } catch (IOException | InterruptedException e) {
-      return false;
-    }
+    Graphviz.requireOrSkip("graphviz is not installed, so there is no render to wrap");
   }
 
   private static Path repositoryRoot() {
