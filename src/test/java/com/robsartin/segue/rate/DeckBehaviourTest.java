@@ -711,6 +711,12 @@ class DeckBehaviourTest {
     // history table and no un-rate (ADR 39, ADR 46).
     answer = Answer.SLOW_NO_ANSWER;
 
+    // And then press at once. `start()`'s wait for quiet establishes that nothing is *holding* a
+    // socket; this establishes that one *exists*, which is the thing Chrome's resend actually
+    // depends on and the thing silence cannot imply — see `warmUp()`. Nothing may go between the
+    // two lines below: every millisecond here is a millisecond in which Chrome can flush its pool
+    // and take the socket away again.
+    warmUp();
     chrome.press("1");
     chrome.until(
         "document.getElementById('problem').textContent.length > 0", "the failure to show");
