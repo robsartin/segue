@@ -351,6 +351,19 @@ public record Equivalences(
    * written under the name his own merge gave it, so it goes with it. Nothing is deleted: the log
    * keeps every row, and this changes only what the fold makes of them.
    *
+   * <p><b>Position-blind, and that is the one place this rule does NOT follow ADR 44.</b> A
+   * retraction reaches backwards only, by position in the log — {@link Retractions#survives} is
+   * asked about a row's index for exactly that reason — but this set is whole-log and {@link
+   * #foldEndpoints} takes no index, so an edge claimed <em>after</em> the retraction that names an
+   * emptied canonical id is withdrawn just the same. That is deliberate. A backwards-only rule
+   * would leave the log {@code [node, minted, merge, retract, edge-naming-the-canonical-id]} naming
+   * an endpoint no fold holds, and {@code TinkerGraphStore.record} would refuse it at every boot —
+   * the very break this rule exists to close, re-created by the ordering rather than fixed. What is
+   * emptied is emptied for the whole projection, because a node either exists in the folded graph
+   * or it does not, and no edge may name one that does not. {@code
+   * RetractedStandInTakesItsEdgesTest} pins both folds on that log; the design spec's 2026-09-03
+   * amendment records the finding and the ruling.
+   *
    * <p><b>Only the local side counts</b>, which is why {@link Retractions#reaches} exists. A merge
    * dropped because its CANONICAL side was retracted leaves nothing to repair here: that id is
    * retracted outright, and {@link Retractions#survives} has already dropped every edge naming it.

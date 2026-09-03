@@ -189,6 +189,52 @@ class RetractedStandInTakesItsEdgesTest {
     assertThat(folded.danglingEdges()).isZero();
   }
 
+  /**
+   * The edge appended <b>after</b> the retraction, naming the emptied canonical id. The rule is
+   * position-blind and withdraws it too — see {@code Equivalences.retractedStandIns}, and the
+   * design spec's 2026-09-03 amendment for why a backwards-only rule was refused: it would leave
+   * exactly this log unbootable, which is the defect the whole issue exists to close.
+   */
+  private static FakeAssertionLog edgeClaimedAfterTheRetractionLog() {
+    return new FakeAssertionLog()
+        .with(
+            node(WREN, NodeKind.PERSON, "Wren Alderman"),
+            minted(LAPSE, NodeKind.WORK, "a working title he took back"),
+            merged(LAPSE, FORFEIT),
+            retract(LAPSE),
+            owned(WREN, FORFEIT, "INFLUENCED_BY"));
+  }
+
+  @Test
+  @DisplayName("the exporter withdraws an edge naming an emptied id even when it came later")
+  void shouldFoldNoEdgeOntoAnEmptiedCanonicalIdWhenTheEdgeWasClaimedAfterTheRetraction() {
+    LogProjection folded = LogProjection.of(edgeClaimedAfterTheRetractionLog());
+
+    assertThat(folded.nodes())
+        .as("nothing holds a node for the canonical id, whatever order the rows arrived in")
+        .doesNotContainKey(FORFEIT);
+    assertThat(folded.edges()).as("and the edge naming it goes with it").isEmpty();
+    assertThat(folded.danglingEdges())
+        .as("a backwards-only rule would leave this at 1, which is a log that cannot boot")
+        .isZero();
+  }
+
+  @Test
+  @DisplayName("the boot replay survives an edge claimed after the retraction that emptied its id")
+  void shouldReplayWithoutThrowingWhenTheEdgeWasClaimedAfterTheRetraction() {
+    try (TinkerGraphStore replayed = new TinkerGraphStore()) {
+      GraphProjector.project(edgeClaimedAfterTheRetractionLog(), replayed, IdentityMerge.NONE);
+
+      assertThat(replayed.node(FORFEIT)).isEmpty();
+      assertThat(replayed.edgeCount())
+          .as("the edge has no endpoint to be applied against, so the graph holds none")
+          .isZero();
+      assertThat(replayed.node(WREN))
+          .as("and the rest of the log is untouched, so this is not an empty graph agreeing")
+          .isPresent();
+    }
+  }
+
   /** The same fixture with nothing retracted: the merge stands and the edge is on the graph. */
   private static FakeAssertionLog mergedAndNotRetractedLog() {
     return new FakeAssertionLog()

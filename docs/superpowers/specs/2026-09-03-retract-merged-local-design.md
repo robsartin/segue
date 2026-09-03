@@ -202,3 +202,58 @@ the comparison is not vacuous.
   and its javadoc cites ADR 44 as the precedent for doing so. Code and ADR disagree; the amendment
   written for this issue records the disagreement and does not quietly fix it by editing the
   original, and nothing here depends on which of the two is right.
+
+## Amendment during implementation (2026-09-03)
+
+**The rule is position-blind, and the "still dangles" bullet above is wrong.**
+
+The section *"What this does not settle"* opens with *"An edge naming a canonical id appended after
+the retraction still dangles. The retraction reaches backwards only (ADR 44), and this rule reaches
+exactly as far."* The implemented rule does not reach exactly as far. `Equivalences.retractedStandIns`
+is a whole-log set and `Equivalences.foldEndpoints` takes no index, so an edge claimed *after* the
+retraction that names an emptied canonical id is withdrawn along with the ones claimed before it.
+
+Measured on the log `[node(WREN), minted(LAPSE), merged(LAPSE→FORFEIT), retract(LAPSE),
+owned(WREN→FORFEIT)]`:
+
+| | `danglingEdges` | boot replay |
+| --- | --- | --- |
+| `224a70c` (before the rule) | 1 | throws |
+| `1945fee` (the rule as implemented) | 0 | replays |
+
+**Ruling: the code is right and this spec was wrong.** A backwards-only rule would leave exactly
+that log unbootable — `TinkerGraphStore.record` refuses an endpoint it has never seen, and the
+replay fails with *"assertion references unknown entity … - upsert the node first"* at every boot,
+on a row ADR 19 forbids deleting. That is the same break the whole issue exists to close, re-created
+by the ordering of two rows rather than fixed. The bullet's escape hatch — *"it is unreachable
+through the supported flow"* — is a reason not to worry about the case, not a reason to specify the
+rule so that it breaks when the case arrives.
+
+The deciding argument is that the two rules are not the same kind of thing. A retraction's
+backwards-only reach answers *"which claims did the owner take back"*, and position is exactly the
+right unit for that: a claim made after the retraction was not taken back by it. Withdrawal answers
+a different question — *"does the endpoint this edge names exist in the folded graph"* — and a node
+either exists in a projection or it does not. There is no index at which the emptied canonical id
+has a node again, so there is no index at which an edge naming it could be applied.
+
+This was driven as a red before it was pinned: a throwaway position-aware fold (both folds asking
+for the set filtered to the retractions reaching the current row) put `danglingEdges` back to 1 in
+the exporter and threw `replay failed at sequence 5 … assertion references unknown entity
+Q10000900112 - upsert the node first` in `GraphProjector`. The other six cases in
+`RetractedStandInTakesItsEdgesTest` stayed green under it, which is what says the backwards-only
+rule is wrong about this case *only*. Both folds are now pinned on that log by
+`shouldFoldNoEdgeOntoAnEmptiedCanonicalIdWhenTheEdgeWasClaimedAfterTheRetraction` and
+`shouldReplayWithoutThrowingWhenTheEdgeWasClaimedAfterTheRetraction`.
+
+**Consequence for Task 7.** ADR 44's *"it reaches backwards only, by position in the log"* does not
+hold for this rule, and the amendment written for this issue **must say so explicitly** rather than
+leaving the reader to assume the retraction's own granularity carries over. Withdrawal of an edge
+that names an emptied stand-in is whole-projection; the retraction that caused it is still
+backwards-only, and both statements have to appear together or the pair reads as a contradiction.
+
+**Also settled during implementation.** The export fold counts what it withdrew.
+`LogProjection.danglingEdges` stays a count of edges dropped for a *missing* endpoint and stays
+zero here, because a withdrawn edge is never offered to that check at all — so without a second
+count the export would simply come out smaller with nothing saying why. `LogProjection.withdrawnEdges`
+is that count, and `GraphProjector` no longer counts a withdrawn edge in the number of assertions it
+applied, because it applied nothing. Issue #227's census reads the count rather than re-deriving it.
