@@ -132,6 +132,10 @@ class StandInQidsDenoteNothingTest {
           entry("Q7366", "class id — mapped by ClassLabels and KindMapper"),
           entry("Q7791", "entity — a real value in the recorded proposition-claims.json"),
           entry("Q11424", "class id — mapped by ClassLabels and KindMapper"),
+          entry(
+              "Q12345",
+              "not an identifier — the exemplar in Qid.check's \"qid must look like"
+                  + " Q12345\" message, quoted back by BridgedIdentityTest's hasMessage"),
           entry("Q15416", "class id — mapped by ClassLabels and KindMapper"),
           entry("Q16473", "entity — named by DotWriter and HoverableSvg"),
           entry("Q23444", "entity — a real value in the recorded proposition-claims.json"),

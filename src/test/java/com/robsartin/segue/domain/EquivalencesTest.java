@@ -18,8 +18,8 @@ class EquivalencesTest {
   /**
    * The two shapes this file needs, and they are not the same one. A merge's canonical side takes
    * ADR 62's eleven digits, which {@code SameAs} admits there and nowhere else; {@code NEIGHBOUR}
-   * is only the far end of an edge, so it is an ordinary stand-in and takes ADR 58's single
-   * leading zero. Each is the id this file used before issue #171 carried into its shape.
+   * is only the far end of an edge, so it is an ordinary stand-in and takes ADR 58's single leading
+   * zero. Each is the id this file used before issue #171 carried into its shape.
    */
   private static final String CANONICAL = "Q10000000900";
 

@@ -53,15 +53,16 @@ final class InventedGraph {
 
   /**
    * A second canonical id, for a merge whose local side carries edges on both sides of itself
-   * (#178). Same invented family, same issue #171 debt.
+   * (#178). ADR 62's shape, for the reason {@link #KETTLES} takes it, keeping the band-A digits.
    */
-  static final String WATERMARK = "Q900107";
+  static final String WATERMARK = "Q10000900107";
 
   /**
    * A third, for the merge whose local side was named by a plain node claim rather than minted
    * (#178, spec ruling 2 - "a later claim naming the local id, by a path that bypasses the tool").
+   * ADR 62's shape, same as the other two canonical sides here.
    */
-  static final String STANDING = "Q900108";
+  static final String STANDING = "Q10000900108";
 
   /**
    * Two ids the owner minted. Two leading zeros, which Wikibase's item-id grammar can never
