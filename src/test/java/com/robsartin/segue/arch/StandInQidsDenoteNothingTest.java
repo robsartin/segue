@@ -59,9 +59,15 @@ import org.junit.jupiter.api.Test;
  * mcp/SegueServiceTest}, and {@code "Q" + next++} in {@code
  * musicbrainz/MusicBrainzSourceAdapterTest} — and they mint allocatable ids no scan over source
  * text can reach. They are fixed by hand under issue #171. A second limit is smaller and worth
- * saying: this file's own two lists are literals in {@code src/test}, so the sweep reads them like
- * any other file's and they cover themselves. Both are limits of the mechanism; a limit stated in
- * the test is a limit, and a limit nobody wrote down is a hole.
+ * saying: this file's own allowlist is a literal in {@code src/test}, so the sweep reads it like
+ * any other file's and it covers itself. Both are limits of the mechanism; a limit stated in the
+ * test is a limit, and a limit nobody wrote down is a hole.
+ *
+ * <p><b>There is one list and no escape hatch.</b> A companion set carried the ids awaiting
+ * migration while issue #171 emptied it band by band; it is gone, so an allocatable-form id in
+ * {@code src/test} is either a deliberately real entity with a reason in {@code ALLOWED} or a
+ * failure. A new test that invents an entity takes the leading-zero form — {@code Q0900100} — which
+ * Wikibase's grammar refuses outright.
  */
 class StandInQidsDenoteNothingTest {
 
@@ -95,7 +101,7 @@ class StandInQidsDenoteNothingTest {
    * <p>A reason, not a bare set: an allowlist without reasons is a list of numbers nobody can
    * review, and naming a real Wikidata entity in a test is meant to be a deliberate act.
    *
-   * <p><b>An id is allowed or excluded whole, and one group straddles that.</b> {@code
+   * <p><b>An id is allowed whole or not at all, and one group straddles that.</b> {@code
    * GraphStoreContract} numbers its questions {@code Q1} to {@code Q4} in {@code @DisplayName}.
    * Every node-id use of {@code Q1}, {@code Q2} and {@code Q3} elsewhere in the tree has taken the
    * leading-zero form — band H, issue #171 — so all four question numbers are here now, sharing one
@@ -238,17 +244,6 @@ class StandInQidsDenoteNothingTest {
               "negative control, deliberately allocatable — QidTest asserts Wikibase's grammar"
                   + " still admits ten digits, which is the upper bound that test pins"));
 
-  /**
-   * Invented ids still in the allocatable form, carried so the rest of the suite can go green while
-   * they are migrated band by band.
-   *
-   * <p><b>This set shrinks to empty and is then deleted.</b> It is emptied band by band under issue
-   * #171, whose last task deletes it and this paragraph with it. Adding an id to it is not a fix;
-   * it is a record that a fix is owed. A new test that needs an id it invents takes the
-   * leading-zero form — {@code Q0900100} — which Wikibase's grammar refuses outright.
-   */
-  static final Set<String> NOT_YET_MIGRATED = Set.of();
-
   /** One allocatable-form id, and where it was found. */
   private record Sighting(Path file, int line, String id) {
     String describe() {
@@ -265,9 +260,7 @@ class StandInQidsDenoteNothingTest {
   @DisplayName("every identifier a test invents is one Wikidata can never allocate")
   void shouldUseAnIdWikidataCannotAllocateWhenATestNamesAnEntityItInvented() {
     List<Sighting> offending =
-        SWEEP.sightings().stream()
-            .filter(s -> !ALLOWED.containsKey(s.id()) && !NOT_YET_MIGRATED.contains(s.id()))
-            .toList();
+        SWEEP.sightings().stream().filter(s -> !ALLOWED.containsKey(s.id())).toList();
     String report = offending.stream().map(Sighting::describe).collect(Collectors.joining("\n"));
 
     assertThat(report)
@@ -306,23 +299,22 @@ class StandInQidsDenoteNothingTest {
   }
 
   @Test
-  @DisplayName("neither list carries an id the tree no longer contains")
-  void shouldCarryNoDeadEntryWhenTheListsAreCheckedAgainstTheTree() {
+  @DisplayName("the allowlist carries no id the tree no longer contains")
+  void shouldCarryNoDeadEntryWhenTheAllowlistIsCheckedAgainstTheTree() {
     Set<String> seen =
         SWEEP.sightings().stream()
             .filter(s -> !s.file().equals(SELF))
             .map(Sighting::id)
             .collect(Collectors.toCollection(LinkedHashSet::new));
 
-    List<String> dead = new ArrayList<>();
-    ALLOWED.keySet().stream().filter(id -> !seen.contains(id)).sorted().forEach(dead::add);
-    NOT_YET_MIGRATED.stream().filter(id -> !seen.contains(id)).sorted().forEach(dead::add);
+    List<String> dead =
+        ALLOWED.keySet().stream().filter(id -> !seen.contains(id)).sorted().toList();
 
     assertThat(dead)
         .as(
-            "ids named by ALLOWED or NOT_YET_MIGRATED that no longer appear anywhere in src/test"
-                + " outside this file. An exclusion that outlives the id it excused is how a list"
-                + " that is meant to shrink to empty stops shrinking; delete the entry")
+            "ids named by ALLOWED that no longer appear anywhere in src/test outside this"
+                + " file. A reason that outlives the id it was written about is a reason nobody"
+                + " can check against a site; delete the entry")
         .isEmpty();
   }
 
