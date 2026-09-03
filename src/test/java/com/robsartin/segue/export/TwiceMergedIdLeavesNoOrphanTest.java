@@ -18,7 +18,6 @@ import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import java.io.IOException;
 import java.io.StringWriter;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -57,7 +56,6 @@ class TwiceMergedIdLeavesNoOrphanTest {
   }
 
   @Test
-  @Disabled("red until #221 retires the superseded stand-in — see this class's javadoc")
   @DisplayName("the exporter's fold holds no node for a canonical id a later merge corrected")
   void shouldHoldNoNodeForTheFirstCanonicalIdWhenALaterMergeCorrectedIt() {
     assertThat(LogProjection.of(correctedLog()).nodes())
@@ -68,7 +66,6 @@ class TwiceMergedIdLeavesNoOrphanTest {
   }
 
   @Test
-  @Disabled("red until #221 retires the superseded stand-in — see this class's javadoc")
   @DisplayName("the boot replay holds no node for a canonical id a later merge corrected")
   void shouldReplayNoNodeForTheFirstCanonicalIdWhenALaterMergeCorrectedIt() {
     try (TinkerGraphStore replayed = new TinkerGraphStore()) {
@@ -84,7 +81,6 @@ class TwiceMergedIdLeavesNoOrphanTest {
   }
 
   @Test
-  @Disabled("red until #221 retires the superseded stand-in — see this class's javadoc")
   @DisplayName("a full export draws no node for a canonical id a later merge corrected")
   void shouldDrawNoNodeForTheFirstCanonicalIdWhenALaterMergeCorrectedIt() throws IOException {
     FakeAssertionLog log = correctedLog();

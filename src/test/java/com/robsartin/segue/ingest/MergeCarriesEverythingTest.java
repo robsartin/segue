@@ -18,6 +18,8 @@ import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -51,6 +53,9 @@ class MergeCarriesEverythingTest {
 
   /** A second allocatable id, standing for something a source already told us about. */
   private static final String NEIGHBOUR = "Q10000000901";
+
+  /** A third allocatable id: the canonical side a second merge corrects the first onto (#221). */
+  private static final String CORRECTED_TO = "Q10000000902";
 
   private static final Provenance SOURCE =
       new Provenance("wikidata", "S-1", Instant.parse("2026-01-01T00:00:00Z"), 1.0);
@@ -187,6 +192,65 @@ class MergeCarriesEverythingTest {
           .as("without a stand-in a folded edge would have an endpoint the store has never seen")
           .isEqualTo("what the owner called it");
     }
+  }
+
+  @Test
+  @DisplayName("should replay no stand-in for a canonical id a later merge corrected")
+  void shouldReplayNoStandInForACanonicalIdALaterMergeCorrected() {
+    ingest.record(LocalEntity.minted(MINTED, NodeKind.PERSON, "a minted person", NOW));
+    ingest.record(SameAs.declared(MINTED, CANONICAL, NOW));
+    ingest.record(SameAs.declared(MINTED, CORRECTED_TO, NOW));
+
+    try (GraphStore rebuilt = new TinkerGraphStore()) {
+      GraphProjector.project(log, rebuilt, IdentityMerge.NONE);
+
+      assertThat(rebuilt.node(CANONICAL))
+          .as(
+              "the replay builds the stand-in a second time at the merge's own row, so retiring it"
+                  + " in Equivalences.standIns alone leaves the two folds holding different graphs")
+          .isEmpty();
+      assertThat(rebuilt.node(CORRECTED_TO))
+          .as("and the correction is what keeps its node")
+          .isPresent();
+    }
+  }
+
+  @Test
+  @DisplayName("should carry no rating onto a canonical id a later merge corrected")
+  void shouldCarryNoRatingOntoACanonicalIdALaterMergeCorrected() {
+    // follow() runs per SameAs row, so before #221 a replay wrote the owner's rating onto BOTH
+    // canonical ids at every boot - and by ADR 48 a high rating counts as something he has, so a
+    // merge he corrected went on telling recommend he owns the item he corrected it away from.
+    ingest.record(LocalEntity.minted(MINTED, NodeKind.PERSON, "a minted person", NOW));
+    affinity.put(new AffinityRecord(MINTED, 5, null, NOW));
+    ingest.record(SameAs.declared(MINTED, CANONICAL, NOW));
+    ingest.record(SameAs.declared(MINTED, CORRECTED_TO, NOW));
+
+    try (GraphStore rebuilt = new TinkerGraphStore()) {
+      GraphProjector.project(log, rebuilt, IdentityMerge.carryingRatings(affinity));
+    }
+
+    assertThat(affinity.find(CORRECTED_TO).orElseThrow().rating())
+        .as("the correction is the merge that stands, and it carries what the local id was rated")
+        .isEqualTo(5);
+  }
+
+  @Test
+  @DisplayName("should ask nothing to follow a merge a later merge corrected, on every replay")
+  void shouldAskNothingToFollowAMergeALaterMergeCorrected() {
+    IngestService blind = new IngestService(log, graph, IdentityMerge.NONE);
+    blind.record(LocalEntity.minted(MINTED, NodeKind.PERSON, "a minted person", NOW));
+    blind.record(SameAs.declared(MINTED, CANONICAL, NOW));
+    blind.record(SameAs.declared(MINTED, CORRECTED_TO, NOW));
+    List<String> followed = new ArrayList<>();
+
+    try (GraphStore rebuilt = new TinkerGraphStore()) {
+      GraphProjector.project(log, rebuilt, (local, canonical) -> followed.add(canonical));
+    }
+
+    assertThat(followed)
+        .as("a replay that carried the rating onto both would re-write the wrong one every boot")
+        .containsExactly(CORRECTED_TO);
   }
 
   @Test

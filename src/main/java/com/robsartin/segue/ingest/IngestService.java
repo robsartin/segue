@@ -198,6 +198,13 @@ public final class IngestService {
       // so there is nothing left to copy and the local id is left exactly where it was, node and
       // all, so every earlier log entry keeps meaning what it meant (ADR 59, amended by #178).
       case SameAs merge -> {
+        if (!equivalences.stands(merge)) {
+          // A merge a later one corrected (#221) does neither half: no stand-in, because the node
+          // would be a labelled orphan under an id the owner corrected away from, and no carry,
+          // because the rating belongs to the merge that stands. Equivalences.NONE - the live path,
+          // which sees one claim and not a log - answers true, so record() is unchanged.
+          return;
+        }
         standIn(graph, merge);
         // The taste half, and it runs on replay too - see standIn()'s last paragraph and
         // IdentityMerge, which together say why that is a repair rather than a hazard.

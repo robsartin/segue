@@ -154,6 +154,13 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
    * only where none exists. The returned map keeps log order for {@link #canonicalByLocal}'s
    * reason.
    *
+   * <p><b>A merge a later merge corrected names nothing</b> (#221). {@link #stands} is the rule and
+   * it is {@link #canonicalByLocal}'s own: the last merge of a local id wins, for the edges through
+   * {@link #foldEndpoints} and now for the node as well, so the first canonical id is not left
+   * holding a labelled node with no edges that nothing claimed. Two local ids merged onto ONE
+   * canonical id are untouched by it — that is the {@code putIfAbsent} above, and a different
+   * question.
+   *
    * <p><b>The stand-in rule has four homes, and they are named here so that the count is not
    * guessed at.</b> "The canonical id gains a node carrying the merged entity's label where nothing
    * has claimed one" is written out in {@link #standIns} (this method, over the log, for both
@@ -185,9 +192,10 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
    */
   public static Map<String, NodeRecord> standIns(
       List<LoggedAssertion> log, UnaryOperator<NodeAssertion> rederive) {
+    Equivalences merges = Equivalences.in(log);
     Map<String, NodeRecord> standIns = new LinkedHashMap<>();
     for (Map.Entry<Integer, NodeRecord> at : localsOfMerges(log, rederive).entrySet()) {
-      if (log.get(at.getKey()) instanceof SameAs merge) {
+      if (log.get(at.getKey()) instanceof SameAs merge && merges.stands(merge)) {
         NodeRecord local = at.getValue();
         // No instanceOf: a stand-in carries what it was given rather than inventing a class -
         // LocalEntity.toNode()'s own reason. On the bypass path the local side DID state classes,
