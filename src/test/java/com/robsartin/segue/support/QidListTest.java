@@ -24,7 +24,7 @@ class QidListTest {
   @Test
   @DisplayName("a bare list is one QID per line")
   void readsABareList() throws IOException {
-    assertThat(QidList.read(file("Q900101\nQ900102\n"))).containsExactly("Q900101", "Q900102");
+    assertThat(QidList.read(file("Q0900101\nQ0900102\n"))).containsExactly("Q0900101", "Q0900102");
   }
 
   @Test
@@ -33,11 +33,11 @@ class QidListTest {
     String mapping =
         """
         name,kind,status,qid,label,confidence,reason
-        Wren Alderman,person,active,Q900101,Wren Alderman,ACCEPTED,name and kind agree
-        The Paper Kettles,group,active,Q900102,The Paper Kettles,ACCEPTED,name and kind agree
+        Wren Alderman,person,active,Q0900101,Wren Alderman,ACCEPTED,name and kind agree
+        The Paper Kettles,group,active,Q0900102,The Paper Kettles,ACCEPTED,name and kind agree
         """;
 
-    assertThat(QidList.read(file(mapping))).containsExactly("Q900101", "Q900102");
+    assertThat(QidList.read(file(mapping))).containsExactly("Q0900101", "Q0900102");
   }
 
   @Test
@@ -46,18 +46,18 @@ class QidListTest {
     String review =
         """
         name,kind,status,qid,label,confidence,reason
-        Wren Alderman,person,active,Q900101,Wren Alderman,ACCEPTED,name and kind agree
-        Ida Marlow,person,active,,,REVIEW,"thin margin between Ida Marlow (Q900104) and another"
+        Wren Alderman,person,active,Q0900101,Wren Alderman,ACCEPTED,name and kind agree
+        Ida Marlow,person,active,,,REVIEW,"thin margin between Ida Marlow (Q0900104) and another"
         """;
 
-    assertThat(QidList.read(file(review))).containsExactly("Q900101");
+    assertThat(QidList.read(file(review))).containsExactly("Q0900101");
   }
 
   @Test
   @DisplayName("blank lines and repeats collapse, so a list can be pasted together from two files")
   void deduplicatesAndSkipsBlanks() throws IOException {
-    assertThat(QidList.read(file("Q900101\n\nQ900101\nQ900102\n")))
-        .containsExactly("Q900101", "Q900102");
+    assertThat(QidList.read(file("Q0900101\n\nQ0900101\nQ0900102\n")))
+        .containsExactly("Q0900101", "Q0900102");
   }
 
   @Test

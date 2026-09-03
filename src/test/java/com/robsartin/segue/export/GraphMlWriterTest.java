@@ -105,11 +105,11 @@ class GraphMlWriterTest {
   private static GraphView star(int edges) {
     List<ViewNode> nodes = new ArrayList<>();
     List<ViewEdge> spokes = new ArrayList<>();
-    nodes.add(new ViewNode("Q900100", NodeKind.PERSON, "Wren Alderman"));
+    nodes.add(new ViewNode("Q0900100", NodeKind.PERSON, "Wren Alderman"));
     for (int i = 1; i <= edges; i++) {
-      String qid = "Q9001" + String.format("%02d", i);
+      String qid = "Q09001" + String.format("%02d", i);
       nodes.add(new ViewNode(qid, NodeKind.WORK, "Invented Work " + i));
-      spokes.add(new ViewEdge("Q900100", qid, "ACTED_IN", 1.0, "invented"));
+      spokes.add(new ViewEdge("Q0900100", qid, "ACTED_IN", 1.0, "invented"));
     }
     return new GraphView("an invented star", nodes, spokes);
   }

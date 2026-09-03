@@ -171,16 +171,17 @@ class GraphProjectorTest {
     // theLogStillHoldsEveryOriginalClaim below, which is the same log read straight back.
     try (AssertionLog log = SqliteAssertionLog.inMemory();
         TinkerGraphStore store = new TinkerGraphStore()) {
-      log.append(new NodeAssertion("Q900101", NodeKind.GROUP, "The Wrong Ones", WIKIDATA));
-      log.append(new NodeAssertion("Q900102", NodeKind.WORK, "A Painting", WIKIDATA));
-      log.append(new AssertionRecord("Q900101", "Q900102", "PERFORMED", null, null, WIKIDATA));
-      log.append(new Retraction("Q900101", "resolved to the painters, not the band", RETRACTED_AT));
+      log.append(new NodeAssertion("Q0900101", NodeKind.GROUP, "The Wrong Ones", WIKIDATA));
+      log.append(new NodeAssertion("Q0900102", NodeKind.WORK, "A Painting", WIKIDATA));
+      log.append(new AssertionRecord("Q0900101", "Q0900102", "PERFORMED", null, null, WIKIDATA));
+      log.append(
+          new Retraction("Q0900101", "resolved to the painters, not the band", RETRACTED_AT));
 
       GraphProjector.project(log, store, IdentityMerge.NONE);
 
-      assertThat(store.node("Q900101")).isEmpty();
+      assertThat(store.node("Q0900101")).isEmpty();
       assertThat(store.edgeCount()).isZero();
-      assertThat(store.node("Q900102")).isPresent();
+      assertThat(store.node("Q0900102")).isPresent();
     }
   }
 
@@ -191,15 +192,15 @@ class GraphProjectorTest {
     // deletion: everything ADR 19 rests on - replay reproducing the graph, the audit trail,
     // ADR 42's offline re-derivation - would become conditional on nobody having deleted
     // anything if this were false.
-    NodeAssertion wrong = new NodeAssertion("Q900101", NodeKind.GROUP, "The Wrong Ones", WIKIDATA);
+    NodeAssertion wrong = new NodeAssertion("Q0900101", NodeKind.GROUP, "The Wrong Ones", WIKIDATA);
     AssertionRecord edge =
-        new AssertionRecord("Q900101", "Q900102", "PERFORMED", null, null, WIKIDATA);
-    Retraction retraction = new Retraction("Q900101", "wrong entity", RETRACTED_AT);
+        new AssertionRecord("Q0900101", "Q0900102", "PERFORMED", null, null, WIKIDATA);
+    Retraction retraction = new Retraction("Q0900101", "wrong entity", RETRACTED_AT);
 
     try (AssertionLog log = SqliteAssertionLog.inMemory();
         TinkerGraphStore store = new TinkerGraphStore()) {
       log.append(wrong);
-      log.append(new NodeAssertion("Q900102", NodeKind.WORK, "A Painting", WIKIDATA));
+      log.append(new NodeAssertion("Q0900102", NodeKind.WORK, "A Painting", WIKIDATA));
       log.append(edge);
       log.append(retraction);
 
@@ -214,15 +215,15 @@ class GraphProjectorTest {
   void replayHonoursClaimsMadeAfterARetraction() {
     try (AssertionLog log = SqliteAssertionLog.inMemory();
         TinkerGraphStore store = new TinkerGraphStore()) {
-      log.append(new NodeAssertion("Q900101", NodeKind.GROUP, "The Wrong Ones", WIKIDATA));
-      log.append(new Retraction("Q900101", "wrong entity", RETRACTED_AT));
-      log.append(new NodeAssertion("Q900101", NodeKind.GROUP, "The Right Ones", WIKIDATA));
-      log.append(new NodeAssertion("Q900102", NodeKind.WORK, "A Song", WIKIDATA));
-      log.append(new AssertionRecord("Q900101", "Q900102", "PERFORMED", null, null, WIKIDATA));
+      log.append(new NodeAssertion("Q0900101", NodeKind.GROUP, "The Wrong Ones", WIKIDATA));
+      log.append(new Retraction("Q0900101", "wrong entity", RETRACTED_AT));
+      log.append(new NodeAssertion("Q0900101", NodeKind.GROUP, "The Right Ones", WIKIDATA));
+      log.append(new NodeAssertion("Q0900102", NodeKind.WORK, "A Song", WIKIDATA));
+      log.append(new AssertionRecord("Q0900101", "Q0900102", "PERFORMED", null, null, WIKIDATA));
 
       GraphProjector.project(log, store, IdentityMerge.NONE);
 
-      assertThat(store.node("Q900101").orElseThrow().label()).isEqualTo("The Right Ones");
+      assertThat(store.node("Q0900101").orElseThrow().label()).isEqualTo("The Right Ones");
       assertThat(store.edgeCount()).isEqualTo(1);
     }
   }
@@ -240,9 +241,9 @@ class GraphProjectorTest {
                       store,
                       IdentityMerge.NONE,
                       Equivalences.NONE,
-                      new Retraction("Q900101", "wrong entity", RETRACTED_AT)))
+                      new Retraction("Q0900101", "wrong entity", RETRACTED_AT)))
           .isInstanceOf(IllegalStateException.class)
-          .hasMessageContaining("Q900101");
+          .hasMessageContaining("Q0900101");
     }
   }
 }

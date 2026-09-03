@@ -50,11 +50,11 @@ import org.junit.jupiter.api.io.TempDir;
 class AffinityWeightedRecommendationTest {
 
   // Three things the owner loves, each reaching the first candidate through its own intermediate.
-  private static final List<String> LOVED = List.of("Q900111", "Q900112", "Q900113");
+  private static final List<String> LOVED = List.of("Q0900111", "Q0900112", "Q0900113");
 
   // Six things the owner is lukewarm about, reaching the second candidate the same way.
   private static final List<String> LUKEWARM =
-      List.of("Q900121", "Q900122", "Q900123", "Q900124", "Q900125", "Q900126");
+      List.of("Q0900121", "Q0900122", "Q0900123", "Q0900124", "Q0900125", "Q0900126");
 
   private static final String BELOVED = "Q0900301";
   private static final String CROWDED = "Q0900302";

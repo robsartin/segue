@@ -82,7 +82,7 @@ class PathRankingTest {
     // Wikidata statement at 1.00, so under confidence alone the meaningless route ranked
     // FIRST. Specificity has to lead for that to change, and this is the test that says so.
     PathResult throughAHub = twoHopVia(hub("Q0900201", NodeKind.CONCEPT), 1.00);
-    PathResult throughSomethingSpecific = twoHopVia(quiet("Q900103", NodeKind.CONCEPT), 0.80);
+    PathResult throughSomethingSpecific = twoHopVia(quiet("Q0900103", NodeKind.CONCEPT), 0.80);
 
     List<PathResult> ranked =
         PathRanking.rank(List.of(throughAHub, throughSomethingSpecific), DEGREES, NO_INSTITUTIONS);
@@ -141,7 +141,7 @@ class PathRankingTest {
             List.of(
                 hop(
                     START,
-                    quiet("Q900104", NodeKind.CONCEPT),
+                    quiet("Q0900104", NodeKind.CONCEPT),
                     new Provenance("llm:claude", "chat#1", Instant.EPOCH, 0.30))));
 
     List<PathResult> ranked =
@@ -156,7 +156,7 @@ class PathRankingTest {
     // Existing callers and the contract tests must not be forced to care. Nothing is a hub
     // when nothing knows any degrees, so ranking falls back to confidence then length.
     PathResult throughAHub = twoHopVia(hub("Q0900209", NodeKind.CONCEPT), 1.00);
-    PathResult throughSomethingSpecific = twoHopVia(quiet("Q900105", NodeKind.CONCEPT), 0.80);
+    PathResult throughSomethingSpecific = twoHopVia(quiet("Q0900105", NodeKind.CONCEPT), 0.80);
 
     assertThat(PathRanking.rank(List.of(throughSomethingSpecific, throughAHub)))
         .containsExactly(throughAHub, throughSomethingSpecific);
@@ -167,8 +167,8 @@ class PathRankingTest {
   void confidenceStillDecidesWithinASpecificityClass() {
     PathResult hubbyAndStrong = twoHopVia(hub("Q0900210", NodeKind.CONCEPT), 1.00);
     PathResult hubbyAndWeak = twoHopVia(hub("Q0900211", NodeKind.CONCEPT), 0.50);
-    PathResult specificAndStrong = twoHopVia(quiet("Q900106", NodeKind.CONCEPT), 1.00);
-    PathResult specificAndWeak = twoHopVia(quiet("Q900107", NodeKind.CONCEPT), 0.80);
+    PathResult specificAndStrong = twoHopVia(quiet("Q0900106", NodeKind.CONCEPT), 1.00);
+    PathResult specificAndWeak = twoHopVia(quiet("Q0900107", NodeKind.CONCEPT), 0.80);
 
     List<PathResult> ranked =
         PathRanking.rank(
@@ -188,7 +188,7 @@ class PathRankingTest {
     // Issue #66. The academy is BELOW the degree threshold and the band is above it, which is
     // the measured shape: on a real graph the Writers Guild of America West carries 11 edges
     // and so does Mötley Crüe, so no degree can separate them. The class can.
-    PathResult throughAnAcademy = twoHopVia(quiet("Q900108", NodeKind.GROUP, ELECTED_TO), 1.00);
+    PathResult throughAnAcademy = twoHopVia(quiet("Q0900108", NodeKind.GROUP, ELECTED_TO), 1.00);
     PathResult throughABand = twoHopVia(hub("Q0900212", NodeKind.GROUP, PLAYED_IN), 0.80);
 
     List<PathResult> ranked =
@@ -204,8 +204,8 @@ class PathRankingTest {
     // A stated class means something on its own, so it needs no kind and no degree to back
     // it up — a learned society that fell through the whitelist is still an election.
     PathResult throughAnUnplacedAcademy =
-        twoHopVia(quiet("Q900111", NodeKind.CONCEPT, ELECTED_TO), 1.00);
-    PathResult throughAFilm = twoHopVia(quiet("Q900112", NodeKind.WORK, MADE), 0.80);
+        twoHopVia(quiet("Q0900111", NodeKind.CONCEPT, ELECTED_TO), 1.00);
+    PathResult throughAFilm = twoHopVia(quiet("Q0900112", NodeKind.WORK, MADE), 0.80);
 
     List<PathResult> ranked =
         PathRanking.rank(List.of(throughAnUnplacedAcademy, throughAFilm), DEGREES, INSTITUTIONS);
@@ -220,9 +220,9 @@ class PathRankingTest {
     // Society" is a fair question. The confidences are the discriminator — if the endpoint
     // counted, both routes would carry one institution and the 1.00 route would win.
     PathResult endingAtAnAcademy =
-        new PathResult(List.of(hop(START, quiet("Q900113", NodeKind.GROUP, ELECTED_TO), 0.80)));
+        new PathResult(List.of(hop(START, quiet("Q0900113", NodeKind.GROUP, ELECTED_TO), 0.80)));
     PathResult passingThroughAnAcademy =
-        twoHopVia(quiet("Q900114", NodeKind.GROUP, ELECTED_TO), 1.00);
+        twoHopVia(quiet("Q0900114", NodeKind.GROUP, ELECTED_TO), 1.00);
 
     List<PathResult> ranked =
         PathRanking.rank(
@@ -238,7 +238,7 @@ class PathRankingTest {
     // recognition one is not always first — the American Academy of Arts and Sciences states
     // learned society, academic publisher, nonprofit organization, in that order.
     PathResult throughAnAcademy =
-        twoHopVia(quiet("Q900115", NodeKind.GROUP, PLAYED_IN, MADE, ELECTED_TO), 1.00);
+        twoHopVia(quiet("Q0900115", NodeKind.GROUP, PLAYED_IN, MADE, ELECTED_TO), 1.00);
     PathResult throughABand = twoHopVia(hub("Q0900213", NodeKind.GROUP, PLAYED_IN), 0.80);
 
     List<PathResult> ranked =
@@ -258,7 +258,7 @@ class PathRankingTest {
     // property is not registered and this rule does not care - it judges the intermediate, not
     // the relation, so it will hold the day the vocabulary widens.
     PathResult throughASubject = twoHopVia(hub("Q0900216", NodeKind.CONCEPT), 1.00);
-    PathResult throughTheBookItself = twoHopVia(quiet("Q900118", NodeKind.WORK), 0.80);
+    PathResult throughTheBookItself = twoHopVia(quiet("Q0900118", NodeKind.WORK), 0.80);
 
     List<PathResult> ranked =
         PathRanking.rank(List.of(throughASubject, throughTheBookItself), DEGREES, INSTITUTIONS);
@@ -281,7 +281,7 @@ class PathRankingTest {
     // is the reason ADR 31's third amendment refused a rule for edition nodes, and it is the
     // reason this one belongs with the property that creates the problem.
     PathResult throughAPlace = twoHopVia(hub("Q0900217", NodeKind.PLACE), 1.00);
-    PathResult throughTheFilmTheyMade = twoHopVia(quiet("Q900119", NodeKind.WORK), 0.80);
+    PathResult throughTheFilmTheyMade = twoHopVia(quiet("Q0900119", NodeKind.WORK), 0.80);
 
     List<PathResult> ranked =
         PathRanking.rank(List.of(throughAPlace, throughTheFilmTheyMade), DEGREES, INSTITUTIONS);
@@ -299,13 +299,13 @@ class PathRankingTest {
     // a hall of fame back into recommendations while routing kept excluding it.
     assertThat(PathRanking.isHub(hub("Q0900214", NodeKind.CONCEPT), DEGREES, NO_INSTITUTIONS))
         .isTrue();
-    assertThat(PathRanking.isHub(quiet("Q900116", NodeKind.CONCEPT), DEGREES, NO_INSTITUTIONS))
+    assertThat(PathRanking.isHub(quiet("Q0900116", NodeKind.CONCEPT), DEGREES, NO_INSTITUTIONS))
         .isFalse();
     assertThat(PathRanking.isHub(hub("Q0900215", NodeKind.GROUP), DEGREES, NO_INSTITUTIONS))
         .isFalse();
     assertThat(
             PathRanking.isHub(
-                quiet("Q900117", NodeKind.GROUP, PLAYED_IN, ELECTED_TO), DEGREES, INSTITUTIONS))
+                quiet("Q0900117", NodeKind.GROUP, PLAYED_IN, ELECTED_TO), DEGREES, INSTITUTIONS))
         .isTrue();
   }
 
@@ -334,8 +334,8 @@ class PathRankingTest {
   /** No class means recognition, so ranking is the issue-#52 order exactly. */
   private static final java.util.function.Predicate<String> NO_INSTITUTIONS = classQid -> false;
 
-  private static final NodeRecord START = new NodeRecord("Q900101", NodeKind.PERSON, "start");
-  private static final NodeRecord END = new NodeRecord("Q900102", NodeKind.PERSON, "end");
+  private static final NodeRecord START = new NodeRecord("Q0900101", NodeKind.PERSON, "start");
+  private static final NodeRecord END = new NodeRecord("Q0900102", NodeKind.PERSON, "end");
 
   private static NodeRecord hub(String qid, NodeKind kind, String... statedClasses) {
     return new NodeRecord(qid, kind, "busy " + qid, List.of(statedClasses));

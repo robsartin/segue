@@ -22,7 +22,8 @@ import org.junit.jupiter.api.Test;
 /** What a person actually reads, and the two things the file has to say about itself (ADR 45). */
 class RecommendationReportTest {
 
-  private static final NodeRecord KNOWN = new NodeRecord("Q900101", NodeKind.GROUP, "one you know");
+  private static final NodeRecord KNOWN =
+      new NodeRecord("Q0900101", NodeKind.GROUP, "one you know");
   private static final NodeRecord VIA =
       new NodeRecord("Q0900201", NodeKind.PERSON, "the artist they cite");
   private static final NodeRecord CANDIDATE =
@@ -106,7 +107,7 @@ class RecommendationReportTest {
     // starts at U2 — so the one thing a reader needs stated is which end is theirs.
     String written = report(List.of(new Explained(RECOMMENDED, List.of(ROUTE))), sweep());
 
-    assertThat(written).contains("from one you know (Q900101):");
+    assertThat(written).contains("from one you know (Q0900101):");
   }
 
   @Test

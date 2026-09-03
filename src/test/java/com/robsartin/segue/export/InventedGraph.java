@@ -31,16 +31,29 @@ import java.util.List;
  */
 final class InventedGraph {
 
-  static final String WREN = "Q900101";
+  static final String WREN = "Q0900101";
+
+  /**
+   * Allocatable shape, from the same invented family as the ids around it — but unlike them, this
+   * one stands as a merge's canonical side ({@code BothFoldsAgreeTest}'s {@code merged(DEMO,
+   * KETTLES)}, via {@link #merged}), so {@code SameAs.declared} runs it through {@code
+   * Qid.checkAllocatable}. It is band A by number but joins Task 10's blocked merge-canonical-side
+   * ids rather than migrating with the rest of this band; it carries the same issue #171 debt until
+   * that task's spec question is answered.
+   */
   static final String KETTLES = "Q900102";
-  static final String HOLLOW_TIDE = "Q900103";
-  static final String MARLOW = "Q900104";
-  static final String PRIZE = "Q900105";
+
+  static final String HOLLOW_TIDE = "Q0900103";
+  static final String MARLOW = "Q0900104";
+  static final String PRIZE = "Q0900105";
 
   /**
    * The id Wikidata turned out to have for something the owner had already minted (#92).
-   * Allocatable shape, from the same invented family as the ids above and carrying the same issue
-   * #171 debt.
+   * Allocatable shape, from the same invented family as the ids above — but unlike them, this one
+   * stands as a merge's canonical side ({@code BothFoldsAgreeTest}, via {@link #merged}), so {@code
+   * SameAs.declared} runs it through {@code Qid.checkAllocatable}. It is band A by number but joins
+   * Task 10's blocked merge-canonical-side ids rather than migrating with the rest of this band; it
+   * carries the same issue #171 debt until that task's spec question is answered.
    */
   static final String PRESSING = "Q900106";
 

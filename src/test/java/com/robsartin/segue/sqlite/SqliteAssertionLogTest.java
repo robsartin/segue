@@ -111,12 +111,12 @@ class SqliteAssertionLogTest {
     // ADR 44: a retraction is appended, never applied to the rows it retracts. The log after
     // one still holds every original claim - that is the whole decision, seen at the storage
     // layer.
-    NodeAssertion node = new NodeAssertion("Q900101", NodeKind.PERSON, "Wren Alderman", WIKIDATA);
+    NodeAssertion node = new NodeAssertion("Q0900101", NodeKind.PERSON, "Wren Alderman", WIKIDATA);
     AssertionRecord edge =
-        new AssertionRecord("Q900101", "Q900102", "MEMBER_OF", null, null, WIKIDATA);
+        new AssertionRecord("Q0900101", "Q0900102", "MEMBER_OF", null, null, WIKIDATA);
     Retraction retraction =
         new Retraction(
-            "Q900101",
+            "Q0900101",
             "resolved to the wrong entity",
             Instant.parse("2026-08-27T11:22:33.456789Z"));
 
@@ -141,9 +141,9 @@ class SqliteAssertionLogTest {
     writeSchemaWithoutReason(db);
 
     NodeAssertion existing =
-        new NodeAssertion("Q900101", NodeKind.PERSON, "Wren Alderman", WIKIDATA);
+        new NodeAssertion("Q0900101", NodeKind.PERSON, "Wren Alderman", WIKIDATA);
     Retraction retraction =
-        new Retraction("Q900101", "invented", Instant.parse("2026-08-27T11:22:33Z"));
+        new Retraction("Q0900101", "invented", Instant.parse("2026-08-27T11:22:33Z"));
 
     try (SqliteAssertionLog log = new SqliteAssertionLog(db)) {
       log.append(existing);
@@ -160,7 +160,7 @@ class SqliteAssertionLogTest {
     writeSchemaWithoutReason(db);
 
     try (SqliteAssertionLog log = new SqliteAssertionLog(db)) {
-      log.append(new Retraction("Q900101", "invented", Instant.parse("2026-08-27T11:22:33Z")));
+      log.append(new Retraction("Q0900101", "invented", Instant.parse("2026-08-27T11:22:33Z")));
     }
     try (SqliteAssertionLog reopened = new SqliteAssertionLog(db)) {
       assertThat(reopened.readAll()).hasSize(1);

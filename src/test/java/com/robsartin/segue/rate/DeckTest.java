@@ -91,8 +91,8 @@ class DeckTest {
         Map.of(
             "Q0900005", new NodeRecord("Q0900005", NodeKind.GROUP, "Five", List.of()),
             "Q0900006", new NodeRecord("Q0900006", NodeKind.GROUP, "Six", List.of()));
-    Explained one = candidateFor("Q900101", "Candidate One");
-    Explained two = candidateFor("Q900102", "Candidate Two");
+    Explained one = candidateFor("Q0900101", "Candidate One");
+    Explained two = candidateFor("Q0900102", "Candidate Two");
 
     List<Card> cards =
         Deck.deal(
@@ -103,17 +103,17 @@ class DeckTest {
             List.of(one, two),
             OptionalInt.empty());
 
-    assertThat(cards.get(4).qid()).isEqualTo("Q900101");
-    assertThat(cards).extracting(Card::qid).contains("Q900102");
+    assertThat(cards.get(4).qid()).isEqualTo("Q0900101");
+    assertThat(cards).extracting(Card::qid).contains("Q0900102");
     assertThat(cards).hasSize(7);
   }
 
   @Test
   @DisplayName("a candidate that is already rated is not dealt")
   void excludesAlreadyRatedCandidate() {
-    Explained candidate = candidateFor("Q900103", "Already Rated Candidate");
+    Explained candidate = candidateFor("Q0900103", "Already Rated Candidate");
 
-    List<Card> cards = deal(List.of(), Map.of("Q900103", 2), List.of(candidate));
+    List<Card> cards = deal(List.of(), Map.of("Q0900103", 2), List.of(candidate));
 
     assertThat(cards).isEmpty();
   }
@@ -249,7 +249,7 @@ class DeckTest {
             q -> DEGREES.getOrDefault(q, 0),
             q -> Optional.ofNullable(NODES.get(q)),
             Map.of("Q0900001", 3),
-            List.of(candidateFor("Q900101", "Candidate One")),
+            List.of(candidateFor("Q0900101", "Candidate One")),
             OptionalInt.of(3));
 
     assertThat(cards).extracting(Card::qid).containsExactly("Q0900001");

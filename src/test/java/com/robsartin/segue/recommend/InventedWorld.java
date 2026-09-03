@@ -30,8 +30,8 @@ import java.util.function.Predicate;
 final class InventedWorld {
 
   // The things "you" already know.
-  static final String KNOWN_ONE = "Q900101";
-  static final String KNOWN_TWO = "Q900102";
+  static final String KNOWN_ONE = "Q0900101";
+  static final String KNOWN_TWO = "Q0900102";
 
   // Intermediates.
   static final String SHARED_ARTIST = "Q0900201";

@@ -20,9 +20,9 @@ class RetractionTest {
   @DisplayName("a retraction names an entity, a reason and the moment it was decided")
   void carriesQidReasonAndInstant() {
     Retraction retraction =
-        new Retraction("Q900101", "resolved to the painters, not the band", WHEN);
+        new Retraction("Q0900101", "resolved to the painters, not the band", WHEN);
 
-    assertThat(retraction.qid()).isEqualTo("Q900101");
+    assertThat(retraction.qid()).isEqualTo("Q0900101");
     assertThat(retraction.reason()).isEqualTo("resolved to the painters, not the band");
     assertThat(retraction.retractedAt()).isEqualTo(WHEN);
   }
@@ -31,8 +31,8 @@ class RetractionTest {
   @DisplayName("every field is required")
   void rejectsNulls() {
     assertThatNullPointerException().isThrownBy(() -> new Retraction(null, "why", WHEN));
-    assertThatNullPointerException().isThrownBy(() -> new Retraction("Q900101", null, WHEN));
-    assertThatNullPointerException().isThrownBy(() -> new Retraction("Q900101", "why", null));
+    assertThatNullPointerException().isThrownBy(() -> new Retraction("Q0900101", null, WHEN));
+    assertThatNullPointerException().isThrownBy(() -> new Retraction("Q0900101", "why", null));
   }
 
   @Test
@@ -41,7 +41,7 @@ class RetractionTest {
     // The whole value of keeping a retraction in an append-only log is that it says we later
     // concluded something was wrong AND what the conclusion was. A retraction with no reason
     // leaves the second half to whoever reads the log next.
-    assertThatIllegalArgumentException().isThrownBy(() -> new Retraction("Q900101", "  ", WHEN));
+    assertThatIllegalArgumentException().isThrownBy(() -> new Retraction("Q0900101", "  ", WHEN));
   }
 
   @Test

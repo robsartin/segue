@@ -24,21 +24,12 @@ import org.junit.jupiter.api.Test;
  * does not show the feature produced it — see {@code SharedAwardRouteTest}'s doc comment for the
  * same argument made about {@code RECEIVED_AWARD}, and the general note in CLAUDE.md about
  * comparing full result sets rather than trusting the first thing that comes back.
- *
- * <p><b>The QIDs here are stand-ins that do denote something, and have not been fixed yet.</b> They
- * were picked outside {@code Fixture}'s own family so the two fixtures cannot collide if ever
- * combined, and were described as being in the {@code Q9000xx} range; they are not, and neither
- * that range nor this one was ever free. Issue #141 moved {@code Fixture} to ids Wikibase's item-id
- * grammar refuses (ADR 58) and left this family alone deliberately: {@code Q9001xx} is shared
- * across roughly twenty unrelated files, so moving three of them here would split the convention
- * rather than mend it. Tracked as <a href="https://github.com/robsartin/segue/issues/171">issue
- * #171</a>. Nothing below depends on what any of these ids denotes.
  */
 class SharedSubjectRouteTest {
 
-  private static final String BOOK_A = "Q900101";
-  private static final String BOOK_B = "Q900102";
-  private static final String SUBJECT = "Q900103";
+  private static final String BOOK_A = "Q0900101";
+  private static final String BOOK_B = "Q0900102";
+  private static final String SUBJECT = "Q0900103";
 
   private static final Instant ASSERTED_AT = Instant.parse("2026-08-28T09:00:00Z");
 

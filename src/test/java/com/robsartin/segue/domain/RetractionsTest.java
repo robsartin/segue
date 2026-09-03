@@ -44,7 +44,7 @@ class RetractionsTest {
   @DisplayName("with no retraction in the log, every claim survives")
   void nothingRetractedKeepsEverything() {
     List<LoggedAssertion> log =
-        List.of(node("Q900101"), node("Q900102"), edge("Q900101", "Q900102"));
+        List.of(node("Q0900101"), node("Q0900102"), edge("Q0900101", "Q0900102"));
 
     assertThat(surviving(log)).isEqualTo(log);
   }
@@ -56,12 +56,12 @@ class RetractionsTest {
     // The motivating case is a wrongly-RESOLVED entity, so the node claim has to go too -
     // retracting only the expansion would leave a wrong identity in the graph, still findable
     // and still rateable.
-    NodeAssertion wrong = node("Q900101");
-    NodeAssertion right = node("Q900102");
-    AssertionRecord out = edge("Q900101", "Q900102");
-    AssertionRecord in = edge("Q900102", "Q900101");
+    NodeAssertion wrong = node("Q0900101");
+    NodeAssertion right = node("Q0900102");
+    AssertionRecord out = edge("Q0900101", "Q0900102");
+    AssertionRecord in = edge("Q0900102", "Q0900101");
 
-    List<LoggedAssertion> log = List.of(wrong, right, out, in, retract("Q900101"));
+    List<LoggedAssertion> log = List.of(wrong, right, out, in, retract("Q0900101"));
 
     assertThat(surviving(log)).containsExactly(right);
   }
@@ -72,21 +72,21 @@ class RetractionsTest {
     // This is what makes re-adding an entity the natural un-retraction (ADR 44's fourth
     // question). Nothing special happens on the way back in: the claim is simply newer than
     // the retraction, so nothing retracts it.
-    NodeAssertion before = node("Q900101");
-    NodeAssertion after = node("Q900101");
-    AssertionRecord afterEdge = edge("Q900101", "Q900102");
+    NodeAssertion before = node("Q0900101");
+    NodeAssertion after = node("Q0900101");
+    AssertionRecord afterEdge = edge("Q0900101", "Q0900102");
 
     List<LoggedAssertion> log =
-        List.of(before, node("Q900102"), retract("Q900101"), after, afterEdge);
+        List.of(before, node("Q0900102"), retract("Q0900101"), after, afterEdge);
 
-    assertThat(surviving(log)).containsExactly(node("Q900102"), after, afterEdge);
+    assertThat(surviving(log)).containsExactly(node("Q0900102"), after, afterEdge);
   }
 
   @Test
   @DisplayName(
       "the retraction row itself is not projected - it describes the fold, it is not in it")
   void theRetractionRowIsNotProjected() {
-    Retraction retraction = retract("Q900101");
+    Retraction retraction = retract("Q0900101");
 
     assertThat(surviving(List.of(retraction))).isEmpty();
   }
@@ -95,10 +95,10 @@ class RetractionsTest {
   @DisplayName(
       "a second retraction of the same entity reaches everything before it, including a re-add")
   void aSecondRetractionMovesTheCutForward() {
-    NodeAssertion first = node("Q900101");
-    NodeAssertion readded = node("Q900101");
+    NodeAssertion first = node("Q0900101");
+    NodeAssertion readded = node("Q0900101");
 
-    List<LoggedAssertion> log = List.of(first, retract("Q900101"), readded, retract("Q900101"));
+    List<LoggedAssertion> log = List.of(first, retract("Q0900101"), readded, retract("Q0900101"));
 
     assertThat(surviving(log)).isEmpty();
   }
@@ -106,13 +106,13 @@ class RetractionsTest {
   @Test
   @DisplayName("retracting one entity leaves an unrelated entity's claims alone")
   void retractionIsScopedToItsEntity() {
-    NodeAssertion other = node("Q900103");
-    AssertionRecord unrelated = edge("Q900102", "Q900103");
+    NodeAssertion other = node("Q0900103");
+    AssertionRecord unrelated = edge("Q0900102", "Q0900103");
 
     List<LoggedAssertion> log =
-        List.of(node("Q900101"), node("Q900102"), other, unrelated, retract("Q900101"));
+        List.of(node("Q0900101"), node("Q0900102"), other, unrelated, retract("Q0900101"));
 
-    assertThat(surviving(log)).containsExactly(node("Q900102"), other, unrelated);
+    assertThat(surviving(log)).containsExactly(node("Q0900102"), other, unrelated);
   }
 
   @Test

@@ -18,8 +18,8 @@ import org.junit.jupiter.api.Test;
  */
 class ScorerTest {
 
-  private static final String SEED = "Q900101";
-  private static final String OTHER_SEED = "Q900102";
+  private static final String SEED = "Q0900101";
+  private static final String OTHER_SEED = "Q0900102";
 
   /** One seed, one intermediate of degree {@code viaDegree}, weight 1. */
   private static SharedIntermediate via(String seed, String qid, int viaDegree) {

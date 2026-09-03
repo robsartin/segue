@@ -77,7 +77,7 @@ class MergedIdIsOfferedOnceTest {
   private static final String CANDIDATE = "Q0900311";
 
   /** On the {@code --known} file and reaching nothing: the file may not be empty. */
-  private static final String ON_THE_FILE = "Q900199";
+  private static final String ON_THE_FILE = "Q0900199";
 
   /** Low enough that nothing needs padding past three edges, and above the sweep's own minimum. */
   private static final int FLOOR = 3;

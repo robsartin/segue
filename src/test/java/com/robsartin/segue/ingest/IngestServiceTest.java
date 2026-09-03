@@ -114,14 +114,14 @@ class IngestServiceTest {
     // widening the port to give it one - for a dev tool, on the port that exists to keep the
     // engine choice reversible - is what ADR 41 already refused. The graph catches up the way
     // ADR 24 says it always does, by being rebuilt from the log.
-    ingest.record(new NodeAssertion("Q900101", NodeKind.PERSON, "Wren Alderman", WIKIDATA));
+    ingest.record(new NodeAssertion("Q0900101", NodeKind.PERSON, "Wren Alderman", WIKIDATA));
     Retraction retraction =
-        new Retraction("Q900101", "wrong entity", Instant.parse("2026-08-27T12:00:00Z"));
+        new Retraction("Q0900101", "wrong entity", Instant.parse("2026-08-27T12:00:00Z"));
 
     IngestService.retract(log, retraction);
 
     assertThat(log.readAll()).element(1).isEqualTo(retraction);
-    assertThat(graph.node("Q900101"))
+    assertThat(graph.node("Q0900101"))
         .as("the running graph is stale until the next boot")
         .isPresent();
   }
@@ -133,7 +133,7 @@ class IngestServiceTest {
     // refuses BEFORE appending: a half-done write here would leave a retraction in the log that
     // the caller was told had failed.
     Retraction retraction =
-        new Retraction("Q900101", "wrong entity", Instant.parse("2026-08-27T12:00:00Z"));
+        new Retraction("Q0900101", "wrong entity", Instant.parse("2026-08-27T12:00:00Z"));
 
     assertThatThrownBy(() -> ingest.record(retraction))
         .isInstanceOf(IllegalArgumentException.class)

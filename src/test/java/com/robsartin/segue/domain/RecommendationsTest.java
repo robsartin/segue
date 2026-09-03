@@ -15,7 +15,7 @@ class RecommendationsTest {
         new NodeRecord(qid, NodeKind.GROUP, "invented " + qid),
         score,
         20,
-        List.of(new SharedIntermediate("Q900101", "Q0900201", 4, 1.0)));
+        List.of(new SharedIntermediate("Q0900101", "Q0900201", 4, 1.0)));
   }
 
   @Test
@@ -64,8 +64,8 @@ class RecommendationsTest {
   @Test
   @DisplayName("regard for every known entity is equal until something rates them")
   void everyKnownEntityIsRegardedEqually() {
-    assertThat(Recommendations.EQUAL_REGARD.applyAsDouble("Q900101")).isEqualTo(1.0);
-    assertThat(Recommendations.EQUAL_REGARD.applyAsDouble("Q900102")).isEqualTo(1.0);
+    assertThat(Recommendations.EQUAL_REGARD.applyAsDouble("Q0900101")).isEqualTo(1.0);
+    assertThat(Recommendations.EQUAL_REGARD.applyAsDouble("Q0900102")).isEqualTo(1.0);
   }
 
   @Test
@@ -75,8 +75,8 @@ class RecommendationsTest {
     // ratings must produce the ranking ADR 45 measured, not a differently-scaled one.
     java.util.function.ToDoubleFunction<String> regard = Recommendations.regardFor(Map.of());
 
-    assertThat(regard.applyAsDouble("Q900101")).isEqualTo(1.0);
-    assertThat(regard.applyAsDouble("Q900102")).isEqualTo(1.0);
+    assertThat(regard.applyAsDouble("Q0900101")).isEqualTo(1.0);
+    assertThat(regard.applyAsDouble("Q0900102")).isEqualTo(1.0);
   }
 
   @Test
@@ -86,30 +86,30 @@ class RecommendationsTest {
     // entity is on the list because the owner likes it — counting it as zero would delete most
     // of the graph the moment the first rating was written.
     java.util.function.ToDoubleFunction<String> regard =
-        Recommendations.regardFor(Map.of("Q900101", 5));
+        Recommendations.regardFor(Map.of("Q0900101", 5));
 
-    assertThat(regard.applyAsDouble("Q900199")).isEqualTo(1.0);
+    assertThat(regard.applyAsDouble("Q0900199")).isEqualTo(1.0);
   }
 
   @Test
   @DisplayName("the scale runs either side of one: a 5 counts up, a 1 counts down")
   void theScaleRunsEitherSideOfOne() {
     java.util.function.ToDoubleFunction<String> regard =
-        Recommendations.regardFor(Map.of("Q900101", 5, "Q900102", 3, "Q900103", 1));
+        Recommendations.regardFor(Map.of("Q0900101", 5, "Q0900102", 3, "Q0900103", 1));
 
-    assertThat(regard.applyAsDouble("Q900101")).isEqualTo(5.0 / 3.0);
-    assertThat(regard.applyAsDouble("Q900102")).isEqualTo(1.0);
-    assertThat(regard.applyAsDouble("Q900103")).isEqualTo(1.0 / 3.0);
+    assertThat(regard.applyAsDouble("Q0900101")).isEqualTo(5.0 / 3.0);
+    assertThat(regard.applyAsDouble("Q0900102")).isEqualTo(1.0);
+    assertThat(regard.applyAsDouble("Q0900103")).isEqualTo(1.0 / 3.0);
   }
 
   @Test
   @DisplayName("three things rated 5 outweigh six things rated 2 — issue #85's own example")
   void threeFivesOutweighSixTwos() {
     java.util.function.ToDoubleFunction<String> regard =
-        Recommendations.regardFor(Map.of("Q900101", 5, "Q900102", 2));
+        Recommendations.regardFor(Map.of("Q0900101", 5, "Q0900102", 2));
 
-    double threeFives = 3 * regard.applyAsDouble("Q900101");
-    double sixTwos = 6 * regard.applyAsDouble("Q900102");
+    double threeFives = 3 * regard.applyAsDouble("Q0900101");
+    double sixTwos = 6 * regard.applyAsDouble("Q0900102");
 
     assertThat(threeFives).isGreaterThan(sixTwos);
   }
