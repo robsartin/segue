@@ -20,14 +20,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.domain.Retraction;
 import com.robsartin.segue.export.InventedGraph.FakeAssertionLog;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import java.io.IOException;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.DisplayName;
@@ -44,10 +50,12 @@ import org.junit.jupiter.api.Test;
  * exactly this reason, and ADR 59 records {@code Map.copyOf} breaking it once already in {@code
  * Equivalences} — where {@code canonicalByLocal} now keeps log order for the same argument.
  *
- * <p><b>Why log order and not a sort.</b> Log order is the one order every reader here already
- * agrees on ({@code KnownList.promoted}, {@code Equivalences.resolve}); it is a fact of the data
- * rather than a choice, and it does not reorder the whole picture every time an id changes shape,
- * as sorting by QID would have done when issue #171 changed a hundred of them. {@link
+ * <p><b>Why log order and not a sort.</b> It is the order {@code Equivalences.canonicalByLocal}
+ * already keeps, under the same ADR 43 contract that two runs over one unchanged input agree byte
+ * for byte — the contract {@code KnownList.promoted} serves by sorting instead, which is the honest
+ * comparison: a fold has to pick one. Log order is a fact of the data rather than a choice, and it
+ * does not reorder the whole picture every time an id changes shape, as sorting by QID would have
+ * done when issue #171 changed a hundred of them. {@link
  * #shouldReverseTheDrawnOrderWhenTheLogsClaimsAreReversed} is what makes that a claim about the log
  * rather than about any fixed order: a fold that sorted would not move.
  *
@@ -55,10 +63,11 @@ import org.junit.jupiter.api.Test;
  * drawn once at class initialisation — so {@link #shouldRenderTheSameBytesWhenAnotherJvmFoldsIt}
  * runs the identical render in a forked JVM and diffs the two outputs. That is the control the
  * design document asks for; {@link #shouldDrawNodesAndEdgesInTheOrderTheLogClaimsThem} is the
- * deterministic pin beside it, and it is the stronger of the two. Two salts can agree by chance -
- * they did, on one run of the re-planted {@code Map.copyOf} control, where the fork stayed green
- * and the three pins reddened - so the fork is the shape of the defect and the pins are what catch
- * it: an order that is a pure function of the log cannot depend on a salt at all.
+ * deterministic pin beside it, and it is the stronger of the two. Two salts can agree by chance:
+ * the fork was observed green once on the re-planted {@code Map.copyOf} control while the pins
+ * reddened, and the reviewer then saw it 5/5 red on the same plant. The fork is the shape of the
+ * defect and the pins are the guarantee — an order that is a pure function of the log cannot depend
+ * on a salt at all.
  *
  * <p>Every entity here is invented (ADR 40, issue #37).
  */
@@ -93,6 +102,8 @@ class ExportOrderIsLogOrderTest {
         owned(TWICE, DEMO, "INFLUENCED_BY"),
         edge(BYPASS, HOLLOW_TIDE, "INFLUENCED_BY"));
   }
+
+  private static final Instant RETRACTED_AT = Instant.parse("2026-02-01T00:00:00Z");
 
   /** No merge in this fixture, so every node's position is its own first claim's. */
   private static final List<String> CLAIMED_IN_ORDER =
@@ -154,7 +165,10 @@ class ExportOrderIsLogOrderTest {
   @DisplayName("a stand-in node a merge created is drawn ahead of every node the log claims")
   void shouldDrawAStandInAheadOfEveryClaimedNode() throws IOException {
     FakeAssertionLog log = logOf(nodeClaims());
-    log.with(merged(ALMANAC, PRESSING));
+    // The merge, and THEN a source naming the canonical id - the last two rows of the log, so that
+    // "the seed's position" and "the claim's own position" are as far apart as this fixture can
+    // put them. Without that second row the test proves only the half that does not bite.
+    log.with(merged(ALMANAC, PRESSING), node(PRESSING, NodeKind.WORK, "what the source calls it"));
 
     String dot = render(new DotWriter(), log);
 
@@ -164,8 +178,34 @@ class ExportOrderIsLogOrderTest {
     assertThat(idsIn(DOT_NODE, dot))
         .as(
             "a stand-in has no claim of its own, so it has no position of its own either: it is"
-                + " seeded by a pre-pass that finishes before the fold begins (#178), and this"
-                + " test is where that ruling is written down rather than implied")
+                + " seeded by a pre-pass that finishes before the fold begins (#178). The claim"
+                + " naming it is the LAST row of the log and the node is still drawn FIRST,"
+                + " because a put on a key a LinkedHashMap already holds replaces the value and"
+                + " leaves the insertion position alone - the rule LogProjection states in prose")
+        .containsExactlyElementsOf(expected);
+    assertThat(dot)
+        .as("only the position is the seed's: the label is the source's, as upsertNode has it")
+        .contains("\"" + PRESSING + "\" [label=\"what the source calls it\"");
+  }
+
+  @Test
+  @DisplayName("a node retracted and then re-claimed is drawn where its surviving claim sits")
+  void shouldDrawAReClaimedNodeWhereItsSurvivingClaimSits() throws IOException {
+    FakeAssertionLog log = logOf(nodeClaims());
+    log.with(
+        new Retraction(MARLOW, "resolved to the wrong Ines", RETRACTED_AT),
+        node(MARLOW, NodeKind.PERSON, "Ines Marlow"));
+
+    String dot = render(new DotWriter(), log);
+
+    List<String> expected = new ArrayList<>(CLAIMED_IN_ORDER);
+    expected.remove(MARLOW);
+    expected.add(MARLOW);
+    assertThat(idsIn(DOT_NODE, dot))
+        .as(
+            "the entity moves from the front of the picture to the back, which is surprising and"
+                + " correct: a retracted claim never enters the map at all (ADR 44), so what fixes"
+                + " a node's position is its first SURVIVING claim and not its first claim")
         .containsExactlyElementsOf(expected);
   }
 
@@ -188,7 +228,10 @@ class ExportOrderIsLogOrderTest {
   // ---- the fork ---------------------------------------------------------
 
   /** Between the two renders in the forked JVM's output. Not a character either format writes. */
-  private static final String SEPARATOR = " ---- ";
+  private static final String SEPARATOR = " ---- ";
+
+  /** Long enough for a cold JVM on a loaded machine; short enough that a wedge is not a hang. */
+  private static final Duration CHILD_BUDGET = Duration.ofSeconds(60);
 
   /** What the forked JVM runs. Not a tool: this class is on the test runtime classpath. */
   public static void main(String[] args) throws IOException {
@@ -207,19 +250,37 @@ class ExportOrderIsLogOrderTest {
   private static String inAnotherJvm() throws IOException, InterruptedException {
     String classpath = System.getProperty("java.class.path", "");
     assertThat(classpath).as("the forked JVM needs this one's classpath").isNotBlank();
-    Process forked =
-        new ProcessBuilder(
-                System.getProperty("java.home") + "/bin/java",
-                "-cp",
-                classpath,
-                ExportOrderIsLogOrderTest.class.getName())
-            .redirectErrorStream(false)
-            .start();
-    String out = new String(forked.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-    String err = new String(forked.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
-    int status = forked.waitFor();
-    assertThat(status).as("the forked JVM said: %s", err).isZero();
-    return out;
+    // Captured to a file rather than read off a pipe, and waited for with a bound. Draining one
+    // stream while the child fills the other is the classic way to deadlock a fork, and an
+    // unbounded waitFor turns a wedged child into a hung `check` with nothing to show for it.
+    Path captured = Files.createTempFile("segue-export-order", ".txt");
+    try {
+      Process forked =
+          new ProcessBuilder(
+                  System.getProperty("java.home") + "/bin/java",
+                  "-cp",
+                  classpath,
+                  ExportOrderIsLogOrderTest.class.getName())
+              .redirectOutput(captured.toFile())
+              // Inherited, so a stack trace from the child reaches this run's standard error,
+              // which the build prints - testLogging events("standardError").
+              .redirectError(ProcessBuilder.Redirect.INHERIT)
+              .start();
+      long pid = forked.pid();
+      boolean finished = forked.waitFor(CHILD_BUDGET.toSeconds(), TimeUnit.SECONDS);
+      if (!finished) {
+        forked.destroyForcibly();
+      }
+      assertThat(finished)
+          .as("the forked JVM (pid %s) drew nothing within %s and was killed", pid, CHILD_BUDGET)
+          .isTrue();
+      assertThat(forked.exitValue())
+          .as("the forked JVM (pid %s) failed; its stderr is in this run's standard error", pid)
+          .isZero();
+      return Files.readString(captured, StandardCharsets.UTF_8);
+    } finally {
+      Files.deleteIfExists(captured);
+    }
   }
 
   // ---- shared -----------------------------------------------------------

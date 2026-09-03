@@ -64,14 +64,15 @@ import java.util.Map;
  * <p><b>Nodes and edges come out in log order</b> - the position of the first surviving claim that
  * names them - and the map holding them keeps it, which {@code Map.copyOf} did not (issue #207).
  * Its iteration order is unspecified and salted per JVM, so two exports of one unchanged log came
- * out in two orders, a diff between them was noise and a real change hid in it. Log order is the
- * order {@code KnownList.promoted} and {@link Equivalences#resolve} already keep for ADR 43's
- * byte-identical contract, and it is a fact of the data rather than a choice: sorting by qid would
- * have been stable too, and would have reordered the entire picture every time an id changed shape,
- * as issue #171 changed a hundred of them. {@code
- * ExportOrderIsLogOrderTest#shouldDrawNodesAndEdgesInTheOrderTheLogClaimsThem} pins the order to
- * the log rather than to any fixed sequence, by reversing the fixture's claims and expecting the
- * picture to reverse with them.
+ * out in two orders, a diff between them was noise and a real change hid in it. Log order is what
+ * {@link Equivalences#canonicalByLocal} already keeps, under ADR 43's contract that two runs over
+ * one unchanged input agree byte for byte - the contract {@code KnownList.promoted} serves by
+ * sorting instead, which is the honest comparison. A fold has to pick one, and log order is a fact
+ * of the data rather than a choice: sorting by qid would have been stable too, and would have
+ * reordered the entire picture every time an id changed shape, as issue #171 changed a hundred of
+ * them. {@code ExportOrderIsLogOrderTest#shouldDrawNodesAndEdgesInTheOrderTheLogClaimsThem} pins
+ * the order to the log rather than to any fixed sequence, by reversing the fixture's claims and
+ * expecting the picture to reverse with them.
  *
  * <p><b>A stand-in node has no claim of its own, so it comes first.</b> {@link
  * Equivalences#standIns} is a pre-pass that completes before this fold begins (#178), and its nodes
