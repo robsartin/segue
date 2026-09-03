@@ -61,9 +61,9 @@ class WikidataMusicBrainzIdentityTest {
   /**
    * {@code application.yaml}'s shipped {@code segue.expand.max-new-edges}. {@code
    * MusicBrainzSourceAdapter} spends that bound on relations <i>before</i> it resolves any
-   * neighbour, so one expansion under the shipped configuration can hand {@code qidsFor} this many
-   * MBIDs in a single call. It is restated here as the size the batching has to survive; {@code
-   * application.yaml} remains the authority on the setting.
+   * neighbour, so one expansion under the shipped configuration can hand {@code identitiesFor} this
+   * many MBIDs in a single call. It is restated here as the size the batching has to survive;
+   * {@code application.yaml} remains the authority on the setting.
    */
   private static final int SHIPPED_MAX_NEW_EDGES = 200;
 
@@ -117,6 +117,15 @@ class WikidataMusicBrainzIdentityTest {
     return row.append("}").toString();
   }
 
+  /**
+   * The QID under each MBID. The mapping assertions below are about which item each MBID bridged
+   * to; the description that now arrives on the same answer has its own tests further down.
+   */
+  private static Map<String, String> qids(Map<String, BridgedIdentity> bridged) {
+    return bridged.entrySet().stream()
+        .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().qid()));
+  }
+
   private static String mbidRow(String mbid) {
     return "{\"mbid\":{\"type\":\"literal\",\"value\":\"" + mbid + "\"}}";
   }
@@ -153,11 +162,12 @@ class WikidataMusicBrainzIdentityTest {
       stub.enqueueBody(
           bindings(itemRow(QUINTET_QID, QUINTET_MBID), itemRow(MEMBER_QID, MEMBER_MBID)));
 
-      Map<String, String> resolved = identity(stub).qidsFor(List.of(QUINTET_MBID, MEMBER_MBID));
+      Map<String, String> resolved =
+          qids(identity(stub).identitiesFor(List.of(QUINTET_MBID, MEMBER_MBID)));
 
       assertThat(resolved)
           .containsOnly(entry(QUINTET_MBID, QUINTET_QID), entry(MEMBER_MBID, MEMBER_QID));
-      // One round trip for a batch this size, which is the reason qidsFor takes a collection.
+      // One round trip for a batch this size, which is why the seam takes a collection.
       // A batch large enough to need more than one is the request-line test below.
       assertThat(stub.requestCount()).isEqualTo(1);
       assertThat(decodedQuery(stub)).contains("wdt:P434").contains(QUINTET_MBID, MEMBER_MBID);
@@ -170,41 +180,20 @@ class WikidataMusicBrainzIdentityTest {
     try (StubWikidataServer stub = new StubWikidataServer()) {
       List<String> mbids = mbids(SHIPPED_MAX_NEW_EDGES);
 
-      identity(stub).qidsFor(mbids);
-
-      // Measured through WikidataClient's own encoding on 2026-08-30: the request URI is
-      // 180 + 43n bytes, so 200 MBIDs in one VALUES clause is 8,780 — over the limit, and a 414
-      // is not transient, so the whole neighbourhood would be dropped with no flag raised.
-      assertThat(stub.queries()).isNotEmpty();
-      for (String query : stub.queries()) {
-        assertThat(PRODUCTION_QUERY_URI.length() + query.length())
-            .as("request-line bytes for one batched query")
-            .isLessThanOrEqualTo(REQUEST_LINE_LIMIT);
-      }
-      // Splitting must not lose anybody: every MBID handed in is asked about in some request.
-      assertThat(everyDecodedQuery(stub)).contains(mbids.toArray(String[]::new));
-    }
-  }
-
-  @Test
-  @DisplayName("should split the widened batch too when one query would outgrow the limit")
-  void shouldSplitTheWidenedBatchTooWhenOneQueryWouldOutgrowTheLimit() {
-    try (StubWikidataServer stub = new StubWikidataServer()) {
-      List<String> mbids = mbids(SHIPPED_MAX_NEW_EDGES);
-
       identity(stub).identitiesFor(mbids);
 
-      // The widened template's own measurement, 2026-09-02, driven through WikidataClient's
+      // The measurement of 2026-09-02, driven through WikidataClient's
       // encoding: the request URI is 351 + 43n bytes, so 200 MBIDs in one VALUES clause is 8,951
       // — over the limit, and a 414 is not transient. The label service, the OPTIONAL P31 and the
       // DISTINCT cost 171 bytes once and nothing per MBID; MAX_MBIDS_PER_QUERY holds the full
       // table, re-measured when review added the DISTINCT rather than adjusted by nine. This test
       // is the guard that a later line added to the query cannot quietly push a shipped batch
-      // over, which is exactly what happened to the figures this replaces.
+      // over, which is exactly what happened to the figures this replaced. It stands in for the
+      // narrow template's own split test, deleted with qidsFor: there is one batched query now.
       assertThat(stub.queries()).isNotEmpty();
       for (String query : stub.queries()) {
         assertThat(PRODUCTION_QUERY_URI.length() + query.length())
-            .as("request-line bytes for one widened batched query")
+            .as("request-line bytes for one batched query")
             .isLessThanOrEqualTo(REQUEST_LINE_LIMIT);
       }
       assertThat(everyDecodedQuery(stub)).contains(mbids.toArray(String[]::new));
@@ -223,7 +212,7 @@ class WikidataMusicBrainzIdentityTest {
       stub.enqueueBody(bindings(itemRow(QUINTET_QID, inTheFirstChunk)));
       stub.enqueueBody(bindings(itemRow(MEMBER_QID, inTheLastChunk)));
 
-      Map<String, String> resolved = identity(stub).qidsFor(mbids);
+      Map<String, String> resolved = qids(identity(stub).identitiesFor(mbids));
 
       assertThat(stub.requestCount()).isEqualTo(2);
       assertThat(resolved)
@@ -249,7 +238,7 @@ class WikidataMusicBrainzIdentityTest {
       // normal drop path (ADR 22 clause 2) and is reported to nobody — so a chunk failure would
       // become silent data loss for an arbitrary subset. An empty map had the same problem for
       // every subset at once; one request's failure now fails the call out loud.
-      assertThatThrownBy(() -> identity.qidsFor(mbids))
+      assertThatThrownBy(() -> identity.identitiesFor(mbids))
           .isInstanceOf(MusicBrainzIdentityUnavailableException.class);
     }
   }
@@ -261,7 +250,8 @@ class WikidataMusicBrainzIdentityTest {
       // Exactly what the live probe returned: the row for the unknown MBID is simply absent.
       stub.enqueueBody(bindings(itemRow(MEMBER_QID, MEMBER_MBID)));
 
-      Map<String, String> resolved = identity(stub).qidsFor(List.of(MEMBER_MBID, UNKNOWN_MBID));
+      Map<String, String> resolved =
+          qids(identity(stub).identitiesFor(List.of(MEMBER_MBID, UNKNOWN_MBID)));
 
       // Not an exception, and not a null value under the key: the key is not there at all.
       assertThat(resolved).containsOnly(entry(MEMBER_MBID, MEMBER_QID));
@@ -273,10 +263,10 @@ class WikidataMusicBrainzIdentityTest {
   @DisplayName("should ask the query service nothing when the batch is empty")
   void shouldAskTheQueryServiceNothingWhenTheBatchIsEmpty() {
     try (StubWikidataServer stub = new StubWikidataServer()) {
-      // The adapter calls qidsFor unconditionally, and a seed whose relations are all outside the
-      // whitelist leaves nothing to resolve. A VALUES clause with no members is a round trip that
-      // can only return nothing.
-      assertThat(identity(stub).qidsFor(List.of())).isEmpty();
+      // The adapter calls the bridge unconditionally, and a seed whose relations are all outside
+      // the whitelist leaves nothing to resolve. A VALUES clause with no members is a round trip
+      // that can only return nothing.
+      assertThat(identity(stub).identitiesFor(List.of())).isEmpty();
 
       assertThat(stub.requestCount()).isZero();
     }
@@ -289,7 +279,7 @@ class WikidataMusicBrainzIdentityTest {
       stub.enqueueBody(bindings(itemRow(MEMBER_QID, MEMBER_MBID)));
 
       Map<String, String> resolved =
-          identity(stub).qidsFor(List.of(MEMBER_MBID, "\" } UNION { ?item ?p ?o . # "));
+          qids(identity(stub).identitiesFor(List.of(MEMBER_MBID, "\" } UNION { ?item ?p ?o . # ")));
 
       assertThat(resolved).containsOnly(entry(MEMBER_MBID, MEMBER_QID));
       assertThat(decodedQuery(stub)).doesNotContain("UNION");
@@ -308,7 +298,8 @@ class WikidataMusicBrainzIdentityTest {
                   + "\"}}",
               itemRow(MEMBER_QID, MEMBER_MBID)));
 
-      Map<String, String> resolved = identity(stub).qidsFor(List.of(QUINTET_MBID, MEMBER_MBID));
+      Map<String, String> resolved =
+          qids(identity(stub).identitiesFor(List.of(QUINTET_MBID, MEMBER_MBID)));
 
       assertThat(resolved).containsOnly(entry(MEMBER_MBID, MEMBER_QID));
     }
@@ -328,7 +319,7 @@ class WikidataMusicBrainzIdentityTest {
 
       MusicBrainzIdentity identity = identity(stub);
 
-      assertThatThrownBy(() -> identity.qidsFor(List.of(MEMBER_MBID)))
+      assertThatThrownBy(() -> identity.identitiesFor(List.of(MEMBER_MBID)))
           .isInstanceOf(MusicBrainzIdentityUnavailableException.class);
     }
   }
@@ -396,7 +387,7 @@ class WikidataMusicBrainzIdentityTest {
       stub.enqueueBody(
           bindings(itemRow(MEMBER_QID, MEMBER_MBID), itemRow(QUINTET_QID, MEMBER_MBID)));
 
-      assertThat(identity(stub).qidsFor(List.of(MEMBER_MBID)))
+      assertThat(qids(identity(stub).identitiesFor(List.of(MEMBER_MBID))))
           .containsOnly(entry(MEMBER_MBID, MEMBER_QID));
       assertThat(decodedQuery(stub)).contains("ORDER BY");
     }

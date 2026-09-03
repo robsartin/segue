@@ -1,7 +1,6 @@
 package com.robsartin.segue.musicbrainz;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.entry;
 
 import com.robsartin.segue.domain.NodeKind;
 import java.util.List;
@@ -11,24 +10,16 @@ import org.junit.jupiter.api.Test;
 
 class MusicBrainzIdentityTest {
 
-  @Test
-  @DisplayName("should drop a neighbour with no QID when the mapping does not know it")
-  void shouldDropANeighbourWithNoQidWhenTheMappingDoesNotKnowIt() {
-    MusicBrainzIdentity identity = StubIdentity.of(Map.of("mbid-known", "Q0900001"));
-
-    Map<String, String> resolved = identity.qidsFor(List.of("mbid-known", "mbid-unknown"));
-
-    assertThat(resolved).containsExactly(entry("mbid-known", "Q0900001"));
-  }
-
   /**
-   * The seam's own default, which is what makes {@code identitiesFor} arrive beside {@code qidsFor}
-   * rather than instead of it (issue #163, the Mikado parallel field).
+   * What an implementor that only maps identifiers answers, now that the seam has one method to
+   * answer it with (issue #163).
    *
-   * <p>An implementor that has not been widened — every one but {@code WikidataMusicBrainzIdentity}
-   * — keeps compiling and keeps answering, because the default asks it the only question it knows:
-   * {@link MusicBrainzIdentity#qidsFor}. What it cannot do is invent the other three fields, and
-   * this is the assertion that it does not try.
+   * <p>This used to assert the seam's own {@code default identitiesFor}, which delegated to {@code
+   * qidsFor} and could invent none of the other three fields. That default was the Mikado parallel
+   * field: it existed so the widening did not have to touch every implementor at once, and it is
+   * gone with {@code qidsFor}. The property it guaranteed is not — an identifier-only bridge still
+   * answers a QID and nothing else — but it is now each implementor's to state, and {@link
+   * StubIdentity} is the double that stands for all of them.
    */
   @Test
   @DisplayName("should bridge the QID and describe nothing when the implementor only maps QIDs")
@@ -38,8 +29,8 @@ class MusicBrainzIdentityTest {
     Map<String, BridgedIdentity> bridged =
         identity.identitiesFor(List.of("mbid-known", "mbid-unknown"));
 
-    // The absent MBID is absent, exactly as qidsFor leaves it: ADR 22 clause 2 declining to reach
-    // a neighbour, not an error and not a key with nothing under it.
+    // The absent MBID is absent: ADR 22 clause 2 declining to reach a neighbour, not an error and
+    // not a key with nothing under it.
     assertThat(bridged).containsOnlyKeys("mbid-known");
     BridgedIdentity known = bridged.get("mbid-known");
     assertThat(known.qid()).isEqualTo("Q0900001");

@@ -26,9 +26,9 @@ import java.util.Objects;
  * allocatable QID would refuse every {@code Q09000xx} the test suite is required to use — this
  * type's own fixtures included. {@code Qid.check}'s {@code Q\d+} is exactly the two shapes ADR 58
  * permits: allocatable, or a leading-zero stand-in. The values are guarded again where they arrive
- * ({@code WikidataMusicBrainzIdentity} drops a binding whose item is not a QID, and {@code
- * MusicBrainzIdentity#identitiesFor}'s default drops a binding whose item is not a QID), but a
- * value type the adapter is about to trust should carry its own shape rather than borrow theirs.
+ * ({@code WikidataMusicBrainzIdentity} drops a binding whose item is not a QID before it can ever
+ * reach here), but a value type the adapter is about to trust should carry its own shape rather
+ * than borrow that guard's.
  *
  * <p><b>Every {@code instanceOf} element too, since issue #163's fix round 1.</b> The sentence
  * above used to name {@code qid} alone, and {@code NodeRecord} — the type that does refuse a
@@ -62,10 +62,10 @@ public record BridgedIdentity(String qid, NodeKind kind, String label, List<Stri
    * A neighbour this bridge resolved but could not describe: a QID, {@link NodeKind#CONCEPT} for
    * ADR 22's "we could not place this", no label worth believing and no classes.
    *
-   * <p>Spelled once, here, because three callers want exactly this shape — {@link
-   * MusicBrainzIdentity#identitiesFor}'s default, {@link #describing} when a row cannot be read,
-   * and every test double standing in for a bridge that only maps identifiers. {@code
-   * MusicBrainzSourceAdapter}'s guard omits it and the caller's fetch happens as it always did.
+   * <p>Spelled once, here, because two callers want exactly this shape — {@link #describing} when a
+   * row cannot be read, and every test double standing in for a bridge that only maps identifiers.
+   * {@code MusicBrainzSourceAdapter}'s guard omits it and the caller's fetch happens as it always
+   * did.
    */
   public static BridgedIdentity undescribed(String qid) {
     return new BridgedIdentity(qid, NodeKind.CONCEPT, null, List.of());
@@ -82,8 +82,8 @@ public record BridgedIdentity(String qid, NodeKind kind, String label, List<Stri
    * IllegalArgumentException} out of the constructor, inside a real {@code identitiesFor}, would
    * abort a whole expansion across every adapter. That is the aborted-expansion failure GAP 9 and
    * issue #147 exist to prevent, merely relocated. Dropping is the answer {@link
-   * MusicBrainzIdentity#qidsFor}'s javadoc already promises for a value this bridge cannot map, and
-   * the answer the seam's default already gives for a malformed {@code qid}.
+   * MusicBrainzIdentity#identitiesFor}'s javadoc already promises for a value this bridge cannot
+   * map.
    *
    * <p><b>Why the whole identity, and not just the unreadable class.</b> An entity with three
    * classes of which one is unreadable is reported undescribed, exactly like an entity with one.
@@ -97,7 +97,7 @@ public record BridgedIdentity(String qid, NodeKind kind, String label, List<Stri
    *
    * <p>The {@code qid} is <b>not</b> softened the same way: a caller has no identity to report
    * undescribed if it cannot name the entity, so it must drop the row before reaching here — see
-   * {@link MusicBrainzIdentity#identitiesFor}, which does.
+   * {@code WikidataMusicBrainzIdentity.describe}, which does.
    */
   public static BridgedIdentity describing(
       String qid, NodeKind kind, String label, List<String> instanceOf) {

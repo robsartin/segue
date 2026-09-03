@@ -309,11 +309,6 @@ class NeighbourFetchCountTest {
     }
 
     @Override
-    public Map<String, String> qidsFor(Collection<String> mbids) {
-      return delegate.qidsFor(mbids);
-    }
-
-    @Override
     public Map<String, BridgedIdentity> identitiesFor(Collection<String> mbids) {
       roundTrips.incrementAndGet();
       return delegate.identitiesFor(mbids);

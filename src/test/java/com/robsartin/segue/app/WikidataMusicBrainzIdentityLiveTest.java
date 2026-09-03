@@ -2,6 +2,7 @@ package com.robsartin.segue.app;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.robsartin.segue.musicbrainz.BridgedIdentity;
 import com.robsartin.segue.musicbrainz.MusicBrainzIdentity;
 import com.robsartin.segue.wikidata.WikidataClient;
 import java.util.List;
@@ -21,7 +22,7 @@ import org.junit.jupiter.api.Test;
  * ./gradlew liveTest}.
  *
  * <p>The MBIDs are the ones the committed MusicBrainz fixture already names, and the round trip is
- * asserted rather than the QIDs: {@code mbidFor(qidsFor(mbid))} must come back to the MBID it
+ * asserted rather than the QIDs: {@code mbidFor(identitiesFor(mbid))} must come back to the MBID it
  * started from. Pinning the QID would make this test fail the day Wikidata merges two items, which
  * is a change in the world rather than a break in this code — and it would put a real identifier in
  * an assertion for no gain, since the property under test is that the two directions agree.
@@ -43,11 +44,12 @@ class WikidataMusicBrainzIdentityLiveTest {
   @Test
   @DisplayName("should agree in both directions when P434 really bridges the two identifiers")
   void shouldAgreeInBothDirectionsWhenP434ReallyBridgesTheTwoIdentifiers() {
-    Map<String, String> resolved = identity.qidsFor(List.of(ENSEMBLE_MBID, MEMBER_MBID));
+    Map<String, BridgedIdentity> resolved =
+        identity.identitiesFor(List.of(ENSEMBLE_MBID, MEMBER_MBID));
 
     assertThat(resolved).containsOnlyKeys(ENSEMBLE_MBID, MEMBER_MBID);
-    assertThat(identity.mbidFor(resolved.get(ENSEMBLE_MBID))).contains(ENSEMBLE_MBID);
-    assertThat(identity.mbidFor(resolved.get(MEMBER_MBID))).contains(MEMBER_MBID);
+    assertThat(identity.mbidFor(resolved.get(ENSEMBLE_MBID).qid())).contains(ENSEMBLE_MBID);
+    assertThat(identity.mbidFor(resolved.get(MEMBER_MBID).qid())).contains(MEMBER_MBID);
   }
 
   @Test
@@ -55,7 +57,8 @@ class WikidataMusicBrainzIdentityLiveTest {
   void shouldDropAnMbidTheRealWikidataDoesNotKnow() {
     // The drop that MusicBrainzIdentity's javadoc measures at 49% of artist-relation neighbours,
     // against the service that actually does the dropping rather than against a stub told to.
-    Map<String, String> resolved = identity.qidsFor(List.of(ENSEMBLE_MBID, UNKNOWN_MBID));
+    Map<String, BridgedIdentity> resolved =
+        identity.identitiesFor(List.of(ENSEMBLE_MBID, UNKNOWN_MBID));
 
     assertThat(resolved).containsOnlyKeys(ENSEMBLE_MBID);
   }

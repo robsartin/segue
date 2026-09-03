@@ -61,7 +61,7 @@ import tools.jackson.databind.JsonNode;
  * wikidata} (ADR 32); see {@link #ask}.
  *
  * <p><b>The seed query is one round trip; the neighbourhood is as few as its size allows.</b>
- * {@link #qidsFor} puts a whole neighbourhood into {@code VALUES} clauses — the measured
+ * {@link #identitiesFor} puts a whole neighbourhood into {@code VALUES} clauses — the measured
  * neighbourhood was 387 across 40 seeds (#91's 2026-08-29 comment), and a call per neighbour
  * against a service that answers in tenths of a second is the shape the seam was made batched to
  * avoid. What it may not do is put all of them in <i>one</i> clause: see {@link
@@ -86,22 +86,12 @@ public final class WikidataMusicBrainzIdentity implements MusicBrainzIdentity {
       Pattern.compile("[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}");
 
   /**
-   * {@code ORDER BY} because the mapping is not one-to-one: a query for items stating more than one
-   * P434 returns hits (measured 2026-08-30), so two rows can carry the same MBID and an unordered
-   * answer would make which QID wins depend on the server's row order.
-   */
-  private static final String BATCH_TEMPLATE =
-      """
-      SELECT ?item ?mbid WHERE {
-        VALUES ?mbid { %s }
-        ?item wdt:%s ?mbid .
-      }
-      ORDER BY ?mbid ?item
-      """;
-
-  /**
-   * The same question with two riders, which is the whole of issue #163: the neighbour's label and
-   * its {@code P31} classes, on the round trip {@link #BATCH_TEMPLATE} was already making.
+   * The batched bridge query: every MBID in one {@code VALUES} clause, with the neighbour's label
+   * and its {@code P31} classes carried back on the same round trip (issue #163).
+   *
+   * <p>{@code ORDER BY} because the mapping is not one-to-one: a query for items stating more than
+   * one P434 returns hits (measured 2026-08-30), so two rows can carry the same MBID and an
+   * unordered answer would make which QID wins depend on the server's row order.
    *
    * <p><b>{@code p:P31/ps:P31}, not {@code wdt:P31}.</b> The truthy predicate exposes only the
    * best-ranked, non-deprecated value; {@code ClaimMapper.instanceOf} reads every statement. A
@@ -142,28 +132,29 @@ public final class WikidataMusicBrainzIdentity implements MusicBrainzIdentity {
    *
    * <p><b>Measured, not estimated — and re-measured when the template grew.</b> Driven through
    * {@link WikidataClient}'s own encoding with MBIDs of the shape MusicBrainz sends, the request
-   * URI is linear in the batch size and the two templates differ only in their fixed part:
+   * URI is linear in the batch size:
    *
    * <table border="1">
    *   <caption>Request-URI bytes against {@code https://query.wikidata.org/sparql?}</caption>
-   *   <tr><th>MBIDs</th><th>{@link #BATCH_TEMPLATE}</th><th>{@link #DESCRIBED_BATCH_TEMPLATE}</th></tr>
-   *   <tr><td>50</td><td>2,330</td><td>2,501</td></tr>
-   *   <tr><td>100</td><td>4,480</td><td>4,651</td></tr>
-   *   <tr><td>182</td><td>8,006</td><td>8,177</td></tr>
-   *   <tr><td>183</td><td>8,049</td><td>8,220</td></tr>
-   *   <tr><td>200</td><td>8,780</td><td>8,951</td></tr>
+   *   <tr><th>MBIDs</th><th>{@link #DESCRIBED_BATCH_TEMPLATE}</th></tr>
+   *   <tr><td>50</td><td>2,501</td></tr>
+   *   <tr><td>100</td><td>4,651</td></tr>
+   *   <tr><td>182</td><td>8,177</td></tr>
+   *   <tr><td>183</td><td>8,220</td></tr>
+   *   <tr><td>200</td><td>8,951</td></tr>
    * </table>
    *
-   * <p>The narrow figures are {@code 180 + 43n}, measured 2026-08-30 and re-measured unchanged on
-   * 2026-09-02. The widened ones are {@code 351 + 43n}, measured 2026-09-02: the label service, the
-   * {@code OPTIONAL p:P31/ps:P31} and the {@code DISTINCT} cost <b>171 bytes, once</b>, and nothing
-   * per MBID. Issue #163's re-measurement is that number and this table; neither was inherited, and
-   * neither was derived from the other by arithmetic — the table was measured a second time when
-   * fix round 1 added {@code DISTINCT}, rather than adjusted by the nine bytes it looked like.
+   * <p>The figures are {@code 351 + 43n}, measured 2026-09-02. The predecessor this template
+   * replaced — the same query without the label service, the {@code OPTIONAL p:P31/ps:P31} and the
+   * {@code DISTINCT} — was {@code 180 + 43n}, so those three lines cost <b>171 bytes, once</b>, and
+   * nothing per MBID. Issue #163's re-measurement is that number and this table; neither was
+   * inherited, and neither was derived from the other by arithmetic — the table was measured a
+   * second time when fix round 1 added {@code DISTINCT}, rather than adjusted by the nine bytes it
+   * looked like.
    *
-   * <p>The classic ceiling on a request line is 8,192 bytes. The widened template's last batch to
-   * fit under it is <b>182</b> rather than the narrow one's 186 — measured at both ends, 182 fits
-   * at 8,177 and 183 does not at 8,220 — and {@code application.yaml} ships {@code
+   * <p>The classic ceiling on a request line is 8,192 bytes. The last batch to fit under it is
+   * <b>182</b>, where the narrower predecessor reached 186 — measured at both ends, 182 fits at
+   * 8,177 and 183 does not at 8,220 — and {@code application.yaml} ships {@code
    * segue.expand.max-new-edges: 200}, a bound {@code MusicBrainzSourceAdapter} spends on relations
    * <i>before</i> it resolves any neighbour. So the shipped configuration could hand this method
    * 200 MBIDs and exceed the limit in one go.
@@ -180,12 +171,12 @@ public final class WikidataMusicBrainzIdentity implements MusicBrainzIdentity {
    * <p><b>100 rather than 182, and 100 still.</b> The headroom that argument bought was spent on
    * exactly the event it anticipated — "the template never gaining a line" — and it covered it
    * twice over, the second time for a line added in review: 4,651 bytes leaves <b>3,541</b> under
-   * the ceiling, so the widened query at the shipped batch size is no closer to the limit than a
-   * reader of the old figure would have assumed. Raising the number to 182 would save one round
-   * trip per two hundred neighbours and would leave 15 bytes; the cost of not doing so is one extra
-   * round trip per 100 neighbours against a service that answers in tenths of a second. Each chunk
-   * is its own {@link WikidataClient#get}, so the retry policy, the honoured {@code Retry-After}
-   * and its ceiling apply per request exactly as they did when there was one.
+   * the ceiling, so this query at the shipped batch size is no closer to the limit than a reader of
+   * the old figure would have assumed. Raising the number to 182 would save one round trip per two
+   * hundred neighbours and would leave 15 bytes; the cost of not doing so is one extra round trip
+   * per 100 neighbours against a service that answers in tenths of a second. Each chunk is its own
+   * {@link WikidataClient#get}, so the retry policy, the honoured {@code Retry-After} and its
+   * ceiling apply per request exactly as they did when there was one.
    */
   private static final int MAX_MBIDS_PER_QUERY = 100;
 
@@ -222,31 +213,11 @@ public final class WikidataMusicBrainzIdentity implements MusicBrainzIdentity {
   }
 
   @Override
-  public Map<String, String> qidsFor(Collection<String> mbids) {
+  public Map<String, BridgedIdentity> identitiesFor(Collection<String> mbids) {
     List<String> asked = accepted(mbids);
     if (asked.isEmpty()) {
       // Nothing whitelisted, or nothing that could be an MBID. A VALUES clause with no members is
       // a round trip whose only possible answer is the empty map.
-      return Map.of();
-    }
-
-    Map<String, String> resolved = new LinkedHashMap<>();
-    inChunks(asked, BATCH_TEMPLATE, response -> collect(response, resolved));
-    return Map.copyOf(resolved);
-  }
-
-  /**
-   * The same bridge, asked for everything the neighbour's identity needs rather than its QID alone
-   * (issue #163).
-   *
-   * <p>It is a separate method beside {@link #qidsFor} rather than a replacement for it, because
-   * the seam has six implementors and moving them all at once is the big-bang the Mikado rule
-   * refuses. {@code qidsFor} is retired once the last caller has moved.
-   */
-  @Override
-  public Map<String, BridgedIdentity> identitiesFor(Collection<String> mbids) {
-    List<String> asked = accepted(mbids);
-    if (asked.isEmpty()) {
       return Map.of();
     }
 
@@ -269,9 +240,14 @@ public final class WikidataMusicBrainzIdentity implements MusicBrainzIdentity {
           // KindMapper is called here, in app, and never in musicbrainz: ADR 32's
           // adapters-are-siblings fence forbids that package importing wikidata, and app is the
           // only one permitted to see two adapters at once.
+          // BridgedIdentity.describing, never the constructor: this is a producer building a row
+          // out of a response, and ArchitectureTest.bridgedIdentitiesAreBuiltThroughTheirFactory
+          // is the fence. entityQid has already dropped a class IRI that is not an item, so the
+          // factory's softening is not expected to fire here — which is the point, since the one
+          // place it must not fire is the one place a caller could reach a constructor that throws.
           bridged.put(
               mbid,
-              new BridgedIdentity(
+              BridgedIdentity.describing(
                   qid, KindMapper.fromInstanceOf(instanceOf), labelByQid.get(qid), instanceOf));
         });
     return Map.copyOf(bridged);
@@ -305,21 +281,6 @@ public final class WikidataMusicBrainzIdentity implements MusicBrainzIdentity {
     }
   }
 
-  /** Reads one response's bindings into {@code resolved}, dropping what cannot be a mapping. */
-  private static void collect(JsonNode response, Map<String, String> resolved) {
-    for (JsonNode row : response.path("results").path("bindings")) {
-      String mbid = row.at("/mbid/value").asText(null);
-      String qid = entityQid(row.at("/item/value").asText(null));
-      if (mbid == null || qid == null) {
-        continue;
-      }
-      // An MBID absent from the result carries no QID and is simply not a key: the interface says
-      // that dropping is ADR 22 clause 2 working as designed, and 49% of artist-relation
-      // neighbours drop this way. Nothing is put here to record the absence.
-      resolved.putIfAbsent(mbid, qid);
-    }
-  }
-
   /** Reads one widened response's bindings, gathering each item's rows back into one entity. */
   private static void describe(
       JsonNode response,
@@ -333,6 +294,9 @@ public final class WikidataMusicBrainzIdentity implements MusicBrainzIdentity {
       if (mbid == null || qid == null) {
         continue;
       }
+      // An MBID absent from the result carries no QID and is simply not a key: the seam says that
+      // dropping is ADR 22 clause 2 working as designed, and 49% of artist-relation neighbours
+      // drop this way. Nothing is put here to record the absence.
       qidByMbid.putIfAbsent(mbid, qid);
       rememberLabel(labelByQid, qid, row.at("/itemLabel/value").asText(null));
       String classQid = entityQid(row.at("/type/value").asText(null));

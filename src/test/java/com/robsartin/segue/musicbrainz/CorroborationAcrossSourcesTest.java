@@ -246,7 +246,7 @@ class CorroborationAcrossSourcesTest {
     }
 
     @Override
-    public Map<String, String> qidsFor(java.util.Collection<String> mbids) {
+    public Map<String, BridgedIdentity> identitiesFor(java.util.Collection<String> mbids) {
       throw new MusicBrainzIdentityUnavailableException("the query service did not answer");
     }
   }

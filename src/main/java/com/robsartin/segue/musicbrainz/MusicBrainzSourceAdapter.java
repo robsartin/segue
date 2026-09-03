@@ -150,9 +150,9 @@ import java.util.regex.Pattern;
  * now declares {@link MusicBrainzIdentityUnavailableException}, and both of its calls are caught
  * here. The distinction that buys is the one this adapter could not draw: {@link
  * MusicBrainzIdentity#mbidFor} returning empty means MusicBrainz holds no record bridged to this
- * seed, and an empty {@link MusicBrainzIdentity#qidsFor} entry means ADR 22 clause 2 declining to
- * reach that neighbour — both normal operation. A bridge that simply could not answer had no third
- * thing to return, so its failure arrived as one of those two and set no flag.
+ * seed, and an MBID absent from {@link MusicBrainzIdentity#identitiesFor} means ADR 22 clause 2
+ * declining to reach that neighbour — both normal operation. A bridge that simply could not answer
+ * had no third thing to return, so its failure arrived as one of those two and set no flag.
  *
  * <p><b>Every string this adapter puts in a {@link Provenance} is guarded, and this is where each
  * one is guarded</b> (<a href="https://github.com/robsartin/segue/issues/147">issue #147</a>).

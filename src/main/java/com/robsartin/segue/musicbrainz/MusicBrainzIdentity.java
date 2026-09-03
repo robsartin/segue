@@ -1,9 +1,6 @@
 package com.robsartin.segue.musicbrainz;
 
-import com.robsartin.segue.domain.NodeKind;
-import com.robsartin.segue.domain.Qid;
 import java.util.Collection;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -27,19 +24,19 @@ import java.util.Optional;
  * note originally recommended, and what it cost. This type is the seam, not the bridge, and nothing
  * here is entitled to assume which one is behind it.
  *
- * <p>{@link #qidsFor} is batched rather than one call per neighbour: the alternative is a round
- * trip per neighbour, and the measured neighbourhood was 387 across 40 seeds (#91's 2026-08-29
- * comment).
+ * <p>{@link #identitiesFor} is batched rather than one call per neighbour: the alternative is a
+ * round trip per neighbour, and the measured neighbourhood was 387 across 40 seeds (#91's
+ * 2026-08-29 comment).
  *
  * <p><b>Both methods may fail, and say so</b> (<a
  * href="https://github.com/robsartin/segue/issues/148">issue #148</a>). {@link
  * MusicBrainzIdentityUnavailableException} is the one failure this seam declares, and declaring it
  * is the whole point: the empty answer is already spoken for twice over — an empty {@link #mbidFor}
- * means MusicBrainz holds no record bridged to that seed, and an MBID absent from {@link #qidsFor}
- * means ADR 22 clause 2 declining to reach that neighbour — so an implementation that degraded to
- * empty on failure was saying "nothing here" when it meant "I could not look". ADR 54 records what
- * that cost: a Query Service outage on the seed lookup read downstream as "this artist has no
- * members", with {@code ExpandResult.sourceUnavailable} false.
+ * means MusicBrainz holds no record bridged to that seed, and an MBID absent from {@link
+ * #identitiesFor} means ADR 22 clause 2 declining to reach that neighbour — so an implementation
+ * that degraded to empty on failure was saying "nothing here" when it meant "I could not look". ADR
+ * 54 records what that cost: a Query Service outage on the seed lookup read downstream as "this
+ * artist has no members", with {@code ExpandResult.sourceUnavailable} false.
  *
  * <p>It is unchecked, like {@code WikidataUnavailableException} and {@link
  * MusicBrainzUnavailableException}, and declared in both signatures anyway so that an implementor
@@ -70,64 +67,34 @@ public interface MusicBrainzIdentity {
   Optional<String> mbidFor(String qid) throws MusicBrainzIdentityUnavailableException;
 
   /**
-   * The QID for each MBID in {@code mbids} that this source can bridge. An MBID absent from the
-   * result carries no QID — silently dropped, not reported as an error.
+   * What this source knows about each MBID in {@code mbids} that it can bridge: the QID, and
+   * whatever description the bridge could see on the round trip it was already making (issue #163).
    *
-   * <p>The values are not taken at their word either: a value that is not a QID is dropped by the
-   * adapter's GAP 9 guard, for the reason that guard states.
-   *
-   * <p><b>That dropping is ADR 22 clause 2 working as designed, not a gap.</b> Measured over
+   * <p>An MBID absent from the result carries no QID — silently dropped, not reported as an error.
+   * <b>That dropping is ADR 22 clause 2 working as designed, not a gap.</b> Measured over
    * artist-relation neighbours, 49% (190 of 387) carry no QID at all, and a 30-entity sample of
    * that 49% was tribute bands, pseudonyms, billing variants and relatives — material the identity
    * spine is declining to reach, on purpose, rather than failing to reach.
+   *
+   * <p><b>A present entry that describes nothing is the third answer, and the reason this signature
+   * replaced one that returned QIDs.</b> An entry whose {@code instanceOf} is empty and whose
+   * {@code label} is null means "bridged, but undescribed" — the bridge named the entity and could
+   * say nothing else about it, which a caller must treat as "fetch this one properly". A map of
+   * MBID to QID could not tell that apart from a described neighbour, so every neighbour cost a
+   * fetch. Absent, present-and-undescribed, and present-and-described are three different answers
+   * and this type gives all three. {@link BridgedIdentity} is where each field's contract lives.
+   *
+   * <p>The values are not taken at their word: a {@code qid} that is not a QID is not a {@link
+   * BridgedIdentity} at all, and an implementation that reads one out of a source drops the row
+   * rather than throwing — see {@link BridgedIdentity#describing}, which is the factory a producer
+   * builds these through, and which answers {@link BridgedIdentity#undescribed} where a class id
+   * cannot be read.
    *
    * @throws MusicBrainzIdentityUnavailableException if the bridge could not be asked at all. A
    *     partial map is not an option here for the reason the dropping above states: half an answer
    *     is indistinguishable from the normal drop path, so an implementation that cannot answer for
    *     every MBID it was handed throws rather than returning what it managed.
    */
-  Map<String, String> qidsFor(Collection<String> mbids)
+  Map<String, BridgedIdentity> identitiesFor(Collection<String> mbids)
       throws MusicBrainzIdentityUnavailableException;
-
-  /**
-   * The same question as {@link #qidsFor}, answered with whatever description the bridge could see
-   * on the round trip it was already making (issue #163).
-   *
-   * <p><b>Same keys, same drops, same failure.</b> An MBID absent from the result carries no QID,
-   * for the reason {@link #qidsFor} states; a bridge that could not be asked throws rather than
-   * answering short.
-   *
-   * <p><b>The default describes nothing, and that is the honest answer.</b> An implementation that
-   * only maps identifiers is not being asked to invent a label or a class: it delegates to {@link
-   * #qidsFor} and hands back {@link NodeKind#CONCEPT} with a null label and no classes, which is
-   * exactly what a caller must treat as "fetch this one properly". Every implementor of this seam
-   * but {@code WikidataMusicBrainzIdentity} is a test double that does precisely that, and this
-   * default is why widening the seam did not have to touch a single one of them. The count is left
-   * out on purpose: it was written here as six and was already seven on the branch that wrote it.
-   *
-   * @throws MusicBrainzIdentityUnavailableException if the bridge could not be asked at all
-   */
-  default Map<String, BridgedIdentity> identitiesFor(Collection<String> mbids)
-      throws MusicBrainzIdentityUnavailableException {
-    Map<String, BridgedIdentity> bridged = new LinkedHashMap<>();
-    qidsFor(mbids)
-        .forEach(
-            (mbid, qid) -> {
-              // Dropped rather than thrown, and this is the one line where the two differ. A
-              // BridgedIdentity refuses to hold a non-QID (ADR 58), so constructing one here from
-              // whatever qidsFor returned would turn a malformed value into an
-              // IllegalArgumentException out of MusicBrainzSourceAdapter.expand — and
-              // SegueService.expandEntity wraps nothing, so one contributor-entered P434 would
-              // abort a whole expansion across every adapter. That is precisely the failure GAP 9
-              // and issue #147 exist to prevent, and qidsFor's own javadoc already promises the
-              // other answer: an MBID this bridge cannot map is absent from the result, silently.
-              // So the shape check that used to happen in the adapter happens here instead, with
-              // the same outcome — no QID, no neighbour, no flag — and the adapter's GAP 9 guard
-              // stays as the second line BridgedIdentity's javadoc says it is.
-              if (Qid.looksLikeAQid(qid)) {
-                bridged.put(mbid, BridgedIdentity.undescribed(qid));
-              }
-            });
-    return Map.copyOf(bridged);
-  }
 }
