@@ -119,7 +119,9 @@ public record LogProjection(
     // (#178). Every edge below has both of its endpoints read through this, so an edge claimed
     // against a merged local id is folded onto the canonical id once - which is why there is no
     // copy at the merge's own row any more, and no accumulator here deciding whether to make one.
-    Equivalences equivalences = Equivalences.in(logged);
+    // folding() rather than in(): the fold is also where an edge naming a stand-in a retraction
+    // took away stops projecting (#224).
+    Equivalences equivalences = Equivalences.folding(logged);
     Map<String, List<AssertionRecord>> byEdge = new LinkedHashMap<>();
 
     for (int i = 0; i < logged.size(); i++) {

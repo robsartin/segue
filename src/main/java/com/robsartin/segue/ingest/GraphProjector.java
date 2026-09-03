@@ -76,8 +76,9 @@ public final class GraphProjector {
     // The graph half of a merge (#178), built from the same log and beside the same log's
     // retractions, because they are the same kind of rule: neither edits a row, and both decide
     // what the fold makes of one. Equivalences.in already asks Retractions.survives itself, so a
-    // merge a retraction reaches folds nothing.
-    Equivalences equivalences = Equivalences.in(assertions);
+    // merge a retraction reaches folds nothing. folding() rather than in(): the fold is also where
+    // an edge naming a stand-in a retraction took away stops projecting (#224).
+    Equivalences equivalences = Equivalences.folding(assertions);
     // Every merged entity's canonical id gets its node before anything is applied (#178). See
     // Equivalences.standIns for why this cannot wait for the merge's own row: an edge whose
     // endpoint the fold below moves onto the canonical id can be claimed EARLIER in the log than

@@ -1,5 +1,6 @@
 package com.robsartin.segue.export;
 
+import static com.robsartin.segue.export.InventedGraph.ALMANAC;
 import static com.robsartin.segue.export.InventedGraph.FORFEIT;
 import static com.robsartin.segue.export.InventedGraph.HOLLOW_TIDE;
 import static com.robsartin.segue.export.InventedGraph.LAPSE;
@@ -19,7 +20,6 @@ import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import java.io.IOException;
 import java.io.StringWriter;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -53,6 +53,12 @@ import org.junit.jupiter.api.Test;
  * stayed enabled throughout: it is what says the fixture holds the merge and the edge in the first
  * place, so the absences above mean something.
  *
+ * <p><b>The two keeping tests are the rule's boundary.</b> A canonical id a source has claimed as a
+ * node, and one a surviving merge still stands in for, both keep their node and their edge:
+ * retracting the local id reaches what the merge created and nothing else, which is the developer
+ * guide's own promise that "what a source claimed about the canonical id is untouched". Both were
+ * measured green before the fix and both were seen red against the rule without its exclusions.
+ *
  * <p>Every entity here is invented (ADR 40, issue #37).
  */
 class RetractedStandInTakesItsEdgesTest {
@@ -76,7 +82,6 @@ class RetractedStandInTakesItsEdgesTest {
   }
 
   @Test
-  @Disabled("#224: red until the fold rule lands - see this class's javadoc")
   @DisplayName("the exporter's fold drops the edge naming a stand-in a retraction took away")
   void shouldFoldNoEdgeOntoACanonicalIdWhenTheMergedLocalWasRetracted() {
     LogProjection folded = LogProjection.of(retractedAfterMergingLog());
@@ -95,7 +100,6 @@ class RetractedStandInTakesItsEdgesTest {
   }
 
   @Test
-  @Disabled("#224: red until the fold rule lands - see this class's javadoc")
   @DisplayName("the boot replay survives a log that retracts a merged local id")
   void shouldReplayWithoutThrowingWhenAMergedLocalIdIsRetracted() {
     try (TinkerGraphStore replayed = new TinkerGraphStore()) {
@@ -112,7 +116,6 @@ class RetractedStandInTakesItsEdgesTest {
   }
 
   @Test
-  @Disabled("#224: red until the fold rule lands - see this class's javadoc")
   @DisplayName("a full export draws no node for a canonical id whose merge was retracted")
   void shouldDrawNoNodeForACanonicalIdWhenItsMergeWasRetracted() throws IOException {
     FakeAssertionLog log = retractedAfterMergingLog();
@@ -126,6 +129,64 @@ class RetractedStandInTakesItsEdgesTest {
           .as("asserted on the artefact somebody keeps and opens in Gephi weeks later")
           .doesNotContain("\"" + FORFEIT + "\"");
     }
+  }
+
+  /**
+   * The same shape with a source claiming the canonical id as a node of its own, before the merge.
+   * Retracting the local id must leave that claim and every edge naming it exactly where they are.
+   */
+  private static FakeAssertionLog retractedAfterMergingOntoAClaimedIdLog() {
+    return new FakeAssertionLog()
+        .with(
+            node(WREN, NodeKind.PERSON, "Wren Alderman"),
+            node(FORFEIT, NodeKind.GROUP, "the name the source already had"),
+            minted(LAPSE, NodeKind.WORK, "a working title he took back"),
+            merged(LAPSE, FORFEIT),
+            owned(WREN, FORFEIT, "INFLUENCED_BY"),
+            retract(LAPSE));
+  }
+
+  @Test
+  @DisplayName("an edge naming a canonical id a source claimed survives the local id's retraction")
+  void shouldKeepAnEdgeNamingACanonicalIdASourceClaimedWhenTheMergedLocalIsRetracted() {
+    LogProjection folded = LogProjection.of(retractedAfterMergingOntoAClaimedIdLog());
+
+    assertThat(folded.nodes())
+        .as("the source's node claim is untouched by a retraction of the owner's local id")
+        .containsKey(FORFEIT);
+    assertThat(folded.edges().stream().map(RetractedStandInTakesItsEdgesTest::key))
+        .as("so the edge naming it is untouched too - the guide's own promise")
+        .containsExactly(WREN + " INFLUENCED_BY " + FORFEIT);
+  }
+
+  /**
+   * Two local ids merged onto ONE canonical id, and only one of them retracted. The other merge
+   * still names the stand-in, so the id is not emptied and the edge naming it stays.
+   */
+  private static FakeAssertionLog oneOfTwoMergesRetractedLog() {
+    return new FakeAssertionLog()
+        .with(
+            node(WREN, NodeKind.PERSON, "Wren Alderman"),
+            minted(LAPSE, NodeKind.WORK, "a working title he took back"),
+            minted(ALMANAC, NodeKind.WORK, "The Salt Almanac"),
+            merged(LAPSE, FORFEIT),
+            merged(ALMANAC, FORFEIT),
+            owned(WREN, FORFEIT, "INFLUENCED_BY"),
+            retract(LAPSE));
+  }
+
+  @Test
+  @DisplayName("an edge naming a canonical id a surviving merge still stands in for is kept")
+  void shouldKeepAnEdgeNamingACanonicalIdWhenAnotherMergeStillStandsInForIt() {
+    LogProjection folded = LogProjection.of(oneOfTwoMergesRetractedLog());
+
+    assertThat(folded.nodes())
+        .as("the second merge's stand-in is what the id has now, and it is not the retracted one")
+        .containsKey(FORFEIT);
+    assertThat(folded.nodes().get(FORFEIT).label()).isEqualTo("The Salt Almanac");
+    assertThat(folded.edges().stream().map(RetractedStandInTakesItsEdgesTest::key))
+        .containsExactly(WREN + " INFLUENCED_BY " + FORFEIT);
+    assertThat(folded.danglingEdges()).isZero();
   }
 
   /** The same fixture with nothing retracted: the merge stands and the edge is on the graph. */
