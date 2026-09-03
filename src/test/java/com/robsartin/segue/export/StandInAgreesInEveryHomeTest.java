@@ -270,12 +270,13 @@ class StandInAgreesInEveryHomeTest {
   }
 
   /**
-   * The live path, which is the only one on which {@code IngestService.standIn} upserts anything:
-   * {@code GraphProjector.project} seeds every stand-in from {@code Equivalences.standIns} before
-   * its loop, so for a merge with a local side the canonical node already exists by the time its
-   * {@code SameAs} is applied; for a merge with none, {@code IngestService.standIn} returns early
-   * on {@code minted.isEmpty()} before it ever looks at the canonical node. Either way, that copy
-   * of the rule never fires.
+   * The live path, driven through {@code IngestService.record} directly rather than {@code
+   * GraphProjector.project}, deliberately. In production, {@code GraphProjector.project} seeds
+   * every canonical node from {@code Equivalences.standIns} before its loop runs, so {@code
+   * IngestService.standIn}'s own upsert never fires there - the node it would write already exists.
+   * This replay skips that pre-seed, so the upsert does fire here: it is the live home's only probe
+   * of that code, and the reason this method bypasses {@code GraphProjector.project} rather than
+   * reusing it.
    */
   private static Map<String, NodeRecord> liveGraphNodes() {
     Map<String, NodeRecord> nodes = new LinkedHashMap<>();
