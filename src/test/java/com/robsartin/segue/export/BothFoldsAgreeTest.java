@@ -2,13 +2,18 @@ package com.robsartin.segue.export;
 
 import static com.robsartin.segue.export.InventedGraph.ALMANAC;
 import static com.robsartin.segue.export.InventedGraph.BYPASS;
+import static com.robsartin.segue.export.InventedGraph.CORRECTED;
 import static com.robsartin.segue.export.InventedGraph.DEMO;
+import static com.robsartin.segue.export.InventedGraph.DETOUR;
 import static com.robsartin.segue.export.InventedGraph.HOLLOW_TIDE;
 import static com.robsartin.segue.export.InventedGraph.KETTLES;
 import static com.robsartin.segue.export.InventedGraph.LEDGER;
 import static com.robsartin.segue.export.InventedGraph.MARLOW;
+import static com.robsartin.segue.export.InventedGraph.MISHEARD;
 import static com.robsartin.segue.export.InventedGraph.PRESSING;
+import static com.robsartin.segue.export.InventedGraph.REROUTED;
 import static com.robsartin.segue.export.InventedGraph.STANDING;
+import static com.robsartin.segue.export.InventedGraph.STRAY;
 import static com.robsartin.segue.export.InventedGraph.TWICE;
 import static com.robsartin.segue.export.InventedGraph.WATERMARK;
 import static com.robsartin.segue.export.InventedGraph.WREN;
@@ -76,11 +81,12 @@ class BothFoldsAgreeTest {
    * minted entity merged onto an id a source <em>has</em> claimed, and one owner edge appended
    * <em>after</em> a merge - which folds onto the canonical id like any other, because since #178
    * the resolution is over the whole log rather than at the merge's own row. That is spec ruling 2,
-   * and it is what the last row of this fixture is for: {@code owned(ALMANAC, MARLOW)} is claimed
-   * against an id already merged and both folds hold it as {@code PRESSING INFLUENCED_BY MARLOW}.
-   * This paragraph said the opposite until Task 4's review caught it - the sentence was true of
-   * {@code carry}, which ran at the merge's position, and it survived the change that made it
-   * false.
+   * and it is what {@code owned(ALMANAC, MARLOW, "INFLUENCED_BY")} is for: it is claimed against an
+   * id already merged and both folds hold it as {@code PRESSING INFLUENCED_BY MARLOW}. This
+   * paragraph said the opposite until Task 4's review caught it - the sentence was true of {@code
+   * carry}, which ran at the merge's position, and it survived the change that made it false. It is
+   * no longer the last row of the fixture - the twice-merged cases below it are - but the claim
+   * this paragraph makes is about what that row does, not about its position.
    *
    * <p><b>Widened for #178, because the Mikado probe produced no evidence here at all.</b> Both
    * merge tests below died inside {@code GraphProjector.project} before comparing anything, so the
@@ -97,6 +103,23 @@ class BothFoldsAgreeTest {
    * one merge here has its local side named by a plain node claim, and both folds have to agree
    * about the canonical node it stands in for - a question they answered with one expression before
    * the stand-in was hoisted, and could quietly answer with two afterwards.
+   *
+   * <p><b>{@code CORRECTED} is merged twice</b> (#221) — onto {@code MISHEARD} and then onto {@code
+   * WATERMARK}, which is how a wrong merge is corrected. Both folds must hold no node at all under
+   * {@code MISHEARD}: the exporter's fold and the boot replay each built one, from {@code
+   * Equivalences.standIns} and {@code IngestService.standIn} respectively, so a fix to either alone
+   * leaves them holding different graphs and this is the test that says so.
+   *
+   * <p><b>{@code STRAY} is merged twice as well, and is the other face of the same rule</b> (#221's
+   * 2026-09-03 amendment, added here because the amendment landed after the paragraph above was
+   * written and this fixture had no case for it). It is merged onto {@code DETOUR}, given a
+   * separate owner edge naming {@code DETOUR} <em>directly</em> while it stood as the canonical id,
+   * and only then corrected onto {@code REROUTED}. Unlike {@code MISHEARD}, {@code DETOUR}'s
+   * stand-in must survive the correction in both folds, because {@code Equivalences.stands} widened
+   * from last-wins alone to last-wins OR a surviving edge naming the canonical id — dropping {@code
+   * DETOUR}'s node here would leave the {@code WREN → DETOUR} edge dangling in one fold or the
+   * other, or both. {@code TwiceMergedIdLeavesNoOrphanTest} pins this shape directly, against each
+   * fold on its own; this fixture is what asks whether the two folds still agree about it.
    */
   private static FakeAssertionLog ownedLog() {
     return new FakeAssertionLog()
@@ -122,7 +145,15 @@ class BothFoldsAgreeTest {
             minted(TWICE, NodeKind.WORK, "the Salt Almanac again"),
             owned(TWICE, ALMANAC, "INFLUENCED_BY"),
             merged(TWICE, PRESSING),
-            owned(ALMANAC, MARLOW, "INFLUENCED_BY"));
+            owned(ALMANAC, MARLOW, "INFLUENCED_BY"),
+            minted(CORRECTED, NodeKind.WORK, "A Self-Pressed Record"),
+            owned(CORRECTED, MARLOW, "INFLUENCED_BY"),
+            merged(CORRECTED, MISHEARD),
+            merged(CORRECTED, WATERMARK),
+            minted(STRAY, NodeKind.WORK, "a stray liner note"),
+            merged(STRAY, DETOUR),
+            owned(WREN, DETOUR, "INFLUENCED_BY"),
+            merged(STRAY, REROUTED));
   }
 
   /** Everything {@link #ownedLog} names, including both canonical ids a merge introduces. */
@@ -139,7 +170,12 @@ class BothFoldsAgreeTest {
           TWICE,
           PRESSING,
           WATERMARK,
-          STANDING);
+          STANDING,
+          CORRECTED,
+          MISHEARD,
+          STRAY,
+          DETOUR,
+          REROUTED);
 
   @Test
   @DisplayName("both folds hold the same nodes when the owner has minted and merged an entity")
@@ -148,8 +184,16 @@ class BothFoldsAgreeTest {
     LogProjection folded = LogProjection.of(log);
 
     // Two folds that both held nothing would agree perfectly. This is what says they held the
-    // thing the merge produces - a canonical node for an id no source ever claimed.
-    assertThat(folded.nodes()).containsKeys(PRESSING, WATERMARK);
+    // thing the merge produces - a canonical node for an id no source ever claimed. DETOUR is the
+    // amendment's case: a later merge corrected STRAY away from it, and its stand-in survives
+    // anyway because the WREN -> DETOUR edge still names it.
+    assertThat(folded.nodes()).containsKeys(PRESSING, WATERMARK, DETOUR);
+
+    // The plain half of the same rule: a correction with no surviving edge on the first canonical
+    // leaves nothing there to disagree about, which is exactly what makes the half-fix control
+    // below meaningful - it is this key, alone, that a fix to standIns without a fix to
+    // IngestService gets wrong.
+    assertThat(folded.nodes()).doesNotContainKey(MISHEARD);
 
     try (TinkerGraphStore replayed = new TinkerGraphStore()) {
       GraphProjector.project(log, replayed, IdentityMerge.NONE);
@@ -183,6 +227,11 @@ class BothFoldsAgreeTest {
     assertThat(folded)
         .contains(
             WATERMARK + " INFLUENCED_BY " + HOLLOW_TIDE, MARLOW + " INFLUENCED_BY " + WATERMARK);
+
+    // The amendment's surviving edge: claimed directly against DETOUR while it stood as STRAY's
+    // canonical id, and it names DETOUR either way - not a local id the fold would otherwise
+    // resolve - so this is unchanged by the fold and both folds must still hold it.
+    assertThat(folded).contains(WREN + " INFLUENCED_BY " + DETOUR);
 
     // Two local ids merged onto ONE canonical id, with an owner edge between them: folding both
     // ends gives an edge from that id to itself. A self-loop is a claim that a thing relates to

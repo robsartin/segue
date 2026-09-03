@@ -73,6 +73,21 @@ final class InventedGraph {
   static final String MISHEARD = "Q10000900109";
 
   /**
+   * A fifth canonical id: the one a later merge corrects {@link #STRAY} away from, kept alive not
+   * by {@code canonicalByLocal} - which has moved on to {@link #REROUTED} - but by a separate owner
+   * edge claimed against it directly while it stood (2026-09-03 amendment to #221's design; {@code
+   * TwiceMergedIdLeavesNoOrphanTest} exercises the same shape on its own). ADR 62's eleven-digit
+   * shape, for the reason {@link #KETTLES} takes it.
+   */
+  static final String DETOUR = "Q10000900110";
+
+  /**
+   * A sixth canonical id: what {@link #STRAY} is corrected onto, superseding {@link #DETOUR} the
+   * way {@link #WATERMARK} supersedes {@link #MISHEARD}. ADR 62's shape, same reason.
+   */
+  static final String REROUTED = "Q10000900111";
+
+  /**
    * Two ids the owner minted. Two leading zeros, which Wikibase's item-id grammar can never
    * allocate (ADR 58, ADR 59) - so these are deliberately not from the {@code Q900xxx} family, and
    * issue #171 does not reach them.
@@ -114,6 +129,15 @@ final class InventedGraph {
    * reason.
    */
   static final String CORRECTED = "Q006";
+
+  /**
+   * A seventh id the owner minted, and the amendment's surviving-edge shape: merged onto {@link
+   * #DETOUR}, given a separate owner edge naming {@link #DETOUR} directly while it stood, and only
+   * then corrected onto {@link #REROUTED} - the same shape {@link #CORRECTED} takes, but with a
+   * claim that keeps the first canonical's stand-in alive rather than letting the correction retire
+   * it outright. Two leading zeros, for {@link #ALMANAC}'s reason.
+   */
+  static final String STRAY = "Q007";
 
   private static final Instant WHEN = Instant.parse("2026-01-01T00:00:00Z");
 
