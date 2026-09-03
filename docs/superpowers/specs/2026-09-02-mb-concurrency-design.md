@@ -155,3 +155,50 @@ document that would go stale.
    actually found. Correcting the record beats rewriting it.
 3. **The positive control is the #146 defect**, faithfully re-planted at both interval scales, red
    every time; a fast test that cannot see the defect it exists for is not a fix.
+
+## Amended 2026-09-02 — what shipped, and where this document is now wrong
+
+Nothing above is deleted: it is the record of what was decided before the seams were built and
+measured. Three of its statements did not survive the build, and this section says so rather than
+letting the reader find out from the code.
+
+**1. The interval seam shipped at a large scale, not a small one.** "The Decision" specifies a 50 ms
+interval with a 10 ms `SLOT_OVERRUN_ALLOWANCE`, and the allowance section argues it is 29× the
+recorded shortfall. Both are gone. Task 1 shipped 100 ms/20 ms because 50 ms/10 ms reddened the
+*correct* client under load, and Task 1's review then measured the 100 ms/20 ms version 0/5 when
+the concurrency test runs alone in a fresh JVM and 5/5 inside the warm class, at load average
+125–152 throughout. The variable was never contention: caller 1's first-ever send costs 40–60 ms to
+reach the socket where caller 2's, on a path 18 other tests have JIT-compiled, costs about 1 ms. The
+allowance was absorbing a term an order of magnitude larger than the arithmetic error it existed to
+bound — the repository's own "proxy assertion clean on a small sample" defect. No width of allowance
+fixes that, so the assertion was replaced instead of the number. `concurrentCallersDoNotLeaveTogether`
+now builds its client at a **five-minute** interval, which costs nothing because nothing waits for
+it, and asserts the departure slots `reserve()` claimed — exactly, with no allowance of any kind.
+
+**2. Two entries under "Rejected" are now the design.** "A fake or fixed `Clock` for the concurrency
+test" and "A no-op `Sleeper` for the concurrency test too" were both rejected on the same ground:
+with nothing waiting, the three sends race and the test measures scheduling instead of throttling.
+That objection is sound against the assertion this document assumed — arrival spacing at a real
+socket — and it is precisely why that assertion had to go. What shipped is neither of the rejected
+things exactly: the clock is **real, and recording** (a fixed clock would still change what
+`reserve` means), and the sleeper is a **recorder**, not a no-op — it captures the wait it was asked
+for and returns. Together they reconstruct each claimed `sendAt` to the nanosecond, so the test
+asserts what the client decided rather than what the JVM then did about it. The real-time property
+that remains — that the three callers are concurrent — is a `CyclicBarrier`, not a timing window.
+
+**3. Control 1 and control 5 held; control 2 was answered differently.** The #146 defect, planted in
+the shape this document names, reds the new assertion 6/6 (three callers claiming one instant instead
+of three slots five minutes apart). The three retry tests still red on their own defects with the
+recording sleeper under them. Control 2 asked for five consecutive passes under load; the rewritten
+test passes 10/10 alone and 10/10 in the class at load average 178–187, and the reason it cannot
+flake is now an argument rather than a margin — any stall long enough to break `reserve`'s
+arithmetic would first blow the test's own 60-second liveness assertion.
+
+**4. `throttleAppliesEvenAfterAConnectionFailure` is untouched, as this document requires**, and is
+now the only test in the class whose assertion is elapsed time. The three-argument constructor this
+document specifies, `MusicBrainzClient(URI, Clock, Duration)`, was superseded by the four-argument
+one and deleted when nothing called it.
+
+**Measured, three runs each, on one machine at load average 141–253:** `MusicBrainzClientTest` inside
+a full `./gradlew test` went from 12.063/12.054/12.061 s to 3.116/3.105/3.104 s — the 12.045 s
+baseline this document records reproduces exactly.

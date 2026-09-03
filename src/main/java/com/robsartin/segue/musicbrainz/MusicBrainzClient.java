@@ -73,8 +73,10 @@ public final class MusicBrainzClient {
    * #MusicBrainzClient()}, which never overrides it. {@link #minRequestInterval} is the
    * per-instance field this defaults; only {@link #MusicBrainzClient(URI, Clock, Duration,
    * Sleeper)}, used by tests, ever passes something else, and it is that constructor's own javadoc
-   * that says why a shorter interval is asserting the same real-time-spacing property at a cheaper
-   * scale, not a different pace MusicBrainz would notice.
+   * that says why the one test that overrides it passes a <em>larger</em> interval — five minutes,
+   * through a sleeper that records the wait rather than taking it — so that the slots {@link
+   * #reserve} claims cannot be confused with anything a real wait or a descheduled thread could
+   * produce. No test asks for a shorter pace than this, and none would gain anything by it.
    */
   static final Duration DEFAULT_MIN_REQUEST_INTERVAL = Duration.ofSeconds(1);
 
@@ -458,12 +460,16 @@ public final class MusicBrainzClient {
    * first run. Nothing could see it afterwards, which is not the same as nothing reaching it. Five
    * tests reach this method, counted by making the delegation throw and reading the names back off
    * the JUnit XML: four sleep the exact 200ms retry backoff, where a truncation changes nothing at
-   * all, and the fifth is the concurrency test, which now asks for 0.1s and allows 20ms of slack —
-   * forty times the shortfall (it was 0.99997s and 100ms before the interval became a per-instance
-   * seam, and the ratio is what the argument rests on). Reaching this method and being able to see
-   * a sub-millisecond error inside it are different things, and only the second would have caught
-   * the defect. A recorder passed in here shows what was asked for without waiting for it, which is
-   * the injected collaborator CLAUDE.md's TDD rule names beside a pure function.
+   * all, and the fifth is the concurrency test, which no longer measures a wait at all: it asks for
+   * five-minute slots through a recording sleeper and asserts the instants {@link #reserve}
+   * claimed, with no tolerance and no wall clock, so a sub-millisecond truncation is not something
+   * it could ever have seen. (It was measured asking for 0.99997s against 100ms of slack when this
+   * paragraph was first written, and 0.1s against 20ms after the interval became a seam; the
+   * argument never rested on the numbers, only on their ratio to the shortfall.) Reaching this
+   * method and being able to see a sub-millisecond error inside it are different things, and only
+   * the second would have caught the defect. A recorder passed in here shows what was asked for
+   * without waiting for it, which is the injected collaborator CLAUDE.md's TDD rule names beside a
+   * pure function.
    *
    * <p><b>A {@link Duration} all the way down, not a millisecond count.</b> {@code
    * Thread.sleep(Duration)} does no millisecond conversion: in JDK 25 it is {@code
