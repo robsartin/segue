@@ -97,15 +97,24 @@ public record LocalEntity(String qid, NodeKind kind, String label, Instant minte
   }
 
   /**
-   * Refuse anything Wikidata could allocate. A grammar fact (ADR 58), not a convention: it cannot
-   * be re-tightened by this project, so it is safe to enforce on reconstruction too. Shared with
-   * {@link SameAs}, whose local side is the same claim by a different name.
+   * Refuse anything that could stand on a merge's canonical side. A grammar fact (ADR 58), not a
+   * convention: it cannot be re-tightened by this project, so it is safe to enforce on
+   * reconstruction too. Shared with {@link SameAs}, whose local side is the same claim by a
+   * different name.
+   *
+   * <p><b>Why {@link Qid#isCanonicalSide} rather than {@link Qid#isAllocatable}.</b> ADR 62
+   * reserves an eleven-digit shape which the grammar cannot allocate and which a merge's canonical
+   * side may therefore take. Refusing only what is allocatable would admit that shape here as well,
+   * and {@link Equivalences} resolves a merge in exactly one hop on the strength of these two
+   * checks being complements — an id accepted on both sides is a chain nothing resolves.
    */
   static void checkUnallocatable(String qid) {
     Qid.check(qid);
-    if (Qid.isAllocatable(qid)) {
+    if (Qid.isCanonicalSide(qid)) {
       throw new IllegalArgumentException(
-          "a local entity's qid must not be allocatable by Wikidata, got: " + qid);
+          "a local entity's qid must not be allocatable by Wikidata, nor take the eleven-digit"
+              + " shape reserved for a merge's canonical side (ADR 62), got: "
+              + qid);
     }
   }
 

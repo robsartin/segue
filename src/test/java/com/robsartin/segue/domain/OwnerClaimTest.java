@@ -82,6 +82,30 @@ class OwnerClaimTest {
     assertThat(merge.assertedAt()).isEqualTo(Instant.EPOCH);
   }
 
+  /**
+   * The two sides of a merge are exact complements over {@code Q\d+} — {@code Equivalences} argues
+   * from that, and only from that, that a canonical id can never be the local side of another merge
+   * and so no chain can form. ADR 62 admits a second unallocatable shape on the canonical side, so
+   * both halves of the complement are asserted here rather than left to follow from "allocatable".
+   */
+  @Test
+  @DisplayName("should accept a merge onto the eleven-digit canonical stand-in shape")
+  void shouldAcceptAMergeOntoTheCanonicalStandInShape() {
+    SameAs merge = SameAs.declared("Q00900042", "Q10000000900", Instant.EPOCH);
+
+    assertThat(merge.canonicalQid()).isEqualTo("Q10000000900");
+  }
+
+  @Test
+  @DisplayName("should refuse a local entity on the eleven-digit canonical stand-in shape")
+  void shouldRefuseALocalEntityOnTheCanonicalStandInShape() {
+    assertThatThrownBy(
+            () ->
+                new LocalEntity("Q10000000900", NodeKind.PERSON, "a minted person", Instant.EPOCH))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("allocatable");
+  }
+
   @Test
   @DisplayName("should refuse an owner edge whose type nothing registers")
   void shouldRefuseAnOwnerEdgeWhoseTypeNothingRegisters() {

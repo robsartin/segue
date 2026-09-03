@@ -232,7 +232,11 @@ class StandInQidsDenoteNothingTest {
               "Q127334927",
               "class id — a band class leavesTheBandsAlone asserts is never a recognition"
                   + " institution"),
-          entry("Q131806449", "entity — WikidataLiveSmokeTest asks the real API about it"));
+          entry("Q131806449", "entity — WikidataLiveSmokeTest asks the real API about it"),
+          entry(
+              "Q1000000000",
+              "negative control, deliberately allocatable — QidTest asserts Wikibase's grammar"
+                  + " still admits ten digits, which is the upper bound that test pins"));
 
   /**
    * Invented ids still in the allocatable form, carried so the rest of the suite can go green while
