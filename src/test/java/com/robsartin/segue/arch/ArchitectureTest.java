@@ -14,6 +14,7 @@ import com.robsartin.segue.domain.OwnerEdge;
 import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.domain.SameAs;
 import com.robsartin.segue.ingest.IngestService;
+import com.robsartin.segue.musicbrainz.BridgedIdentity;
 import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.GraphStore;
@@ -523,6 +524,49 @@ class ArchitectureTest {
                   + " SameAs.declared, so everything that MAKES an owner claim goes through them —"
                   + " only domain and sqlite, which reconstruct logged rows, may reach the"
                   + " constructors");
+
+  /**
+   * #163: a bridged neighbour is built through {@link BridgedIdentity#describing}, never through
+   * the record's constructor.
+   *
+   * <p>{@link #ownerClaimsAreMadeThroughTheirFactories}'s shape, aimed at one record and for a
+   * sharper reason than convention. The constructor <b>throws</b> on a class id that is not a QID;
+   * the factory <b>drops</b>, answering {@link BridgedIdentity#undescribed}. Both are correct and
+   * they are not interchangeable, because of where a producer sits: {@code
+   * MusicBrainzSourceAdapter} catches {@code MusicBrainzIdentityUnavailableException} and nothing
+   * else, and {@code SegueService.expandEntity} wraps {@code adapter.expand} in no {@code try} at
+   * all. So an {@code IllegalArgumentException} out of the constructor, inside a real {@code
+   * identitiesFor}, aborts a whole expansion across every adapter on one contributor-entered value
+   * — which is exactly the failure GAP 9 and issue #147 exist to prevent, and exactly what issue
+   * #163's fix round 1 found in the log: {@code NodeRecord} refuses such a class id from inside
+   * {@code IngestService.apply}, which runs after the claim has been appended, so the append-only
+   * log (ADR 19) was left holding a row {@code GraphProjector} re-throws on at every boot.
+   *
+   * <p><b>Why a rule rather than a comment.</b> The constructor is public because the record's
+   * fixtures and its own factories call it, and {@code new BridgedIdentity(qid, kind, label,
+   * classes)} reads like the obvious thing to write in a bridge. Nothing about the call site says
+   * which of the two behaviours it gets, and the difference only shows up in a poisoned log at the
+   * next boot. The one place the constructor's throw is the right answer is {@link BridgedIdentity}
+   * itself, which is why that is the only class exempt.
+   *
+   * <p><b>What this rule does not reach.</b> {@code @AnalyzeClasses} imports {@code src/main} only
+   * ({@code ImportOption.DoNotIncludeTests}), so the test doubles that legitimately build rows —
+   * {@code BridgedIdentityTest}'s fixtures, and the described neighbours {@code
+   * MusicBrainzNeighbourIdentityTest} hands its stub bridge — are outside the import rather than
+   * exempted by a clause here. A test asserting what the constructor refuses has to call it.
+   */
+  @ArchTest
+  static final ArchRule bridgedIdentitiesAreBuiltThroughTheirFactory =
+      noClasses()
+          .that()
+          .doNotBelongToAnyOf(BridgedIdentity.class)
+          .should(ArchConditions.accessTargetWhere(constructionOf(BridgedIdentity.class)))
+          .because(
+              "#163: BridgedIdentity.describing drops a row whose class id cannot be read, where"
+                  + " the constructor throws — and a throw out of a producer aborts the whole"
+                  + " expansion, because MusicBrainzSourceAdapter catches only"
+                  + " MusicBrainzIdentityUnavailableException and SegueService.expandEntity wraps"
+                  + " nothing");
 
   /**
    * ADR 41: the graph exporter reads. It has no way to write, and that is the point.
