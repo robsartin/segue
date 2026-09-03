@@ -2,6 +2,7 @@ package com.robsartin.segue.export;
 
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.EdgeRecord;
+import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
@@ -44,12 +45,20 @@ import java.util.Map;
  * export is the artefact somebody keeps, mails or opens in Gephi weeks later. {@code
  * GraphProjector} asks the identical question of the identical log.
  *
- * <p><b>A merge is applied here too, in full</b> (#92). {@code IngestService.carry} creates the
- * canonical node and copies the local id's edges onto it; this fold does the same thing at the same
- * point in the log, because a merge the export ignored would show an entity hanging off a retired
- * local id with no canonical node at all while {@code get_entity} showed the opposite - the
- * divergence the paragraph above forbids, in its worst form. {@code BothFoldsAgreeTest} covers the
- * third layer as well as retraction, which is what stops the two from drifting apart again.
+ * <p><b>A merge is applied here too, in full</b> (#92), because a merge the export ignored would
+ * show an entity hanging off a retired local id with no canonical node at all while {@code
+ * get_entity} showed the opposite - the divergence the paragraph above forbids, in its worst form.
+ * {@code BothFoldsAgreeTest} covers the third layer as well as retraction, which is what stops the
+ * two from drifting apart again. The canonical node comes from {@link Equivalences#standIns}, which
+ * the boot replay also seeds itself with, before either fold begins, and every edge's endpoints are
+ * read through {@link Equivalences#foldEndpoints} as the edge is folded, so a merged entity's edges
+ * exist once rather than twice (#178). That is the same method {@code IngestService.apply} calls -
+ * one rule, not two agreeing ideas.
+ *
+ * <p><b>The local id keeps its node and loses its edges</b>, which is ADR 59's merge bullet as #178
+ * amends it: an equivalence is not new evidence, so a merged entity is one node carrying one set of
+ * edges, and the id the owner retired is drawn as the orphan it now is (spec ruling 3). Nothing
+ * hides it, on the retraction chapter's precedent.
  *
  * <p>It is not a {@code GraphStore} and must not become one. It answers "what is in the log",
  * nothing else; anything that needs a traversal uses the real engine, so that an exported route is
@@ -71,11 +80,20 @@ public record LogProjection(
 
   /** Read the log once and fold it. */
   public static LogProjection of(AssertionLog log) {
-    Map<String, NodeRecord> nodes = new LinkedHashMap<>();
-    Map<String, List<AssertionRecord>> byEdge = new LinkedHashMap<>();
-
     List<LoggedAssertion> logged = log.readAll();
     Retractions retractions = Retractions.in(logged);
+    // Every merged entity's canonical id has its node before the fold begins (#178), from the same
+    // method the boot replay seeds itself with. A real node claim about the canonical id, wherever
+    // it sits in the log, lands on top of the stand-in below and wins - which is the guarantee
+    // that used to come from asking whether the id had been claimed yet at the merge's own row.
+    Map<String, NodeRecord> nodes = new LinkedHashMap<>(Equivalences.standIns(logged));
+    // The graph half of a merge, over the whole log and from the same type the boot replay uses
+    // (#178). Every edge below has both of its endpoints read through this, so an edge claimed
+    // against a merged local id is folded onto the canonical id once - which is why there is no
+    // copy at the merge's own row any more, and no accumulator here deciding whether to make one.
+    Equivalences equivalences = Equivalences.in(logged);
+    Map<String, List<AssertionRecord>> byEdge = new LinkedHashMap<>();
+
     for (int i = 0; i < logged.size(); i++) {
       LoggedAssertion assertion = logged.get(i);
       if (!retractions.survives(i, assertion)) {
@@ -84,7 +102,7 @@ public record LogProjection(
       switch (assertion) {
         case NodeAssertion claim -> nodes.put(claim.qid(), KindMapper.rederive(claim).toNode());
         case AssertionRecord claim ->
-            byEdge.computeIfAbsent(claim.edgeKey(), key -> new ArrayList<>()).add(claim);
+            equivalences.foldEndpoints(claim).ifPresent(folded -> collect(byEdge, folded));
         // Retractions never survive the rule above; they describe the fold rather than appear
         // in it. Reaching this arm would mean Retractions.survives had changed its mind.
         case Retraction retraction ->
@@ -95,35 +113,20 @@ public record LogProjection(
         // minted entity - re-derivation reads the P31 classes a source stated, and the owner
         // stated a kind directly and no classes at all, so there is nothing to re-derive from.
         case LocalEntity minted -> nodes.put(minted.qid(), minted.toNode());
-        case OwnerEdge owned -> {
-          AssertionRecord claim = owned.toAssertion();
-          byEdge.computeIfAbsent(claim.edgeKey(), key -> new ArrayList<>()).add(claim);
-        }
+        case OwnerEdge owned ->
+            equivalences
+                .foldEndpoints(owned.toAssertion())
+                .ifPresent(folded -> collect(byEdge, folded));
         // A merge is not drawn - it is a statement about identity, not a node or an edge, and an
         // edge for it would put a relationship in the export that find_paths cannot route along,
-        // which this class's last paragraph forbids. What it IS, here as in IngestService.carry,
-        // is the claims that do have a picture moving onto the canonical id: the canonical node
-        // when nothing has claimed one, so a carried edge has both endpoints. Skipping it left the
-        // export showing an entity hanging off a retired local id with no canonical node at all,
-        // while get_entity showed the opposite - the exact divergence this class forbids itself.
-        case SameAs merge -> {
-          NodeRecord local = nodes.get(merge.localQid());
-          // Nothing minted under the local id: nothing to carry, and not an error - the same
-          // reading IngestService.carry takes, where a retraction may have dropped the claim this
-          // merge resolves while keeping the merge itself.
-          if (local != null) {
-            if (!nodes.containsKey(merge.canonicalQid())) {
-              // No instanceOf, because the owner stated no classes - LocalEntity.toNode()'s
-              // reason, and the stand-in carries what it was given. A source that HAS named the
-              // canonical entity wins, here by containsKey and in the graph by upsertNode's
-              // last-writer-wins.
-              nodes.put(
-                  merge.canonicalQid(),
-                  new NodeRecord(merge.canonicalQid(), local.kind(), local.label(), List.of()));
-            }
-            carry(byEdge, merge.localQid(), merge.canonicalQid());
-          }
-        }
+        // which this class's last paragraph forbids. Nothing happens at its own row any more
+        // either (#178): its node half was seeded from Equivalences.standIns before this loop
+        // began, because a folded edge can arrive before the merge that names its endpoint, and
+        // its edge half is the fold above, which resolves every endpoint over the whole log.
+        // Skipping a merge outright is still what this class forbids itself - it left the export
+        // showing an entity hanging off a retired local id with no canonical node at all, while
+        // get_entity showed the opposite - and skipping it is not what this arm does.
+        case SameAs ignored -> {}
       }
     }
 
@@ -148,39 +151,8 @@ public record LogProjection(
     return new LogProjection(nodes, edges, dangling);
   }
 
-  /**
-   * Copy every edge claimed against a merged local id onto the canonical one - {@code
-   * IngestService.carry}'s edge half, over the fold's own accumulator rather than over a graph.
-   *
-   * <p><b>Nothing is removed.</b> The local id keeps its edges, exactly as it keeps its node: a
-   * merge is an asserted equivalence, never an edit (ADR 19, ADR 44).
-   *
-   * <p><b>Every supporting claim, not one</b>, for the reason {@code carry} gives: an edge holds
-   * the provenance of everyone who claimed it, and copying one would change what {@code
-   * EdgeRecord.corroboration()} counts on the canonical id.
-   *
-   * <p><b>What has been said so far, not what the log says in the end.</b> This runs at the merge's
-   * own position, so a claim appended <em>after</em> a merge stays on the id it was made against -
-   * {@code carry}'s "order is log order" paragraph, which is the property that keeps live ingest,
-   * boot replay and this fold answering alike.
-   */
-  private static void carry(
-      Map<String, List<AssertionRecord>> byEdge, String local, String canonical) {
-    for (List<AssertionRecord> claims : List.copyOf(byEdge.values())) {
-      AssertionRecord first = claims.get(0);
-      if (!first.fromQid().equals(local) && !first.toQid().equals(local)) {
-        continue;
-      }
-      String from = first.fromQid().equals(local) ? canonical : first.fromQid();
-      String to = first.toQid().equals(local) ? canonical : first.toQid();
-      for (AssertionRecord claim : List.copyOf(claims)) {
-        // The collapsed validity, from the first claim, because that is the one the fold below
-        // gives the edge and the one carry() reads off the EdgeRecord it copies.
-        AssertionRecord carried =
-            new AssertionRecord(
-                from, to, first.typeCode(), first.validFrom(), first.validTo(), claim.provenance());
-        byEdge.computeIfAbsent(carried.edgeKey(), key -> new ArrayList<>()).add(carried);
-      }
-    }
+  /** One folded edge claim, filed under the pair it now names. */
+  private static void collect(Map<String, List<AssertionRecord>> byEdge, AssertionRecord claim) {
+    byEdge.computeIfAbsent(claim.edgeKey(), key -> new ArrayList<>()).add(claim);
   }
 }

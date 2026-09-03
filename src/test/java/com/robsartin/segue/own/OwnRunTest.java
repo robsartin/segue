@@ -163,8 +163,9 @@ class OwnRunTest {
   @Test
   @DisplayName("should refuse when an endpoint of an assertion is a local id already merged")
   void shouldRefuseWhenAnEndpointOfAnAssertionIsALocalIdAlreadyMerged() {
-    // A claim made now would land on the retired id and never be carried: carry() reads the graph
-    // as it stood when the merge was applied, so anything appended after it stays where it was.
+    // A claim made now names the id the owner retired. Since #178 both folds would quietly resolve
+    // it onto the canonical id (spec ruling 2); the refusal is so the operator sees which id he is
+    // really claiming about, rather than the thing that keeps the graph correct.
     seedASourcedEntity(SOURCED, "Ines Marlow");
     String minted = mintOne("A Self-Pressed Record");
     run.run(merge(minted, false), notes::add);
@@ -179,8 +180,8 @@ class OwnRunTest {
   @DisplayName(
       "should accept the canonical id of a merge as an endpoint though no source claimed it")
   void shouldAcceptTheCanonicalIdOfAMergeAsAnEndpointWhenNoSourceHasClaimedIt() {
-    // The merge put a node under it - carry() creates the canonical node when nothing has claimed
-    // one - so it IS in the projection this invocation replays, and refusing it would be false.
+    // The merge put a node under it - the stand-in creates the canonical node when nothing has
+    // claimed one - so it IS in the projection this invocation replays, and refusing it is false.
     seedASourcedEntity(SOURCED, "Ines Marlow");
     String minted = mintOne("A Self-Pressed Record");
     run.run(merge(minted, false), notes::add);
