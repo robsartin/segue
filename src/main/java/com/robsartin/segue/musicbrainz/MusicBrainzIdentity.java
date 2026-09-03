@@ -24,19 +24,19 @@ import java.util.Optional;
  * note originally recommended, and what it cost. This type is the seam, not the bridge, and nothing
  * here is entitled to assume which one is behind it.
  *
- * <p>{@link #qidsFor} is batched rather than one call per neighbour: the alternative is a round
- * trip per neighbour, and the measured neighbourhood was 387 across 40 seeds (#91's 2026-08-29
- * comment).
+ * <p>{@link #identitiesFor} is batched rather than one call per neighbour: the alternative is a
+ * round trip per neighbour, and the measured neighbourhood was 387 across 40 seeds (#91's
+ * 2026-08-29 comment).
  *
  * <p><b>Both methods may fail, and say so</b> (<a
  * href="https://github.com/robsartin/segue/issues/148">issue #148</a>). {@link
  * MusicBrainzIdentityUnavailableException} is the one failure this seam declares, and declaring it
  * is the whole point: the empty answer is already spoken for twice over — an empty {@link #mbidFor}
- * means MusicBrainz holds no record bridged to that seed, and an MBID absent from {@link #qidsFor}
- * means ADR 22 clause 2 declining to reach that neighbour — so an implementation that degraded to
- * empty on failure was saying "nothing here" when it meant "I could not look". ADR 54 records what
- * that cost: a Query Service outage on the seed lookup read downstream as "this artist has no
- * members", with {@code ExpandResult.sourceUnavailable} false.
+ * means MusicBrainz holds no record bridged to that seed, and an MBID absent from {@link
+ * #identitiesFor} means ADR 22 clause 2 declining to reach that neighbour — so an implementation
+ * that degraded to empty on failure was saying "nothing here" when it meant "I could not look". ADR
+ * 54 records what that cost: a Query Service outage on the seed lookup read downstream as "this
+ * artist has no members", with {@code ExpandResult.sourceUnavailable} false.
  *
  * <p>It is unchecked, like {@code WikidataUnavailableException} and {@link
  * MusicBrainzUnavailableException}, and declared in both signatures anyway so that an implementor
@@ -67,22 +67,34 @@ public interface MusicBrainzIdentity {
   Optional<String> mbidFor(String qid) throws MusicBrainzIdentityUnavailableException;
 
   /**
-   * The QID for each MBID in {@code mbids} that this source can bridge. An MBID absent from the
-   * result carries no QID — silently dropped, not reported as an error.
+   * What this source knows about each MBID in {@code mbids} that it can bridge: the QID, and
+   * whatever description the bridge could see on the round trip it was already making (issue #163).
    *
-   * <p>The values are not taken at their word either: a value that is not a QID is dropped by the
-   * adapter's GAP 9 guard, for the reason that guard states.
-   *
-   * <p><b>That dropping is ADR 22 clause 2 working as designed, not a gap.</b> Measured over
+   * <p>An MBID absent from the result carries no QID — silently dropped, not reported as an error.
+   * <b>That dropping is ADR 22 clause 2 working as designed, not a gap.</b> Measured over
    * artist-relation neighbours, 49% (190 of 387) carry no QID at all, and a 30-entity sample of
    * that 49% was tribute bands, pseudonyms, billing variants and relatives — material the identity
    * spine is declining to reach, on purpose, rather than failing to reach.
+   *
+   * <p><b>A present entry that describes nothing is the third answer, and the reason this signature
+   * replaced one that returned QIDs.</b> An entry whose {@code instanceOf} is empty and whose
+   * {@code label} is null means "bridged, but undescribed" — the bridge named the entity and could
+   * say nothing else about it, which a caller must treat as "fetch this one properly". A map of
+   * MBID to QID could not tell that apart from a described neighbour, so every neighbour cost a
+   * fetch. Absent, present-and-undescribed, and present-and-described are three different answers
+   * and this type gives all three. {@link BridgedIdentity} is where each field's contract lives.
+   *
+   * <p>The values are not taken at their word: a {@code qid} that is not a QID is not a {@link
+   * BridgedIdentity} at all, and an implementation that reads one out of a source drops the row
+   * rather than throwing — see {@link BridgedIdentity#describing}, which is the factory a producer
+   * builds these through, and which answers {@link BridgedIdentity#undescribed} where a class id
+   * cannot be read.
    *
    * @throws MusicBrainzIdentityUnavailableException if the bridge could not be asked at all. A
    *     partial map is not an option here for the reason the dropping above states: half an answer
    *     is indistinguishable from the normal drop path, so an implementation that cannot answer for
    *     every MBID it was handed throws rather than returning what it managed.
    */
-  Map<String, String> qidsFor(Collection<String> mbids)
+  Map<String, BridgedIdentity> identitiesFor(Collection<String> mbids)
       throws MusicBrainzIdentityUnavailableException;
 }

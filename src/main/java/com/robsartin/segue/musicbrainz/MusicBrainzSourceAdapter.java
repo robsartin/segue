@@ -3,6 +3,7 @@ package com.robsartin.segue.musicbrainz;
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.EdgeType;
 import com.robsartin.segue.domain.EdgeTypes;
+import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.Provenance;
@@ -16,6 +17,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -92,53 +94,54 @@ import java.util.regex.Pattern;
  * all, so the n kept here are simply the n MusicBrainz listed first. {@link ExpandResult#truncated}
  * reports both the same way (GAP 6).
  *
- * <p><b>No {@code neighbors}, and neither because the data is missing nor because it was never
- * examined</b> (<a href="https://github.com/robsartin/segue/issues/143">issue #143</a>). {@link
- * ExpandResult} treats them as an optimisation an adapter may supply and is explicit that one which
- * does not know is not obliged to guess, so an absent neighbour falls back to the caller's own
- * fetch. This adapter takes that fallback <i>deliberately</i>, and the reason is not the one an
- * earlier version of this javadoc gave. That version said the response carries a name but not the
- * neighbour's type, and it was false: every relation in the committed fixture carries {@code
- * artist.type} — 22 {@code Person} and 2 {@code Group}, which map one-to-one onto {@link
- * #DESCRIBED}.
+ * <p><b>{@code neighbors()} is filled, but only from an identity that says enough</b> (<a
+ * href="https://github.com/robsartin/segue/issues/163">issue #163</a>; ADR 61, which reverses half
+ * of ADR 55 and leaves its {@code subgroup} half standing). {@link ExpandResult} treats neighbours
+ * as an optimisation an adapter may supply and is explicit that one which does not know is not
+ * obliged to guess. This adapter now knows, sometimes, and the guard is what "sometimes" means: see
+ * {@link #describes}.
  *
- * <p><b>The response pays for two thirds of a neighbour's identity, and the missing third is the
- * expensive one.</b> With the QID from {@link MusicBrainzIdentity#qidsFor} and the label from
- * {@link ArtistRelation#targetName}, a {@code NodeAssertion} is constructible at zero extra network
- * cost. What MusicBrainz cannot supply is {@code instanceOf}: it classifies an artist as {@code
- * Person} or {@code Group} without stating Wikidata classes, so the list would be empty. {@code
- * SegueService} prefers an adapter's neighbour to a fetch and records it <b>whether or not the node
- * already exists</b> (issue #55), and {@code TinkerGraphStore.upsertNode} writes {@code instanceOf}
- * on every upsert, empty included and deliberately so — its own comment says a later claim stating
- * no classes must not leave an earlier claim's behind. So this adapter's {@code neighbors()} would
- * not merely decline to add classes; it would remove the ones already there, and give the ones it
- * discovered none. {@code PathRanking.isHub}, {@code CandidateSweep}, {@code rate/Card}, {@code
- * DotWriter} and {@code GraphMlWriter} all read that field, and ADR 42 is the decision that the log
- * keeps the raw classes so a derivation can be revisited at all.
+ * <p><b>The history is worth carrying, because the guard is the whole of what it taught.</b> #143
+ * asked for a {@code neighbors()} built from the MusicBrainz response alone, and the response does
+ * pay for two thirds of a neighbour's identity — every relation in the committed fixture carries
+ * {@code artist.type} (22 {@code Person} and 2 {@code Group}, mapping one-to-one onto {@link
+ * #DESCRIBED}), and {@link ArtistRelation#targetName} carries the label. The missing third is the
+ * expensive one: MusicBrainz classifies an artist without stating Wikidata classes, so {@code
+ * instanceOf} would be empty. {@code SegueService} prefers an adapter's neighbour to a fetch and
+ * records it <b>whether or not the node already exists</b> (issue #55), and {@code
+ * TinkerGraphStore.upsertNode} writes {@code instanceOf} on every upsert, empty included and
+ * deliberately so — its own comment says a later claim stating no classes must not leave an earlier
+ * claim's behind. So #143's neighbour would not merely decline to add classes; it would remove the
+ * ones already there, and give the ones it discovered none. {@code PathRanking.isHub}, {@code
+ * CandidateSweep}, {@code rate/Card}, {@code DotWriter} and {@code GraphMlWriter} all read that
+ * field, and ADR 42 is the decision that the log keeps the raw classes so a derivation can be
+ * revisited at all. <b>ADR 55 refused #143 on that, measured</b>: of the neighbours this adapter
+ * resolved, 44% were already in the graph — where the fetch is not spent at all, because it is
+ * gated on {@code isNew} — and a further tenth were described by Wikidata's own reverse pass in the
+ * same call, against nodes losing or never gaining their classes at a greater rate than that. That
+ * refusal still stands, and {@code MusicBrainzNeighbourIdentityTest} still holds it.
  *
- * <p><b>Both halves of that are measured rather than argued, and the saving is smaller than #143
- * assumed.</b> A dev-side probe drove this adapter and the shipped bridge over a sample of the real
- * graph's {@code PERSON} and {@code GROUP} nodes and ran the production Wikidata adapter beside it,
- * on 2026-08-30; the figures and the method are in ADR 55. Of the neighbours this adapter resolved,
- * 44% were already in the graph — where the fetch is not spent at all, because it is gated on
- * {@code isNew} — and a further tenth were described by Wikidata's own reverse pass in the same
- * call. Fewer than half were fetches a {@code neighbors()} would actually have saved, at a median
- * of one per expansion, against nodes losing or never gaining their classes at a greater rate than
- * that.
+ * <p><b>What ADR 61 changes is where the classes come from.</b> ADR 55's own closing sentence named
+ * the route that collects the saving without the cost — a bridge that returns classes alongside
+ * QIDs, one batched Query Service round trip per 100 neighbours, the shape {@code ReverseClaims}
+ * already uses for Wikidata's own neighbours — and said it was a change of its own because it
+ * widens {@link MusicBrainzIdentity} and the {@code app} class behind it. That is what {@link
+ * MusicBrainzIdentity#identitiesFor} is. So this adapter emits a neighbour when, and only when, the
+ * bridge could see a real label and at least one class; anything less is omitted and the caller's
+ * fetch happens exactly as before. Measured over the committed fixture's 22 mappable neighbours,
+ * that is 22 fetches saved at the same one bridge round trip, and 22 fetches still spent when the
+ * bridge describes none of them — {@code NeighbourFetchCountTest} is the measurement and its own
+ * positive control.
  *
- * <p><b>The route that collects the saving without the cost is a bridge that returns classes
- * alongside QIDs</b> — one batched Query Service round trip per 100 neighbours, which is the shape
- * {@code ReverseClaims} already uses for Wikidata's own neighbours, rather than one fetch each.
- * That widens {@link MusicBrainzIdentity} and the {@code app} class behind it, so it is a change of
- * its own and not a line here. ADR 55 records the decision and {@code
- * MusicBrainzNeighbourIdentityTest} holds it: those tests were watched red against an adapter that
- * did emit neighbours, and they are what stops that coming back by accident.
+ * <p><b>The neighbour claim is stamped {@code "wikidata"}, not {@link #SOURCE_ID}.</b> See {@link
+ * #toNeighbour}, and {@link SourceAdapter#id()}, whose sentence is scoped to {@link
+ * ExpandResult#assertions()} for this reason.
  *
- * <p><b>No stated classes, so {@code instanceOf} stays empty.</b> MusicBrainz classifies an artist
- * as {@code Person} or {@code Group} without stating Wikidata classes, which is exactly the case
- * {@code KindMapper.rederive} leaves untouched (ADR 42). {@code instanceOf} is a list of QIDs
- * enforced by {@code NodeRecord}'s constructor, so a MusicBrainz type id put there would build a
- * {@code NodeAssertion} cleanly and blow up later inside {@code IngestService.apply} (GAP 7).
+ * <p><b>GAP 7 is unchanged and is the reason the guard is a guard rather than a throw.</b> {@code
+ * instanceOf} is a list of QIDs enforced by {@code NodeRecord}'s constructor, so a MusicBrainz type
+ * id put there would build a {@code NodeAssertion} cleanly and blow up later inside {@code
+ * IngestService.apply}. An <i>empty</i> list has no element to fail on: it goes through, and
+ * erases. That is why an undescribed neighbour is omitted rather than emitted class-less.
  *
  * <p><b>Failures degrade rather than propagate</b>, as {@link SourceAdapter#expand} requires: an
  * unreachable MusicBrainz yields a flagged empty result, not a thrown error. <b>So does an
@@ -147,9 +150,9 @@ import java.util.regex.Pattern;
  * now declares {@link MusicBrainzIdentityUnavailableException}, and both of its calls are caught
  * here. The distinction that buys is the one this adapter could not draw: {@link
  * MusicBrainzIdentity#mbidFor} returning empty means MusicBrainz holds no record bridged to this
- * seed, and an empty {@link MusicBrainzIdentity#qidsFor} entry means ADR 22 clause 2 declining to
- * reach that neighbour — both normal operation. A bridge that simply could not answer had no third
- * thing to return, so its failure arrived as one of those two and set no flag.
+ * seed, and an MBID absent from {@link MusicBrainzIdentity#identitiesFor} means ADR 22 clause 2
+ * declining to reach that neighbour — both normal operation. A bridge that simply could not answer
+ * had no third thing to return, so its failure arrived as one of those two and set no flag.
  *
  * <p><b>Every string this adapter puts in a {@link Provenance} is guarded, and this is where each
  * one is guarded</b> (<a href="https://github.com/robsartin/segue/issues/147">issue #147</a>).
@@ -182,6 +185,8 @@ import java.util.regex.Pattern;
 public final class MusicBrainzSourceAdapter implements SourceAdapter {
 
   private static final String SOURCE_ID = "musicbrainz";
+
+  private static final String WIKIDATA_SOURCE_ID = "wikidata";
 
   /** MusicBrainz's own name for the relation this adapter maps. */
   private static final String MEMBER_OF_BAND = "member of band";
@@ -299,9 +304,11 @@ public final class MusicBrainzSourceAdapter implements SourceAdapter {
     List<ArtistRelation> bounded = mappable.stream().limit(ctx.maxNewEdges()).toList();
     boolean truncated = bounded.size() < mappable.size();
 
-    Map<String, String> qids;
+    Map<String, BridgedIdentity> bridgedNeighbours;
     try {
-      qids = identity.qidsFor(bounded.stream().map(ArtistRelation::targetMbid).distinct().toList());
+      bridgedNeighbours =
+          identity.identitiesFor(
+              bounded.stream().map(ArtistRelation::targetMbid).distinct().toList());
     } catch (MusicBrainzIdentityUnavailableException e) {
       // The same reasoning one call later, and with more at stake: an empty map is how ADR 22
       // clause 2 declines to reach a neighbour, measured at 49% of them, so a failed batch used to
@@ -314,31 +321,32 @@ public final class MusicBrainzSourceAdapter implements SourceAdapter {
     // a single response at a single moment, and repeated clock reads would say otherwise (ADR 20).
     Instant assertedAt = clock.instant();
     List<AssertionRecord> assertions = new ArrayList<>();
+    Map<String, NodeAssertion> neighbours = new LinkedHashMap<>();
     for (ArtistRelation relation : bounded) {
-      String targetQid = qids.get(relation.targetMbid());
+      BridgedIdentity neighbour = bridgedNeighbours.get(relation.targetMbid());
+      // GAP 9's shape check used to be a second `if` here, on targetQid. It moved, and did not
+      // vanish: a BridgedIdentity cannot hold a qid or a class id that is not a QID (its
+      // constructor runs Qid.check on every one), and the seam's default drops a binding whose
+      // qid is malformed rather than constructing one — so by the time a value reaches this loop
+      // it has already been checked, by the same predicate, one layer down. Keeping the branch
+      // here would have been a condition no test could make true and no reader could trust.
+      // The argument it carried is unchanged and still applies where the check now is:
+      // MusicBrainzIdentity is an interface this package neither implements nor constrains, and
+      // whatever supplies it is reading QIDs out of somebody's database — Wikidata's P434 in the
+      // shipped wiring, an external-id whose values are contributor-entered.
+      String targetQid = neighbour == null ? null : neighbour.qid();
       if (targetQid == null) {
         // ADR 22 clause 2 declining to reach this neighbour, measured at 49% of artist-relation
         // neighbours and mostly tributes, pseudonyms and billing variants. Not a shortfall.
         continue;
       }
-      if (!Qid.looksLikeAQid(targetQid)) {
-        // GAP 9: AssertionRecord validates neither endpoint, so a non-QID would be logged happily
-        // and then reach TinkerGraphStore.requireVertex and throw mid-batch, after the log entry
-        // is already written. ClaimMapper refuses a non-QID object id for the same stated reason,
-        // in the guard that names that exact failure. This is not a defensive check against a
-        // programming error: MusicBrainzIdentity
-        // is an interface this package neither implements nor constrains, and whatever supplies
-        // it is reading QIDs out of somebody's database — Wikidata's P434 in the shipped wiring,
-        // an external-id whose values are contributor-entered. Malformed input arrives from
-        // outside either way, which is why the guard does not depend on which bridge is wired.
-        //
-        // It is one of three such guards rather than the only one, which is what issue #147 was:
-        // the class note enumerates what reaches Provenance and says where each part is checked.
-        continue;
-      }
       assertions.add(toAssertion(seed.qid(), seedMbid, relation, targetQid, assertedAt));
+      if (describes(neighbour)) {
+        neighbours.putIfAbsent(targetQid, toNeighbour(neighbour, assertedAt));
+      }
     }
-    return new ExpandResult(List.copyOf(assertions), false, truncated);
+    return new ExpandResult(
+        List.copyOf(assertions), List.copyOf(neighbours.values()), false, truncated);
   }
 
   /**
@@ -364,6 +372,50 @@ public final class MusicBrainzSourceAdapter implements SourceAdapter {
         && BY_RELATION_TYPE.containsKey(relation.type())
         && (FORWARD.equals(relation.direction()) || BACKWARD.equals(relation.direction()))
         && looksLikeAnMbid(relation.targetMbid());
+  }
+
+  /**
+   * Whether this bridged identity says enough to be worth emitting as a neighbour, which is the
+   * whole of the non-erasing guard (issue #163; ADR 61).
+   *
+   * <p><b>Both halves are erasure, not fastidiousness.</b> {@code SegueService} prefers an
+   * adapter's neighbour to a fetch and records it <b>whether or not the node already exists</b>
+   * (issue #55), and {@code TinkerGraphStore.upsertNode} writes {@code instanceOf} on every upsert,
+   * empty included and deliberately so — its own comment says a later claim stating no classes must
+   * not leave an earlier claim's behind. So a neighbour emitted with an empty {@code instanceOf}
+   * removes the classes an existing node already had and gives a new one none: exactly what ADR 55
+   * refused, measured. A label is the same story one field over: {@code wikibase:label} answers
+   * with the bare QID where no English label exists, {@link BridgedIdentity} normalises every
+   * unbelievable answer to null, and {@link NodeAssertion} requires a label — so emitting one would
+   * not misname the node, it would throw out of {@link #expand} and lose the whole expansion.
+   *
+   * <p>An identity that fails either half is simply omitted, and {@code SegueService} falls back to
+   * the fetch it would have spent anyway. That is what makes the saving a saving rather than a
+   * trade: nothing is lost when the bridge could not see enough, and the round trip is only skipped
+   * when it had nothing left to buy.
+   */
+  private static boolean describes(BridgedIdentity neighbour) {
+    return neighbour.label() != null && !neighbour.instanceOf().isEmpty();
+  }
+
+  /**
+   * The neighbour claim, carrying {@code "wikidata"} rather than {@link #SOURCE_ID}.
+   *
+   * <p>The kind, label and classes are Wikidata's facts — {@code P31} and the label service, read
+   * on the bridge's own round trip — and this claim is byte-identical to what {@code ReverseClaims}
+   * and {@code WikidataEntityResolver.fetch} would have produced for the same entity, because it is
+   * the same claim from the same source. Stamping it {@code "musicbrainz"} would attribute
+   * Wikidata's classes to a database that states none. The edge stays MusicBrainz's; only the
+   * identity is Wikidata's. See {@link SourceAdapter#id()}, whose sentence is scoped to {@link
+   * ExpandResult#assertions()} for this reason.
+   */
+  private static NodeAssertion toNeighbour(BridgedIdentity neighbour, Instant assertedAt) {
+    return new NodeAssertion(
+        neighbour.qid(),
+        neighbour.kind(),
+        neighbour.label(),
+        neighbour.instanceOf(),
+        new Provenance(WIKIDATA_SOURCE_ID, neighbour.qid(), assertedAt, 1.00));
   }
 
   /** Whether this string is an MBID, for the two callers that check rather than refuse. */

@@ -505,6 +505,7 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `theClaimToolsHaveNoDefaultDatabase` | `retract` or `own` depending on `support.DefaultDatabase` at all — the two tools that append a first-person claim require `--db` and have no default left to resolve. Second line of defence, not first: the refusal tests red three-per-tool against every reintroduction tried, and this holds when those tests are edited to match. `dependOnClassesThat` rather than a call predicate, so a method reference (`DefaultDatabase::resolve`, reported as *references*) or a field of that type is caught as readily as a call; javadoc naming the class in prose is not a dependency and is deliberately still allowed | issue [#179](https://github.com/robsartin/segue/issues/179) |
 | `theClaimToolsTakeTheirDatabaseFromTheFlagAlone` | `retract` or `own` calling any `support` method that returns a `java.nio.file.Path`, or reading any `support` field of that type. The sibling rule forbids a *name*; this forbids the *capability*, and the gap between them was measured — a `Path`-returning method added to `support.RequiredDatabase` (which both tools already use for the refusal sentence) and wired in restores the default while leaving `theClaimToolsHaveNoDefaultDatabase` green. `Path` is the line because a `String` has to be parsed back by a line a reviewer can see, which is why `RequiredDatabase.refusal` returns one | issue [#179](https://github.com/robsartin/segue/issues/179) |
 | `ownerClaimsAreMadeThroughTheirFactories` | calling — or referencing — the constructor of `LocalEntity`, `OwnerEdge` or `SameAs` from outside `domain` and `sqlite`. Those constructors enforce only what Wikidata's grammar fixes, so that an append-only row stays decodable after a convention moves; the conventions themselves (two leading zeros, the controlled relation vocabulary) live in `minted()`, `claimed()` and `declared()`. This rule is what makes every *maker* of a claim go through them, with no second copy of a rule to fall out of date. `sqlite` is exempt because `readRow` reconstructs rather than claims | [ADR 22](adr/0022-wikidata-identity-and-vocabulary.md), [ADR 19](adr/0019-assertion-log-source-of-truth.md), [ADR 58](adr/0058-stand-in-identifiers-cannot-be-allocatable.md) |
+| `bridgedIdentitiesAreBuiltThroughTheirFactory` | calling — or referencing — the constructor of `BridgedIdentity` from anywhere but the record itself. `BridgedIdentity.describing` *drops* a row whose class id is not a QID, answering `undescribed`; the constructor *throws*. The two are not interchangeable in a bridge: `MusicBrainzSourceAdapter` catches only `MusicBrainzIdentityUnavailableException` and `SegueService.expandEntity` wraps `adapter.expand` in no `try`, so an `IllegalArgumentException` from a producer aborts a whole expansion across every adapter — and `NodeRecord` refuses the same value only from inside `IngestService.apply`, after the claim has been appended. Rules run over `src/main` only, so the test doubles that build rows directly are outside the import rather than exempted | [ADR 19](adr/0019-assertion-log-source-of-truth.md), [ADR 58](adr/0058-stand-in-identifiers-cannot-be-allocatable.md), issue [#163](https://github.com/robsartin/segue/issues/163) |
 | `nothingWritesToStandardOut` | reading `System.out` anywhere except the one named exception, `SegueApplication` | [ADR 28](adr/0028-mcp-transports.md) |
 | `nothingWritesToStandardError`, `noPrintStackTrace`, `noJavaUtilLogging` | bypassing SLF4J | [ADR 30](adr/0030-structured-logging.md) |
 | `affinityNeverTouchesTheWorldFactLayer` | a taste-layer type depending on the log, the graph, `IngestService` or the claim records | [ADR 33](adr/0033-taste-layer-separation.md) |
@@ -752,6 +753,21 @@ the graph grew. Note it is a different rule from the `described.putIfAbsent` fir
 few lines above it in the same method: that one settles two sources disagreeing *within one call*,
 this one re-reads the *same* source *across runs*.
 
+**Inline identity is no longer only Wikidata's reverse pass** (issue #163,
+[ADR 61](adr/0061-the-bridge-returns-classes.md)). `MusicBrainzSourceAdapter` fills `neighbors()`
+too, out of the Wikidata-backed P434 bridge it already spends one batched Query Service round trip
+on: a MusicBrainz-discovered neighbour can arrive with a kind, a label and its raw classes instead
+of costing a `fetch` each. **It is guarded rather than unconditional**, and the guard is the whole
+decision — an identity the bridge could not describe (no classes, or a label that came back as the
+bare QID) is omitted, and the `fetch` happens exactly as it did before. Emitting an undescribed one
+would erase classes, for the two reasons in the paragraph above: an adapter's neighbour is recorded
+for an existing node too, and `upsertNode` is last-writer-wins on `instanceOf`.
+[ADR 55](adr/0055-what-the-musicbrainz-adapter-refuses.md) measured that erasure and declined
+`neighbors()` on it; ADR 61 reverses that half on the bridge that removes it, and carries both the
+measurement and the alternatives it rejected. One thing to know while reading a log: **the neighbour
+claim carries `sourceId` `wikidata`, because the kind, label and classes are Wikidata's facts; the
+edge still carries `musicbrainz`.**
+
 **And a node also corrects itself at the next boot, from the classes it stored** (issue #60, ADR
 42). A node claim carries the raw `P31` values beside the kind derived from them, so both
 projections — `GraphProjector` at boot and `LogProjection` in the exporter — re-derive the kind
@@ -795,6 +811,16 @@ kept and the expansion degrades gracefully instead of returning nothing. Registe
 is Wikidata's inverse of one already in `EdgeTypes` reintroduces the duplicate: mark it
 `fallbackOnly` or do not register it. The measurement and the reasoning are in
 [ADR 36](adr/0036-reverse-lookup-via-sparql.md)'s issue-#33 amendment.
+
+**All of this is `wikidata`'s alone.** The forward whitelist, the reverse property set and the
+subtraction between them live in that package, and a second source neither inherits them nor is
+measured against them: `MusicBrainzSourceAdapter` makes no reverse pass and has no fallback-only
+claims to drop, because it reads one `ws/2` response and maps a two-entry relation whitelist of its
+own. What it contributes to the same expansion, besides those relations, is **neighbour identity** —
+see the bridge in the paragraphs above and
+[ADR 61](adr/0061-the-bridge-returns-classes.md). Widening the bridge did not touch any of the three
+couplings or this subtraction, and a change here that claims to be "the same fix for MusicBrainz" is
+a sign of a mechanism being merged that was never shared.
 
 ### Ordering, bounds and degradation
 
@@ -912,7 +938,14 @@ ambiguous on its own:
 - `assertions` — what the source claims.
 - `neighbors` — identity for entities on the far end, when the source already knows it. Optional; an
   absent neighbour falls back to a `fetch`. This is an optimisation only the adapter can supply, and
-  it stopped an expansion needing one HTTP round trip per discovered neighbour.
+  it stopped an expansion needing one HTTP round trip per discovered neighbour. **Supply one only
+  where you can describe it as fully as a `fetch` would**
+  ([ADR 61](adr/0061-the-bridge-returns-classes.md)): `SegueService` records a supplied neighbour
+  whether or not the node already exists, and `upsertNode` is last-writer-wins on `instanceOf`, so a
+  neighbour emitted without classes takes away the classes a node already had — and one emitted with
+  a *narrower* class list than the source would give a fetch takes away the difference, with nothing
+  marking the result partial. A real label and the whole class list, or nothing: omitting one costs
+  a `fetch`, which is the fallback working, and a thin one costs data nothing gets back.
 - `sourceUnavailable` — the source could not be reached at all.
 - `truncated` — there was more, and this is a prefix of it.
 

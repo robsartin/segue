@@ -14,7 +14,20 @@ import com.robsartin.segue.domain.NodeRecord;
  */
 public interface SourceAdapter {
 
-  /** Stable identifier, and the {@code sourceId} every assertion this adapter emits will carry. */
+  /**
+   * Stable identifier, and the {@code sourceId} every {@link ExpandResult#assertions() assertion}
+   * this adapter emits will carry.
+   *
+   * <p><b>It governs {@code assertions()}, not {@link ExpandResult#neighbors() neighbors()}</b> (<a
+   * href="https://github.com/robsartin/segue/issues/163">issue #163</a>; ADR 61). A neighbour is
+   * identity an adapter <i>already had</i> rather than a relation it discovered, and it may have
+   * had it from somewhere else: {@code MusicBrainzSourceAdapter} learns a neighbour's kind, label
+   * and classes from the Wikidata-backed bridge it resolves MBIDs through, and stamps that claim
+   * {@code "wikidata"} because that is whose fact it is. The edge still carries {@code
+   * "musicbrainz"}. Forcing the adapter's own id onto both would put a source's name on data it
+   * does not state, and {@code EdgeRecord.corroboration()} counts distinct sources per <b>edge</b>,
+   * so nothing about this manufactures corroboration.
+   */
   String id();
 
   /** Whether this source has anything to say about entities of a given kind. */

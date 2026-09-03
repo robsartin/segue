@@ -290,3 +290,36 @@ says so in its own javadoc.
   table copied into prose goes stale silently. Nothing in either Decision above turns on the count:
   the argument is that admitting `subgroup` buys one edge, and that is unchanged whether the map
   it would be added to holds one mapping or two.
+
+**Amendment (2026-09-02, issue #163): the `neighbors()` decline above is reversed by
+[ADR 61](0061-the-bridge-returns-classes.md), on evidence that was not on the table when this ADR
+was written. The `subgroup` decline (#142) stands unchanged, and so does every figure above.**
+
+**What changed is where a neighbour's classes come from.** This ADR's own closing sentence named the
+route — a bridge that returns classes alongside QIDs, on the batched Query Service round trip
+`WikidataMusicBrainzIdentity` already spends — and called it the recommended successor rather than a
+consolation. Issue #163 built it: `MusicBrainzIdentity.identitiesFor` answers with a
+`BridgedIdentity` carrying a kind, a label and the raw classes, and `MusicBrainzSourceAdapter` emits
+a neighbour **only** from one that carries at least one class and a real label. The trade this ADR
+measured is therefore no longer the trade on offer: the saving is collected and the erasure is not
+paid, because an identity the bridge could not describe is omitted and the `EntityResolver.fetch`
+happens exactly as it does today.
+
+**The tests this ADR shipped are the evidence, not a casualty.**
+`MusicBrainzNeighbourIdentityTest` holds all three of its findings unedited and is green against the
+change — which is precisely the property this ADR predicted the bridge route would have, when it
+said the test "does not forbid the bridge-with-classes route".
+
+**Which layer refuses what, since the answer moved.** `BridgedIdentity` checks the shape of the QID
+and of every class id; each bridge withholds a description it cannot build — answering
+`undescribed` rather than throwing into an expansion nothing wraps, so the entry survives, the edge
+assertion still lands, and only the node claim is withheld; and the adapter's guard asks only
+whether an identity says enough to emit.
+The adapter's own shape check (GAP 9) is now defence in depth rather than the live check. ADR 61 is
+the authority on all of it.
+
+**This ADR is not superseded, and that is deliberate.** It decided two things and only one has
+changed, so marking it `Superseded by` would reopen `subgroup` — a question #163 neither measured
+nor touched. Its status stays `Accepted`, this amendment names its reverser, and ADR 61 names this
+ADR under `related` rather than `supersedes`. [ADR 1](0001-record-architecture-decisions.md) had no
+precedent for a partial reversal; ADR 61 states the convention it set.

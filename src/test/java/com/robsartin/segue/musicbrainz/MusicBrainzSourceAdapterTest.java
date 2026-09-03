@@ -354,6 +354,13 @@ class MusicBrainzSourceAdapterTest {
     // shipped wiring — so this is arriving external data rather than a programming error, the same
     // case ClaimMapper's non-QID object-id guard refuses for Wikidata. The adapter does not know
     // which bridge is behind the seam, which is exactly why it checks.
+    //
+    // Since issue #163 the drop happens one layer earlier, in the bridge itself: a BridgedIdentity
+    // may not hold a non-QID, so a bridge reading one out of its source drops the row rather than
+    // constructing one and throwing out of expand(). StubIdentity carries that guard, as every
+    // implementor now must — it was the seam's default until qidsFor was retired and took the
+    // default with it. The assertions below are unchanged because the observable answer is — no
+    // assertion, no flag — and the adapter's own GAP 9 guard remains behind it.
     MusicBrainzSourceAdapter adapter =
         adapter(mapping(QUINTET_MBID, QUINTET_QID, FIRST_MEMBER_MBID, "https://example.invalid/x"));
 
@@ -594,7 +601,7 @@ class MusicBrainzSourceAdapterTest {
     }
 
     @Override
-    public Map<String, String> qidsFor(Collection<String> mbids) {
+    public Map<String, BridgedIdentity> identitiesFor(Collection<String> mbids) {
       throw new MusicBrainzIdentityUnavailableException("the bridge did not answer");
     }
   }
@@ -614,7 +621,7 @@ class MusicBrainzSourceAdapterTest {
     }
 
     @Override
-    public Map<String, String> qidsFor(Collection<String> mbids) {
+    public Map<String, BridgedIdentity> identitiesFor(Collection<String> mbids) {
       throw new MusicBrainzIdentityUnavailableException("the bridge did not answer");
     }
   }
@@ -639,9 +646,9 @@ class MusicBrainzSourceAdapterTest {
     }
 
     @Override
-    public Map<String, String> qidsFor(Collection<String> mbids) {
+    public Map<String, BridgedIdentity> identitiesFor(Collection<String> mbids) {
       asked.addAll(mbids);
-      return delegate.qidsFor(mbids);
+      return delegate.identitiesFor(mbids);
     }
   }
 

@@ -202,13 +202,12 @@ final class ReverseClaims {
   }
 
   private static void rememberLabel(Map<String, String> labels, String qid, String label) {
-    if (label == null || label.isBlank() || label.equals(qid)) {
-      // wikibase:label hands back the bare QID when no English label exists, so believing it
-      // would fill the graph with nodes called "Q121998451". Leaving the neighbour out lets
-      // SegueService fall back to a real fetch, which is the behaviour that already exists.
-      return;
+    // The rule this method used to spell out lives in WikibaseLabels now, because issue #163 gave
+    // the same service a second consumer and the two copies were byte-identical.
+    String believable = WikibaseLabels.believable(qid, label);
+    if (believable != null) {
+      labels.putIfAbsent(qid, believable);
     }
-    labels.putIfAbsent(qid, label);
   }
 
   private static List<NodeAssertion> neighbours(
