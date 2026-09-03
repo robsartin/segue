@@ -581,10 +581,12 @@ class MusicBrainzProbeEngineTest {
                   graph));
 
       // MusicBrainzSourceAdapter.expand opens with mbidFor and follows it with artistRelations and
-      // qidsFor, so one mbidFor per seed is what says the adapter was not driven a second time —
-      // and therefore that each seed cost exactly one /artist/<mbid> request.
+      // identitiesFor, so one mbidFor per seed is what says the adapter was not driven a second
+      // time — and therefore that each seed cost exactly one /artist/<mbid> request.
       assertThat(identity.mbidForCalls).as("one bridge lookup per seed").isEqualTo(2);
-      assertThat(identity.qidsForCalls).as("one batched neighbour lookup per bridged seed").isOne();
+      assertThat(identity.identitiesForCalls)
+          .as("one batched neighbour lookup per bridged seed")
+          .isOne();
       assertThat(report.sample()).isEqualTo(new Sample(2, 1, 1, 1, 24, 1, 2));
       assertThat(report.census())
           .containsExactly(Map.entry("member of band", 22), Map.entry("named after artist", 2));
@@ -650,7 +652,7 @@ class MusicBrainzProbeEngineTest {
     private final Map<String, String> neighbourMbidToQid;
     private final Map<String, String> seedQidToMbid;
     private int mbidForCalls;
-    private int qidsForCalls;
+    private int identitiesForCalls;
 
     private CountingIdentity(
         Map<String, String> neighbourMbidToQid, Map<String, String> seedQidToMbid) {
@@ -664,14 +666,20 @@ class MusicBrainzProbeEngineTest {
       return Optional.ofNullable(seedQidToMbid.get(qid));
     }
 
+    /**
+     * Answers with {@link BridgedIdentity#undescribed} rows: this double knows a QID per MBID and
+     * could invent none of the other three fields, which is exactly what {@code qidsFor} gave
+     * before issue #163 retired it. An MBID the bridge cannot name is left out of the map, as
+     * {@code identitiesFor}'s javadoc requires.
+     */
     @Override
-    public Map<String, String> qidsFor(Collection<String> mbids) {
-      qidsForCalls++;
-      Map<String, String> resolved = new LinkedHashMap<>();
+    public Map<String, BridgedIdentity> identitiesFor(Collection<String> mbids) {
+      identitiesForCalls++;
+      Map<String, BridgedIdentity> resolved = new LinkedHashMap<>();
       for (String mbid : mbids) {
         String qid = neighbourMbidToQid.get(mbid);
         if (qid != null) {
-          resolved.put(mbid, qid);
+          resolved.put(mbid, BridgedIdentity.undescribed(qid));
         }
       }
       return Map.copyOf(resolved);

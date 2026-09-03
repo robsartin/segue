@@ -106,7 +106,7 @@ class MusicBrainzProbeLiveTest {
 
       System.out.println(report.render());
       // Per seed: one MusicBrainz /artist/<mbid>, and on the Wikidata side one mbidFor, one
-      // batched qidsFor over the relation targets, and one WikidataSourceAdapter.expand — and
+      // batched identitiesFor over the relation targets, and one WikidataSourceAdapter.expand — and
       // MusicBrainz asks for about one request a second. So the elapsed time is the figure that
       // says whether a longer run is affordable.
       System.out.println(

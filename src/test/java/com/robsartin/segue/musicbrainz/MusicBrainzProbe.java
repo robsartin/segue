@@ -568,7 +568,10 @@ final class MusicBrainzProbe {
               .filter(Objects::nonNull)
               .distinct()
               .toList();
-      Map<String, String> qids = targets.isEmpty() ? Map.of() : inputs.identity().qidsFor(targets);
+      // identitiesFor is one batched question per seed, as qidsFor was before it was retired
+      // (issue #163): the probe reads only the QID off each answer, because a census counts
+      // neighbours and not what the bridge could say about them.
+      Map<String, String> qids = targets.isEmpty() ? Map.of() : qidsOf(inputs, targets);
       // Once per neighbour per expansion, which is the unit SegueService resolves them in and the
       // unit ADR 55 counted them in.
       List<String> neighbours =
@@ -604,6 +607,14 @@ final class MusicBrainzProbe {
    * and applies the bound where the adapter applies it, so this is not a second copy of the
    * whitelist — block 5's last row would go stale the day that rule changed.
    */
+  /** The QID of every target the bridge could name, in the order the batch was asked. */
+  private static Map<String, String> qidsOf(ProbeInputs inputs, List<String> targets) {
+    Map<String, BridgedIdentity> identities = inputs.identity().identitiesFor(targets);
+    Map<String, String> qids = new LinkedHashMap<>();
+    identities.forEach((mbid, identity) -> qids.put(mbid, identity.qid()));
+    return Map.copyOf(qids);
+  }
+
   private static int musicbrainzAssertions(
       List<ArtistRelation> relations, Map<String, String> qids) {
     return (int)
