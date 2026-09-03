@@ -353,8 +353,13 @@ public final class MusicBrainzSourceAdapter implements SourceAdapter {
    * {@code sourceRef}, and a tab or a newline in it throws out of {@link Provenance}'s constructor
    * and past {@link #expand}. Asking it here rather than at the assertion also keeps the bound
    * honest, and costs the bridge nothing — an unciteable neighbour is never even asked about.
+   *
+   * <p>Package-private rather than private so that {@code MusicBrainzProbe} can count what this
+   * adapter would contribute to {@code SegueService}'s concatenation from a response it already
+   * holds, instead of keeping a second copy of this rule or spending a second request to ask for
+   * it.
    */
-  private static boolean isMappable(ArtistRelation relation) {
+  static boolean isMappable(ArtistRelation relation) {
     return relation.type() != null
         && BY_RELATION_TYPE.containsKey(relation.type())
         && (FORWARD.equals(relation.direction()) || BACKWARD.equals(relation.direction()))
