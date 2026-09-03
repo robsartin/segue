@@ -2197,9 +2197,15 @@ neighbour the local entity touched had one more incident edge than the world jus
 `lift` divides by (ADR 45). Measured on an invented fixture: up to 12.5 % off a candidate's score,
 enough to unseat the top recommendation, and invisible in ADR 57's floor reading.
 `MergeDoesNotInflateDegreeTest` is the guard on the ranking and `BothFoldsAgreeTest` is what stops
-the replayed graph and the exported picture from drifting apart. A fold that would collapse both
-ends of one edge onto a single id — the owner minting the same thing twice and merging both — drops
-that edge rather than inventing a self-loop; a self-loop already in the log is left where it is.
+the replayed graph and the exported picture from drifting apart.
+`StandInAgreesInEveryHomeTest` is the third guard in that family: the stand-in rule has four
+homes — `Equivalences.standIns`, `IngestService.standIn`, `OwnRun.labelsInTheProjection` and
+`ratings/Labels.forQids` — and it feeds all four one log and reds when any pair of them calls a
+canonical id something different.
+
+A fold that would collapse both ends of one edge onto a single id — the owner minting the same
+thing twice and merging both — drops that edge rather than inventing a self-loop; a self-loop
+already in the log is left where it is.
 
 **A merge applied live moves nothing until the next boot.** `IngestService.record` sees one claim
 and not a log, so a `SameAs` arriving there appends, gets its canonical stand-in node, and moves no

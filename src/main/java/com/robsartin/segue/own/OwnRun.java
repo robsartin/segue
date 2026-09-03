@@ -221,8 +221,16 @@ public final class OwnRun {
    * canonical entity written under the wrong name (#178, spec ruling 2). The canonical id is
    * offered, carrying the merged entity's label, because the merge put a node under it. Asking
    * retraction alone got both halves wrong at once.
+   *
+   * <p><b>Package-private rather than private, and the reason is named so it is not guessed at.</b>
+   * This is the third of the stand-in rule's four homes (ADR 59's residual, issue #220), and {@code
+   * StandInAgreesInEveryHomeTest} feeds all four one log and holds them to one answer per canonical
+   * id. The alternative was to drive {@code OwnRun.run} with a dry-run {@code OwnCli.Assert} and
+   * read the labels back out of the operator note, which would put a prose parser in front of a
+   * guard - the shape that turns "cannot read it" into "it is not there". Nothing outside this
+   * package calls it, and no ArchUnit rule changes.
    */
-  private static Map<String, String> labelsInTheProjection(
+  static Map<String, String> labelsInTheProjection(
       List<LoggedAssertion> logged, Equivalences merges) {
     Map<String, String> labels = new LinkedHashMap<>();
     Retractions retractions = Retractions.in(logged);
