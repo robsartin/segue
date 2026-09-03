@@ -44,8 +44,8 @@ import java.util.function.Consumer;
  * the log". An endpoint an earlier retraction reached is absent, because the shared {@link
  * Retractions} fold says so - the same rule both graph projections and the exporter apply; an
  * endpoint the owner has merged away is absent too, and the id it was merged into is present, on
- * the shared {@link Equivalences} fold and {@code IngestService.carry}'s node rule. A local entity
- * minted by an <em>earlier</em> invocation is present, because it projects through {@code
+ * the shared {@link Equivalences} fold and {@code IngestService.standIn}'s node rule. A local
+ * entity minted by an <em>earlier</em> invocation is present, because it projects through {@code
  * LocalEntity.toNode()}. Minting and asserting in one run is deliberately not supported: one
  * operation per run, as {@code retractEntity} does one retraction per run.
  */
@@ -154,18 +154,25 @@ public final class OwnRun {
             + merge.canonicalQid()
             + ": you are saying they are the same thing");
     n.accept(
-        "nothing is deleted — the local id stays resolvable, and its edges and rating are carried"
-            + " onto the canonical id (ADR 19, ADR 44)");
+        "nothing is deleted — the local id stays resolvable and keeps its own rating, and its edges"
+            + " move onto the canonical id, where they are counted once (ADR 19, ADR 44; ADR 59 as"
+            + " #178 amends it)");
     // Said, not refused. A second merge of one local id is how a wrong merge is corrected -
     // Equivalences' rule is that the last surviving merge wins - so the operator who means it
     // keeps his correction, and the operator who has forgotten sees it before the log is touched.
+    //
+    // The graph half used to be the other way round and this line used to say so: carry COPIED the
+    // edges at each merge's own row, so a twice-merged local id left a copy on both canonical ids
+    // and the note had to warn that the graph kept both. Since #178 both folds resolve endpoints
+    // through the same last-wins map, so the edges land on this canonical id alone - one rule for
+    // the rating and the graph instead of two answers to one question.
     String already = Equivalences.in(logged).canonicalByLocal().get(merge.localQid());
     if (already != null) {
       n.accept(
           merge.localQid()
               + " was already merged into "
               + already
-              + " — the last merge wins for the rating; the graph keeps both carries");
+              + " — the last merge wins, for the rating and for the edges alike");
     }
     return SameAs.declared(merge.localQid(), merge.canonicalQid(), clock.instant());
   }
@@ -175,9 +182,11 @@ public final class OwnRun {
     String label = present.get(qid);
     if (label == null) {
       // A merged local id is refused by name rather than as an absence. It IS still in the graph -
-      // nothing is deleted - so "mint or seed it first" would be false and useless advice; and an
-      // edge claimed against it now would stay on the retired id forever, because carry() reads
-      // the graph as it stood when the merge was applied.
+      // nothing is deleted - so "mint or seed it first" would be false and useless advice. Since
+      // #178 an edge claimed against it would not be stranded either: both folds resolve endpoints
+      // over the whole log, so it would silently become an edge on the canonical id. That is spec
+      // ruling 2, and it is why this refusal is a courtesy to the operator - telling him which id
+      // he is really claiming about - rather than the thing that keeps the graph correct.
       String canonical = merges.canonicalByLocal().get(qid);
       if (canonical != null) {
         throw new IllegalArgumentException(
@@ -208,10 +217,10 @@ public final class OwnRun {
    *
    * <p><b>Merges move the offer, in both directions</b>, through the shared {@link Equivalences}
    * exactly as retraction goes through the shared {@link Retractions}. A merged local id is no
-   * longer offered - an edge claimed against it would land on the id the owner retired and never be
-   * carried, because {@code carry} reads the graph as it stood when the merge was applied. The
-   * canonical id is offered, carrying the merged entity's label, because the merge put a node under
-   * it. Asking retraction alone got both halves wrong at once.
+   * longer offered - it is the id the owner retired, and a claim naming it is a claim about the
+   * canonical entity written under the wrong name (#178, spec ruling 2). The canonical id is
+   * offered, carrying the merged entity's label, because the merge put a node under it. Asking
+   * retraction alone got both halves wrong at once.
    */
   private static Map<String, String> labelsInTheProjection(
       List<LoggedAssertion> logged, Equivalences merges) {
@@ -227,7 +236,7 @@ public final class OwnRun {
       } else if (assertion instanceof LocalEntity minted) {
         labels.put(minted.qid(), minted.label());
       } else if (assertion instanceof SameAs merge && !labels.containsKey(merge.canonicalQid())) {
-        // The node carry, the same rule IngestService.carry and both folds apply: the canonical id
+        // The node stand-in, the same rule Equivalences.standIns and both folds apply: the id
         // gains a node carrying the merged entity's label where nothing has claimed one. It is in
         // the projection, so this tool has to offer it - and it is usually the id the owner wants
         // next, since a merge is normally declared the moment Wikidata catches up.

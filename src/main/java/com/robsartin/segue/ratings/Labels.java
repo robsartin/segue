@@ -30,14 +30,20 @@ import java.util.Set;
  * KindMapper.rederive} matters to a picture that colours by kind, and this is a list of names.
  *
  * <p><b>A merge is folded here too, and that invariant is why</b> (#92). {@code
- * IngestService.carry} puts a node under the canonical id carrying the label of the entity merged
- * into it, and it writes that to the <em>graph</em> while this reads the <em>log</em> - so for as
- * long as this fold ignored merges, the sentence above was false in the one case the third layer
- * creates: a carried canonical row was listed as {@link AffinityRow#NO_LABEL} - "(not in the
- * graph)" - while the node was in the graph. That string is for a rating that outlived its node,
- * which is the opposite situation, and it is what made the wrong output read as intended. The rule
- * is carry's, not a second one: the canonical id takes the merged entity's label only where nothing
- * has claimed it, and a claim after the merge still overwrites.
+ * Equivalences.standIns} puts a node under the canonical id carrying the label of the entity merged
+ * into it, and both projections write that to the <em>graph</em> while this reads the <em>log</em>
+ * - so for as long as this fold ignored merges, the sentence above was false in the one case the
+ * third layer creates: a carried canonical row was listed as {@link AffinityRow#NO_LABEL} - "(not
+ * in the graph)" - while the node was in the graph. That string is for a rating that outlived its
+ * node, which is the opposite situation, and it is what made the wrong output read as intended. The
+ * rule is the stand-in's, not a second one: the canonical id takes the merged entity's label only
+ * where nothing has claimed it, and a claim after the merge still overwrites.
+ *
+ * <p><b>#178 moved a merge's edges and left its node exactly here.</b> Both folds now resolve an
+ * edge's endpoints onto the canonical id instead of copying them, so the local id is an orphan in
+ * the graph - but it still has its node and still has its label, which is all this list reads. So
+ * this fold is unchanged by that amendment, and it is unchanged on purpose rather than by
+ * oversight.
  *
  * <p><b>Both rows stay, and that is not the same defect.</b> A merge carries the rating and leaves
  * the local row where it is, deliberately - {@code IdentityMerge.carryingRatings} moves the score
@@ -119,14 +125,14 @@ final class Labels {
       if (qid != null && wanted.contains(qid)) {
         labels.put(qid, label);
       }
-      // A merge names an entity too, at one remove: IngestService.carry puts a node under the
-      // canonical id carrying the label of the entity that was merged into it, so this fold has to
-      // do the same or the invariant above is false. It was: a carried canonical row listed as
+      // A merge names an entity too, at one remove: the stand-in puts a node under the canonical
+      // id carrying the label of the entity that was merged into it, so this fold has to do the
+      // same or the invariant above is false. It was: a carried canonical row listed as
       // "(not in the graph)" while the node was in the graph. The retraction check above already
       // covers this row - a SameAs naming a retracted entity on either side never reaches here.
       if (assertion instanceof SameAs merge) {
         String local = labels.get(merge.localQid());
-        // Only where nothing has claimed the canonical entity, which is carry()'s own guard: a
+        // Only where nothing has claimed the canonical entity, the stand-in's own guard: a
         // source that HAS named it wins, because overwriting its label with the owner's working
         // title would be the merge editing the world rather than recording an identity. A source
         // that names it LATER still wins, here by the put above and in the graph by upsertNode.

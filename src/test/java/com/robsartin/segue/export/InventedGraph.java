@@ -45,6 +45,18 @@ final class InventedGraph {
   static final String PRESSING = "Q900106";
 
   /**
+   * A second canonical id, for a merge whose local side carries edges on both sides of itself
+   * (#178). Same invented family, same issue #171 debt.
+   */
+  static final String WATERMARK = "Q900107";
+
+  /**
+   * A third, for the merge whose local side was named by a plain node claim rather than minted
+   * (#178, spec ruling 2 - "a later claim naming the local id, by a path that bypasses the tool").
+   */
+  static final String STANDING = "Q900108";
+
+  /**
    * Two ids the owner minted. Two leading zeros, which Wikibase's item-id grammar can never
    * allocate (ADR 58, ADR 59) - so these are deliberately not from the {@code Q900xxx} family, and
    * issue #171 does not reach them.
@@ -52,6 +64,25 @@ final class InventedGraph {
   static final String ALMANAC = "Q001";
 
   static final String DEMO = "Q002";
+
+  /** A third, and the one the folds are asked the hardest question about (#178). */
+  static final String LEDGER = "Q003";
+
+  /**
+   * A fourth, deliberately NOT minted anywhere: it is named by a plain {@link NodeAssertion}, the
+   * shape spec ruling 2 says the fold must not assume away (#178). Unreachable from today's sources
+   * - no source can allocate a {@code Q00} id - and that is exactly why only a test can hold the
+   * two folds to answering it alike.
+   */
+  static final String BYPASS = "Q004";
+
+  /**
+   * A fifth, minted and then merged onto the <em>same</em> canonical id as {@link #ALMANAC} — the
+   * owner minting one thing twice and saying so, which is a real path (#178). An owner edge between
+   * the two folds to an edge from that canonical id to itself, and a self-loop is a claim that a
+   * thing relates to itself, which neither a source nor the owner ever made.
+   */
+  static final String TWICE = "Q005";
 
   private static final Instant WHEN = Instant.parse("2026-01-01T00:00:00Z");
 

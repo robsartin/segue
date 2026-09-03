@@ -197,3 +197,121 @@ projected to the graph like a world fact, and excluded from corroboration entire
   rating would also be deterministic and has not been argued either way.
 - **The migration of ADR 58's remaining stand-ins** into leading-zero form, which is issue #171 and
   is deliberately untouched here.
+
+**Amendment (2026-09-02, issue #178): the merge bullet's graph half — *"the local id keeps its
+node, its edges and its affinity row"* — is now false in its middle term. The edges move.**
+
+Nothing above is withdrawn, no sentence above is edited, and the decision this ADR made is
+unchanged: a merge is still an appended equivalence and never an edit, the log is still untouched,
+and a wrong merge is still retractable by [ADR 44](0044-retraction-as-a-new-claim.md)'s ordinary
+mechanism, because the fold asks `Retractions.survives` before it folds anything. What changes is
+where the merged entity's edges live once the log has been read.
+
+**What the bullet says, and what is true instead.** Four sentences of it no longer describe the
+code, and each is replaced by one line here rather than corrected in place:
+
+- *"the local id keeps its node, its edges and its affinity row"* — it keeps its **node** and its
+  **affinity row**. Its edges are resolved onto the canonical id at projection, so they exist once.
+- *"`IngestService` copies the node and the edges onto the canonical id"* — it copies neither. The
+  canonical node is built by `Equivalences.standIns` in a pre-pass that runs before either fold
+  begins, and the edges are folded rather than copied.
+- *"Ingest and every boot replay carry it"* — every boot replay folds it; live ingest no longer has
+  a graph half to carry. `IngestService.record` sees one claim and not a log, so a `SameAs` arriving
+  there appends, gets its canonical stand-in node, and moves no edge until the next boot — the same
+  contract `retract()` already gives, and for the same reason ([ADR 24](0024-sqlite-assertion-log.md),
+  [ADR 18](0018-graph-engine-gremlin.md): `GraphStore` cannot remove or rewrite an edge).
+- *"Each of those classes is the authority for its own half"* — `Equivalences` is now the authority
+  for both halves. `Equivalences.foldEndpoints` is the rule; `GraphProjector.project` and
+  `LogProjection.of` are its two callers, and each is still the authority for its own fold's
+  mechanics. This ADR mirrors no table of theirs.
+
+The rating half of a merge, and the correction ADR 33's amendment records about `note_affinity`,
+are untouched by all of this.
+
+**The measurement that forced it, as dated observations (2026-09-02).** All of it is an invented
+fixture with invented ids, so [ADR 51](0051-what-an-adr-may-quote.md) does not bite: there is no
+known-list behind it. Driving the real `recommend` against a scratch log, a merge of one minted
+entity carrying 2, 5 and 20 owner edges moved 8, 10 and 18 of the top 25 scores; ranks moved by at
+most three places; one entry left the page and one entered at twenty edges; and the worst single
+score change was −12.50 %, which unseated the rank-1 candidate whose degree went 7 → 8. The issue's
+own estimate of "roughly 3 %" turned out to be the large-degree end of that curve rather than its
+middle. **Nothing in [ADR 57](0057-the-floor-reports-itself.md)'s reading would have told an
+operator any of it had happened**: the pool's median degree read 19 → 20 at five edges and identical
+at two and twenty. The positive control — the same fixture with the owner's edges counted once —
+returns the pre-merge top 25 in the pre-merge order, largest score difference 0.0000000000, so the
+target state is exact and needs no tolerance. `MergeDoesNotInflateDegreeTest` is that control kept,
+and it has been seen red at all three degrees with the copy restored, quoting those same figures.
+The instrument was validated first: two replays of one unchanged log are byte-identical.
+
+**Why the fix is in the projection and not in the scorer.** The inflated degree had four readers —
+`Scorer`'s division by the candidate's own degree, `PathRanking.isHub` on the routing side, the
+exporter's picture, and `find_paths` offering two identical routes — and one fold corrects all four.
+Correcting it inside the scorer would have added a third job to a number
+[ADR 45](0045-recommend-by-normalised-lift-with-routes.md)'s 2026-08-29 amendment already records as
+doing two it cannot separate, and would have left the other three readers reading the old number
+with nothing comparing them. `BothFoldsAgreeTest` is what stops the two folds drifting apart while
+they move together, and it reds with the copy restored just as the ranking guard does.
+
+**How it was built, because the order is part of the record.** The whole change was tried first as a
+Mikado probe and reverted: **11 tests failed**, and the prerequisites they named were then landed
+leaf-first, green at every commit. Two of those leaves are worth naming. `Equivalences.standIns`
+walks the log itself in a second pass rather than reading the store, because at the moment the
+stand-in map is wanted nothing has been projected yet and the store cannot answer. And
+`Equivalences.localsOfMerges` became the single predicate for "which surviving merges have a local
+side, and what did it look like" — the exporter used to keep its own answer in its node accumulator,
+which is the two-readings-of-one-log shape this issue is a member of.
+
+**A fold that would collapse an edge onto itself drops that edge.** The owner minting one thing
+twice and merging both onto one canonical id is a real path, and the edge between the two would fold
+to a self-loop nobody claimed, so `foldEndpoints` yields nothing for it and both folds skip it. This
+is scoped to what the fold creates: a self-loop already in the log is left exactly where it is,
+because refusing those is a different rule and belongs on the record, where every writer meets it.
+
+**Consequence for `exportGraph`.** A merged local id becomes a node with no edges, and it is drawn —
+in a `full` or `subgraph` export, like any other orphan, with nothing hiding it. That is asserted on
+the DOT artefact itself and not only on the records behind it. The node *order* of an export holding
+a merge also changes, because the stand-ins are now listed by the pre-pass rather than at the merge's
+row; the separate, pre-existing question of node-order determinism in that writer is issue #207.
+
+**Rejected, with the reason each lost.**
+
+- **Exclude merged local ids from degree in the scorer** — `CandidateSweep` takes the equivalences
+  and subtracts the duplicate edges itself. By far the cheapest: no projection moves, no export
+  artefact changes, and no clause of this ADR would have needed amending. **Lost because it is the
+  shape of the bug it fixes.** A corrected degree only the scorer knows about is a second reading of
+  one log that the other three readers do not share, which is exactly the family (#176, #177, #178)
+  this fix belongs to; and it amends ADR 45's formula rather than this ADR's bullet, giving degree a
+  third job on top of the two it already cannot separate.
+- **Accept and record** — state the residual and make it visible beside ADR 57's floor reading.
+  Honest, and this repository has shipped four documented refusals that each beat their fix.
+  **Lost on the measurement**: 12.50 % on one score, enough to unseat rank 1 and swap an entry off
+  the page, at a merged degree the owner would call ordinary, and it compounds with every merge in
+  exactly the neighbourhood he cares most about. Recording it honestly is itself a build, because
+  "silent" is half the defect.
+- **The rename form of the fold** — the local id becomes the canonical id everywhere, node included,
+  so the graph holds one node and the export has no orphan to draw. Cleaner. **Rejected for now**
+  because it deletes more of the bullet above than the defect requires, and `get_entity` on a local
+  id would start answering nothing with no redirect to offer instead. Worth re-opening if the
+  isolated node turns out to be worse than the missing one.
+- **A `GraphStore` edge delete**, so the carry could move edges incrementally. **Lost** because no
+  `SameAs` reaches a live graph, so it would widen the port that exists to keep the engine choice
+  reversible (ADR 18) for a case that does not arise.
+
+**Residuals accepted rather than closed**, each visible in the code today:
+
+- **The stand-in's kind is taken as the claim stated it** on the bypass path — a merge whose local
+  side is a plain node claim carrying classes gives a stand-in with the claimed kind while both folds
+  re-derive the local node's own. Both folds agree, so `BothFoldsAgreeTest` cannot see it; re-deriving
+  inside `domain` would drag `KindMapper` in and break `noPackageCycles`.
+- **The stand-in rule has four homes**: `Equivalences.standIns`, `IngestService.standIn`,
+  `OwnRun.labelsInTheProjection` and `ratings/Labels.forQids`. The last two read labels off the log
+  rather than nodes off a graph, which is why they are copies rather than callers. Nothing fails if
+  one drifts.
+- **How many merges the owner's real graph holds is unmeasured.** Nothing in this work opened
+  `~/.segue/segue.db`; every figure above is from an invented fixture, so the size of the effect this
+  amendment removes — `merges × their degree` — is known for the fixture and unknown for the graph it
+  was built to stand in for. The spec left this open and it stays open.
+- **A local id merged twice leaves an orphan stand-in under the *first* canonical id** while its
+  edges land on the last, because the stand-in map is `putIfAbsent` and the canonical map is
+  last-wins. Both folds agree about it; it is a correction's leftover rather than anything the owner
+  claimed.

@@ -575,7 +575,8 @@ transaction that rolls the log back.
 ### Replay shares the apply step
 
 `GraphProjector.project` does not have its own switch over assertion kinds. It calls the same
-package-private `IngestService.apply(store, assertion)` that live ingest uses. Two copies of that
+package-private `IngestService.apply` that live ingest uses — since #178 with the log's
+`Equivalences` beside the store, so that a merge's endpoints are folded on the way in. Two copies of that
 dispatch would be free to drift, and a rebuilt graph that silently differs from the one it replaced
 defeats the point of keeping a log. Replay is fatal on the first failure and names the 1-based
 sequence number: a log that will not project is corruption to surface at boot, not to limp past.
@@ -2138,31 +2139,52 @@ hold as a minted entity, a sourced QID and a retracted local id alike, gets the 
 `nothing in the projection minted Q00900043 — check the id, or it may already be retracted`.
 
 The two report lines say what happens: `merging Q00900042 "A Self-Pressed Record" into Q12345: you
-are saying they are the same thing`, then `nothing is deleted — the local id stays resolvable, and
-its edges and rating are carried onto the canonical id (ADR 19, ADR 44)`.
+are saying they are the same thing`, then `nothing is deleted — the local id stays resolvable and
+keeps its own rating, and its edges move onto the canonical id, where they are counted once (ADR 19,
+ADR 44; ADR 59 as #178 amends it)`.
 
-Those two halves do not happen at the same time. **Every replay carries the edges.**
-`IngestService.apply` calls `carry` on any `SameAs` it meets, so ingest, boot and a dev tool's
-throwaway projection all copy the local node's edges onto the canonical id, give the canonical id a
-node only when nothing has claimed one, and leave the local node exactly where it was — which is
-what "stays resolvable" means, since a route recorded last month still names it.
+Those two halves do not happen at the same time. **Every replay folds the edges, and moving is not
+copying.** `GraphProjector.project` and `LogProjection.of` each resolve every edge endpoint through
+`Equivalences.foldEndpoints` before they apply or collect it, so a merged entity's edges exist
+**once**, on the canonical id. The local node stays exactly where it was — which is what "stays
+resolvable" means, since a route recorded last month still names it — and the canonical id gets a
+node only when nothing has claimed one, built by `Equivalences.standIns` in a pre-pass that runs
+before either fold begins. An edge claimed against the local id *after* the merge folds onto the
+canonical id too: the resolution is over the whole log, not at the merge's row.
+
+**Until [#178](https://github.com/robsartin/segue/issues/178) it copied instead**, and left the
+edges on the local id as well, so the graph held two nodes carrying one entity's edges and every
+neighbour the local entity touched had one more incident edge than the world justified — which
+`lift` divides by (ADR 45). Measured on an invented fixture: up to 12.5 % off a candidate's score,
+enough to unseat the top recommendation, and invisible in ADR 57's floor reading.
+`MergeDoesNotInflateDegreeTest` is the guard on the ranking and `BothFoldsAgreeTest` is what stops
+the replayed graph and the exported picture from drifting apart. A fold that would collapse both
+ends of one edge onto a single id — the owner minting the same thing twice and merging both — drops
+that edge rather than inventing a self-loop; a self-loop already in the log is left where it is.
+
+**A merge applied live moves nothing until the next boot.** `IngestService.record` sees one claim
+and not a log, so a `SameAs` arriving there appends, gets its canonical stand-in node, and moves no
+edge; the boot after it moves them. That is the contract `retract()` already gives, for the same
+reason — `GraphStore` cannot remove or rewrite an edge (ADR 24, ADR 18) — and `ownClaim` holds no
+graph at all, so nothing it does depends on it.
 
 **The rating half is the one that is not always wired.** It goes through the `IdentityMerge` port,
-and `recommend` and `rate` both replay with `IdentityMerge.NONE`, so their projection carries the
-edges and no rating at all. That is why `Equivalences` **resolves** the merge at read time instead,
-for that single run: two affinity rows naming one thing become one view, and the last surviving
-merge wins for the rating.
+and `recommend` and `rate` both replay with `IdentityMerge.NONE`, so their projection folds the
+edges and carries no rating at all. That is why `Equivalences` **resolves** the merge at read time
+instead, for that single run: two affinity rows naming one thing become one view, and the last
+surviving merge wins for the rating.
 
 A second merge of one local id is **said, not refused**, because that is how a wrong merge is
-corrected: `Q00900042 was already merged into Q12345 — the last merge wins for the rating; the graph
-keeps both carries`.
+corrected: `Q00900042 was already merged into Q12345 — the last merge wins, for the rating and for
+the edges alike`. One rule now answers for both halves — the edges land on the last canonical id
+alone, where the copy used to leave one on each. What the first canonical id keeps is an orphan
+stand-in node with the merged entity's label and no edges, which is a correction's leftover rather
+than anything you claimed.
 
-**The graph half is open, and no fold reaches it.** After a merge the graph holds two nodes carrying
-the same edges, so every neighbour the local entity touched has one more incident edge than the world
-justifies, and `lift` divides by the candidate's own degree (ADR 45). That is
-[#178](https://github.com/robsartin/segue/issues/178), measured at roughly 3% on a test-sized
-fixture, silent, and compounding with every merge. Task 4b of #92 folded the *ratings* so a merged
-entity counts once; this one is the graph half and nothing folds it yet.
+**So a merged local id draws as an isolated node.** It has a node and no edges, and a `full` or
+`subgraph` export draws it like any other orphan — nothing hides it, and
+`MergedIdIsDrawnAsAnOrphanTest` asserts that on the DOT itself. Task 4b of #92 had already folded
+the *ratings* so a merged entity counts once; #178 is the graph half, and both folds now make it.
 
 ### Undoing one, and why it matters which id you retract
 
