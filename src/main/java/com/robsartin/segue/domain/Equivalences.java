@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.UnaryOperator;
 
 /**
  * Which local ids the owner has said are really something else, and what the taste layer does about
@@ -167,21 +168,35 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
    * log, four homes, one answer per canonical id. It pins what they do rather than claiming it is
    * right, and ADR 59's residual - four homes, not one caller - is untouched by it.
    *
+   * <p>The kind this one carries now comes through {@code rederive} (#222); the other three are
+   * unchanged by that, because two of them carry a label and no kind at all, and {@code
+   * IngestService.standIn} copies the local node as the graph in front of it holds it - which on
+   * the live path is the claim un-re-derived, because that path is not a projection (ADR 42).
+   *
    * <p><b>Derived from {@link #localsOfMerges}, and that is the point.</b> "Does this merge have a
    * local side, and what does it look like?" is one question, asked by the stand-in here and by
    * {@code IngestService.standIn} on the live path. Answering it in two places is how the two folds
    * drift — which they did, briefly, when this method read {@link LocalEntity} claims while {@code
    * LogProjection} still read its own accumulator to decide whether to copy a merge's edges.
    *
+   * @param rederive how the calling fold derives a node claim's kind - {@code KindMapper::rederive}
+   *     from both of them, handed in because {@code domain} may not name it
    * @return each canonical id and the node to stand in for it, in log order
    */
-  public static Map<String, NodeRecord> standIns(List<LoggedAssertion> log) {
+  public static Map<String, NodeRecord> standIns(
+      List<LoggedAssertion> log, UnaryOperator<NodeAssertion> rederive) {
     Map<String, NodeRecord> standIns = new LinkedHashMap<>();
-    for (Map.Entry<Integer, NodeRecord> at : localsOfMerges(log).entrySet()) {
+    for (Map.Entry<Integer, NodeRecord> at : localsOfMerges(log, rederive).entrySet()) {
       if (log.get(at.getKey()) instanceof SameAs merge) {
         NodeRecord local = at.getValue();
         // No instanceOf: a stand-in carries what it was given rather than inventing a class -
-        // LocalEntity.toNode()'s own reason, and the owner stated no classes.
+        // LocalEntity.toNode()'s own reason. On the bypass path the local side DID state classes,
+        // and they are deliberately dropped here too (#222). Not because they would say nothing:
+        // instanceOf is read on its own, independently of the kind derived from it - DotWriter
+        // tooltips it and shades a WORK by it, GraphMlWriter writes it out as its own attribute -
+        // so carrying the list forward would put the local side's classes on the canonical id and
+        // report them as that entity's, which no source has stated about it. The kind is a
+        // different case and is copied: it is what the stand-in exists to say.
         standIns.putIfAbsent(
             merge.canonicalQid(),
             new NodeRecord(merge.canonicalQid(), local.kind(), local.label(), List.of()));
@@ -209,23 +224,24 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
    * no source can allocate a {@code Q00} id — which is why it is a rule to state rather than a bug
    * to have shipped.
    *
-   * <p><b>Node kinds are taken as the claim stated them, and on the bypass path that is a known
-   * lag.</b> {@code KindMapper.rederive} is the identity on a claim carrying no {@code P31} classes
-   * (ADR 42), which covers every {@link LocalEntity}: the owner states a kind and no classes. A
-   * {@link NodeAssertion} <em>can</em> carry classes, and both folds re-derive the local node's own
-   * kind from them while the stand-in built here keeps the kind the claim stated — so a bypass
-   * claim carrying {@code ["Q5"]} gives a stand-in of the claimed kind beside a local node
-   * re-derived to {@code PERSON}. <b>That is the one condition under which this method is
-   * wrong.</b>
+   * <p><b>Node kinds come from the caller, not from the claim (#222).</b> {@code
+   * KindMapper.rederive} is the identity on a claim carrying no {@code P31} classes (ADR 42), which
+   * covers every {@link LocalEntity}: the owner states a kind and no classes. A {@link
+   * NodeAssertion} <em>can</em> carry classes, and both folds re-derive the local node's own kind
+   * from them - so for as long as this method read the claim's stated kind, a bypass claim gave a
+   * stand-in of one kind beside a local node re-derived to another, and the two nodes standing for
+   * one entity disagreed about what it is. Both folds read this one method, so they agreed about
+   * the lagging kind and {@code BothFoldsAgreeTest} could not see it; {@code
+   * StandInKindMatchesTheLocalNodeTest} compares the stand-in with the node beside it instead.
    *
-   * <p>It is documented rather than fixed, and the reason is a package rule, not a judgement about
-   * likelihood: {@code KindMapper} lives in {@code wikidata}, and calling it from {@code domain}
-   * fails {@code ArchitectureTest.noPackageCycles}. The premise that would make the lag unreachable
-   * — "a class-bearing claim about an unallocatable id cannot come from a source" — is exactly the
-   * premise spec ruling 2 declines to rely on, and the same one whose widening admitted {@link
-   * NodeAssertion} here in the first place, so it is not offered as a defence. Both folds read this
-   * one method, so they agree about the lagging kind and {@code BothFoldsAgreeTest} cannot see it;
-   * only a rule that moved re-derivation behind a port would close it.
+   * <p><b>Which is why the re-derivation is a parameter.</b> {@code KindMapper} lives in {@code
+   * wikidata}, and {@code ArchitectureTest.domainHasNoThirdPartyDependencies} allows this package
+   * {@code domain}, {@code java} and {@code javax} and nothing else - not even {@code port}, so a
+   * seam declared there was never available either. What is available is a {@code
+   * java.util.function} type, and each fold hands in the {@code KindMapper::rederive} it already
+   * applies to every node claim it folds. It is required rather than defaulted, on {@link #NONE}'s
+   * reason: an overload quietly restoring the old behaviour is how a third fold would arrive with
+   * the lag and nothing saying so.
    *
    * <p><b>Log order, in both senses.</b> A node is read as it stood <em>when the merge was
    * made</em>, matching {@code standIn}'s "order is log order" paragraph, so a claim appended after
@@ -233,10 +249,14 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
    * #canonicalByLocal}'s reason, which is what lets {@link #standIns} say "the first merge onto a
    * canonical id names it".
    *
+   * @param rederive how the calling fold derives a node claim's kind - {@code KindMapper::rederive}
+   *     from both of them, handed in because {@code domain} may not name it
    * @return the log position of each surviving merge that has a local side, and that side's node
    */
-  public static Map<Integer, NodeRecord> localsOfMerges(List<LoggedAssertion> log) {
+  public static Map<Integer, NodeRecord> localsOfMerges(
+      List<LoggedAssertion> log, UnaryOperator<NodeAssertion> rederive) {
     Objects.requireNonNull(log, "log");
+    Objects.requireNonNull(rederive, "rederive");
     Retractions retractions = Retractions.in(log);
     Map<String, NodeRecord> claimed = new LinkedHashMap<>();
     Map<Integer, NodeRecord> atMerge = new LinkedHashMap<>();
@@ -247,7 +267,7 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
       }
       switch (assertion) {
         case LocalEntity local -> claimed.put(local.qid(), local.toNode());
-        case NodeAssertion claim -> claimed.put(claim.qid(), claim.toNode());
+        case NodeAssertion claim -> claimed.put(claim.qid(), rederive.apply(claim).toNode());
         case SameAs merge -> {
           NodeRecord local = claimed.get(merge.localQid());
           if (local != null) {

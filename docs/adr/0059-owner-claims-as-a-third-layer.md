@@ -315,3 +315,85 @@ row; the separate, pre-existing question of node-order determinism in that write
   edges land on the last, because the stand-in map is `putIfAbsent` and the canonical map is
   last-wins. Both folds agree about it; it is a correction's leftover rather than anything the owner
   claimed.
+
+**Amendment (2026-09-03, issue #222): the first residual above is closed. The stand-in carries the
+kind the fold re-derived for the node it stands in for, and the re-derivation reaches `domain` as a
+parameter.**
+
+Nothing above is withdrawn and no sentence above is edited. The residual said it plainly: *"the
+stand-in's kind is taken as the claim stated it"* on the bypass path, *"re-deriving inside `domain`
+would drag `KindMapper` in and break `noPackageCycles`"*. The first half was true and is now false;
+the second half named the wrong rule and was still right about the obstacle.
+
+**What the code does now.** `Equivalences.localsOfMerges` and `Equivalences.standIns` take the
+re-derivation as a required `UnaryOperator<NodeAssertion>`, and `LogProjection.of` and
+`GraphProjector.project` each hand in the `KindMapper::rederive` they already apply to every node
+claim they fold. A merge's canonical node therefore ends the fold as the same kind as the node it
+stands in for. Those classes are the authority for the mechanics; this amendment mirrors no table
+of theirs.
+
+**The measurement, on an invented fixture** — invented ids, invented labels, no known list behind
+it, so [ADR 51](0051-what-an-adr-may-quote.md) does not bite. A bypass `NodeAssertion` naming a
+local id as `WORK` while stating one class the whitelist does not know, then a merge onto a
+canonical id: before the change, **both** folds held the local node as `CONCEPT` and the canonical
+node as `WORK`, failing on `expected: CONCEPT but was: WORK`; after it, both hold `CONCEPT`. Both
+folds were wrong in the same direction, which is exactly why `BothFoldsAgreeTest` was silent — it
+compares the two folds to each other. `StandInKindMatchesTheLocalNodeTest` compares the stand-in
+with the node beside it, in each fold separately, and was seen red in both and planted against once
+per fold.
+
+**The obstacle was stricter than the residual said, and that changed the answer.**
+`ArchitectureTest.noPackageCycles` was the rule named; the binding one is
+`domainHasNoThirdPartyDependencies`, which allows `domain` only `domain`, `java` and `javax`. So a
+port interface for the re-derivation was never available either — `domain` may not reach `port` —
+and the seam had to be a `java.util.function` type. That is not a workaround for the rule; it is
+what the rule leaves, and the `localsOfMerges` javadoc had already named the shape: *"only a rule
+that moved re-derivation behind a port would close it"*.
+
+**Rejected, with the reason each lost.**
+
+- **The merge event carries the re-derived kind when it is written** — `SameAs` gains a `NodeKind`,
+  set at the moment of the merge, and both folds read it. No package problem at all. **Lost because
+  it writes a derived value into an append-only log**, which is the thing
+  [ADR 42](0042-store-p31-and-rederive-kind-at-projection.md) exists to undo: a kind frozen into a
+  row is immune to every later correction of the whitelist, which is the ratchet issue #60 removed
+  at the cost of two full re-seeds. It also fails to fix what it was proposed for — every `SameAs`
+  already in the log carries no kind, so the fold needs the fallback anyway and the lag survives on
+  precisely the rows that exist.
+- **Copy from the resolved local node in a post-pass.** The issue's own first candidate, and it
+  cannot be taken as stated: **neither fold has resolved any node at the point the stand-in is
+  built.** The pre-pass runs before the fold, and it has to — an edge claimed earlier in the log
+  than the merge that names its endpoint arrives on the canonical id first, and
+  `TinkerGraphStore.record` refuses an endpoint it has never seen. As a post-pass the exporter could
+  do it, and the boot replay could not: a `GraphStore` cannot say which canonical nodes were
+  stand-ins, so that fold would keep its own record of the pre-pass — a second answer to "which
+  merges have a local side", the two-readings-of-one-log shape the 2026-09-02 amendment spent an
+  issue removing.
+- **The stand-in carries the local node's classes** so the folds re-derive it like any other node.
+  **Lost** because neither fold re-derives a `NodeRecord`, so each would need its own conversion,
+  and because it would assert classes about the *canonical* entity that no source ever stated for
+  it — which is what `standIns` already refuses: a stand-in carries what it was given rather than
+  inventing a class.
+- **Move `KindMapper` into `domain`.** ArchUnit would permit it, since a class with only private
+  constructors is a static registry rather than a value type. **Lost on what it puts there**: a
+  whitelist of Wikidata `P31` ids, grown from measurements against Wikidata and owned by the adapter
+  that fetches them, made visible to every domain type.
+- **Accept and record again.** The path is unreachable from today's sources — no source can allocate
+  a `Q00` id. **Lost for the reason the 2026-09-02 amendment already gives when it declines that
+  defence**: it is the same premise spec ruling 2 refuses to rely on, and the fold admits a
+  `NodeAssertion` on that path *because* it refuses to rely on it.
+
+**What this does not settle.**
+
+- **The live path does not re-derive at all.** `IngestService.record` applies a node claim as it was
+  stated, so `IngestService.standIn` — which copies the local node off the running graph — answers
+  with the claimed kind there, and agrees with the local node beside it because that node is
+  un-re-derived too. That is the same lag [ADR 42](0042-store-p31-and-rederive-kind-at-projection.md)
+  already accepts for the node itself — a claim's kind is stale until the next boot's fold re-derives
+  it — extended to the stand-in beside it on the same terms: a bypass claim leaves its node and its
+  stand-in at the claimed kind together until the next boot, at which point both `LogProjection` and
+  `GraphProjector` re-derive both through `KindMapper::rederive`. Nothing in production reaches it:
+  `OwnRun` appends a merge through `claim()`, which holds no graph. Whether ADR 42's re-derivation
+  should also run on the live write is a separate question nobody has argued.
+- **The stand-in rule still has four homes.** This closes the kind lag in one of them and unifies
+  none of them; that residual stands, and is issue #220.
