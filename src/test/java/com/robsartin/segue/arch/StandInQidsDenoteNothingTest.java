@@ -74,9 +74,10 @@ import org.junit.jupiter.api.Test;
  *
  * <p><b>There is one list and no escape hatch.</b> A companion set carried the ids awaiting
  * migration while issue #171 emptied it band by band; it is gone, so an allocatable-form id in
- * {@code src/test} is either a deliberately real entity with a reason in {@code ALLOWED} or a
- * failure. A new test that invents an entity takes the leading-zero form — {@code Q0900100} — which
- * Wikibase's grammar refuses outright.
+ * {@code src/test} is either a deliberately real entity, allowed at the file and context it appears
+ * in with the reason it is real, in {@code ALLOWED} — or a failure. A new test that invents an
+ * entity takes the leading-zero form — {@code Q0900100} — which Wikibase's grammar refuses
+ * outright.
  */
 class StandInQidsDenoteNothingTest {
 
@@ -963,19 +964,29 @@ class StandInQidsDenoteNothingTest {
     assertThat(SWEEP.files())
         .as(
             "this class's own source among the files the sweep read. It is named by an absolute"
-                + " path, and the dead-entry test discounts it - so a rename or a move would leave"
-                + " that test comparing the lists against a tree that still contains every id they"
-                + " name, silently vacuous rather than red")
+                + " path, and isAllowed's file().equals(SELF) check is what keeps this file's own"
+                + " ALLOWED literals from being reported as offending sightings. A moved or renamed"
+                + " SELF reds two tests: this one, directly, because the swept files would no longer"
+                + " contain the stale path - and the offending-id test, because that check stops"
+                + " firing for this file's own literals. Read this one first")
         .contains(SELF);
+  }
+
+  /** One id claimed at one site — never at all, when {@link #site} is {@code null}. */
+  private record Claim(String id, Site site) {
+    @Override
+    public String toString() {
+      return site == null ? id + " @ (no site at all)" : id + " @ " + site;
+    }
   }
 
   @Test
   @DisplayName("the allowlist names no site the tree no longer carries the id at")
   void shouldCarryNoDeadSiteWhenTheAllowlistIsCheckedAgainstTheTree() {
-    Set<String> live =
+    Set<Claim> live =
         SWEEP.sightings().stream()
             .filter(s -> !s.file().equals(SELF))
-            .map(s -> s.id() + " @ " + new Site(relative(s.file()), s.context()))
+            .map(s -> new Claim(s.id(), new Site(relative(s.file()), s.context())))
             .collect(Collectors.toCollection(LinkedHashSet::new));
 
     List<String> dead =
@@ -983,9 +994,10 @@ class StandInQidsDenoteNothingTest {
             .flatMap(
                 e ->
                     e.getValue().sites().isEmpty()
-                        ? Stream.of(e.getKey() + " @ (no site at all)")
-                        : e.getValue().sites().stream().map(s -> e.getKey() + " @ " + s))
+                        ? Stream.of(new Claim(e.getKey(), null))
+                        : e.getValue().sites().stream().map(s -> new Claim(e.getKey(), s)))
             .filter(claim -> !live.contains(claim))
+            .map(Claim::toString)
             .sorted()
             .toList();
 
