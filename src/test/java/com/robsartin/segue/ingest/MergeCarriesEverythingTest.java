@@ -365,6 +365,39 @@ class MergeCarriesEverythingTest {
         .isEqualTo(2);
   }
 
+  @Test
+  @DisplayName(
+      "should carry a rating only to the merge that stands, even where the superseded canonical"
+          + " id's stand-in survives because a surviving edge names it (#221 fix round 1)")
+  void
+      shouldCarryTheRatingOnlyToTheMergeThatStandsEvenWhenTheSupersededCanonicalIdsStandInSurvives() {
+    // ingest.record applies with Equivalences.NONE, so a live carry would write the rating onto
+    // CANONICAL before replay ever ran - MergeCarriesEverythingTest's class javadoc gives the
+    // reason. A blind IngestService keeps the live path from carrying anything, so what
+    // affinity.find(CANONICAL) reports afterwards can only be the replay's own answer.
+    IngestService blind = new IngestService(log, graph, IdentityMerge.NONE);
+    blind.record(LocalEntity.minted(MINTED, NodeKind.PERSON, "a minted person", NOW));
+    affinity.put(new AffinityRecord(MINTED, 5, null, NOW));
+    blind.record(SameAs.declared(MINTED, CANONICAL, NOW));
+    blind.record(new NodeAssertion(NEIGHBOUR, NodeKind.PERSON, "a sourced person", SOURCE));
+    blind.record(OwnerEdge.claimed(NEIGHBOUR, CANONICAL, "INFLUENCED_BY", NOW));
+    blind.record(SameAs.declared(MINTED, CORRECTED_TO, NOW));
+
+    try (GraphStore rebuilt = new TinkerGraphStore()) {
+      GraphProjector.project(log, rebuilt, IdentityMerge.carryingRatings(affinity));
+    }
+
+    assertThat(affinity.find(CORRECTED_TO).orElseThrow().rating())
+        .as("the correction is the merge that stands, and it carries what the local id was rated")
+        .isEqualTo(5);
+    assertThat(affinity.find(CANONICAL))
+        .as(
+            "CANONICAL's stand-in survives because the surviving NEIGHBOUR edge names it, but the"
+                + " rating still belongs to the merge that stands, not to every merge that once"
+                + " touched this local id")
+        .isEmpty();
+  }
+
   private void mintAndClaimAnEdge() {
     ingest.record(new NodeAssertion(NEIGHBOUR, NodeKind.PERSON, "a sourced person", SOURCE));
     ingest.record(LocalEntity.minted(MINTED, NodeKind.PERSON, "a minted person", NOW));

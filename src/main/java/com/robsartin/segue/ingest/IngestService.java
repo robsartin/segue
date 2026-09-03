@@ -198,17 +198,25 @@ public final class IngestService {
       // so there is nothing left to copy and the local id is left exactly where it was, node and
       // all, so every earlier log entry keeps meaning what it meant (ADR 59, amended by #178).
       case SameAs merge -> {
-        if (!equivalences.stands(merge)) {
-          // A merge a later one corrected (#221) does neither half: no stand-in, because the node
-          // would be a labelled orphan under an id the owner corrected away from, and no carry,
-          // because the rating belongs to the merge that stands. Equivalences.NONE - the live path,
-          // which sees one claim and not a log - answers true, so record() is unchanged.
-          return;
+        // The node half and the taste half now ask DIFFERENT questions of the same merge (#221,
+        // fix round 1). Equivalences.stands() answers "does this merge still contribute a node" -
+        // last-wins, OR a surviving edge names its canonical id, because OwnRun can offer that id
+        // as an endpoint the moment its stand-in exists and a claim made against it survives a
+        // later correction (ADR 19). Equivalences.NONE - the live path, which sees one claim and
+        // not a log - answers both questions true, so record() is unchanged.
+        if (equivalences.stands(merge)) {
+          standIn(graph, merge);
         }
-        standIn(graph, merge);
-        // The taste half, and it runs on replay too - see standIn()'s last paragraph and
+        // The taste half stays keyed on last-wins ALONE, deliberately narrower: a rating is the
+        // owner's opinion about the thing he corrected himself onto, not a fact about a node that
+        // merely still exists because an edge names it. Carrying it on every merge that once
+        // touched this local id - not only the one that stands today - is the defect an earlier
+        // round of this issue fixed; widening stands() without narrowing this separately would
+        // have reintroduced it. Runs on replay too - see standIn()'s last paragraph and
         // IdentityMerge, which together say why that is a repair rather than a hazard.
-        merges.follow(merge.localQid(), merge.canonicalQid());
+        if (equivalences.last(merge)) {
+          merges.follow(merge.localQid(), merge.canonicalQid());
+        }
       }
     }
   }

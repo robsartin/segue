@@ -2,6 +2,7 @@ package com.robsartin.segue.domain;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -73,13 +74,17 @@ import java.util.function.UnaryOperator;
  * false; the local check reads the same predicate instead, so the complement is restored by
  * construction rather than by coincidence.
  *
- * <p><b>One local id merged twice leaves a node behind under the first canonical id.</b> {@link
- * #standIns} is {@code putIfAbsent} and keyed by canonical id, so the first merge names the
- * stand-in; {@link #canonicalByLocal} is last-wins, so {@link #foldEndpoints} sends the edges to
- * the last. The first canonical id therefore keeps an orphan node with the merged entity's label
- * and no edges. Both folds agree about it and it is drawn as an orphan like the local id itself
- * (spec ruling 3), so nothing is inconsistent — but nothing asserts it either, and it is a
- * correction's leftover rather than something the owner claimed.
+ * <p><b>One local id merged onto one canonical id and then corrected onto another retires the first
+ * canonical id's stand-in — unless a surviving edge still names it.</b> {@link #standIns} is {@code
+ * putIfAbsent} and keyed by canonical id, so the first merge names the stand-in; {@link
+ * #canonicalByLocal} is last-wins, so {@link #foldEndpoints} sends the edges to the last. {@link
+ * #stands} is what decides whether the first canonical id's stand-in is built at all: it answers
+ * false — no node — for a superseded merge no surviving edge references, and true — the node
+ * stands, though its own edges have all folded onto the last id — for one a surviving edge does
+ * reference, because {@code OwnRun} can offer a merge's canonical id as an endpoint the moment its
+ * stand-in exists, and a claim made against it before the correction survives the correction (ADR
+ * 19, #221 fix round 1). The rating carry does not follow this widening: {@link #last} is its own,
+ * narrower predicate, so a rating is carried only onto the id a local id resolves to TODAY.
  *
  * @param canonicalByLocal each merged local id, and the id it turned out to be, <b>in log
  *     order</b>. Last claim wins when one local id was merged twice — the same "what had we already
@@ -90,7 +95,7 @@ import java.util.function.UnaryOperator;
  *     about which of two collided ratings survives. That is the byte-identical-output argument
  *     {@code KnownList.promoted} makes for its own sort, crediting ADR 43
  */
-public record Equivalences(Map<String, String> canonicalByLocal) {
+public record Equivalences(Map<String, String> canonicalByLocal, Set<String> referencedEndpoints) {
 
   /** A projection with no merges in it, named at the call site rather than defaulted. */
   public static final Equivalences NONE = new Equivalences(Map.of());
@@ -99,6 +104,22 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
     canonicalByLocal =
         Collections.unmodifiableMap(
             new LinkedHashMap<>(Objects.requireNonNull(canonicalByLocal, "canonicalByLocal")));
+    referencedEndpoints =
+        Collections.unmodifiableSet(
+            new LinkedHashSet<>(
+                Objects.requireNonNull(referencedEndpoints, "referencedEndpoints")));
+  }
+
+  /**
+   * A caller that has only merges to hand, and none of the surviving edges that could keep a
+   * superseded stand-in alive (#221 fix round 1). Every existing caller of the one-argument
+   * constructor predates {@link #referencedEndpoints} and asks only {@link #resolve} or {@link
+   * #foldEndpoints}, neither of which reads it — {@link #stands} is the one method that would see
+   * the difference, and nothing outside {@link #in} builds an {@code Equivalences} that needs to
+   * answer it accurately.
+   */
+  public Equivalences(Map<String, String> canonicalByLocal) {
+    this(canonicalByLocal, Set.of());
   }
 
   /**
@@ -107,17 +128,43 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
    * <p>A merge a retraction reaches is not one: {@link Retractions#survives} is asked the same
    * question here that both graph folds ask it, so an equivalence the graph refused to carry cannot
    * still be resolving ratings.
+   *
+   * <p><b>The referenced-endpoint set is built here too, from the same pass, for {@link #stands}'s
+   * reason</b> (#221 fix round 1). It is every id a surviving {@link AssertionRecord} or {@link
+   * OwnerEdge} names as {@code fromQid} or {@code toQid}, read RAW off the log rather than through
+   * the fold: the question {@link #stands} asks is "did the owner (or a source) claim something
+   * against this id while it stood as a canonical id", and folding the claim through the very
+   * equivalences being computed would answer a different question — "does an edge exist against
+   * whatever it resolves to today", which is {@link #canonicalByLocal}'s own question, not this
+   * one.
    */
   public static Equivalences in(List<LoggedAssertion> log) {
     Objects.requireNonNull(log, "log");
     Retractions retractions = Retractions.in(log);
     Map<String, String> byLocal = new LinkedHashMap<>();
+    Set<String> referenced = new LinkedHashSet<>();
     for (int i = 0; i < log.size(); i++) {
-      if (log.get(i) instanceof SameAs merge && retractions.survives(i, merge)) {
-        byLocal.put(merge.localQid(), merge.canonicalQid());
+      LoggedAssertion assertion = log.get(i);
+      if (!retractions.survives(i, assertion)) {
+        continue;
+      }
+      switch (assertion) {
+        case SameAs merge -> byLocal.put(merge.localQid(), merge.canonicalQid());
+        case AssertionRecord edge -> {
+          referenced.add(edge.fromQid());
+          referenced.add(edge.toQid());
+        }
+        case OwnerEdge edge -> {
+          referenced.add(edge.fromQid());
+          referenced.add(edge.toQid());
+        }
+        default -> {
+          // A node claim or a retraction names no relationship, and this set is only ever asked
+          // about a canonical id's edges.
+        }
       }
     }
-    return new Equivalences(byLocal);
+    return new Equivalences(byLocal, referenced);
   }
 
   /**
@@ -154,12 +201,15 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
    * only where none exists. The returned map keeps log order for {@link #canonicalByLocal}'s
    * reason.
    *
-   * <p><b>A merge a later merge corrected names nothing</b> (#221). {@link #stands} is the rule and
-   * it is {@link #canonicalByLocal}'s own: the last merge of a local id wins, for the edges through
-   * {@link #foldEndpoints} and now for the node as well, so the first canonical id is not left
-   * holding a labelled node with no edges that nothing claimed. Two local ids merged onto ONE
-   * canonical id are untouched by it — that is the {@code putIfAbsent} above, and a different
-   * question.
+   * <p><b>A merge a later merge corrected names nothing, unless a surviving edge still needs it</b>
+   * (#221; widened in a later round of the same issue — see {@link #stands}). Ordinarily the last
+   * merge of a local id wins, for the edges through {@link #foldEndpoints} and for the node as
+   * well, so the first canonical id is not left holding a labelled node with no edges that nothing
+   * claimed. But a surviving edge CAN claim it directly, made while it still stood as the canonical
+   * id, and dropping its node then would leave that edge with an endpoint the store has never seen
+   * — so {@link #stands} answers true for exactly that case, and the stand-in survives holding the
+   * merged entity's label and the edge, nothing more. Two local ids merged onto ONE canonical id
+   * are untouched by either rule — that is the {@code putIfAbsent} above, and a different question.
    *
    * <p><b>The stand-in rule has four homes, and they are named here so that the count is not
    * guessed at.</b> "The canonical id gains a node carrying the merged entity's label where nothing
@@ -386,33 +436,74 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
   }
 
   /**
-   * Whether these equivalences still point at this merge's canonical id — {@link
-   * #canonicalByLocal}'s last-wins rule, asked about one row (#221).
+   * Whether this merge still contributes a node — {@link #last} OR a surviving edge names its
+   * canonical id (#221, fix round 1 widening the original last-wins-only rule).
    *
-   * <p><b>The stand-in rule needs it because a second merge of one local id is a correction.</b>
-   * {@link #standIns} named a stand-in for every surviving merge, so a local id merged onto one
-   * canonical id and then onto another left a node under the first carrying the merged entity's
-   * label and no edges — the edges having folded onto the last, which is the id this map keeps.
-   * Nothing claimed that node and nothing named it. ADR 59's amendment of 2026-09-03 records the
-   * decision to stop making it.
+   * <p><b>The widening exists because a legal, supported-flow log could not be replayed.</b> The
+   * original rule was last-wins alone: {@link #standIns} named a stand-in for every surviving merge
+   * whose canonical id was the CURRENT one, so a local id merged onto one canonical id and then
+   * onto another left nothing under the first at all. That is correct while nothing else in the log
+   * ever names the first canonical id — but {@code OwnRun} offers a merge's canonical id as an
+   * endpoint the moment its stand-in exists, so the owner can claim an edge against it
+   * <em>before</em> the correction arrives. The edge survives the correction (ADR 19: nothing is
+   * deleted), the endpoint it names does not exist under last-wins-only, and {@code
+   * TinkerGraphStore.record} refuses it — the boot replay a controller reproduced: {@code replay
+   * failed at sequence 4 … assertion references unknown entity … - upsert the node first}, on a row
+   * nothing can be dropped from ADR 19 makes append-only. A superseded canonical id whose stand-in
+   * a surviving edge still needs is not an orphan — it has an edge, and the export shows exactly
+   * the claim the owner made while it stood.
+   *
+   * <p><b>Two ways to rewrite the edge instead were rejected.</b> Re-pointing it onto the corrected
+   * canonical would silently rewrite what the owner actually claimed — he named the <em>first</em>
+   * id, and the first id may itself turn out to be a real, distinct entity the correction says
+   * nothing about. Having {@code GraphProjector} tolerate the missing endpoint as a dangling edge
+   * would replay the claim into nothing without saying so — the same silent data-loss shape issue
+   * #101 already fixed once for the rating deck. Surviving the stand-in is the only option that
+   * keeps every claim, changes no id, and fails loudly if it cannot.
+   *
+   * <p><b>The rating carry does NOT follow this widening — see {@link #last}.</b> A node surviving
+   * because an edge names it is a fact about the graph; a rating is the owner's opinion about the
+   * thing he corrected himself onto, and only the merge that stands today is entitled to carry it.
+   * Widening {@code stands} without narrowing the carry separately would have written a rating onto
+   * every canonical id a local id ever touched, which is the very defect the original {@link
+   * #last}-only rule fixed in a previous round of this issue.
    *
    * <p><b>Equivalences that have never heard of the local id do not contradict the merge, so the
    * answer is true.</b> That is not a convenience for the empty case: {@code IngestService.record}
    * applies a claim with {@link #NONE}, because it sees one claim and not a log, and a {@code
    * SameAs} arriving there must go on getting its canonical node or the running graph is left with
    * an endpoint it has never heard of — which is the whole job of {@code IngestService.standIn}. A
-   * caller holding the log gets the last-wins answer; a caller holding no log gets the merge it was
-   * handed.
+   * caller holding the log gets the last-wins-or-referenced answer; a caller holding no log gets
+   * the merge it was handed.
    *
    * <p><b>A retracted merge is not exempted from this rule — it is filtered out before reaching
    * it.</b> {@link #canonicalByLocal} is built only from surviving rows, so a retracted merge's own
    * canonical id is not what decides its answer here: where the same local id was merged again by a
-   * row that survives, the map holds that later canonical, and this method answers false for the
-   * retracted row exactly as it would for any other superseded merge. Every home of the stand-in
-   * rule asks {@link Retractions#survives} before it asks this one, so that case never actually
-   * reaches here on its own account; {@link #localsOfMerges} does the filtering for both folds.
+   * row that survives, the map holds that later canonical. {@link #referencedEndpoints} is built
+   * from surviving edges only, for the same reason — a retracted edge claims nothing and keeps
+   * nothing alive. Every home of the stand-in rule asks {@link Retractions#survives} before it asks
+   * this one, so a retracted row never actually reaches here on its own account; {@link
+   * #localsOfMerges} does the filtering for both folds.
    */
   public boolean stands(SameAs merge) {
+    Objects.requireNonNull(merge, "merge");
+    return last(merge) || referencedEndpoints.contains(merge.canonicalQid());
+  }
+
+  /**
+   * Whether these equivalences still point at this merge's canonical id — {@link
+   * #canonicalByLocal}'s last-wins rule alone, asked about one row (#221).
+   *
+   * <p><b>The rating carry's own predicate, and deliberately narrower than {@link #stands}.</b>
+   * {@code IngestService.apply} keys {@code merges.follow} on this method, not on {@link #stands}:
+   * a superseded canonical id's stand-in may survive because a surviving edge names it, but the
+   * rating is not a claim about that node — it is the owner's opinion about the thing he corrected
+   * himself onto, and only the merge that resolves the local id TODAY is entitled to carry it.
+   * Every merge of one local id would otherwise ask to carry the rating on every replay, which is
+   * the exact defect a previous round of this issue fixed by keying the carry on this predicate to
+   * begin with.
+   */
+  public boolean last(SameAs merge) {
     Objects.requireNonNull(merge, "merge");
     String canonical = canonicalByLocal.get(merge.localQid());
     return canonical == null || canonical.equals(merge.canonicalQid());

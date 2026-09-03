@@ -98,6 +98,81 @@ class TwiceMergedIdLeavesNoOrphanTest {
     }
   }
 
+  /**
+   * Minted, merged onto the wrong item, given an edge naming that wrong item DIRECTLY while it
+   * stood as the canonical id, and only then corrected onto the right one (#221 fix round 1).
+   * {@code OwnRun} would have offered {@link InventedGraph#MISHEARD} as an endpoint the moment the
+   * first merge's stand-in existed, so an owner edge naming it directly — not through {@link
+   * InventedGraph#CORRECTED} — is a claim the supported flow can produce, on rows ADR 19 forbids
+   * deleting.
+   */
+  private static FakeAssertionLog correctedLogWithASurvivingEdgeOnTheFirstCanonical() {
+    return new FakeAssertionLog()
+        .with(
+            node(WREN, NodeKind.PERSON, "Wren Alderman"),
+            minted(CORRECTED, NodeKind.WORK, "A Self-Pressed Record"),
+            merged(CORRECTED, MISHEARD),
+            owned(WREN, MISHEARD, "INFLUENCED_BY"),
+            merged(CORRECTED, WATERMARK));
+  }
+
+  @Test
+  @DisplayName(
+      "replay does not throw, and agrees with the exporter, when a surviving edge names a"
+          + " canonical id a later merge corrected")
+  void shouldReplayWithoutThrowingWhenASurvivingEdgeNamesACorrectedCanonicalId() {
+    FakeAssertionLog log = correctedLogWithASurvivingEdgeOnTheFirstCanonical();
+
+    // The replay exception this reproduces (before the fix): TinkerGraphStore refuses the
+    // WREN -> MISHEARD edge because Equivalences.standIns dropped MISHEARD's node entirely —
+    // "assertion references unknown entity Q10000900109 - upsert the node first", wrapped as
+    // "replay failed at sequence 4" by GraphProjector. A legal, supported-flow append must not
+    // make the log unbootable.
+    try (TinkerGraphStore replayed = new TinkerGraphStore()) {
+      GraphProjector.project(log, replayed, IdentityMerge.NONE);
+
+      assertThat(replayed.node(MISHEARD))
+          .as(
+              "a surviving edge names MISHEARD directly, so its stand-in is not an orphan and"
+                  + " dropping it would leave the edge dangling")
+          .hasValueSatisfying(
+              node -> {
+                assertThat(node.kind()).isEqualTo(NodeKind.WORK);
+                assertThat(node.label()).isEqualTo("A Self-Pressed Record");
+              });
+      assertThat(replayed.edges(MISHEARD))
+          .as("and the edge the owner claimed against it replays too")
+          .singleElement()
+          .extracting(EdgeRecord::fromQid, EdgeRecord::toQid)
+          .containsExactly(WREN, MISHEARD);
+    }
+  }
+
+  @Test
+  @DisplayName(
+      "a superseded canonical id's stand-in survives the exporter's fold too, where a surviving"
+          + " edge names it, and the two folds agree")
+  void shouldKeepTheSupersededStandInInTheExportersFoldWhenASurvivingEdgeNamesItToo() {
+    FakeAssertionLog log = correctedLogWithASurvivingEdgeOnTheFirstCanonical();
+
+    LogProjection folded = LogProjection.of(log);
+    assertThat(folded.nodes())
+        .as(
+            "the exporter's fold: a surviving edge names MISHEARD directly, so its stand-in is"
+                + " not an orphan and dropping it would leave the edge dangling")
+        .containsKey(MISHEARD);
+    assertThat(folded.nodes().get(MISHEARD).kind()).isEqualTo(NodeKind.WORK);
+    assertThat(folded.nodes().get(MISHEARD).label()).isEqualTo("A Self-Pressed Record");
+    assertThat(folded.edges().stream().map(TwiceMergedIdLeavesNoOrphanTest::key))
+        .as(
+            "the edge the owner claimed directly against the then-canonical id, agreeing with the"
+                + " boot replay")
+        .contains(WREN + " INFLUENCED_BY " + MISHEARD);
+    assertThat(folded.danglingEdges())
+        .as("retiring the node while keeping the edge would be the defect this test catches")
+        .isZero();
+  }
+
   @Test
   @DisplayName("the corrected canonical id keeps the label and every edge when a merge is redone")
   void shouldKeepTheLabelAndTheEdgesOnTheCorrectedCanonicalIdWhenAMergeIsRedone() {
