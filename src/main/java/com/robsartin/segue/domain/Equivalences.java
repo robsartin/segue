@@ -160,8 +160,12 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
    * OwnRun.labelsInTheProjection} (its own {@code !labels.containsKey(canonicalQid)} copy, so the
    * tool offers the canonical id as an endpoint) and {@code ratings/Labels.forQids} (so a carried
    * canonical row is not listed as "not in the graph"). The last two read labels off the log rather
-   * than nodes off a graph, which is why they are copies rather than callers. All four agree today,
-   * condition for condition; nothing holds them to it but this paragraph.
+   * than nodes off a graph, which is why they are copies rather than callers. All four agree today
+   * about what the projection holds - though not condition for condition, because this method has
+   * no such condition at all and takes its guarantee from being applied first, as the paragraph
+   * above says. {@code StandInAgreesInEveryHomeTest} is what holds them to it (issue #220): one
+   * log, four homes, one answer per canonical id. It pins what they do rather than claiming it is
+   * right, and ADR 59's residual - four homes, not one caller - is untouched by it.
    *
    * <p><b>Derived from {@link #localsOfMerges}, and that is the point.</b> "Does this merge have a
    * local side, and what does it look like?" is one question, asked by the stand-in here and by

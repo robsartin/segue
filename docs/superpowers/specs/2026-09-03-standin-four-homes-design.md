@@ -196,7 +196,7 @@ Each is planted in `src/main`, observed red on the named assertion, and reverted
 | # | plant | must red |
 |---|---|---|
 | 1 | `ratings/Labels.forQids`: drop `!labels.containsKey(merge.canonicalQid())` so a later merge wins — the issue's own "prefer the last merge" | test 1, naming `ratings/Labels.forQids` against each of the other three, at `Q10000900205` (the source's name overwritten by the owner's) and `Q10000900201` (row 15's merge overwriting row 2's) |
-| 2 | `IngestService.standIn`: pass `NodeKind.CONCEPT` instead of `minted.get().kind()` | test 2, naming `IngestService.standIn (live record)` against `Equivalences.standIns (via LogProjection.of)`, on all six ids |
+| 2 | `IngestService.standIn`: pass `NodeKind.CONCEPT` instead of `minted.get().kind()` | test 2, naming `IngestService.standIn (live record)` against `Equivalences.standIns (via LogProjection.of)`, on four of the six ids — not `Q10000900205` (its node already exists in the log before the merge, so `standIn` no-ops) or `Q10000900206` (its node claim arrives after the merge and overwrites the plant's kind) |
 | 3 | `Equivalences.standIns`: `put` instead of `putIfAbsent` | test 3, on `Q10000900201`'s stand-in row (`"the second working title"` for `"the April tape"`); test 1 reds too, which is the guard agreeing with itself |
 | 4 | `OwnRun.labelsInTheProjection`: drop its `!labels.containsKey(merge.canonicalQid())` | test 1, naming `OwnRun.labelsInTheProjection` — the control that proves the fourth home is really wired in and not just imported |
 

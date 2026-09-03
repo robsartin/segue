@@ -11,6 +11,7 @@ import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.export.InventedGraph.FakeAssertionLog;
 import com.robsartin.segue.ingest.IngestService;
+import com.robsartin.segue.own.ProjectionLabelsProbe;
 import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.ratings.LabelsProbe;
 import com.robsartin.segue.tinker.TinkerGraphStore;
@@ -61,6 +62,7 @@ class StandInAgreesInEveryHomeTest {
 
   private static final String FOLD = "Equivalences.standIns (via LogProjection.of)";
   private static final String LIVE = "IngestService.standIn (live record)";
+  private static final String OWN = "OwnRun.labelsInTheProjection";
   private static final String RATINGS = "ratings/Labels.forQids";
 
   /** The fixture: the spec's table, row for row. No edges and no retractions - see the spec. */
@@ -140,6 +142,8 @@ class StandInAgreesInEveryHomeTest {
   private static final Map<String, NodeRecord> IN_THE_LIVE_GRAPH = liveGraphNodes();
   private static final Map<String, String> IN_THE_RATINGS_LIST =
       LabelsProbe.forQids(LOG, canonicalIds());
+  private static final Map<String, String> IN_THE_OWN_TOOL =
+      ProjectionLabelsProbe.labelsInTheProjection(LOG.readAll(), Equivalences.in(LOG.readAll()));
 
   /** One home's answer: a label always, a kind only where the home exposes one. */
   private record Answer(String label, NodeKind kind) {
@@ -255,6 +259,7 @@ class StandInAgreesInEveryHomeTest {
     Map<String, Answer> byHome = new LinkedHashMap<>();
     byHome.put(FOLD, fromNode(IN_THE_FOLD.get(canonical)));
     byHome.put(LIVE, fromNode(IN_THE_LIVE_GRAPH.get(canonical)));
+    byHome.put(OWN, fromLabel(IN_THE_OWN_TOOL.get(canonical)));
     byHome.put(RATINGS, fromLabel(IN_THE_RATINGS_LIST.get(canonical)));
     return byHome;
   }
@@ -267,12 +272,14 @@ class StandInAgreesInEveryHomeTest {
   /**
    * The live path, which is the only one on which {@code IngestService.standIn} upserts anything:
    * {@code GraphProjector.project} seeds every stand-in from {@code Equivalences.standIns} before
-   * its loop, so the canonical node always exists by the time a {@code SameAs} is applied and that
-   * copy of the rule never fires.
+   * its loop, so for a merge with a local side the canonical node already exists by the time its
+   * {@code SameAs} is applied; for a merge with none, {@code IngestService.standIn} returns early
+   * on {@code minted.isEmpty()} before it ever looks at the canonical node. Either way, that copy
+   * of the rule never fires.
    */
   private static Map<String, NodeRecord> liveGraphNodes() {
     Map<String, NodeRecord> nodes = new LinkedHashMap<>();
-    List<LoggedAssertion> logged = fourHomesLog().readAll();
+    List<LoggedAssertion> logged = LOG.readAll();
     try (TinkerGraphStore graph = new TinkerGraphStore()) {
       IngestService ingest = new IngestService(new FakeAssertionLog(), graph, IdentityMerge.NONE);
       logged.forEach(ingest::record);
