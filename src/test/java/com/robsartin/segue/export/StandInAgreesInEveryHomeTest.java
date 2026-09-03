@@ -154,7 +154,9 @@ class StandInAgreesInEveryHomeTest {
    * @param shownLabel what the three homes that read the WHOLE log show once those claims have
    *     landed - the fold, {@code OwnRun.labelsInTheProjection} and {@code ratings/Labels.forQids}.
    *     One field for the three of them because all three ask {@code Equivalences.in(log).stands},
-   *     so they cannot answer this differently; null where they hold nothing
+   *     so one pinned column is enough; the pairwise assertion below is what catches one of them
+   *     drifting, which is what three copies of a rule do and why this test exists. Null where they
+   *     hold nothing
    * @param shownInTheLiveGraphLabel what the live graph shows - the same label as {@code
    *     shownLabel} on every row but the twice-merged one, where {@code IngestService.record} is
    *     handed {@code Equivalences.NONE} and so still builds a stand-in the other three have

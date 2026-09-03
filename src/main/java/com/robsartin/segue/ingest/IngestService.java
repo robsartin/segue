@@ -252,23 +252,29 @@ public final class IngestService {
    * claimed, on the local node.
    *
    * <p><b>On replay this is a second helping of a job already done, deliberately.</b> {@link
-   * Equivalences#standIns} builds the same node from the same rule before the fold begins, and it
-   * has to, because a folded edge can be claimed <em>earlier</em> in the log than the merge that
-   * names its endpoint. This one is the live path's copy, where there is no pre-pass and no whole
-   * log to read: it is what keeps {@code record(SameAs)} from leaving a canonical id the running
-   * graph has never heard of. The two build the same fields from the same rule, and {@code
-   * MergeCarriesEverythingTest} holds them to it.
+   * Equivalences#standIns} builds the same node before the fold begins, and it has to, because a
+   * folded edge can be claimed <em>earlier</em> in the log than the merge that names its endpoint.
+   * This one is the live path's copy, where there is no pre-pass and no whole log to read: it is
+   * what keeps {@code record(SameAs)} from leaving a canonical id the running graph has never heard
+   * of. The two build the same fields - the canonical id, the local node's kind and label, no
+   * {@code instanceOf} - and {@code MergeCarriesEverythingTest} holds them to it. They do not build
+   * them from quite the same rule; the two paragraphs below say where the rules part.
    *
-   * <p><b>They do not always reach the same answer, and the reason is which equivalences each is
-   * asked</b> (#221). Both ask {@link Equivalences#stands}, but the pre-pass asks it of {@code
-   * Equivalences.in(log)} and this path asks it of {@link Equivalences#NONE}, whose {@code stands}
-   * is unconditionally true because it has no log to contradict the merge in front of it. So for a
-   * local id merged twice, the pre-pass names no stand-in under the superseded canonical id and
-   * this path still builds one - and that is not a drift to fix here, because it is the same shape
-   * as ADR 42's kind lag: the live path applies the claim it was handed, and the next boot's fold
-   * is what applies the whole log to it. Nothing in production reaches the divergence - {@code
-   * record}'s own javadoc records that nothing sends a {@code SameAs} here at all. {@code
-   * StandInAgreesInEveryHomeTest} pins the two answers per home rather than asserting them equal.
+   * <p><b>They do not always reach the same answer, and which equivalences each is asked is one of
+   * two reasons</b> (#221). The other is the kind: since #222 the pre-pass runs the local node's
+   * claim through {@code KindMapper::rederive} and this path copies the node as the running graph
+   * holds it, un-re-derived, so a bypass claim stating a class gives the two different kinds until
+   * the next boot (ADR 42's lag). Both divergences are written up in one place, {@link
+   * Equivalences#standIns}. This paragraph is the first reason. Both ask {@link
+   * Equivalences#stands}, but the pre-pass asks it of {@code Equivalences.in(log)} and this path
+   * asks it of {@link Equivalences#NONE}, whose {@code stands} is unconditionally true because it
+   * has no log to contradict the merge in front of it. So for a local id merged twice, the pre-pass
+   * names no stand-in under the superseded canonical id and this path still builds one - and that
+   * is not a drift to fix here, because it is the same shape as ADR 42's kind lag: the live path
+   * applies the claim it was handed, and the next boot's fold is what applies the whole log to it.
+   * Nothing in production reaches the divergence - {@code record}'s own javadoc records that
+   * nothing sends a {@code SameAs} here at all. {@code StandInAgreesInEveryHomeTest} pins the two
+   * answers per home rather than asserting them equal.
    *
    * <p><b>Order is log order, deliberately.</b> This reads the graph as it stands at the moment the
    * merge is applied. That matches {@link com.robsartin.segue.domain.Retractions}, which also asks
