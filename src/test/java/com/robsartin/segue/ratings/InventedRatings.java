@@ -51,6 +51,12 @@ final class InventedRatings {
    */
   static final String CANONICAL = "Q10000900042";
 
+  /**
+   * A second canonical id, for a merge the owner corrected by merging the same local id again
+   * (#221). ADR 62's shape, for the reason {@link #CANONICAL} takes it.
+   */
+  static final String CORRECTED_CANONICAL = "Q10000900043";
+
   static final String CANONICAL_LABEL = "The Name A Source Gave It";
 
   static final String QUARTET_LABEL = "The Invented Quartet";

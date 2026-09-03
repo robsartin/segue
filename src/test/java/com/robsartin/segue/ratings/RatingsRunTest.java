@@ -2,6 +2,7 @@ package com.robsartin.segue.ratings;
 
 import static com.robsartin.segue.ratings.InventedRatings.CANONICAL;
 import static com.robsartin.segue.ratings.InventedRatings.CANONICAL_LABEL;
+import static com.robsartin.segue.ratings.InventedRatings.CORRECTED_CANONICAL;
 import static com.robsartin.segue.ratings.InventedRatings.EARLY;
 import static com.robsartin.segue.ratings.InventedRatings.LATE;
 import static com.robsartin.segue.ratings.InventedRatings.MINTED;
@@ -116,6 +117,26 @@ class RatingsRunTest {
         .containsExactlyInAnyOrder(
             org.assertj.core.groups.Tuple.tuple(MINTED, MINTED_LABEL),
             org.assertj.core.groups.Tuple.tuple(CANONICAL, MINTED_LABEL));
+  }
+
+  @Test
+  @DisplayName("should say a canonical id is not in the graph when a later merge corrected it")
+  void shouldSayACanonicalIdIsNotInTheGraphWhenALaterMergeCorrectedIt() throws IOException {
+    // A rating an earlier build carried onto the wrong canonical id stays - AffinityStore has no
+    // delete (ADR 39, ADR 46) - and since #221 that id has no node. "(not in the graph)" is what
+    // that string is for: a rating that outlived its node. Naming it with the merged entity's
+    // label would be this listing insisting on a node both folds have stopped making.
+    FakeAffinityStore ratings = new FakeAffinityStore().rated(CANONICAL, 5, null, LATE);
+    FakeAssertionLog log =
+        new FakeAssertionLog()
+            .with(
+                minted(MINTED, MINTED_LABEL),
+                merged(MINTED, CANONICAL),
+                merged(MINTED, CORRECTED_CANONICAL));
+
+    assertThat(run(ratings, log, SortOrder.RATING))
+        .extracting(AffinityRow::qid, AffinityRow::displayLabel)
+        .containsExactly(org.assertj.core.groups.Tuple.tuple(CANONICAL, AffinityRow.NO_LABEL));
   }
 
   @Test

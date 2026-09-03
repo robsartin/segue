@@ -1,5 +1,6 @@
 package com.robsartin.segue.ratings;
 
+import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
@@ -89,6 +90,7 @@ final class Labels {
     // surviving merge of the same localQid to a different requested canonical would need to expose
     // a difference, and it collapses the same way, because that second merge's own row already adds
     // localQid on its own account.
+    Equivalences merges = Equivalences.in(logged);
     Set<String> wanted = new HashSet<>(qids);
     for (int i = 0; i < logged.size(); i++) {
       if (logged.get(i) instanceof SameAs merge && qids.contains(merge.canonicalQid())) {
@@ -130,7 +132,10 @@ final class Labels {
       // same or the invariant above is false. It was: a carried canonical row listed as
       // "(not in the graph)" while the node was in the graph. The retraction check above already
       // covers this row - a SameAs naming a retracted entity on either side never reaches here.
-      if (assertion instanceof SameAs merge) {
+      if (assertion instanceof SameAs merge && merges.stands(merge)) {
+        // A merge a later one corrected lends nothing (#221): both folds have retired the node it
+        // stood in for, so a label here would deny the "(not in the graph)" the row honestly
+        // deserves.
         String local = labels.get(merge.localQid());
         // Only where nothing has claimed the canonical entity, the stand-in's own guard: a
         // source that HAS named it wins, because overwriting its label with the owner's working
