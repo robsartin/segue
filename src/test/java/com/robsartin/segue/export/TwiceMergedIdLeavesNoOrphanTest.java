@@ -18,6 +18,7 @@ import com.robsartin.segue.export.InventedGraph.FakeAssertionLog;
 import com.robsartin.segue.ingest.GraphProjector;
 import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.tinker.TinkerGraphStore;
+import com.robsartin.segue.wikidata.KindMapper;
 import java.io.IOException;
 import java.io.StringWriter;
 import org.junit.jupiter.api.DisplayName;
@@ -210,7 +211,9 @@ class TwiceMergedIdLeavesNoOrphanTest {
   @Test
   @DisplayName("a retracted edge keeps no superseded stand-in alive")
   void shouldKeepNoSupersededStandInAliveWhenTheOnlyNamingEdgeIsRetracted() {
-    assertThat(Equivalences.standIns(correctedLogWithARetractedSurvivingEdge().readAll()))
+    assertThat(
+            Equivalences.standIns(
+                correctedLogWithARetractedSurvivingEdge().readAll(), KindMapper::rederive))
         .as(
             "the WREN -> MISHEARD edge no longer survives, so nothing keeps MISHEARD's stand-in"
                 + " alive and the last-wins rule alone decides it")

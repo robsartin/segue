@@ -29,13 +29,13 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * The stand-in rule's four homes give one answer, on one log (issue #220).
+ * The stand-in rule's four homes give one answer wherever they read the same equivalences, on one
+ * log (issue #220).
  *
  * <p><b>This pins today's answers, and does not claim they are right.</b> Every expected value
- * below is what the four homes say today, recorded so that one of them moving alone reds; three of
- * the pinned rows are behaviours ADR 59 lists as residuals — one for {@code Q10000900203} / {@code
- * Q10000900204} (a local merged twice, issue #221) and one for {@code Q10000900202} (the bypass
- * kind, issue #222) — and pinning them is not agreeing with them.
+ * below is what the four homes say today, recorded so that one of them moving alone reds; one of
+ * the pinned rows is a behaviour ADR 59 lists as a residual — {@code Q10000900202}, the bypass kind
+ * (issue #222) — and pinning it is not agreeing with it.
  *
  * <p><b>A kind is compared only where a home exposes one.</b> Two of the four — {@code
  * Equivalences.standIns} (via the fold) and the live {@code IngestService} graph — return a {@code
@@ -53,6 +53,27 @@ import org.junit.jupiter.api.Test;
  * than asserted equal across the two, which would be asserting something false about the code. The
  * invariant that does hold everywhere is asserted instead, in every home that exposes a kind: a
  * stand-in and the local node it stands for agree about what the entity is.
+ *
+ * <p><b>The twice-merged row is split the other way — by presence, not by kind — and that is the
+ * code too.</b> {@code Q10000900203} is the first of two canonical ids one local id was merged
+ * onto, and since issue #221 a superseded merge names no stand-in unless a surviving edge still
+ * references its canonical id. This fixture has no edges at all, so the three homes that read the
+ * whole log — the fold, {@code OwnRun.labelsInTheProjection} and {@code ratings/Labels.forQids} —
+ * all ask {@code Equivalences.in(log).stands} and all answer "no node". The live home answers with
+ * the local's kind and label instead, because {@code IngestService.record} is handed {@code
+ * Equivalences.NONE}, whose {@code stands} is unconditionally true: it sees one claim rather than a
+ * log, so nothing there can know a later merge corrected this one. <b>The four homes ask one
+ * predicate; they do not ask it of one {@code Equivalences}.</b>
+ *
+ * <p><b>Both splits are the same fact about the live path: it folds nothing.</b> {@code record}
+ * applies a claim as it stands — no {@code KindMapper.rederive}, which is ADR 42's lag and the
+ * bypass row above, and no equivalences read off a log, which is the twice-merged row. Neither is
+ * reachable in production: {@code record}'s own javadoc says nothing sends a {@code SameAs} to it,
+ * because {@code OwnRun} appends a merge through {@code claim}, which has no graph half, and the
+ * boot replay seeds every canonical node from {@code Equivalences.standIns} before its loop runs.
+ * Driving the live home through {@code GraphProjector} instead would make it agree on both rows and
+ * would trade away the only probe this repository has of {@code IngestService.standIn}'s own upsert
+ * — see {@link #liveGraphNodes()}.
  *
  * <p><b>It does not close ADR 59's residual.</b> The residual is that the stand-in rule has four
  * homes; after this it still has four. What changes is that nothing failed if one drifted, and now
@@ -130,6 +151,14 @@ class StandInAgreesInEveryHomeTest {
    * @param shownInTheLiveGraph what the live graph shows once they have - the same kind as {@code
    *     shownInTheFold} on every row but the bypass one, where ADR 42's live lag keeps the claimed
    *     kind until the next boot
+   * @param shownLabel what the three homes that read the WHOLE log show once those claims have
+   *     landed - the fold, {@code OwnRun.labelsInTheProjection} and {@code ratings/Labels.forQids}.
+   *     One field for the three of them because all three ask {@code Equivalences.in(log).stands},
+   *     so they cannot answer this differently; null where they hold nothing
+   * @param shownInTheLiveGraphLabel what the live graph shows - the same label as {@code
+   *     shownLabel} on every row but the twice-merged one, where {@code IngestService.record} is
+   *     handed {@code Equivalences.NONE} and so still builds a stand-in the other three have
+   *     retired (#221)
    */
   private record Pinned(
       String canonical,
@@ -138,7 +167,8 @@ class StandInAgreesInEveryHomeTest {
       String standInLabel,
       NodeKind shownInTheFold,
       NodeKind shownInTheLiveGraph,
-      String shownLabel) {}
+      String shownLabel,
+      String shownInTheLiveGraphLabel) {}
 
   private static final List<Pinned> PINNED =
       List.of(
@@ -149,8 +179,9 @@ class StandInAgreesInEveryHomeTest {
               "the April tape",
               NodeKind.WORK,
               NodeKind.WORK,
+              "the April tape",
               "the April tape"),
-          // The bypass row, and the only one whose two kind-exposing homes differ: the folds
+          // The bypass row, and the only one the two kind-exposing homes split by KIND: the folds
           // re-derive Q5 to PERSON (#222), the live path holds the claimed WORK until the next
           // boot (ADR 42). See the class javadoc.
           new Pinned(
@@ -160,15 +191,13 @@ class StandInAgreesInEveryHomeTest {
               "a signal a source named",
               NodeKind.PERSON,
               NodeKind.WORK,
+              "a signal a source named",
               "a signal a source named"),
+          // The twice-merged row, and the only one the homes split by PRESENCE (#221). The
+          // correction retired this stand-in, and the three homes that read the whole log say so;
+          // the live one is handed Equivalences.NONE and still builds it. See the class javadoc.
           new Pinned(
-              FIRST,
-              TWICE_OVER,
-              NodeKind.WORK,
-              "the ledger, twice over",
-              NodeKind.WORK,
-              NodeKind.WORK,
-              "the ledger, twice over"),
+              FIRST, TWICE_OVER, null, null, null, NodeKind.WORK, null, "the ledger, twice over"),
           new Pinned(
               SECOND,
               TWICE_OVER,
@@ -176,6 +205,7 @@ class StandInAgreesInEveryHomeTest {
               "the ledger, twice over",
               NodeKind.WORK,
               NodeKind.WORK,
+              "the ledger, twice over",
               "the ledger, twice over"),
           new Pinned(
               KNOWN,
@@ -184,6 +214,7 @@ class StandInAgreesInEveryHomeTest {
               "the owner's working title",
               NodeKind.GROUP,
               NodeKind.GROUP,
+              "the name the source already had",
               "the name the source already had"),
           new Pinned(
               LATER,
@@ -192,6 +223,7 @@ class StandInAgreesInEveryHomeTest {
               "the owner's other working title",
               NodeKind.GROUP,
               NodeKind.GROUP,
+              "the name the source brought later",
               "the name the source brought later"));
 
   // Read once. Every home gets the same fifteen rows, which is the whole point, and building
@@ -218,47 +250,77 @@ class StandInAgreesInEveryHomeTest {
   }
 
   @Test
-  @DisplayName("every home calls each canonical id the same thing")
-  void shouldAgreeOnEveryCanonicalLabelWhenAllFourHomesReadOneLog() {
+  @DisplayName("the three homes that read the whole log call each canonical id the same thing")
+  void shouldAgreeOnEveryCanonicalLabelWhenTheThreeLogReadingHomesReadOneLog() {
     assertThat(answersFor(TAPE).keySet())
         .as("the four homes this guard reads (%s), independent of the count below", HOMES)
         .containsExactlyElementsOf(HOMES);
 
     List<String> disagreements = new ArrayList<>();
+    List<String> departures = new ArrayList<>();
     long answered = 0;
     for (Pinned row : PINNED) {
-      List<Map.Entry<String, Answer>> homes = List.copyOf(answersFor(row.canonical()).entrySet());
-      for (Map.Entry<String, Answer> home : homes) {
+      Map<String, Answer> byHome = answersFor(row.canonical());
+      for (Map.Entry<String, Answer> home : byHome.entrySet()) {
         answered += home.getValue().label() == null ? 0 : 1;
       }
-      for (int i = 0; i < homes.size(); i++) {
-        for (int j = i + 1; j < homes.size(); j++) {
-          if (!Objects.equals(homes.get(i).getValue().label(), homes.get(j).getValue().label())) {
+      // The three that read the whole log are compared with each other; the live home is pinned
+      // against its own column instead, because it is handed Equivalences.NONE and answers for a
+      // superseded merge the other three have retired (#221). See the class javadoc.
+      List<Map.Entry<String, Answer>> readingTheLog =
+          byHome.entrySet().stream().filter(home -> !LIVE.equals(home.getKey())).toList();
+      for (int i = 0; i < readingTheLog.size(); i++) {
+        for (int j = i + 1; j < readingTheLog.size(); j++) {
+          if (!Objects.equals(
+              readingTheLog.get(i).getValue().label(), readingTheLog.get(j).getValue().label())) {
             disagreements.add(
                 row.canonical()
                     + ": "
-                    + homes.get(i).getKey()
+                    + readingTheLog.get(i).getKey()
                     + " says "
-                    + homes.get(i).getValue().describe()
+                    + readingTheLog.get(i).getValue().describe()
                     + ", "
-                    + homes.get(j).getKey()
+                    + readingTheLog.get(j).getKey()
                     + " says "
-                    + homes.get(j).getValue().describe());
+                    + readingTheLog.get(j).getValue().describe());
           }
         }
+      }
+      departures.addAll(
+          labelDeparture(LIVE, row.canonical(), byHome.get(LIVE), row.shownInTheLiveGraphLabel()));
+      for (Map.Entry<String, Answer> home : readingTheLog) {
+        departures.addAll(
+            labelDeparture(home.getKey(), row.canonical(), home.getValue(), row.shownLabel()));
       }
     }
 
     // Homes that all answered nothing would agree perfectly.
     assertThat(answered)
-        .as("every home answered for every canonical id the pinned table says is present")
-        .isEqualTo(homeCount() * PINNED.stream().filter(r -> r.shownLabel() != null).count());
+        .as("every home answered for every canonical id the pinned table says it holds")
+        .isEqualTo(
+            (homeCount() - 1) * PINNED.stream().filter(r -> r.shownLabel() != null).count()
+                + PINNED.stream().filter(r -> r.shownInTheLiveGraphLabel() != null).count());
+    assertThat(departures)
+        .as("each home against its own pinned label - each line names the home and the row")
+        .isEmpty();
     assertThat(disagreements)
         .as(
-            "one stand-in rule, %d homes (ADR 59's residual, issue #220) - each line names the"
-                + " pair that disagrees",
-            homeCount())
+            "one stand-in rule, %d homes read the whole log and answer alike (ADR 59's residual,"
+                + " issue #220) - each line names the pair that disagrees",
+            homeCount() - 1)
         .isEmpty();
+    assertThat(
+            PINNED.stream()
+                .filter(r -> (r.shownLabel() == null) != (r.shownInTheLiveGraphLabel() == null))
+                .toList())
+        .as(
+            "the live home is split from the other three by PRESENCE on the twice-merged row and"
+                + " nowhere else - it is handed Equivalences.NONE, whose stands is unconditionally"
+                + " true, so it alone still builds a stand-in the correction retired (#221). A"
+                + " table splitting them anywhere else would be recording a drift as though it"
+                + " were that; one splitting them nowhere would have stopped recording it")
+        .extracting(Pinned::canonical)
+        .containsExactly(FIRST);
   }
 
   @Test
@@ -283,17 +345,21 @@ class StandInAgreesInEveryHomeTest {
     assertThat(departures)
         .as(
             "each of the two kind-exposing homes against its own pinned kind - they agree on every"
-                + " row but the bypass one, where the folds re-derive (#222) and the live path"
-                + " holds the claimed kind until the next boot (ADR 42)")
+                + " row both of them hold but the bypass one, where the folds re-derive (#222) and"
+                + " the live path holds the claimed kind until the next boot (ADR 42)")
         .isEmpty();
     assertThat(
             PINNED.stream()
+                .filter(r -> r.shownInTheFold() != null && r.shownInTheLiveGraph() != null)
                 .filter(r -> !Objects.equals(r.shownInTheFold(), r.shownInTheLiveGraph()))
                 .toList())
         .as(
-            "the two homes are pinned apart on the bypass row and nowhere else - a table pinning"
-                + " them apart anywhere else would be recording a drift as though it were ADR 42's"
-                + " lag, and one pinning them apart nowhere would have stopped recording that lag")
+            "of the rows both homes hold, the two are pinned apart on the bypass row and nowhere"
+                + " else - a table pinning them apart anywhere else would be recording a drift as"
+                + " though it were ADR 42's lag, and one pinning them apart nowhere would have"
+                + " stopped recording that lag. The twice-merged row is excluded here because only"
+                + " one home holds it at all, which is a split by presence rather than by kind and"
+                + " is asserted as such above")
         .extracting(Pinned::canonical)
         .containsExactly(BEACON);
   }
@@ -305,9 +371,19 @@ class StandInAgreesInEveryHomeTest {
     Set<String> claimedOutright = claimedOutright();
     List<Pinned> rows =
         PINNED.stream().filter(r -> !claimedOutright.contains(r.canonical())).toList();
+    // A home that holds no node for a row has no stand-in there to compare, so the row is scoped
+    // out of THAT home rather than out of the test: the twice-merged row (#221) leaves the fold's
+    // side and stays on the live one. Scoped from the pinned table, which the two tests above
+    // hold to the code, rather than from what the home happened to answer - so a home that
+    // silently stopped building a stand-in still reds there.
+    List<Pinned> inTheFold = rows.stream().filter(r -> r.shownInTheFold() != null).toList();
+    List<Pinned> inTheLiveGraph =
+        rows.stream().filter(r -> r.shownInTheLiveGraph() != null).toList();
     List<String> departures = new ArrayList<>();
-    for (Pinned row : rows) {
+    for (Pinned row : inTheFold) {
       departures.addAll(standInDeparture(FOLD, IN_THE_FOLD, row));
+    }
+    for (Pinned row : inTheLiveGraph) {
       departures.addAll(standInDeparture(LIVE, IN_THE_LIVE_GRAPH, row));
     }
 
@@ -318,6 +394,20 @@ class StandInAgreesInEveryHomeTest {
             BEACON)
         .extracting(Pinned::canonical)
         .contains(BEACON);
+    assertThat(inTheLiveGraph)
+        .as(
+            "the twice-merged row (%s) is compared in the live home, which still builds its"
+                + " stand-in over Equivalences.NONE - dropping it from both homes would leave the"
+                + " one stand-in #221 changed unchecked against the node it copies",
+            FIRST)
+        .extracting(Pinned::canonical)
+        .contains(FIRST);
+    assertThat(inTheFold)
+        .as(
+            "and not in the fold, where the correction retired it - comparing a stand-in that is"
+                + " not there against a local node that is would be asserting the absence twice")
+        .extracting(Pinned::canonical)
+        .doesNotContain(FIRST);
     assertThat(departures)
         .as(
             "a stand-in copies the local node as its own home holds it - the one thing both"
@@ -360,6 +450,22 @@ class StandInAgreesInEveryHomeTest {
                 + " notice",
             SIGNAL, BYPASS_CLAIM.kind())
         .isNotEqualTo(BYPASS_CLAIM.kind());
+  }
+
+  /** One home's answer against its own pinned label, as a line naming both or as nothing at all. */
+  private static List<String> labelDeparture(
+      String home, String canonical, Answer answer, String pinned) {
+    if (Objects.equals(answer.label(), pinned)) {
+      return List.of();
+    }
+    return List.of(
+        canonical
+            + ": "
+            + home
+            + " says "
+            + answer.describe()
+            + ", pinned "
+            + (pinned == null ? "no node" : "\"" + pinned + "\""));
   }
 
   /** One home's answer against its own pinned kind, as a line naming both or as nothing at all. */
