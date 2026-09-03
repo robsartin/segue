@@ -47,15 +47,16 @@ import org.junit.jupiter.api.io.TempDir;
  * id as a discovery</b>, which is his own entity handed back under its new name. Resolved, the
  * rating is the canonical id's, the canonical id is known, and it is not dealt at all.
  *
- * <p>Every qid and label is invented. The canonical side of a merge must be an id Wikidata could
- * allocate, so {@code Q900} stands in for one as {@code MergeCarriesEverythingTest} uses it.
+ * <p>Every qid and label is invented. The canonical side of a merge may not take a stand-in's
+ * leading zero, so {@code Q10000000900} stands in for one in ADR 62's shape, as {@code
+ * MergeCarriesEverythingTest} uses it.
  */
 class MergedIdIsNotDealtTest {
 
   /** Two leading zeros: a local entity, not one of ADR 58's single-zero stand-ins. */
   private static final String MINTED = "Q00900042";
 
-  private static final String CANONICAL = "Q900";
+  private static final String CANONICAL = "Q10000000900";
   private static final String VIA = "Q0900211";
   private static final String ON_THE_FILE = "Q0900199";
 

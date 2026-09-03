@@ -140,7 +140,7 @@ class KnownListTest {
   @Test
   @DisplayName("what the sweep may not offer is the rejections and the merged local ids together")
   void shouldUnionTheRejectionsWithTheMergedLocalIdsWhenAskedWhatIsNotOffered() {
-    Equivalences merges = new Equivalences(Map.of("Q00900042", "Q900"));
+    Equivalences merges = new Equivalences(Map.of("Q00900042", "Q10000000900"));
 
     assertThat(KnownList.notOffered(Map.of("Q0900001", 2, "Q0900002", 5), merges))
         .containsExactlyInAnyOrder("Q0900001", "Q00900042");
@@ -152,10 +152,10 @@ class KnownListTest {
     // Equivalences.resolve has already moved the rating, so the local id is absent from the map
     // by the time revisitable is asked. Written down because it is a decision, not an oversight:
     // dealing the local id for revision would write a second live row and rebuild the defect.
-    Equivalences merges = new Equivalences(Map.of("Q00900042", "Q900"));
+    Equivalences merges = new Equivalences(Map.of("Q00900042", "Q10000000900"));
     Map<String, Integer> resolved = merges.resolve(Map.of("Q00900042", 5));
 
     assertThat(KnownList.revisitable(KnownList.promoted(List.of(), resolved), resolved))
-        .containsExactly("Q900");
+        .containsExactly("Q10000000900");
   }
 }

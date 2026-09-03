@@ -14,9 +14,18 @@ class EquivalencesTest {
 
   private static final String MINTED = "Q00900042";
   private static final String OTHER_MINTED = "Q00900043";
-  private static final String CANONICAL = "Q900";
-  private static final String OTHER_CANONICAL = "Q901";
-  private static final String NEIGHBOUR = "Q902";
+
+  /**
+   * The two shapes this file needs, and they are not the same one. A merge's canonical side takes
+   * ADR 62's eleven digits, which {@code SameAs} admits there and nowhere else; {@code NEIGHBOUR}
+   * is only the far end of an edge, so it is an ordinary stand-in and takes ADR 58's single
+   * leading zero. Each is the id this file used before issue #171 carried into its shape.
+   */
+  private static final String CANONICAL = "Q10000000900";
+
+  private static final String OTHER_CANONICAL = "Q10000000901";
+
+  private static final String NEIGHBOUR = "Q0902";
   private static final Instant WHEN = Instant.parse("2026-08-31T09:00:00Z");
 
   @Test
@@ -115,11 +124,11 @@ class EquivalencesTest {
     // launches, it failed 20 times out of 20.
     List<LoggedAssertion> log =
         List.of(
-            SameAs.declared("Q00900050", "Q905", WHEN),
-            SameAs.declared("Q00900010", "Q901", WHEN),
-            SameAs.declared("Q00900040", "Q904", WHEN),
-            SameAs.declared("Q00900020", "Q902", WHEN),
-            SameAs.declared("Q00900030", "Q903", WHEN));
+            SameAs.declared("Q00900050", "Q10000000905", WHEN),
+            SameAs.declared("Q00900010", "Q10000000901", WHEN),
+            SameAs.declared("Q00900040", "Q10000000904", WHEN),
+            SameAs.declared("Q00900020", "Q10000000902", WHEN),
+            SameAs.declared("Q00900030", "Q10000000903", WHEN));
 
     assertThat(Equivalences.in(log).canonicalByLocal().keySet())
         .containsExactly("Q00900050", "Q00900010", "Q00900040", "Q00900020", "Q00900030");

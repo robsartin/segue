@@ -270,7 +270,7 @@ class RateRunTest {
               graph,
               List.of(KNOWN_ONE),
               Map.of(),
-              new Equivalences(Map.of(minted, "Q900")),
+              new Equivalences(Map.of(minted, "Q10000000900")),
               10,
               MIN_CANDIDATE_DEGREE,
               OptionalInt.empty(),

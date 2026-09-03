@@ -176,7 +176,7 @@ class RecommendRunTest {
     run(options(KNOWN_ONE, KNOWN_TWO));
 
     assertThat(notes)
-        .noneMatch(note -> note.contains("Q900") || note.contains("who that artist cites"));
+        .noneMatch(note -> note.contains("Q10000000900") || note.contains("who that artist cites"));
   }
 
   @Test

@@ -75,10 +75,10 @@ class OwnerClaimTest {
   @DisplayName(
       "should accept a merge whose local side is a local entity and whose canonical side is real")
   void shouldAcceptAMergeOntoARealWikidataId() {
-    SameAs merge = SameAs.declared("Q00900042", "Q900", Instant.EPOCH);
+    SameAs merge = SameAs.declared("Q00900042", "Q10000000900", Instant.EPOCH);
 
     assertThat(merge.localQid()).isEqualTo("Q00900042");
-    assertThat(merge.canonicalQid()).isEqualTo("Q900");
+    assertThat(merge.canonicalQid()).isEqualTo("Q10000000900");
     assertThat(merge.assertedAt()).isEqualTo(Instant.EPOCH);
   }
 

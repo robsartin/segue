@@ -247,10 +247,7 @@ class StandInQidsDenoteNothingTest {
    * it is a record that a fix is owed. A new test that needs an id it invents takes the
    * leading-zero form — {@code Q0900100} — which Wikibase's grammar refuses outright.
    */
-  static final Set<String> NOT_YET_MIGRATED =
-      Set.of(
-          "Q900", "Q901", "Q902", "Q903", "Q904", "Q905", "Q900042", "Q900102", "Q900106",
-          "Q999999");
+  static final Set<String> NOT_YET_MIGRATED = Set.of("Q999999");
 
   /** One allocatable-form id, and where it was found. */
   private record Sighting(Path file, int line, String id) {
@@ -279,8 +276,10 @@ class StandInQidsDenoteNothingTest {
                 + " sightings in %d files. Every one of them denotes a real entity, or will as"
                 + " soon as the counter reaches it. Give the entity an id the grammar refuses,"
                 + " by prepending one zero to the id the test uses today - the Q0900100 shape,"
-                + " which LocalEntity's javadoc already predicts - or, if the test is genuinely"
-                + " about a real entity, add it to ALLOWED with the reason it is real",
+                + " which LocalEntity's javadoc already predicts. A merge's canonical side is the"
+                + " one place that shape is refused, and it takes ADR 62's eleven-digit shape"
+                + " instead; see Qid.checkCanonicalSide. Or, if the test is genuinely about a real"
+                + " entity, add it to ALLOWED with the reason it is real",
             offending.size(), SWEEP.sightings().size(), SWEEP.files().size())
         .isEmpty();
   }

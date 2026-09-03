@@ -16,14 +16,12 @@ import java.util.List;
 /**
  * Invented people, invented bands, invented QIDs.
  *
- * <p><b>The QIDs are invented in the sense that nobody looked them up — not in the sense that they
- * denote nothing.</b> Some of the ids below resolve to real Wikidata entities. They were picked
- * from a {@code Q900xxx} range described as a placeholder range shared with {@code
- * fixture.Fixture}; that range was never free, and {@code Fixture} has since moved to ids
- * Wikibase's item-id grammar refuses (ADR 58). This file has not, because that family is shared
- * across many unrelated test files and moving one of them would split the convention rather than
- * mend it. Tracked as <a href="https://github.com/robsartin/segue/issues/171">issue #171</a>;
- * nothing here depends on what any id denotes.
+ * <p><b>The QIDs denote nothing, and are shaped so that they never can.</b> They were once picked
+ * from a {@code Q900xxx} range described as free; it was not, and most of them resolved to real
+ * entities. Every id here now takes a shape Wikibase's item-id grammar refuses — a leading zero for
+ * a stand-in (ADR 58), two for one the owner minted (ADR 59), and eleven digits for the two that
+ * stand on a merge's canonical side and so may not carry a leading zero (ADR 62). Issue #171 moved
+ * them; nothing here depends on what any id denotes.
  *
  * <p>Nothing in this file is derived from a real graph, a real list or a real rating: ADR 40 and
  * issue #37 are explicit that this repository is public and that the personal data lives outside
@@ -34,28 +32,24 @@ final class InventedGraph {
   static final String WREN = "Q0900101";
 
   /**
-   * Allocatable shape, from the same invented family as the ids around it — but unlike them, this
-   * one stands as a merge's canonical side ({@code BothFoldsAgreeTest}'s {@code merged(DEMO,
-   * KETTLES)}, via {@link #merged}), so {@code SameAs.declared} runs it through {@code
-   * Qid.checkAllocatable}. It is band A by number but joins Task 10's blocked merge-canonical-side
-   * ids rather than migrating with the rest of this band; it carries the same issue #171 debt until
-   * that task's spec question is answered.
+   * A merge's canonical side ({@code BothFoldsAgreeTest}'s {@code merged(DEMO, KETTLES)}, via
+   * {@link #merged}), so {@code SameAs.declared} runs it through {@code Qid.checkCanonicalSide} and
+   * the leading zero its neighbours took is not available to it. It carries ADR 62's eleven-digit
+   * shape instead, keeping the digits of the band-A id it migrated from in its last places.
    */
-  static final String KETTLES = "Q900102";
+  static final String KETTLES = "Q10000900102";
 
   static final String HOLLOW_TIDE = "Q0900103";
   static final String MARLOW = "Q0900104";
   static final String PRIZE = "Q0900105";
 
   /**
-   * The id Wikidata turned out to have for something the owner had already minted (#92).
-   * Allocatable shape, from the same invented family as the ids above — but unlike them, this one
-   * stands as a merge's canonical side ({@code BothFoldsAgreeTest}, via {@link #merged}), so {@code
-   * SameAs.declared} runs it through {@code Qid.checkAllocatable}. It is band A by number but joins
-   * Task 10's blocked merge-canonical-side ids rather than migrating with the rest of this band; it
-   * carries the same issue #171 debt until that task's spec question is answered.
+   * The id Wikidata turned out to have for something the owner had already minted (#92) — a merge's
+   * canonical side ({@code BothFoldsAgreeTest}, via {@link #merged}), so it takes ADR 62's
+   * eleven-digit shape for the reason {@link #KETTLES} does, and keeps the digits of the band-A id
+   * it migrated from in its last places.
    */
-  static final String PRESSING = "Q900106";
+  static final String PRESSING = "Q10000900106";
 
   /**
    * A second canonical id, for a merge whose local side carries edges on both sides of itself

@@ -20,9 +20,9 @@ import org.junit.jupiter.api.io.TempDir;
  * rule, for a tool with three operations instead of one.
  *
  * <p>The stand-ins here take a single leading zero (ADR 58): well-formed, and never allocatable by
- * Wikidata. The one exception is a merge's canonical side, which must be allocatable or the merge
- * is not "Wikidata caught up" at all - it uses the same {@code Q900} this branch's other merge
- * tests use.
+ * Wikidata. The one exception is a merge's canonical side, which may not take that shape - a merge
+ * onto a stand-in is not "Wikidata caught up" at all. It takes ADR 62's eleven-digit shape instead,
+ * the same {@code Q10000000900} this branch's other merge tests use.
  */
 class OwnCliTest {
 
@@ -74,10 +74,10 @@ class OwnCliTest {
   @DisplayName("should read both sides when merging")
   void shouldReadBothSidesWhenMerging() {
     OwnCli.Merge merge =
-        (OwnCli.Merge) parse("merge", "--local", "Q00900042", "--canonical", "Q900");
+        (OwnCli.Merge) parse("merge", "--local", "Q00900042", "--canonical", "Q10000000900");
 
     assertThat(merge.localQid()).isEqualTo("Q00900042");
-    assertThat(merge.canonicalQid()).isEqualTo("Q900");
+    assertThat(merge.canonicalQid()).isEqualTo("Q10000000900");
   }
 
   @Test
