@@ -120,4 +120,21 @@ class RetractionsTest {
   void emptyLog() {
     assertThat(surviving(List.of())).isEmpty();
   }
+
+  @Test
+  @DisplayName("a retraction reaches an id at a row before it, and not at one after it")
+  void shouldReachOnlyTheRowsBeforeItWhenAnIdWasRetracted() {
+    List<LoggedAssertion> log = List.of(node("Q0900101"), retract("Q0900101"), node("Q0900101"));
+    Retractions retractions = Retractions.in(log);
+
+    assertThat(retractions.reaches(0, "Q0900101"))
+        .as("the claim before the retraction is reached, which is what drops it from the fold")
+        .isTrue();
+    assertThat(retractions.reaches(2, "Q0900101"))
+        .as("backwards only (ADR 44): a claim appended afterwards stands")
+        .isFalse();
+    assertThat(retractions.reaches(0, "Q0900102"))
+        .as("an id nothing retracted is reached at no row at all")
+        .isFalse();
+  }
 }
