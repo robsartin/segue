@@ -243,11 +243,16 @@ public final class OwnRun {
         labels.put(node.qid(), node.label());
       } else if (assertion instanceof LocalEntity minted) {
         labels.put(minted.qid(), minted.label());
-      } else if (assertion instanceof SameAs merge && !labels.containsKey(merge.canonicalQid())) {
+      } else if (assertion instanceof SameAs merge
+          && merges.stands(merge)
+          && !labels.containsKey(merge.canonicalQid())) {
         // The node stand-in, the same rule Equivalences.standIns and both folds apply: the id
         // gains a node carrying the merged entity's label where nothing has claimed one. It is in
         // the projection, so this tool has to offer it - and it is usually the id the owner wants
         // next, since a merge is normally declared the moment Wikidata catches up.
+        //
+        // A merge the owner has since corrected lends no label (#221): the second merge retires
+        // the stand-in the first named, so that id has no node to offer as an endpoint.
         String local = labels.get(merge.localQid());
         if (local != null) {
           labels.put(merge.canonicalQid(), local);

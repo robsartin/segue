@@ -377,6 +377,35 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
             from, to, claim.typeCode(), claim.validFrom(), claim.validTo(), claim.provenance()));
   }
 
+  /**
+   * Whether these equivalences still point at this merge's canonical id — {@link
+   * #canonicalByLocal}'s last-wins rule, asked about one row (#221).
+   *
+   * <p><b>The stand-in rule needs it because a second merge of one local id is a correction.</b>
+   * {@link #standIns} named a stand-in for every surviving merge, so a local id merged onto one
+   * canonical id and then onto another left a node under the first carrying the merged entity's
+   * label and no edges — the edges having folded onto the last, which is the id this map keeps.
+   * Nothing claimed that node and nothing named it. ADR 59's amendment of 2026-09-03 records the
+   * decision to stop making it.
+   *
+   * <p><b>Equivalences that have never heard of the local id do not contradict the merge, so the
+   * answer is true.</b> That is not a convenience for the empty case: {@code IngestService.record}
+   * applies a claim with {@link #NONE}, because it sees one claim and not a log, and a {@code
+   * SameAs} arriving there must go on getting its canonical node or the running graph is left with
+   * an endpoint it has never heard of — which is the whole job of {@code IngestService.standIn}. A
+   * caller holding the log gets the last-wins answer; a caller holding no log gets the merge it was
+   * handed.
+   *
+   * <p>A merge a retraction reaches is absent from this map and would also answer true. No caller
+   * is affected: every home of the stand-in rule asks {@link Retractions#survives} first, and
+   * {@link #localsOfMerges} does it for both folds.
+   */
+  public boolean stands(SameAs merge) {
+    Objects.requireNonNull(merge, "merge");
+    String canonical = canonicalByLocal.get(merge.localQid());
+    return canonical == null || canonical.equals(merge.canonicalQid());
+  }
+
   /** What this id turned out to be, or the id itself where the owner has said nothing. */
   private String canonical(String qid) {
     return canonicalByLocal.getOrDefault(qid, qid);
