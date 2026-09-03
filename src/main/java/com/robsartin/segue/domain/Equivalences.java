@@ -396,9 +396,13 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
    * caller holding the log gets the last-wins answer; a caller holding no log gets the merge it was
    * handed.
    *
-   * <p>A merge a retraction reaches is absent from this map and would also answer true. No caller
-   * is affected: every home of the stand-in rule asks {@link Retractions#survives} first, and
-   * {@link #localsOfMerges} does it for both folds.
+   * <p><b>A retracted merge is not exempted from this rule — it is filtered out before reaching
+   * it.</b> {@link #canonicalByLocal} is built only from surviving rows, so a retracted merge's own
+   * canonical id is not what decides its answer here: where the same local id was merged again by a
+   * row that survives, the map holds that later canonical, and this method answers false for the
+   * retracted row exactly as it would for any other superseded merge. Every home of the stand-in
+   * rule asks {@link Retractions#survives} before it asks this one, so that case never actually
+   * reaches here on its own account; {@link #localsOfMerges} does the filtering for both folds.
    */
   public boolean stands(SameAs merge) {
     Objects.requireNonNull(merge, "merge");

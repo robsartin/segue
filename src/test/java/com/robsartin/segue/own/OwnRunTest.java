@@ -210,7 +210,10 @@ class OwnRunTest {
 
     assertThatThrownBy(() -> run.run(claim(SOURCED, CANONICAL, false), notes::add))
         .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining(CANONICAL);
+        .hasMessageContaining(CANONICAL)
+        .as("the generic \"mint or seed it first\" advice is wrong here - nothing to mint or seed")
+        .hasMessageContaining("corrected")
+        .hasMessageContaining(OTHER_CANONICAL);
   }
 
   @Test

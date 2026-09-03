@@ -115,8 +115,8 @@ public final class OwnRun {
       List<LoggedAssertion> logged, Assert edge, Consumer<String> n) {
     Equivalences merges = Equivalences.in(logged);
     Map<String, String> present = labelsInTheProjection(logged, merges);
-    String from = labelOrRefuse(present, merges, edge.fromQid());
-    String to = labelOrRefuse(present, merges, edge.toQid());
+    String from = labelOrRefuse(logged, present, merges, edge.fromQid());
+    String to = labelOrRefuse(logged, present, merges, edge.toQid());
     n.accept(
         "claiming "
             + edge.fromQid()
@@ -178,7 +178,7 @@ public final class OwnRun {
   }
 
   private static String labelOrRefuse(
-      Map<String, String> present, Equivalences merges, String qid) {
+      List<LoggedAssertion> logged, Map<String, String> present, Equivalences merges, String qid) {
     String label = present.get(qid);
     if (label == null) {
       // A merged local id is refused by name rather than as an absence. It IS still in the graph -
@@ -197,6 +197,22 @@ public final class OwnRun {
                 + canonical
                 + ", which is the id the merge retired it in favour of (#92)");
       }
+      // A canonical id a merge once named, but a later merge of the same local id corrected away
+      // (#221), is a different absence from "nothing here at all" - it is not that no claim ever
+      // reached this id, but that the one claim that did has since been superseded. "Mint or seed
+      // it first" would be actively wrong advice, so this is checked and named before falling
+      // through to that generic refusal.
+      String standing = correctedTo(logged, merges, qid);
+      if (standing != null) {
+        throw new IllegalArgumentException(
+            qid
+                + " was the canonical id of a merge you have since corrected — that merge now"
+                + " points to "
+                + standing
+                + "; claim against "
+                + standing
+                + " instead (#221)");
+      }
       throw new IllegalArgumentException(
           "nothing in the projection is "
               + qid
@@ -204,6 +220,23 @@ public final class OwnRun {
               + " first (it may also have been retracted)");
     }
     return label;
+  }
+
+  /**
+   * The id a merge naming {@code canonicalQid} now points to instead, where the log holds such a
+   * merge and {@link Equivalences#stands} says it has been superseded - {@code null} where {@code
+   * canonicalQid} was never a merge's canonical side, or the merge that named it still stands.
+   */
+  private static String correctedTo(
+      List<LoggedAssertion> logged, Equivalences merges, String canonicalQid) {
+    for (LoggedAssertion assertion : logged) {
+      if (assertion instanceof SameAs merge
+          && merge.canonicalQid().equals(canonicalQid)
+          && !merges.stands(merge)) {
+        return merges.canonicalByLocal().get(merge.localQid());
+      }
+    }
+    return null;
   }
 
   /**
