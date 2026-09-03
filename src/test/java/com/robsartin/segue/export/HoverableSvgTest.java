@@ -30,7 +30,7 @@ class HoverableSvgTest {
       <g id="graph0" class="graph">
       <title>a made&#45;up view</title>
       <g id="node1" class="node">
-      <title>Q901</title>
+      <title>Q0901</title>
       <g id="a_node1"><a xlink:title="human">
       <ellipse cx="70" cy="-106" rx="70" ry="18"/>
       <text x="70" y="-101">Wren Alderman</text>
@@ -69,7 +69,7 @@ class HoverableSvgTest {
     String second =
         """
         <g id="edge1" class="edge">
-        <title>Q901&#45;&gt;Q902</title>
+        <title>Q0901&#45;&gt;Q0902</title>
         <path d="M70,-88C70,-76 70,-61 70,-47"/>
         <text x="112" y="-57">MEMBER_OF</text>
         </g>

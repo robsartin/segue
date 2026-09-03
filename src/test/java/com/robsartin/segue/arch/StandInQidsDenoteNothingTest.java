@@ -245,7 +245,7 @@ class StandInQidsDenoteNothingTest {
    */
   static final Set<String> NOT_YET_MIGRATED =
       Set.of(
-          "Q900", "Q901", "Q902", "Q903", "Q904", "Q905", "Q906", "Q900042", "Q900102", "Q900106",
+          "Q900", "Q901", "Q902", "Q903", "Q904", "Q905", "Q900042", "Q900102", "Q900106",
           "Q999999");
 
   /** One allocatable-form id, and where it was found. */

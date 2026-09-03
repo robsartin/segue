@@ -50,9 +50,9 @@ class WhatAHoverShowsTest {
     return new GraphView(
         "a made-up view",
         List.of(
-            new ViewNode("Q901", NodeKind.PERSON, "Wren Alderman", List.of("Q5")),
-            new ViewNode("Q902", NodeKind.GROUP, "The Paper Kettles", List.of("Q215380"))),
-        List.of(new ViewEdge("Q901", "Q902", "MEMBER_OF", 1.0, "invented")));
+            new ViewNode("Q0901", NodeKind.PERSON, "Wren Alderman", List.of("Q5")),
+            new ViewNode("Q0902", NodeKind.GROUP, "The Paper Kettles", List.of("Q215380"))),
+        List.of(new ViewEdge("Q0901", "Q0902", "MEMBER_OF", 1.0, "invented")));
   }
 
   @BeforeAll
@@ -94,7 +94,7 @@ class WhatAHoverShowsTest {
   void hoveringANodeShowsItsQid() throws IOException {
     List<String> hovers = hoverTexts();
 
-    assertThat(hovers).contains("Q901");
+    assertThat(hovers).contains("Q0901");
     assertThat(hovers).doesNotContain("human");
   }
 
@@ -103,7 +103,7 @@ class WhatAHoverShowsTest {
   void hoveringAnEdgeShowsTwoQids() throws IOException {
     List<String> hovers = hoverTexts();
 
-    assertThat(hovers).contains("Q901->Q902");
+    assertThat(hovers).contains("Q0901->Q0902");
     assertThat(hovers).noneMatch(hover -> hover.contains("MEMBER_OF"));
   }
 
