@@ -15,6 +15,7 @@ import com.robsartin.segue.domain.SameAs;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.wikidata.KindMapper;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -60,6 +61,27 @@ import java.util.Map;
  * edges, and the id the owner retired is drawn as the orphan it now is (spec ruling 3). Nothing
  * hides it, on the retraction chapter's precedent.
  *
+ * <p><b>Nodes and edges come out in log order</b> - the position of the first surviving claim that
+ * names them - and the map holding them keeps it, which {@code Map.copyOf} did not (issue #207).
+ * Its iteration order is unspecified and salted per JVM, so two exports of one unchanged log came
+ * out in two orders, a diff between them was noise and a real change hid in it. Log order is what
+ * {@link Equivalences#canonicalByLocal} already keeps, under ADR 43's contract that two runs over
+ * one unchanged input agree byte for byte - the contract {@code KnownList.promoted} serves by
+ * sorting instead, which is the honest comparison. A fold has to pick one, and log order is a fact
+ * of the data rather than a choice: sorting by qid would have been stable too, and would have
+ * reordered the entire picture every time an id changed shape, as issue #171 changed a hundred of
+ * them. {@code ExportOrderIsLogOrderTest#shouldDrawNodesAndEdgesInTheOrderTheLogClaimsThem} pins
+ * the order to the log rather than to any fixed sequence, by reversing the fixture's claims and
+ * expecting the picture to reverse with them.
+ *
+ * <p><b>A stand-in node has no claim of its own, so it comes first.</b> {@link
+ * Equivalences#standIns} is a pre-pass that completes before this fold begins (#178), and its nodes
+ * are seeded in the order of the merges that named them, ahead of everything the log claims -
+ * including a later real claim about the same canonical id, which replaces the value and leaves the
+ * position where the seed put it. Emitting them at their merge's own row instead would read more
+ * literally as log order, and is rejected for #178's own reason: the {@code SameAs} arm below does
+ * nothing at its own row any more, and handing it work again is how the two folds drift.
+ *
  * <p>It is not a {@code GraphStore} and must not become one. It answers "what is in the log",
  * nothing else; anything that needs a traversal uses the real engine, so that an exported route is
  * the route {@code find_paths} would give.
@@ -74,7 +96,11 @@ public record LogProjection(
     Map<String, NodeRecord> nodes, List<EdgeRecord> edges, int danglingEdges) {
 
   public LogProjection {
-    nodes = Map.copyOf(nodes);
+    // Not Map.copyOf: its iteration order is unspecified and salted per JVM, so two exports of one
+    // unchanged log came out in two orders and a DOT or GraphML diff between them was noise (issue
+    // #207). This is the same copy Equivalences.canonicalByLocal makes for the same reason, and
+    // ADR 43's byte-identical contract is what both of them serve.
+    nodes = Collections.unmodifiableMap(new LinkedHashMap<>(nodes));
     edges = List.copyOf(edges);
   }
 
