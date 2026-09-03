@@ -415,12 +415,21 @@ away from — which, by [ADR 48](0048-a-high-rating-counts-as-something-you-have
 
 **The rule, in one place — first landed last-wins alone, then widened once more before this closed.**
 `Equivalences.stands` answers whether a merge still contributes a node. All four homes of the
-stand-in rule ask it, which is what makes them agree about this case by construction rather than by
-inspection: `Equivalences.standIns` skips a merge it answers false for, `IngestService.apply`'s
-`SameAs` arm does neither half of its job for one, and `OwnRun.labelsInTheProjection` and
-`ratings/Labels.forQids` lend it no label. Equivalences that have never heard of the local id answer
-**true**, which is what keeps `IngestService.record` — applying one claim with `Equivalences.NONE`,
-having no log to read — creating its live stand-in exactly as before.
+stand-in rule ask it: `Equivalences.standIns` skips a merge it answers false for,
+`IngestService.apply`'s `SameAs` arm does neither half of its job for one, and
+`OwnRun.labelsInTheProjection` and `ratings/Labels.forQids` lend it no label.
+
+**They ask one predicate; they do not ask it of one `Equivalences`, and the difference is visible in
+exactly this case.** Equivalences that have never heard of the local id answer **true**, which is
+what keeps `IngestService.record` — applying one claim with `Equivalences.NONE`, having no log to
+read — creating its live stand-in exactly as before. So three homes agree about a twice-merged local
+id *because* they read the same log, and the live one still builds the stand-in the correction
+retired. That is the shape [ADR 42](0042-store-p31-and-rederive-kind-at-projection.md) already
+accepts for a node's kind, extended to the stand-in on the same terms: the live path applies the one
+claim it was handed and lags until the next boot's fold applies the whole log. Nothing in production
+reaches it — `IngestService.record`'s own javadoc records that nothing sends a `SameAs` there, since
+`OwnRun` appends a merge through `claim`, which has no graph half. `StandInAgreesInEveryHomeTest`
+(issue #220) pins the two answers per home rather than asserting them equal.
 
 **Fixing the exporter's fold alone would not have been a fix, and that is measured too.** With
 `Equivalences.standIns` corrected and `IngestService` untouched, the boot replay went on building

@@ -95,9 +95,14 @@ import java.util.function.UnaryOperator;
  *     about which of two collided ratings survives. That is the byte-identical-output argument
  *     {@code KnownList.promoted} makes for its own sort, crediting ADR 43
  * @param referencedEndpoints every id a surviving {@link AssertionRecord} or {@link OwnerEdge}
- *     names as {@code fromQid} or {@code toQid} (#221 fix round 1) — unordered, unlike {@code
- *     canonicalByLocal}, because {@link #stands} only ever asks it {@code contains}, never iterates
- *     it, so there is no output order for a salted iteration to disagree about
+ *     names as {@code fromQid} or {@code toQid} (#221 fix round 1). <b>Insertion-ordered, and no
+ *     answer depends on the order:</b> {@link #stands} only ever asks it {@code contains}, never
+ *     iterates it. The order is kept all the same — the compact constructor and {@link #in} both
+ *     build a {@code LinkedHashSet} — for a narrower reason than {@code canonicalByLocal}'s, which
+ *     is that a result changes: this is a record, so the set is printed by {@code toString}
+ *     whenever an assertion over an {@code Equivalences} fails, and a salted iteration would print
+ *     one unchanged log two ways on two JVMs. {@code Set} equality is order-blind, so {@code
+ *     equals} reads the same either way
  */
 public record Equivalences(Map<String, String> canonicalByLocal, Set<String> referencedEndpoints) {
 
@@ -127,10 +132,13 @@ public record Equivalences(Map<String, String> canonicalByLocal, Set<String> ref
    * that have never heard of the local id do not contradict the merge" paragraph. So the empty set
    * here changes nothing for {@link #NONE}: it never reaches the clause that would need it.
    *
-   * <p>The two remaining direct callers ({@code RateRunTest}, {@code KnownListTest}) construct an
-   * {@code Equivalences} with a real {@code canonicalByLocal} but ask only {@link #resolve} or
-   * {@link #foldEndpoints} of it, neither of which reads {@link #referencedEndpoints} at all — so
-   * an empty set is exactly as accurate there as a computed one would be.
+   * <p>The two remaining direct callers construct an {@code Equivalences} with a real {@code
+   * canonicalByLocal} and hand it on to a reader that never asks {@link #referencedEndpoints} at
+   * all: {@code KnownListTest} to {@code KnownList.notOffered}, which reads {@link #merged()}, and
+   * {@code RateRunTest} to {@code RateRun.buildDeck}, which reaches {@link #resolve} and {@link
+   * #merged()} through the deck. So an empty set is exactly as accurate there as a computed one
+   * would be — and it is the conclusion rather than the route that carries that, since neither
+   * reader touches the field on any path.
    */
   public Equivalences(Map<String, String> canonicalByLocal) {
     this(canonicalByLocal, Set.of());
@@ -245,11 +253,23 @@ public record Equivalences(Map<String, String> canonicalByLocal, Set<String> ref
    * OwnRun.labelsInTheProjection} (its own {@code !labels.containsKey(canonicalQid)} copy, so the
    * tool offers the canonical id as an endpoint) and {@code ratings/Labels.forQids} (so a carried
    * canonical row is not listed as "not in the graph"). The last two read labels off the log rather
-   * than nodes off a graph, which is why they are copies rather than callers. All four agree today
-   * about what the projection holds - though not condition for condition, because this method has
-   * no such condition at all and takes its guarantee from being applied first, as the paragraph
-   * above says. {@code StandInAgreesInEveryHomeTest} is what holds them to it (issue #220): one
-   * log, four homes, one answer per canonical id. It pins what they do rather than claiming it is
+   * than nodes off a graph, which is why they are copies rather than callers.
+   *
+   * <p><b>They agree wherever they are asked the same equivalences, which is not everywhere</b>
+   * (#221). All four ask {@link #stands}; three of them ask it of {@code Equivalences.in(log)} and
+   * {@code IngestService.standIn} asks it of {@link #NONE}, whose {@code stands} is unconditionally
+   * true because it holds no log to contradict the merge in front of it. So for a local id merged
+   * twice, the three that read the log name no stand-in under the superseded canonical id and the
+   * live one still builds one - the same shape as ADR 42's kind lag, and lagging until the next
+   * boot for the same reason: the live path applies one claim, and the fold applies the whole log.
+   * Nothing in production reaches it, because {@code IngestService.record}'s own javadoc records
+   * that nothing sends a {@code SameAs} there. They also do not agree condition for condition, for
+   * a separate reason: this method has no "unless something claimed it" condition at all and takes
+   * that guarantee from being applied first, as the paragraph above says.
+   *
+   * <p>{@code StandInAgreesInEveryHomeTest} is what holds them to it (issue #220): one log, four
+   * homes, and one answer per canonical id in every home that reads the same equivalences, with the
+   * two rows that split pinned per home and named. It pins what they do rather than claiming it is
    * right, and ADR 59's residual - four homes, not one caller - is untouched by it.
    *
    * <p>The kind this one carries now comes through {@code rederive} (#222); the other three are

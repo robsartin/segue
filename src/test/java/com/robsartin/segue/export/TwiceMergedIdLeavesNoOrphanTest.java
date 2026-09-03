@@ -4,6 +4,7 @@ import static com.robsartin.segue.export.InventedGraph.CORRECTED;
 import static com.robsartin.segue.export.InventedGraph.MISHEARD;
 import static com.robsartin.segue.export.InventedGraph.WATERMARK;
 import static com.robsartin.segue.export.InventedGraph.WREN;
+import static com.robsartin.segue.export.InventedGraph.edge;
 import static com.robsartin.segue.export.InventedGraph.merged;
 import static com.robsartin.segue.export.InventedGraph.minted;
 import static com.robsartin.segue.export.InventedGraph.node;
@@ -188,6 +189,35 @@ class TwiceMergedIdLeavesNoOrphanTest {
     assertThat(folded.danglingEdges())
         .as("retiring the node while keeping the edge would be the defect this test catches")
         .isZero();
+  }
+
+  /**
+   * The surviving-edge fixture again, with the naming edge coming from a SOURCE rather than from
+   * the owner — an {@link com.robsartin.segue.domain.AssertionRecord} where every other fixture on
+   * this path uses an {@link com.robsartin.segue.domain.OwnerEdge}. {@code Equivalences.in} reads
+   * both kinds of edge into {@code referencedEndpoints} through two arms of one switch, and until
+   * this case existed the sourced arm could have been emptied with the suite still green.
+   */
+  private static FakeAssertionLog correctedLogWithASourcedSurvivingEdge() {
+    return new FakeAssertionLog()
+        .with(
+            node(WREN, NodeKind.PERSON, "Wren Alderman"),
+            minted(CORRECTED, NodeKind.WORK, "A Self-Pressed Record"),
+            merged(CORRECTED, MISHEARD),
+            edge(WREN, MISHEARD, "INFLUENCED_BY"),
+            merged(CORRECTED, WATERMARK));
+  }
+
+  @Test
+  @DisplayName("a sourced edge keeps a superseded stand-in alive, as an owner edge does")
+  void shouldKeepTheSupersededStandInAliveWhenASourcedEdgeNamesTheCorrectedCanonicalId() {
+    assertThat(
+            Equivalences.standIns(
+                correctedLogWithASourcedSurvivingEdge().readAll(), KindMapper::rederive))
+        .as(
+            "an edge a source claimed against MISHEARD keeps its stand-in exactly as one the owner"
+                + " claimed does - stands asks what still names the id, not who said so")
+        .containsOnlyKeys(MISHEARD, WATERMARK);
   }
 
   /**

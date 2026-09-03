@@ -83,6 +83,10 @@ home of the stand-in rule asks:
 
 Five edits, one predicate:
 
+> **Superseded — see the second amendment at the end of this file (2026-09-03).** The table below is
+> the design, not what landed: `stands` gained a sibling predicate and a new record component, and
+> `IngestService.apply` took two guards rather than one. Read the amendment for the blast radius.
+
 | where | change |
 |---|---|
 | `Equivalences.stands` | new; `canonicalByLocal.get(local)` is `null` or equals the merge's canonical |
@@ -181,9 +185,14 @@ Both are `ready` on sibling branches off the same base and both touch this regio
   expected values for the twice-merged canonical are exactly what this change inverts: all four
   homes must then answer "no stand-in" rather than "a stand-in labelled with the merged entity's
   label". **The final task rebases onto `main` and, if #220's guard is present, updates that case's
-  expectation and says so in the commit.** Note for whoever reconciles them: after this change the
-  four homes agree about the twice-merged case *by construction*, because all four ask
-  `Equivalences.stands`.
+  expectation and says so in the commit.** Note for whoever reconciles them: **this note was wrong
+  as first written, and is corrected here rather than left to mislead the task it addresses** — it
+  said the four homes would then agree about the twice-merged case *by construction, because all
+  four ask `Equivalences.stands`*. They do all ask it; they do not all ask it of the same
+  `Equivalences`. `IngestService.record` is handed `Equivalences.NONE`, whose `stands` is
+  unconditionally true, so the live home goes on building the stand-in the other three retire.
+  #220's guard must therefore pin that row **per home** rather than null it outright. See the second
+  amendment at the end of this file.
 
 Keep the ADR amendment in its own dated section at the end of `0059-owner-claims-as-a-third-layer.md`
 so that three amendments landing in the same week merge cleanly.
@@ -249,10 +258,48 @@ one that stands today).
 
 Consequence for the four homes named in `Equivalences.standIns`' javadoc: all four (`standIns`,
 `IngestService.standIn`, `OwnRun.labelsInTheProjection`, `ratings/Labels.forQids`) ask
-`Equivalences.stands` directly, so the widening reaches all four by construction, and each was
+`Equivalences.stands` directly, so the widening reaches every home that reads a log — see the second
+amendment for the one that does not — and each was
 checked against its own existing coverage (`OwnRunTest.shouldRefuseTheCanonicalIdOfAMergeWhen…`
 still reds correctly, because that fixture has no surviving edge naming the corrected-away id) and
 given one added case where the surviving-edge path was previously untested
 (`RatingsRunTest.shouldKeepACanonicalIdsLabelWhenASurvivingEdgeNamesItDirectlyThoughALaterMergeCorrectedIt`).
 
 This finding and ruling are also the basis for Task 6's ADR 59 amendment.
+
+## Second amendment (2026-09-03, on rebasing onto #220 and #222)
+
+Two corrections and one reconciliation, all of them found by the whole-branch review at `44610ab`.
+
+**1. "All four homes agree by construction" is false, and this branch is what made it false.** The
+claim appears above in "Concurrency: #220 and #222" and in the first amendment's closing paragraph;
+both are annotated in place, and the same sentence has been corrected in
+`Equivalences.standIns`' javadoc, in `IngestService.standIn`'s, in the developer guide and in
+[ADR 59](../../adr/0059-owner-claims-as-a-third-layer.md)'s dated amendment before that amendment
+landed. What is true: **the four homes ask one predicate, and they agree wherever they are asked the
+same equivalences.** Three of them read the whole log and ask `Equivalences.in(log).stands`;
+`IngestService.record` applies one claim with `Equivalences.NONE`, whose `stands` is unconditionally
+true because it holds no log to contradict the merge in front of it — the `null → true` clause the
+design section above states deliberately. So for a local id merged twice the live path still builds
+the stand-in the correction retired, and lags until the next boot re-folds the log. That is the same
+shape ADR 42 already accepts for a node's kind, and nothing in production reaches it:
+`IngestService.record`'s javadoc records that nothing sends a `SameAs` there, because `OwnRun`
+appends a merge through `claim`, which has no graph half.
+
+**2. #220's guard, reconciled.** `StandInAgreesInEveryHomeTest` pins one canonical id per row across
+the four homes. The row for the twice-merged local id is now pinned **per home** — the fold, the own
+tool and the ratings listing hold nothing; the live graph holds the local's kind and label — with an
+assertion that it is the only row split that way. #222 had already given the same table a per-home
+shape for the bypass row, which is split by *kind* rather than by *presence*; the two assertions are
+kept apart so that neither can stand in for the other. Driving the live home through
+`GraphProjector` instead would make it agree and was rejected: #220's own `liveGraphNodes` javadoc
+says it is the only probe this repository has of `IngestService.standIn`'s upsert.
+
+**3. What actually landed, correcting the "five edits, one predicate" table.** Two predicates, not
+one — `stands` (a node) and `last` (the rating carry), deliberately different widths; a new record
+component `referencedEndpoints`, with a convenience constructor for callers that have only merges;
+a rewritten `Equivalences.in` building that set from the same pass, over an exhaustive switch with
+no default arm; **two** guards in `IngestService.apply`'s `SameAs` arm rather than one, because the
+stand-in and the carry no longer answer to the same predicate; and a new `OwnRun.correctedTo`, so
+the tool refuses a corrected-away canonical id by name instead of as a bare absence. The two label
+copies (`OwnRun.labelsInTheProjection`, `Labels.forQids`) are as the table has them.

@@ -2236,7 +2236,10 @@ that edge survives the correction (ADR 19 forbids deleting it); dropping its sta
 leave the edge with an endpoint nothing has ever seen, so the node survives instead, holding the
 merged entity's label and exactly that edge. `Equivalences.stands` is the one rule behind both
 halves — last-wins, OR a surviving edge names the merge's canonical id — and all four homes of the
-stand-in ask it. The rating carry does not follow the exception: it stays last-wins alone
+stand-in ask it, though not all of the same `Equivalences`: `IngestService.record` is handed
+`Equivalences.NONE`, which holds no log, so on the live write path a superseded stand-in is still
+built and stays until the next boot re-folds the log. The rating carry does not follow the
+exception: it stays last-wins alone
 (`Equivalences.last`), because a node that survives on an edge's account is a fact about the graph,
 not your opinion about the thing you corrected yourself onto.
 

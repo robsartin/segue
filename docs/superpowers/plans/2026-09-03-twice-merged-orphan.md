@@ -645,6 +645,8 @@ ask it. A rating an older build already carried onto such an id stays — there 
 
 - [ ] **Step 2 — the ADR amendment**, appended as its own dated section at the very end of `docs/adr/0059-owner-claims-as-a-third-layer.md`, below the residuals list. Nothing above it is edited, including the residual bullet this closes.
 
+  > **The draft below is plan-time text, and the landed amendment is the authority.** It was widened by fix round 1 (a superseded stand-in survives while a surviving edge names it), and its "all four homes … agree about this case by construction" sentence — repeated in the developer-guide draft above — is false and was corrected before the amendment landed: they ask one predicate, not one `Equivalences`. See Task 7 Step 2.
+
 ```markdown
 **Amendment (2026-09-03, issue #221): the last of the residuals above is closed — a local id merged
 twice now leaves nothing under the first canonical id.**
@@ -709,7 +711,9 @@ to disown such a row is a separate decision nobody has argued.
 
 - [ ] **Step 1 — rebase.** `git fetch origin`, then `git rebase origin/main`. Expect a possible textual conflict inside `Equivalences.standIns` with **#222** (which edits the `NodeRecord` construction in the same loop): keep both — #222's kind expression inside the body, this branch's `&& merges.stands(merge)` on the `if`.
 
-- [ ] **Step 2 — #220's guard, if it has landed.** `git log origin/main --oneline | grep -i 220` and look for the four-homes drift guard. Its fixture includes a local merged twice and pins **today's** answer for it. If present, update that case: every one of the four homes must now answer "no stand-in under the first canonical id", and after this change they agree by construction because all four ask `Equivalences.stands`. Adjust the guard's expectation, not its mechanism, and say in the commit message that #221 inverted that one case. Commit separately: `#221: reconcile #220's four-homes guard with the corrected-merge rule`.
+- [ ] **Step 2 — #220's guard, if it has landed.** `git log origin/main --oneline | grep -i 220` and look for the four-homes drift guard. Its fixture includes a local merged twice and pins **today's** answer for it. If present, update that case's expectation, not its mechanism, and say in the commit message what changed. Commit separately: `#221: reconcile #220's four-homes guard with the corrected-merge rule`.
+
+  > **This step was wrong as first written, and is corrected here rather than left as it ran.** It said "every one of the four homes must now answer 'no stand-in under the first canonical id', and after this change they agree by construction because all four ask `Equivalences.stands`". Following that literally leaves #220's guard red. The four homes ask one **predicate**; they do not ask it of one `Equivalences`. Three read the whole log and ask `Equivalences.in(log).stands`; `IngestService.record` applies one claim with `Equivalences.NONE`, whose `stands` is unconditionally true, so the live home still builds the stand-in the correction retired — the same lag ADR 42 accepts for a node's kind. The row is therefore pinned **per home**, with one assertion saying it is the only row split that way. Do **not** switch the live probe to `GraphProjector`: that would make it agree and would trade away the only probe this repository has of `IngestService.standIn`'s upsert, which #220's own `liveGraphNodes` javadoc names. See the second amendment in `docs/superpowers/specs/2026-09-03-twice-merged-orphan-design.md`.
 
 - [ ] **Step 3 — the gate, blocking, from a clean tree.** `SEGUE_REQUIRE_BROWSER=true SEGUE_REQUIRE_GRAPHVIZ=true ./gradlew check --rerun-tasks`. Confirm **BUILD SUCCESSFUL** and **0 skipped**.
 
