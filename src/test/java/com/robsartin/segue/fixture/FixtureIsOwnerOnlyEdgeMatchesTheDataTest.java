@@ -51,8 +51,12 @@ class FixtureIsOwnerOnlyEdgeMatchesTheDataTest {
             .map(EdgeRecord::key)
             .collect(Collectors.toSet());
 
-    assertThat(derivedOwnerOnly).isNotEmpty();
-    assertThat(derivedOwnerOnly).isEqualTo(acceptedByPredicate);
+    assertThat(derivedOwnerOnly)
+        .as("the fixture must hold at least one triple asserted only by the owner")
+        .isNotEmpty();
+    assertThat(derivedOwnerOnly)
+        .as("isOwnerOnlyEdge must accept exactly the triples the data says are owner-only")
+        .isEqualTo(acceptedByPredicate);
   }
 
   /**

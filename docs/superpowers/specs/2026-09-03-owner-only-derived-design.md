@@ -66,7 +66,7 @@ triple (any one `AssertionRecord` in the group supplies `fromQid`/`toQid`/`typeC
 reads neither `validFrom`/`validTo` nor `sources`, so those fields can be `null`/`List.of()`), filter
 by `Fixture::isOwnerOnlyEdge`, and collect `EdgeRecord::key`. Compare the two `Set<String>`s.
 
-Today, over the fixture's fifteen assertions, exactly one triple is a size-1 group whose sole
+Today, over the fixture's assertions, exactly one triple is a size-1 group whose sole
 assertion is `Provenance.owner(...)`: `owner(LOCAL_NOVELIST, "AUTHORED", LOCAL_NOVEL)`
 (`Fixture.java:164`). The layered claim, `owner(CAVE, "AUTHORED", ASS_SAW_ANGEL)` alongside
 `wikidata(CAVE, "AUTHORED", ASS_SAW_ANGEL, ...)`, groups to size 2 and is correctly excluded — it is
@@ -78,14 +78,21 @@ other witness.
 
 `isOwnerOnlyEdge` tests `fromQid`/`toQid` only — it does not look at `typeCode` at all. The derived
 set is keyed on the full triple. The two sets happen to agree today because the fixture has exactly
-one edge type between `LOCAL_NOVELIST` and `LOCAL_NOVEL`. If a second edge type were ever added
-between that same pair (e.g. a second owner claim `LOCAL_NOVELIST ILLUSTRATED LOCAL_NOVEL`, still
-uncorroborated), the two predicates would diverge: the derived, triple-keyed set would gain a second
-member while the name-based, pair-keyed `isOwnerOnlyEdge` would (correctly, by its own definition)
-still accept both, since it never asked about type. That divergence is not a defect this issue asks
-to close — it is exactly the kind of drift this new test exists to catch, and it would fail loudly
-(non-empty-and-equal) rather than silently, the day it happened. No production change is warranted to
-pre-empt a case the fixture does not yet have.
+one edge type between `LOCAL_NOVELIST` and `LOCAL_NOVEL`. A second edge type between that pair does
+not, by itself, threaten the test: if it were also owner-only (asserted exactly once, by the owner —
+e.g. `owner(LOCAL_NOVELIST, "ILLUSTRATED", LOCAL_NOVEL)`), the derived set gains that key **and** the
+pair-keyed predicate accepts both representatives, so the two sets stay equal, both non-empty, and
+**the test stays green** — correctly, since the predicate's name is still honest about every triple
+it now names.
+
+The case that actually diverges is the opposite shape: a second edge type between that pair that is
+**not** owner-only — asserted by a real source, or asserted twice — e.g.
+`wikidata(LOCAL_NOVELIST, "ILLUSTRATED", LOCAL_NOVEL, ...)` alongside the existing
+`owner(LOCAL_NOVELIST, "AUTHORED", LOCAL_NOVEL)`. There, `derivedOwnerOnly` excludes the new triple
+(it has a witness beyond the owner) while the pair-keyed `isOwnerOnlyEdge` accepts it anyway, since it
+never asks about type — the sets diverge and the equality assertion reds. That is the case worth
+recording, and it *is* guarded, which is a stronger and truer claim than "any second edge type
+diverges". No production change is warranted to pre-empt a case the fixture does not yet have.
 
 ## Decision: `isOwnerOnlyEdge` stays name-based, and this test pins it
 
@@ -133,17 +140,17 @@ import org.junit.jupiter.api.Test;
  * {@link Fixture#isOwnerOnlyEdge} identifies its edge by NAME — the pair {@link
  * Fixture#LOCAL_NOVELIST} to {@link Fixture#LOCAL_NOVEL}. Nothing pinned that this triple actually
  * HAS the property the name claims: asserted exactly once, by the owner, with no real source ever
- * asserting the same triple (#217). #176 itself began with an entry commented owner-only that a real
- * source also asserted, and {@code isOwnerOnlyEdge} — which only ever looks at the pair — would have
- * returned {@code true} for that entry too.
+ * asserting the same triple (#217). #176 itself began with an entry commented owner-only that a
+ * real source also asserted, and {@code isOwnerOnlyEdge} — which only ever looks at the pair —
+ * would have returned {@code true} for that entry too.
  *
  * <p>This test derives the owner-only set from {@link Fixture#assertions()} directly: a triple
  * (from, type, to) with exactly one assertion, made by the owner. It then checks {@code
- * isOwnerOnlyEdge} against that derivation instead of trusting the name. Deliberately independent of
- * {@code GraphStore} and both engines — this is a property of the fixture's raw data, not of either
- * engine's projection of it, and {@code GraphStoreContract}'s {@code
- * shouldReturnTheOwnerOnlyEdgeWhenTheCorroborationFloorIsZero} stays the place that pins the engines'
- * behaviour.
+ * isOwnerOnlyEdge} against that derivation instead of trusting the name. Deliberately independent
+ * of {@code GraphStore} and both engines — this is a property of the fixture's raw data, not of
+ * either engine's projection of it, and {@code GraphStoreContract}'s {@code
+ * shouldReturnTheOwnerOnlyEdgeWhenTheCorroborationFloorIsZero} stays the place that pins the
+ * engines' behaviour.
  */
 class FixtureIsOwnerOnlyEdgeMatchesTheDataTest {
 
@@ -169,8 +176,12 @@ class FixtureIsOwnerOnlyEdgeMatchesTheDataTest {
             .map(EdgeRecord::key)
             .collect(Collectors.toSet());
 
-    assertThat(derivedOwnerOnly).isNotEmpty();
-    assertThat(derivedOwnerOnly).isEqualTo(acceptedByPredicate);
+    assertThat(derivedOwnerOnly)
+        .as("the fixture must hold at least one triple asserted only by the owner")
+        .isNotEmpty();
+    assertThat(derivedOwnerOnly)
+        .as("isOwnerOnlyEdge must accept exactly the triples the data says are owner-only")
+        .isEqualTo(acceptedByPredicate);
   }
 
   /**
