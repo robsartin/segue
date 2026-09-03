@@ -1003,7 +1003,7 @@ The suite is layered on purpose, and each layer catches something the layer belo
 | **Real subprocess** | `app/StdioPurityTest` | Output written by a *dependency* or by the framework's own startup. See below |
 | Architecture | `arch/ArchitectureTest` | An invariant an ADR states being quietly abandoned |
 | Documentation | `arch/AdrIndexTest`, `arch/DeveloperGuideEnumerationsTest`, `arch/DocumentationLinksTest`, `own/DeveloperGuideOwnClaimExamplesTest`, `retract/DeveloperGuideRetractionExamplesTest` | This guide's enumerations drifting from the code — the ArchUnit rule table, the layering diagram's packages and edges, the package table's rows, and the live-tagged and stub-server names in the row above. Each set is re-derived from the tree and compared in both directions ([issue #145](https://github.com/robsartin/segue/issues/145)); `docs/adr/README.md` dropping a row, or a row disagreeing with the ADR it names ([issue #170](https://github.com/robsartin/segue/issues/170)); and every relative link in `README.md` and `docs/**/*.md` naming a file or an anchor that does not exist, or written in a shape the sweep cannot read ([issue #168](https://github.com/robsartin/segue/issues/168)) |
-| **Live, tagged and excluded** | `@Tag("live")` on `WikidataLiveSmokeTest`, `PersonSeededRouteLiveTest`, `SharedAwardRouteLiveTest`, `MusicBrainzLiveSmokeTest`, `WikidataMusicBrainzIdentityLiveTest`, `MusicBrainzProbeLiveTest` — six classes, and `liveTest` includes any `live` tag, so a new one joins with no build change | Either upstream API changing, a wrong identifier baked into a fixture, a P434 bridge that agrees with a stub but not with Wikidata, and — for the probe — what this graph would actually gain from a change, which no fixture can measure |
+| **Live, tagged and excluded** | `@Tag("live")` on `WikidataLiveSmokeTest`, `PersonSeededRouteLiveTest`, `SharedAwardRouteLiveTest`, `MusicBrainzLiveSmokeTest`, `WikidataMusicBrainzIdentityLiveTest`, `MusicBrainzProbeLiveTest` — six classes, and `liveTest` includes any `live` tag, so a new one joins with no build change; the last of them carries a second `probe` tag that `liveTest` excludes and `mbProbe` includes, because it needs a copy of the log and not just the network | Either upstream API changing, a wrong identifier baked into a fixture, a P434 bridge that agrees with a stub but not with Wikidata, and — for the probe — what this graph would actually gain from a change, which no fixture can measure |
 
 Three of those deserve more than a table row.
 
@@ -1104,6 +1104,12 @@ They are not optional either, and the reason is specific: a fixture asserts what
 wrote. The live smoke test caught a wrong QID on its first run — a plan had used an identifier that
 belonged to a different person entirely, and every fixture-backed test would have carried that error
 forever. **Run `./gradlew liveTest` deliberately when you touch ingest.**
+
+`liveTest` runs the live *smoke* tests and not the probe below. `MusicBrainzProbeLiveTest` carries a
+second tag, `probe`, which `liveTest` excludes and `mbProbe` includes — because a smoke test needs
+the network and nothing else, while the probe needs a copy of the assertion log named on the command
+line and fails without one. Reached by the `live` tag alone it would make `liveTest` red on every
+machine, so the two tasks are `live` minus `probe` and `probe`.
 
 `mbProbe` is the second task in that family and is not a smoke test: it is the instrument behind
 [ADR 55](adr/0055-what-the-musicbrainz-adapter-refuses.md)'s magnitudes, kept so they can be

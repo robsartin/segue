@@ -178,10 +178,21 @@ tasks.test {
 
 tasks.register<Test>("liveTest") {
     group = "verification"
-    description = "Runs the tagged live tests against the real Wikidata API. Needs network."
+    description =
+        "Runs the tagged live smoke tests against the real Wikidata and MusicBrainz APIs. Needs " +
+            "network. The `probe` tag is excluded: see mbProbe, which is the task for it."
     testClassesDirs = sourceSets["test"].output.classesDirs
     classpath = sourceSets["test"].runtimeClasspath
-    useJUnitPlatform { includeTags("live") }
+    // Every `live` test EXCEPT the probes. A smoke test needs the network and nothing else, so
+    // this task can be run on any machine at any time; a probe is an instrument handed a copy of
+    // the assertion log through -Dsegue.probe.db, and it refuses to run without one rather than
+    // skipping. This task forwards no such property, so a probe reached by the `live` tag alone
+    // would make `./gradlew liveTest` unconditionally red — which it was between the commit that
+    // added MusicBrainzProbeLiveTest and this line.
+    useJUnitPlatform {
+        includeTags("live")
+        excludeTags("probe")
+    }
     // Never up-to-date: the point is to re-check the real endpoint.
     outputs.upToDateWhen { false }
 }
@@ -200,10 +211,11 @@ tasks.register<Test>("mbProbe") {
             "Example: ./gradlew mbProbe -Dsegue.probe.db=/tmp/segue-probe.db"
     testClassesDirs = sourceSets["test"].output.classesDirs
     classpath = sourceSets["test"].runtimeClasspath
-    useJUnitPlatform { includeTags("live") }
-    // The one class, so this task is the probe and not a second liveTest: `liveTest` still reaches
-    // it through the tag, and this task reaches nothing else.
-    filter { includeTestsMatching("com.robsartin.segue.musicbrainz.MusicBrainzProbeLiveTest") }
+    // The other side of liveTest's exclusion, stated in the same vocabulary: that task is `live`
+    // minus `probe`, this one is `probe`. A class-name filter would put one fully-qualified name
+    // in two tasks and leave the next probe class free to redden liveTest all over again; a tag
+    // enrols it in this task instead, which is the property `live` itself already has.
+    useJUnitPlatform { includeTags("probe") }
     // sqlite-jdbc loads a native library, the same grant tasks.test makes. liveTest does not make
     // it — nothing tagged `live` opened SQLite until this probe did — so without this line the
     // probe would meet the JDK's restricted-method warning on the copy it was handed.

@@ -144,9 +144,17 @@ final class MusicBrainzProbe {
    * What a MusicBrainz relation type may look like. Wider than the sixteen lower-case types ADR
    * 55's census happened to hold: MusicBrainz states types carrying capitals, hyphens, commas and
    * parentheses ({@code DJ-mix}, {@code (has) collaborated on}), and rejecting one of those as if
-   * it were a name would red the live run on a correct table. It is the QID and MBID checks, not
-   * this shape, that reject an identifier; and the reason a label cannot reach the census at all is
-   * structural — the report carries no label to print.
+   * it were a name would red the live run on a correct table.
+   *
+   * <p><b>This is a shape and a length bound, and it is not a name detector — say so rather than
+   * let its name imply otherwise.</b> A census key of {@code "Radiohead"} matches it, and would
+   * match any pattern loose enough to admit the real vocabulary: an artist's name and a relation
+   * type are the same shape of string. <b>What actually keeps a name out of the census is
+   * structural</b>: {@link #census(List)} counts {@code ArtistRelation::type} and nothing else, so
+   * a key here is a type string MusicBrainz stated, and the report carries no label to print in the
+   * first place. This check is the belt over that — it catches a key that is an identifier or is
+   * far too long to be a type, and the QID and MBID patterns beside it are what reject an
+   * identifier by shape.
    */
   private static final Pattern A_RELATION_TYPE =
       Pattern.compile("[A-Za-z(][A-Za-z0-9 ()',./&+-]{0,39}");
@@ -442,9 +450,11 @@ final class MusicBrainzProbe {
         .isFalse();
     assertThat(report.census().keySet().stream().filter(key -> !isARelationType(key)).count())
         .as(
-            "invariant 8 (privacy): every census row label is a MusicBrainz relation type. The"
-                + " offending labels are deliberately not printed here — a failure message is not"
-                + " a licence to name an entity")
+            "invariant 8 (privacy): every census row label is shaped like a MusicBrainz relation"
+                + " type, which is a length and character bound and not a name check — what keeps"
+                + " a name out of the census is that its keys are relation-type strings by"
+                + " construction. The offending labels are deliberately not printed here — a"
+                + " failure message is not a licence to name an entity")
         .isZero();
     List<String> unaccountedFor = new ArrayList<>();
     for (String line : rendered.lines().toList()) {

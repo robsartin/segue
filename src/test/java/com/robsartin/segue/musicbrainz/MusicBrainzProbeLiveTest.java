@@ -36,8 +36,12 @@ import org.junit.jupiter.api.Test;
  * exact numbers are legitimate because they are true by construction.
  *
  * <p><b>Run it deliberately: {@code ./gradlew mbProbe -Dsegue.probe.db=/tmp/segue-probe.db}</b>,
- * against a copy the owner made. Tagged {@code live}, so {@code ./gradlew check} never reaches it
- * and {@code ./gradlew liveTest} does.
+ * against a copy the owner made. Tagged {@code live}, so {@code ./gradlew check} never reaches it,
+ * and tagged {@code probe} as well, so {@code ./gradlew liveTest} does not either. That second tag
+ * is not decoration: {@code liveTest} forwards no {@code -Dsegue.probe.db}, so a probe it reached
+ * would hit the refusal below and make a task that has to stay runnable on any machine
+ * unconditionally red. A live smoke test needs the network and nothing else; a probe needs a copy
+ * of the log, which is a different thing to ask of whoever types the command.
  *
  * <p><b>It fails rather than skips when no copy is named, and a skip was rejected on purpose.</b>
  * {@code Assumptions.abort} would report success for a run that never happened, which is the same
@@ -67,6 +71,7 @@ import org.junit.jupiter.api.Test;
  * duration, and invariant 8 asserts of the table itself that it names no entity.
  */
 @Tag("live")
+@Tag("probe")
 class MusicBrainzProbeLiveTest {
 
   /** How many seeds to draw, half {@code PERSON} and half {@code GROUP}, as ADR 55's run. */
@@ -100,8 +105,10 @@ class MusicBrainzProbeLiveTest {
                   graph));
 
       System.out.println(report.render());
-      // MusicBrainz asks for about one request a second and this walk makes two calls a seed, so
-      // the elapsed time is the figure that says whether a longer run is affordable.
+      // Per seed: one MusicBrainz /artist/<mbid>, and on the Wikidata side one mbidFor, one
+      // batched qidsFor over the relation targets, and one WikidataSourceAdapter.expand — and
+      // MusicBrainz asks for about one request a second. So the elapsed time is the figure that
+      // says whether a longer run is affordable.
       System.out.println(
           "\nelapsed: " + Duration.ofNanos(System.nanoTime() - startedAt).toSeconds() + "s");
 
