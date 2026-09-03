@@ -88,6 +88,13 @@ final class InventedGraph {
   static final String REROUTED = "Q10000900111";
 
   /**
+   * A seventh canonical id: the one {@link #LAPSE} was merged onto before the owner retracted the
+   * local id, so the merge that gave this id its only node stops projecting and nothing else holds
+   * one for it (#224). ADR 62's eleven-digit shape, for the reason {@link #KETTLES} takes it.
+   */
+  static final String FORFEIT = "Q10000900112";
+
+  /**
    * Two ids the owner minted. Two leading zeros, which Wikibase's item-id grammar can never
    * allocate (ADR 58, ADR 59) - so these are deliberately not from the {@code Q900xxx} family, and
    * issue #171 does not reach them.
@@ -138,6 +145,13 @@ final class InventedGraph {
    * it outright. Two leading zeros, for {@link #ALMANAC}'s reason.
    */
   static final String STRAY = "Q007";
+
+  /**
+   * An eighth id the owner minted, and the one issue #224 turns on: merged onto {@link #FORFEIT},
+   * given an owner edge naming {@link #FORFEIT} directly, and then retracted. Two leading zeros,
+   * for {@link #ALMANAC}'s reason.
+   */
+  static final String LAPSE = "Q008";
 
   private static final Instant WHEN = Instant.parse("2026-01-01T00:00:00Z");
 
