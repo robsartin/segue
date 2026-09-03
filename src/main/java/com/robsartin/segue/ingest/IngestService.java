@@ -169,7 +169,13 @@ public final class IngestService {
       Equivalences equivalences,
       LoggedAssertion assertion) {
     Objects.requireNonNull(equivalences, "equivalences");
-    switch (equivalences.foldEndpoints(assertion)) {
+    Optional<LoggedAssertion> folded = equivalences.foldEndpoints(assertion);
+    if (folded.isEmpty()) {
+      // The fold collapsed both endpoints onto one id, so there is no edge left to apply. See
+      // Equivalences.foldEndpoints: an equivalence does not make a thing relate to itself.
+      return;
+    }
+    switch (folded.get()) {
       case NodeAssertion node -> graph.upsertNode(node.toNode());
       case AssertionRecord edge -> graph.record(edge);
       // Unreachable, and a guard rather than a path. A retraction is honoured by the FOLD - both

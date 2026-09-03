@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -244,20 +245,38 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
    * its own node (ADR 59's merge bullet), and folding a {@link SameAs} onto itself would rewrite
    * the claim that states the equivalence.
    *
+   * <p><b>An edge whose two ends land on one id is dropped, and that is the one thing here that is
+   * a decision rather than a rewrite.</b> The owner minting one thing twice and later saying so is
+   * a real path, and an edge he claimed between the two folds to an edge from the canonical id to
+   * itself. A self-loop is a claim that a thing relates to itself, which neither he nor any source
+   * ever made — so the fold would be manufacturing evidence out of an equivalence, and {@code
+   * Scorer}'s degree and {@code find_paths} would both read it. The edge is dropped instead. Task
+   * 5's ADR amendment records the decision.
+   *
+   * <p><b>A self-loop the fold did not create is left exactly where it is</b>, which is why the
+   * check is on {@code from.equals(to)} <em>after</em> the untouched-claim shortcut above rather
+   * than on the folded pair alone. {@link AssertionRecord} does not forbid a claim from an entity
+   * to itself, so one could already be in the log and in the graph, and nothing about #178 changed
+   * that. Refusing it here would be an unrelated rule wearing this method's name; if the repo wants
+   * that rule it belongs on the record, where every writer would meet it.
+   *
    * <p><b>One hop, and the class javadoc says why there can never be two.</b>
    */
-  public LoggedAssertion foldEndpoints(LoggedAssertion assertion) {
+  public Optional<LoggedAssertion> foldEndpoints(LoggedAssertion assertion) {
     Objects.requireNonNull(assertion, "assertion");
     return switch (assertion) {
-      case AssertionRecord claim -> foldEndpoints(claim);
+      case AssertionRecord claim -> foldEndpoints(claim).map(folded -> folded);
       case OwnerEdge owned -> {
         String from = canonical(owned.fromQid());
         String to = canonical(owned.toQid());
-        yield from.equals(owned.fromQid()) && to.equals(owned.toQid())
-            ? owned
-            : new OwnerEdge(from, to, owned.typeCode(), owned.assertedAt());
+        if (from.equals(owned.fromQid()) && to.equals(owned.toQid())) {
+          yield Optional.of(owned);
+        }
+        yield from.equals(to)
+            ? Optional.empty()
+            : Optional.of(new OwnerEdge(from, to, owned.typeCode(), owned.assertedAt()));
       }
-      default -> assertion;
+      default -> Optional.of(assertion);
     };
   }
 
@@ -268,16 +287,23 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
    *
    * <p>The general method delegates here, so there is one rule and not two.
    */
-  public AssertionRecord foldEndpoints(AssertionRecord claim) {
+  public Optional<AssertionRecord> foldEndpoints(AssertionRecord claim) {
     Objects.requireNonNull(claim, "claim");
     String from = canonical(claim.fromQid());
     String to = canonical(claim.toQid());
     if (from.equals(claim.fromQid()) && to.equals(claim.toQid())) {
       // Most of a log names no merged id at all, and a copy of every row would be waste.
-      return claim;
+      return Optional.of(claim);
     }
-    return new AssertionRecord(
-        from, to, claim.typeCode(), claim.validFrom(), claim.validTo(), claim.provenance());
+    if (from.equals(to)) {
+      // The fold collapsed two distinct ids onto one. See this method's javadoc: an equivalence
+      // says two names are one thing, and it does not go on to claim that the thing relates to
+      // itself.
+      return Optional.empty();
+    }
+    return Optional.of(
+        new AssertionRecord(
+            from, to, claim.typeCode(), claim.validFrom(), claim.validTo(), claim.provenance()));
   }
 
   /** What this id turned out to be, or the id itself where the owner has said nothing. */

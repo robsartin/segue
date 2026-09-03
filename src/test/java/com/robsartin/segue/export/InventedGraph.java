@@ -76,6 +76,14 @@ final class InventedGraph {
    */
   static final String BYPASS = "Q004";
 
+  /**
+   * A fifth, minted and then merged onto the <em>same</em> canonical id as {@link #ALMANAC} — the
+   * owner minting one thing twice and saying so, which is a real path (#178). An owner edge between
+   * the two folds to an edge from that canonical id to itself, and a self-loop is a claim that a
+   * thing relates to itself, which neither a source nor the owner ever made.
+   */
+  static final String TWICE = "Q005";
+
   private static final Instant WHEN = Instant.parse("2026-01-01T00:00:00Z");
 
   private InventedGraph() {}

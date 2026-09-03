@@ -101,7 +101,8 @@ public record LogProjection(
       }
       switch (assertion) {
         case NodeAssertion claim -> nodes.put(claim.qid(), KindMapper.rederive(claim).toNode());
-        case AssertionRecord claim -> collect(byEdge, equivalences.foldEndpoints(claim));
+        case AssertionRecord claim ->
+            equivalences.foldEndpoints(claim).ifPresent(folded -> collect(byEdge, folded));
         // Retractions never survive the rule above; they describe the fold rather than appear
         // in it. Reaching this arm would mean Retractions.survives had changed its mind.
         case Retraction retraction ->
@@ -112,7 +113,10 @@ public record LogProjection(
         // minted entity - re-derivation reads the P31 classes a source stated, and the owner
         // stated a kind directly and no classes at all, so there is nothing to re-derive from.
         case LocalEntity minted -> nodes.put(minted.qid(), minted.toNode());
-        case OwnerEdge owned -> collect(byEdge, equivalences.foldEndpoints(owned.toAssertion()));
+        case OwnerEdge owned ->
+            equivalences
+                .foldEndpoints(owned.toAssertion())
+                .ifPresent(folded -> collect(byEdge, folded));
         // A merge is not drawn - it is a statement about identity, not a node or an edge, and an
         // edge for it would put a relationship in the export that find_paths cannot route along,
         // which this class's last paragraph forbids. Nothing happens at its own row any more

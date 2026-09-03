@@ -9,6 +9,7 @@ import static com.robsartin.segue.export.InventedGraph.LEDGER;
 import static com.robsartin.segue.export.InventedGraph.MARLOW;
 import static com.robsartin.segue.export.InventedGraph.PRESSING;
 import static com.robsartin.segue.export.InventedGraph.STANDING;
+import static com.robsartin.segue.export.InventedGraph.TWICE;
 import static com.robsartin.segue.export.InventedGraph.WATERMARK;
 import static com.robsartin.segue.export.InventedGraph.WREN;
 import static com.robsartin.segue.export.InventedGraph.edge;
@@ -118,6 +119,9 @@ class BothFoldsAgreeTest {
             node(BYPASS, NodeKind.WORK, "a local-shaped id a source named"),
             owned(BYPASS, WREN, "INFLUENCED_BY"),
             merged(BYPASS, STANDING),
+            minted(TWICE, NodeKind.WORK, "the Salt Almanac again"),
+            owned(TWICE, ALMANAC, "INFLUENCED_BY"),
+            merged(TWICE, PRESSING),
             owned(ALMANAC, MARLOW, "INFLUENCED_BY"));
   }
 
@@ -132,6 +136,7 @@ class BothFoldsAgreeTest {
           DEMO,
           LEDGER,
           BYPASS,
+          TWICE,
           PRESSING,
           WATERMARK,
           STANDING);
@@ -178,6 +183,16 @@ class BothFoldsAgreeTest {
     assertThat(folded)
         .contains(
             WATERMARK + " INFLUENCED_BY " + HOLLOW_TIDE, MARLOW + " INFLUENCED_BY " + WATERMARK);
+
+    // Two local ids merged onto ONE canonical id, with an owner edge between them: folding both
+    // ends gives an edge from that id to itself. A self-loop is a claim that a thing relates to
+    // itself, which neither a source nor the owner ever made - so the fold drops it, in both
+    // folds, rather than inventing evidence out of an equivalence (#178).
+    assertThat(folded)
+        .as(
+            "an equivalence collapses two ids into one thing; it does not make that thing relate"
+                + " to itself, and Scorer's degree and find_paths would both read the self edge")
+        .doesNotContain(PRESSING + " INFLUENCED_BY " + PRESSING);
 
     try (TinkerGraphStore replayed = new TinkerGraphStore()) {
       GraphProjector.project(log, replayed, IdentityMerge.NONE);

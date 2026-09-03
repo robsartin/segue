@@ -131,7 +131,7 @@ class EquivalencesTest {
     Equivalences merges = Equivalences.in(List.of(SameAs.declared(MINTED, CANONICAL, WHEN)));
     AssertionRecord claim = edge(MINTED, NEIGHBOUR);
 
-    assertThat(merges.foldEndpoints(claim).fromQid()).isEqualTo(CANONICAL);
+    assertThat(merges.foldEndpoints(claim).orElseThrow().fromQid()).isEqualTo(CANONICAL);
   }
 
   @Test
@@ -140,7 +140,7 @@ class EquivalencesTest {
     Equivalences merges = Equivalences.in(List.of(SameAs.declared(MINTED, CANONICAL, WHEN)));
     AssertionRecord claim = edge(NEIGHBOUR, MINTED);
 
-    assertThat(merges.foldEndpoints(claim).toQid())
+    assertThat(merges.foldEndpoints(claim).orElseThrow().toQid())
         .as("half a fold is a half-merge - the to-side moves as well as the from-side")
         .isEqualTo(CANONICAL);
   }
@@ -154,9 +154,40 @@ class EquivalencesTest {
                 SameAs.declared(MINTED, CANONICAL, WHEN),
                 SameAs.declared(OTHER_MINTED, OTHER_CANONICAL, WHEN)));
 
-    assertThat(merges.foldEndpoints(edge(MINTED, OTHER_MINTED)))
+    assertThat(merges.foldEndpoints(edge(MINTED, OTHER_MINTED)).orElseThrow())
         .extracting(AssertionRecord::fromQid, AssertionRecord::toQid)
         .containsExactly(CANONICAL, OTHER_CANONICAL);
+  }
+
+  @Test
+  @DisplayName("an edge whose two ends merge onto one canonical id folds to no edge at all")
+  void shouldDropAnEdgeWhoseBothEndsResolveToTheSameCanonicalId() {
+    Equivalences merges =
+        Equivalences.in(
+            List.of(
+                SameAs.declared(MINTED, CANONICAL, WHEN),
+                SameAs.declared(OTHER_MINTED, CANONICAL, WHEN)));
+
+    assertThat(merges.foldEndpoints(edge(MINTED, OTHER_MINTED)))
+        .as(
+            "the owner minting one thing twice and saying so is a real path; the edge between the"
+                + " two would fold to a self-loop, and neither he nor a source claimed that a"
+                + " thing relates to itself")
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("an edge already claimed from an entity to itself is not the fold's business")
+  void shouldLeaveASelfLoopNoMergeCreatedExactlyWhereItWas() {
+    Equivalences merges = Equivalences.in(List.of(SameAs.declared(MINTED, CANONICAL, WHEN)));
+    AssertionRecord claim = edge(NEIGHBOUR, NEIGHBOUR);
+
+    assertThat(merges.foldEndpoints(claim))
+        .as(
+            "this type answers 'which id', and a self-loop nobody merged was in the log and in the"
+                + " graph before #178; dropping it here would be an unrelated rule wearing this"
+                + " method's name")
+        .contains(claim);
   }
 
   @Test
@@ -175,7 +206,7 @@ class EquivalencesTest {
 
     assertThat(merges.foldEndpoints(claim))
         .as("an equivalence says which id, not what was claimed, when, or by whom")
-        .isEqualTo(
+        .contains(
             new AssertionRecord(
                 CANONICAL,
                 NEIGHBOUR,
@@ -195,7 +226,7 @@ class EquivalencesTest {
         .as(
             "IngestService.apply switches on the kind of claim: an owner edge that folded into a"
                 + " sourced one would be attributed to a witness who never said it")
-        .isEqualTo(OwnerEdge.claimed(CANONICAL, NEIGHBOUR, "INFLUENCED_BY", WHEN));
+        .contains(OwnerEdge.claimed(CANONICAL, NEIGHBOUR, "INFLUENCED_BY", WHEN));
   }
 
   @Test
@@ -206,7 +237,7 @@ class EquivalencesTest {
 
     assertThat(merges.foldEndpoints(claim))
         .as("most of the log names no merged id at all, and a copy of it would be waste")
-        .isSameAs(claim);
+        .containsSame(claim);
   }
 
   @Test
@@ -218,10 +249,10 @@ class EquivalencesTest {
 
     assertThat(merges.foldEndpoints(minted))
         .as("the local node stays exactly where it was - ADR 59's merge bullet, and #178 keeps it")
-        .isSameAs(minted);
+        .containsSame(minted);
     assertThat(merges.foldEndpoints(merge))
         .as("folding the merge onto itself would rewrite the claim that states the equivalence")
-        .isSameAs(merge);
+        .containsSame(merge);
   }
 
   @Test
@@ -233,7 +264,8 @@ class EquivalencesTest {
                 SameAs.declared(MINTED, CANONICAL, WHEN),
                 new Retraction(CANONICAL, "the merge named the wrong item", WHEN)));
 
-    assertThat(merges.foldEndpoints(edge(MINTED, NEIGHBOUR)).fromQid()).isEqualTo(MINTED);
+    assertThat(merges.foldEndpoints(edge(MINTED, NEIGHBOUR)).orElseThrow().fromQid())
+        .isEqualTo(MINTED);
   }
 
   @Test
