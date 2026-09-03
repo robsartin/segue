@@ -104,6 +104,35 @@ class MergedIdIsDrawnAsAnOrphanTest {
     }
   }
 
+  @Test
+  @DisplayName("the drawn graph shows the merged local id as a node no edge line touches")
+  void shouldDrawTheMergedLocalIdWithNoEdgeLineNamingIt() throws IOException {
+    FakeAssertionLog log = mergedLog();
+    try (TinkerGraphStore graph = new TinkerGraphStore()) {
+      GraphProjector.project(log, graph, IdentityMerge.NONE);
+      StringWriter out = new StringWriter();
+
+      new DotWriter().write(new ViewSelector(graph, log).full(), out);
+      String dot = out.toString();
+
+      assertThat(dot)
+          .as(
+              "ruling 3 is about the artefact somebody keeps and opens in Gephi, so it is asserted"
+                  + " on the artefact: the node stays (ADR 59) and nothing hides it")
+          .contains("\"" + ALMANAC + "\" [label=");
+      assertThat(dot)
+          .as(
+              "an orphan is a node no edge line names; a fold that left one end behind would draw"
+                  + " the merged entity twice over, which is the defect #178 measured")
+          .doesNotContain("\"" + ALMANAC + "\" ->")
+          .doesNotContain("-> \"" + ALMANAC + "\"");
+      assertThat(dot)
+          .as("and the edges are not lost with the id - both of them name the canonical node")
+          .contains("\"" + PRESSING + "\" -> \"" + WREN + "\"")
+          .contains("\"" + HOLLOW_TIDE + "\" -> \"" + PRESSING + "\"");
+    }
+  }
+
   private static String key(EdgeRecord edge) {
     return edge.fromQid() + " " + edge.typeCode() + " " + edge.toQid();
   }

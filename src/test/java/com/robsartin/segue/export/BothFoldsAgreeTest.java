@@ -73,7 +73,13 @@ class BothFoldsAgreeTest {
    * The same pair of folds over the third layer (#92, issue #92 task 6's review): an entity the
    * owner minted with an owner edge out of it, a merge onto an id no source has claimed, a second
    * minted entity merged onto an id a source <em>has</em> claimed, and one owner edge appended
-   * after a merge - which stays on the id it was made against, in both folds.
+   * <em>after</em> a merge - which folds onto the canonical id like any other, because since #178
+   * the resolution is over the whole log rather than at the merge's own row. That is spec ruling 2,
+   * and it is what the last row of this fixture is for: {@code owned(ALMANAC, MARLOW)} is claimed
+   * against an id already merged and both folds hold it as {@code PRESSING INFLUENCED_BY MARLOW}.
+   * This paragraph said the opposite until Task 4's review caught it - the sentence was true of
+   * {@code carry}, which ran at the merge's position, and it survived the change that made it
+   * false.
    *
    * <p><b>Widened for #178, because the Mikado probe produced no evidence here at all.</b> Both
    * merge tests below died inside {@code GraphProjector.project} before comparing anything, so the
