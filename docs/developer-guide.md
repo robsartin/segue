@@ -752,6 +752,21 @@ the graph grew. Note it is a different rule from the `described.putIfAbsent` fir
 few lines above it in the same method: that one settles two sources disagreeing *within one call*,
 this one re-reads the *same* source *across runs*.
 
+**Inline identity is no longer only Wikidata's reverse pass** (issue #163,
+[ADR 61](adr/0061-the-bridge-returns-classes.md)). `MusicBrainzSourceAdapter` fills `neighbors()`
+too, out of the Wikidata-backed P434 bridge it already spends one batched Query Service round trip
+on: a MusicBrainz-discovered neighbour can arrive with a kind, a label and its raw classes instead
+of costing a `fetch` each. **It is guarded rather than unconditional**, and the guard is the whole
+decision — an identity the bridge could not describe (no classes, or a label that came back as the
+bare QID) is omitted, and the `fetch` happens exactly as it did before. Emitting an undescribed one
+would erase classes, for the two reasons in the paragraph above: an adapter's neighbour is recorded
+for an existing node too, and `upsertNode` is last-writer-wins on `instanceOf`.
+[ADR 55](adr/0055-what-the-musicbrainz-adapter-refuses.md) measured that erasure and declined
+`neighbors()` on it; ADR 61 reverses that half on the bridge that removes it, and carries both the
+measurement and the alternatives it rejected. One thing to know while reading a log: **the neighbour
+claim carries `sourceId` `wikidata`, because the kind, label and classes are Wikidata's facts; the
+edge still carries `musicbrainz`.**
+
 **And a node also corrects itself at the next boot, from the classes it stored** (issue #60, ADR
 42). A node claim carries the raw `P31` values beside the kind derived from them, so both
 projections — `GraphProjector` at boot and `LogProjection` in the exporter — re-derive the kind
@@ -795,6 +810,16 @@ kept and the expansion degrades gracefully instead of returning nothing. Registe
 is Wikidata's inverse of one already in `EdgeTypes` reintroduces the duplicate: mark it
 `fallbackOnly` or do not register it. The measurement and the reasoning are in
 [ADR 36](adr/0036-reverse-lookup-via-sparql.md)'s issue-#33 amendment.
+
+**All of this is `wikidata`'s alone.** The forward whitelist, the reverse property set and the
+subtraction between them live in that package, and a second source neither inherits them nor is
+measured against them: `MusicBrainzSourceAdapter` makes no reverse pass and has no fallback-only
+claims to drop, because it reads one `ws/2` response and maps a two-entry relation whitelist of its
+own. What it contributes to the same expansion, besides those relations, is **neighbour identity** —
+see the bridge in the paragraphs above and
+[ADR 61](adr/0061-the-bridge-returns-classes.md). Widening the bridge did not touch any of the three
+couplings or this subtraction, and a change here that claims to be "the same fix for MusicBrainz" is
+a sign of a mechanism being merged that was never shared.
 
 ### Ordering, bounds and degradation
 
@@ -912,7 +937,12 @@ ambiguous on its own:
 - `assertions` — what the source claims.
 - `neighbors` — identity for entities on the far end, when the source already knows it. Optional; an
   absent neighbour falls back to a `fetch`. This is an optimisation only the adapter can supply, and
-  it stopped an expansion needing one HTTP round trip per discovered neighbour.
+  it stopped an expansion needing one HTTP round trip per discovered neighbour. **Supply one only if
+  you can describe it** ([ADR 61](adr/0061-the-bridge-returns-classes.md)): `SegueService` records a
+  supplied neighbour whether or not the node already exists, and `upsertNode` is last-writer-wins on
+  `instanceOf`, so a neighbour emitted without classes takes away the classes a node already had.
+  Omitting one costs a `fetch`, which is the fallback working; emitting a thin one costs data
+  nothing gets back.
 - `sourceUnavailable` — the source could not be reached at all.
 - `truncated` — there was more, and this is a prefix of it.
 
