@@ -62,15 +62,16 @@ import org.junit.jupiter.api.Test;
  * musicbrainz/MusicBrainzSourceAdapterTest} — and they mint allocatable ids no scan over source
  * text can reach. They are fixed by hand under issue #171. A second limit is smaller and worth
  * saying: this file's own allowlist is a literal in {@code src/test}, so the sweep reads it like
- * any other file's and it covers itself. A third: a site key names the file and whether a sighting
- * sat inside an annotation, and cannot tell a node id from a class id inside a file that already
- * declares the id in code — {@code new NodeRecord("Q5", …)} inside {@code wikidata/KindMapperTest}
- * stays green because {@code Q5} is legitimately in that file already. Only a parser could. A
- * fourth, in the annotation classifier itself: {@code opensAnnotation} walks the raw source
- * backwards from a {@code (} looking for a preceding {@code @Ident}, so a {@code //} comment ending
- * in {@code @Ident} immediately before a code {@code (} would misclassify that paren as opening an
- * annotation — zero instances of that shape exist in this tree today. Every one of these is a limit
- * of the mechanism; a limit stated in the test is a limit, and a limit nobody wrote down is a hole.
+ * any other file's, though it matches by id alone — see {@code ALLOWED} — and it covers itself. A
+ * third: a site key names the file and whether a sighting sat inside an annotation, and cannot tell
+ * a node id from a class id inside a file that already declares the id in code — {@code new
+ * NodeRecord("Q5", …)} inside {@code wikidata/KindMapperTest} stays green because {@code Q5} is
+ * legitimately in that file already. Only a parser could. A fourth, in the annotation classifier
+ * itself: {@code opensAnnotation} walks the raw source backwards from a {@code (} looking for a
+ * preceding {@code @Ident}, so a {@code //} comment ending in {@code @Ident} immediately before a
+ * code {@code (} would misclassify that paren as opening an annotation — zero instances of that
+ * shape exist in this tree today. Every one of these is a limit of the mechanism; a limit stated in
+ * the test is a limit, and a limit nobody wrote down is a hole.
  *
  * <p><b>There is one list and no escape hatch.</b> A companion set carried the ids awaiting
  * migration while issue #171 emptied it band by band; it is gone, so an allocatable-form id in
@@ -106,7 +107,7 @@ class StandInQidsDenoteNothingTest {
   private record Site(String file, Context context) {
     @Override
     public String toString() {
-      return context == Context.ANNOTATION ? file + " (in an annotation)" : file;
+      return context == Context.ANNOTATION ? file + " (in an annotation)" : file + " (in code)";
     }
   }
 
@@ -143,10 +144,12 @@ class StandInQidsDenoteNothingTest {
         ? sighting.describe()
         : sighting.describe()
             + "  — allowed, but only at "
-            + allowance.sites().stream()
-                .map(Site::toString)
-                .sorted()
-                .collect(Collectors.joining(", "));
+            + (allowance.sites().isEmpty()
+                ? "(no site at all)"
+                : allowance.sites().stream()
+                    .map(Site::toString)
+                    .sorted()
+                    .collect(Collectors.joining(", ")));
   }
 
   /**
@@ -914,8 +917,8 @@ class StandInQidsDenoteNothingTest {
   private record Sighting(Path file, int line, String id, Context context) {
     String describe() {
       return context == Context.ANNOTATION
-          ? "%s:%d  %s (in an annotation)".formatted(ROOT.relativize(file), line, id)
-          : "%s:%d  %s".formatted(ROOT.relativize(file), line, id);
+          ? "%s:%d  %s (in an annotation)".formatted(relative(file), line, id)
+          : "%s:%d  %s".formatted(relative(file), line, id);
     }
   }
 

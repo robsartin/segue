@@ -198,6 +198,11 @@
   }
 ```
 
+  **Note (final review, F5):** the shipped version keys `live` and `dead` on a `private record
+  Claim(String id, Site site)` rather than on the `"id @ site"` string shown above — the
+  comparison is on values, and the string above is now only how a `Claim` renders for the
+  message. Same shape, narrower key.
+
   Controls, each quoted and reverted: (a) add `code("src/test/java/com/robsartin/segue/domain/QidTest.java")` to `Q5`'s sites → red naming it; (b) change `Q1`'s `annotation(...)` to `code(...)` → red, proving the context is part of the site; (c) empty one entry's sites → red `(no site at all)`.
 
 - [ ] **Step 7 — the checks kept from #213.** Delete the `Q328` entry → red on `src/test/resources/wikidata/proposition-claims.json`; restore. Confirm the vacuity test is untouched and green (files non-empty, sightings non-empty, `SELF` among the files read).
