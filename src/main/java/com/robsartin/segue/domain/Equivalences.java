@@ -64,6 +64,14 @@ import java.util.Set;
  * by construction, so no id can sit on both sides of the relation whatever the convention does
  * next. If that were false, {@link #resolve} would leave a rating stranded on an intermediate id.
  *
+ * <p><b>One local id merged twice leaves a node behind under the first canonical id.</b> {@link
+ * #standIns} is {@code putIfAbsent} and keyed by canonical id, so the first merge names the
+ * stand-in; {@link #canonicalByLocal} is last-wins, so {@link #foldEndpoints} sends the edges to
+ * the last. The first canonical id therefore keeps an orphan node with the merged entity's label
+ * and no edges. Both folds agree about it and it is drawn as an orphan like the local id itself
+ * (spec ruling 3), so nothing is inconsistent — but nothing asserts it either, and it is a
+ * correction's leftover rather than something the owner claimed.
+ *
  * @param canonicalByLocal each merged local id, and the id it turned out to be, <b>in log
  *     order</b>. Last claim wins when one local id was merged twice — the same "what had we already
  *     been told" reading {@link Retractions} takes, and the only one that lets a wrong merge be
@@ -137,6 +145,16 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
    * only where none exists. The returned map keeps log order for {@link #canonicalByLocal}'s
    * reason.
    *
+   * <p><b>The stand-in rule has four homes, and they are named here so that the count is not
+   * guessed at.</b> "The canonical id gains a node carrying the merged entity's label where nothing
+   * has claimed one" is written out in {@link #standIns} (this method, over the log, for both
+   * folds), {@code IngestService.standIn} (over the running graph, live path only), {@code
+   * OwnRun.labelsInTheProjection} (its own {@code !labels.containsKey(canonicalQid)} copy, so the
+   * tool offers the canonical id as an endpoint) and {@code ratings/Labels.forQids} (so a carried
+   * canonical row is not listed as "not in the graph"). The last two read labels off the log rather
+   * than nodes off a graph, which is why they are copies rather than callers. All four agree today,
+   * condition for condition; nothing holds them to it but this paragraph.
+   *
    * <p><b>Derived from {@link #localsOfMerges}, and that is the point.</b> "Does this merge have a
    * local side, and what does it look like?" is one question, asked by the stand-in here and by
    * {@code IngestService.standIn} on the live path. Answering it in two places is how the two folds
@@ -179,11 +197,23 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
    * no source can allocate a {@code Q00} id — which is why it is a rule to state rather than a bug
    * to have shipped.
    *
-   * <p><b>Node kinds are taken as the claim stated them.</b> {@code KindMapper.rederive} is the
-   * identity on a claim carrying no {@code P31} classes (ADR 42), and a claim that carries classes
-   * is a source's, about an id no source can allocate. So there is nothing here to re-derive, and
-   * {@code domain} does not learn about {@code wikidata} to say so. If that ever became false, a
-   * stand-in's kind would lag the local node's own.
+   * <p><b>Node kinds are taken as the claim stated them, and on the bypass path that is a known
+   * lag.</b> {@code KindMapper.rederive} is the identity on a claim carrying no {@code P31} classes
+   * (ADR 42), which covers every {@link LocalEntity}: the owner states a kind and no classes. A
+   * {@link NodeAssertion} <em>can</em> carry classes, and both folds re-derive the local node's own
+   * kind from them while the stand-in built here keeps the kind the claim stated — so a bypass
+   * claim carrying {@code ["Q5"]} gives a stand-in of the claimed kind beside a local node
+   * re-derived to {@code PERSON}. <b>That is the one condition under which this method is
+   * wrong.</b>
+   *
+   * <p>It is documented rather than fixed, and the reason is a package rule, not a judgement about
+   * likelihood: {@code KindMapper} lives in {@code wikidata}, and calling it from {@code domain}
+   * fails {@code ArchitectureTest.noPackageCycles}. The premise that would make the lag unreachable
+   * — "a class-bearing claim about an unallocatable id cannot come from a source" — is exactly the
+   * premise spec ruling 2 declines to rely on, and the same one whose widening admitted {@link
+   * NodeAssertion} here in the first place, so it is not offered as a defence. Both folds read this
+   * one method, so they agree about the lagging kind and {@code BothFoldsAgreeTest} cannot see it;
+   * only a rule that moved re-derivation behind a port would close it.
    *
    * <p><b>Log order, in both senses.</b> A node is read as it stood <em>when the merge was
    * made</em>, matching {@code standIn}'s "order is log order" paragraph, so a claim appended after
