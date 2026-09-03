@@ -74,13 +74,23 @@ class StandInAgreesInEveryHomeTest {
    */
   private static final List<String> HOMES = List.of(FOLD, LIVE, OWN, RATINGS);
 
+  /**
+   * Row 3's claim, the source's own words: {@code SIGNAL}'s stated kind and the class it was
+   * derived from. Read by both {@link #fourHomesLog()} and {@link
+   * #shouldRederiveAKindDifferentFromTheClaimedOneWhenTheBypassRowsClassesAreMapped()} - one place
+   * writes this row down, so an edit to it cannot leave the discriminating-property test asserting
+   * against a stale copy.
+   */
+  private static final NodeAssertion BYPASS_CLAIM =
+      node(SIGNAL, NodeKind.WORK, "a signal a source named", List.of("Q5"));
+
   /** The fixture: the spec's table, row for row. No edges and no retractions - see the spec. */
   private static FakeAssertionLog fourHomesLog() {
     return new FakeAssertionLog()
         .with(
             minted(APRIL, NodeKind.WORK, "the April tape"),
             merged(APRIL, TAPE),
-            node(SIGNAL, NodeKind.WORK, "a signal a source named", List.of("Q5")),
+            BYPASS_CLAIM,
             merged(SIGNAL, BEACON),
             minted(TWICE_OVER, NodeKind.WORK, "the ledger, twice over"),
             merged(TWICE_OVER, FIRST),
@@ -270,17 +280,14 @@ class StandInAgreesInEveryHomeTest {
   @Test
   @DisplayName("the bypass row's claimed kind and its re-derived kind differ")
   void shouldRederiveAKindDifferentFromTheClaimedOneWhenTheBypassRowsClassesAreMapped() {
-    NodeAssertion bypassClaim =
-        node(SIGNAL, NodeKind.WORK, "a signal a source named", List.of("Q5"));
-
-    assertThat(KindMapper.rederive(bypassClaim).kind())
+    assertThat(KindMapper.rederive(BYPASS_CLAIM).kind())
         .as(
             "%s's stated class Q5 must re-derive to a kind different from the claimed %s - that gap"
                 + " is the whole reason this row is pinned as the bypass-lag row (issue #222); if it"
                 + " ever agreed, the row would stop discriminating and nothing else here would"
                 + " notice",
-            SIGNAL, bypassClaim.kind())
-        .isNotEqualTo(bypassClaim.kind());
+            SIGNAL, BYPASS_CLAIM.kind())
+        .isNotEqualTo(BYPASS_CLAIM.kind());
   }
 
   /** Every home's answer for one canonical id, in a fixed order so a failure reads alike twice. */
