@@ -71,7 +71,7 @@ public abstract class GraphStoreContract {
   void nodesAreRetrievable() {
     assertThat(store.node(Fixture.CAVE)).isPresent();
     assertThat(store.node(Fixture.CAVE).orElseThrow().label()).isEqualTo("Nick Cave");
-    assertThat(store.node("Q999999")).isEmpty();
+    assertThat(store.node("Q0999999")).isEmpty();
   }
 
   @Test

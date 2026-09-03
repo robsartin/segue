@@ -247,7 +247,7 @@ class StandInQidsDenoteNothingTest {
    * it is a record that a fix is owed. A new test that needs an id it invents takes the
    * leading-zero form — {@code Q0900100} — which Wikibase's grammar refuses outright.
    */
-  static final Set<String> NOT_YET_MIGRATED = Set.of("Q999999");
+  static final Set<String> NOT_YET_MIGRATED = Set.of();
 
   /** One allocatable-form id, and where it was found. */
   private record Sighting(Path file, int line, String id) {

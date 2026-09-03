@@ -9,6 +9,7 @@ import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.port.ExpandContext;
 import com.robsartin.segue.port.ExpandResult;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -25,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -47,6 +49,26 @@ class MusicBrainzSourceAdapterTest {
   private static final String QUINTET_MBID = "ee55e4e8-807d-49b1-8470-d1c0898ed7cb";
 
   private static final String QUINTET_QID = "Q0900001";
+
+  /**
+   * Wikibase's item-id grammar, read reflectively from {@code FixtureQidsDenoteNothingTest} - the
+   * one place this repository writes it down (issue #171). {@code everyMbidInTheFixture} mints qids
+   * at runtime from a bare {@code "Q"} and a counter, a site no source scan can see, so this is the
+   * only oracle available to confirm the minted ids are unallocatable.
+   */
+  private static final Pattern WIKIBASE_ITEM_ID = wikibaseItemIdGrammar();
+
+  private static Pattern wikibaseItemIdGrammar() {
+    try {
+      Field field =
+          Class.forName("com.robsartin.segue.fixture.FixtureQidsDenoteNothingTest")
+              .getDeclaredField("WIKIBASE_ITEM_ID");
+      field.setAccessible(true);
+      return (Pattern) field.get(null);
+    } catch (ReflectiveOperationException e) {
+      throw new AssertionError("cannot read FixtureQidsDenoteNothingTest.WIKIBASE_ITEM_ID", e);
+    }
+  }
 
   // The first three "member of band" relations in the committed fixture, in the order it states
   // them. Fixture order is load-bearing for the truncation test below and nowhere else.
@@ -579,7 +601,11 @@ class MusicBrainzSourceAdapterTest {
     for (ArtistRelation relation :
         MusicBrainzClient.readingFrom(fixture("artist-with-relations.json"))
             .artistRelations(QUINTET_MBID)) {
-      mapping.putIfAbsent(relation.targetMbid(), "Q" + next++);
+      String qid = "Q0" + next++;
+      assertThat(WIKIBASE_ITEM_ID.matcher(qid).matches())
+          .as("%s must be unallocatable (issue #171)", qid)
+          .isFalse();
+      mapping.putIfAbsent(relation.targetMbid(), qid);
     }
     return Map.copyOf(mapping);
   }

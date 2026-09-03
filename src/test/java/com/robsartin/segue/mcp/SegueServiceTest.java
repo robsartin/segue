@@ -29,6 +29,7 @@ import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import com.robsartin.segue.wikidata.WikidataUnavailableException;
+import java.lang.reflect.Field;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -38,6 +39,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -52,6 +54,32 @@ import org.junit.jupiter.api.Test;
  * could leak the only personal data segue holds.
  */
 class SegueServiceTest {
+
+  /**
+   * Wikibase's item-id grammar, read reflectively from {@code FixtureQidsDenoteNothingTest} - the
+   * one place this repository writes it down (issue #171). Three loops below mint qids at runtime
+   * from a bare {@code "Q"} and a loop counter, sites no source scan can see, so this is the only
+   * oracle available to confirm the minted ids are unallocatable.
+   */
+  private static final Pattern WIKIBASE_ITEM_ID = wikibaseItemIdGrammar();
+
+  private static Pattern wikibaseItemIdGrammar() {
+    try {
+      Field field =
+          Class.forName("com.robsartin.segue.fixture.FixtureQidsDenoteNothingTest")
+              .getDeclaredField("WIKIBASE_ITEM_ID");
+      field.setAccessible(true);
+      return (Pattern) field.get(null);
+    } catch (ReflectiveOperationException e) {
+      throw new AssertionError("cannot read FixtureQidsDenoteNothingTest.WIKIBASE_ITEM_ID", e);
+    }
+  }
+
+  private static void assertMintedUnallocatable(String qid) {
+    assertThat(WIKIBASE_ITEM_ID.matcher(qid).matches())
+        .as("%s must be unallocatable (issue #171)", qid)
+        .isFalse();
+  }
 
   private static final Provenance WIKIDATA =
       new Provenance("wikidata", "S-1", Instant.parse("2026-08-24T09:00:00Z"), 1.0);
@@ -180,10 +208,10 @@ class SegueServiceTest {
   @Test
   @DisplayName("expandEntity on an unknown seed returns an error, not an exception")
   void expandEntityUnknownSeedReturnsError() {
-    ToolResult<SegueService.ExpansionSummary> result = service().expandEntity("Q999999", 10);
+    ToolResult<SegueService.ExpansionSummary> result = service().expandEntity("Q0999999", 10);
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.ERROR);
-    assertThat(result.detail()).contains("Q999999");
+    assertThat(result.detail()).contains("Q0999999");
   }
 
   @Test
@@ -301,7 +329,8 @@ class SegueServiceTest {
     List<AssertionRecord> assertions = new ArrayList<>();
     List<NodeAssertion> neighbors = new ArrayList<>();
     for (int i = 0; i < 3; i++) {
-      String qid = "Q" + (700 + i);
+      String qid = "Q0" + (700 + i);
+      assertMintedUnallocatable(qid);
       assertions.add(new AssertionRecord("Q01", qid, "MEMBER_OF", null, null, WIKIDATA));
       neighbors.add(new NodeAssertion(qid, NodeKind.GROUP, "Group " + i, WIKIDATA));
     }
@@ -336,7 +365,8 @@ class SegueServiceTest {
     List<AssertionRecord> assertions = new ArrayList<>();
     List<NodeAssertion> neighbors = new ArrayList<>();
     for (int i = 0; i < flood; i++) {
-      String qid = "Q" + (100 + i);
+      String qid = "Q0" + (100 + i);
+      assertMintedUnallocatable(qid);
       assertions.add(new AssertionRecord("Q01", qid, "ABOUTNESS", null, null, WIKIDATA));
       neighbors.add(new NodeAssertion(qid, NodeKind.WORK, "Work " + i, WIKIDATA));
     }
@@ -367,7 +397,8 @@ class SegueServiceTest {
     List<AssertionRecord> assertions = new ArrayList<>();
     List<NodeAssertion> neighbors = new ArrayList<>();
     for (int i = 0; i < pastTheCeiling; i++) {
-      String qid = "Q" + (100 + i);
+      String qid = "Q0" + (100 + i);
+      assertMintedUnallocatable(qid);
       assertions.add(new AssertionRecord("Q01", qid, "DIRECTED", null, null, WIKIDATA));
       neighbors.add(new NodeAssertion(qid, NodeKind.WORK, "Work " + i, WIKIDATA));
     }

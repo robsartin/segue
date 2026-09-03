@@ -2,9 +2,11 @@ package com.robsartin.segue.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.lang.reflect.Field;
 import java.time.Instant;
 import java.util.List;
 import java.util.function.ToIntFunction;
+import java.util.regex.Pattern;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -14,6 +16,26 @@ import org.junit.jupiter.api.Test;
  * shakiest hop, so the order is weakest confidence descending, with hop count breaking ties.
  */
 class PathRankingTest {
+
+  /**
+   * Wikibase's item-id grammar, read reflectively from {@code FixtureQidsDenoteNothingTest} - the
+   * one place this repository writes it down (issue #171). {@code path} mints qids at runtime from
+   * a bare {@code "Q"} and a loop counter, a site no source scan can see, so this is the only
+   * oracle available to confirm the minted ids are unallocatable.
+   */
+  private static final Pattern WIKIBASE_ITEM_ID = wikibaseItemIdGrammar();
+
+  private static Pattern wikibaseItemIdGrammar() {
+    try {
+      Field field =
+          Class.forName("com.robsartin.segue.fixture.FixtureQidsDenoteNothingTest")
+              .getDeclaredField("WIKIBASE_ITEM_ID");
+      field.setAccessible(true);
+      return (Pattern) field.get(null);
+    } catch (ReflectiveOperationException e) {
+      throw new AssertionError("cannot read FixtureQidsDenoteNothingTest.WIKIBASE_ITEM_ID", e);
+    }
+  }
 
   @Test
   @DisplayName("weakest confidence descending is the primary order")
@@ -365,8 +387,16 @@ class PathRankingTest {
         IntStream.range(0, hopConfidences.length)
             .mapToObj(
                 i -> {
-                  NodeRecord from = new NodeRecord("Q" + i, NodeKind.CONCEPT, "n" + i);
-                  NodeRecord to = new NodeRecord("Q" + (i + 1), NodeKind.CONCEPT, "n" + (i + 1));
+                  String fromQid = "Q0" + i;
+                  String toQid = "Q0" + (i + 1);
+                  assertThat(WIKIBASE_ITEM_ID.matcher(fromQid).matches())
+                      .as("%s must be unallocatable (issue #171)", fromQid)
+                      .isFalse();
+                  assertThat(WIKIBASE_ITEM_ID.matcher(toQid).matches())
+                      .as("%s must be unallocatable (issue #171)", toQid)
+                      .isFalse();
+                  NodeRecord from = new NodeRecord(fromQid, NodeKind.CONCEPT, "n" + i);
+                  NodeRecord to = new NodeRecord(toQid, NodeKind.CONCEPT, "n" + (i + 1));
                   EdgeRecord edge =
                       new EdgeRecord(
                           from.qid(),
