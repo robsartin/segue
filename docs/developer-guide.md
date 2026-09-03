@@ -330,6 +330,8 @@ graph TD
   own --> sqlite
   own --> support
   census --> support
+  census --> domain
+  census ==>|"one fold, not two"| export
 ```
 
 **What the diagram shows.** Dependencies point downward and never back up. `domain` sits at the
@@ -380,8 +382,8 @@ has a different relationship with the data and a different fence to match.
 - **`recommend` reaches `sqlite`, `tinker`, `ingest` and `wikidata`**, because it replays the log
   into a throwaway projection and traverses it, and it writes nothing at all
   ([ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md)).
-- **`rate` reaches the same four and `recommend` itself**, the one dependency between two dev
-  tools, for the candidate half of the deck. It is the other tool that writes — to the taste layer
+- **`rate` reaches the same four and `recommend` itself**, one of the two dependencies between dev
+  tools (the other is `census → export`), for the candidate half of the deck. It is the other tool that writes — to the taste layer
   only, through `AffinityStore.updateRating`, never through `IngestService`
   ([ADR 46](adr/0046-the-rating-deck.md)).
 - **`own` reaches `sqlite` and `ingest`, and is the second that writes a world-fact claim.** It
