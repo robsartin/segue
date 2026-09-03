@@ -71,17 +71,6 @@ class OwnerClaimTest {
         .isInstanceOf(IllegalArgumentException.class);
   }
 
-  @Test
-  @DisplayName(
-      "should accept a merge whose local side is a local entity and whose canonical side is real")
-  void shouldAcceptAMergeOntoARealWikidataId() {
-    SameAs merge = SameAs.declared("Q00900042", "Q10000000900", Instant.EPOCH);
-
-    assertThat(merge.localQid()).isEqualTo("Q00900042");
-    assertThat(merge.canonicalQid()).isEqualTo("Q10000000900");
-    assertThat(merge.assertedAt()).isEqualTo(Instant.EPOCH);
-  }
-
   /**
    * The two sides of a merge are exact complements over {@code Q\d+} — {@code Equivalences} argues
    * from that, and only from that, that a canonical id can never be the local side of another merge
@@ -93,7 +82,9 @@ class OwnerClaimTest {
   void shouldAcceptAMergeOntoTheCanonicalStandInShape() {
     SameAs merge = SameAs.declared("Q00900042", "Q10000000900", Instant.EPOCH);
 
+    assertThat(merge.localQid()).isEqualTo("Q00900042");
     assertThat(merge.canonicalQid()).isEqualTo("Q10000000900");
+    assertThat(merge.assertedAt()).isEqualTo(Instant.EPOCH);
   }
 
   @Test

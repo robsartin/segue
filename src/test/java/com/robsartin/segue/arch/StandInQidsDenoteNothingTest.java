@@ -121,7 +121,7 @@ class StandInQidsDenoteNothingTest {
           entry(
               "Q42",
               "negative control, deliberately allocatable — OwnerClaimTest asserts LocalEntity"
-                  + " refuses it, and it stands as a merge's canonical side"),
+                  + " refuses it"),
           entry("Q328", "entity — a real value in the recorded proposition-claims.json"),
           entry("Q515", "class id — mapped by KindMapper"),
           entry("Q1064", "entity — a real value in the recorded proposition-claims.json"),

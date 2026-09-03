@@ -148,9 +148,11 @@ the retake and the mechanism that replaces the consequence.
 
 **What moved.** Of the distinct allocatable-form ids that consequence counted, **100 were
 stand-ins** — invented ids in exactly the shape this ADR forbids — across **61 files**, falling
-into **ten families** by prefix. They were migrated one family per commit with the gate green after
-each ([ADR 4](0004-mikado-method-for-changes.md)), and every migrated id is the old one carried
-into an unallocatable shape rather than a fresh number, so each family's diff is reviewable by eye.
+into **ten families** by prefix. They were migrated family by family — one commit each, and
+two where a family had a second half that could not take a leading zero — with the gate green
+after each ([ADR 4](0004-mikado-method-for-changes.md)), and every migrated id is the old one
+carried into an unallocatable shape rather than a fresh number, so each family's diff is
+reviewable by eye.
 The remainder are deliberately real and stay. (A narrower scan — strip comments, then match quoted
 runs — reaches 60 files rather than 61: it cannot read `//` inside a string literal, nor a text
 block, whose quotes do not pair the way it assumes. The distinct-id count is 100 either way.)

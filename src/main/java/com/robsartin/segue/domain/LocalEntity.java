@@ -11,12 +11,13 @@ import java.util.regex.Pattern;
  * precedent: its own validation, in {@code domain}, and no {@link Provenance} - there is no source
  * to attribute this to, because the owner minting it is the source.
  *
- * <p><b>Identity reuses ADR 58's unallocatable-QID mechanism (issue #141).</b> Wikibase's {@code
- * ItemId} grammar is {@code Q[1-9]\d{0,9}}: the first digit after {@code Q} may never be zero, so a
- * qid that starts {@code Q0} can never be allocated by Wikidata, now or in the future. ADR 58's
- * decision reserves that leading-zero shape for a <b>stand-in</b> generally - {@code Fixture}'s
- * constants are one population living in that shape, not the whole of what the shape means, and
- * nothing in ADR 58 is scoped to "test fixtures" alone.
+ * <p><b>Identity reuses ADR 58's unallocatable-QID mechanism; the shape it takes here is ADR 59's
+ * own decision (issue #92).</b> Wikibase's {@code ItemId} grammar is {@code Q[1-9]\d{0,9}}: the
+ * first digit after {@code Q} may never be zero, so a qid that starts {@code Q0} can never be
+ * allocated by Wikidata, now or in the future. ADR 58's decision reserves that leading-zero shape
+ * for a <b>stand-in</b> generally - {@code Fixture}'s constants are one population living in that
+ * shape, not the whole of what the shape means, and nothing in ADR 58 is scoped to "test fixtures"
+ * alone.
  *
  * <p><b>The local-entity band is a second shape, not a number range.</b> A numeric floor inside the
  * single-leading-zero space cannot separate two open-ended families from each other: issue #171
@@ -28,12 +29,14 @@ import java.util.regex.Pattern;
  * from landing inside a floor meant for local entities and colliding silently.
  *
  * <p>So a local entity's qid takes <b>two</b> leading zeros - {@code Q00} followed by at least one
- * more digit - while every stand-in, present and future, keeps exactly one. Both shapes are
- * unallocatable under {@code Q[1-9]\d{0,9}} and both match every {@code Q\d+} pattern in {@code
- * src/main}, so nothing outside this check has to learn about the second zero, and the distinction
- * survives #171 landing on whatever numbers it lands on, because it is a shape rather than a range.
- * <b>The leading zeros are the discriminator, not decoration</b> - {@code Q0900042} is a stand-in's
- * shape and is refused here; {@code Q00900042} is a local entity's, and is not.
+ * more digit - while every stand-in, present and future, keeps exactly one. That two-zero shape is
+ * ADR 59's; the single zero is ADR 58's, and ADR 62's eleven digits are a merge's canonical side.
+ * Both shapes are unallocatable under {@code Q[1-9]\d{0,9}} and both match every {@code Q\d+}
+ * pattern in {@code src/main}, so nothing outside this check has to learn about the second zero,
+ * and the distinction survives #171 landing on whatever numbers it lands on, because it is a shape
+ * rather than a range. <b>The leading zeros are the discriminator, not decoration</b> - {@code
+ * Q0900042} is a stand-in's shape and is refused here; {@code Q00900042} is a local entity's, and
+ * is not.
  *
  * @param qid the local entity's own identifier - two leading zeros ({@code Q00...})
  * @param kind what it is, same as any other node
@@ -136,15 +139,15 @@ public record LocalEntity(String qid, NodeKind kind, String label, Instant minte
 
   /**
    * Refuse anything unallocatable that still is not shaped like a local entity (most likely one of
-   * ADR 58's single-leading-zero stand-ins). This project's own convention, enforced at the moment
-   * of claiming only - it moved once already and may move again, and rows written before it moved
-   * still have to be readable.
+   * ADR 58's single-leading-zero stand-ins; the two-zero shape asserted here is ADR 59's). This
+   * project's own convention, enforced at the moment of claiming only - it moved once already and
+   * may move again, and rows written before it moved still have to be readable.
    */
   static void checkLocalShape(String qid) {
     checkUnallocatable(qid);
     if (!isLocal(qid)) {
       throw new IllegalArgumentException(
-          "a local entity's qid must have two leading zeros (Q00..., ADR 58 issue #141) to stay"
+          "a local entity's qid must have two leading zeros (Q00..., ADR 59 issue #92) to stay"
               + " distinct from a single-leading-zero stand-in, got: "
               + qid);
     }

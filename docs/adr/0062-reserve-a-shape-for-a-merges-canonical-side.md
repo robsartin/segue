@@ -4,7 +4,7 @@ date: "2026-09-02"
 topic: reserve-a-shape-for-a-merges-canonical-side
 tags: [project, domain, testing, wikidata, data]
 supersedes: []
-related: [stand-in-identifiers-cannot-be-allocatable, owner-claims-as-a-third-layer, wikidata-identity-and-vocabulary, use-test-driven-development, mikado-method-for-changes, what-an-adr-may-quote]
+related: [stand-in-identifiers-cannot-be-allocatable, owner-claims-as-a-third-layer, wikidata-identity-and-vocabulary, what-an-adr-may-quote, privacy-and-data-handling, use-test-driven-development, mikado-method-for-changes]
 ---
 # 62. Reserve a second unallocatable shape for a merge's canonical side, and give the allocatable grammar the upper bound it always claimed
 
@@ -13,7 +13,9 @@ related: [stand-in-identifiers-cannot-be-allocatable, owner-claims-as-a-third-la
 [ADR 58](0058-stand-in-identifiers-cannot-be-allocatable.md) requires every stand-in identifier to
 take a shape Wikibase's item-id grammar refuses, and reserved the leading zero for it.
 [Issue #171](https://github.com/robsartin/segue/issues/171) is the sweep that makes the rest of
-`src/test` obey. Ten of its eleven bands migrate by prepending a zero. One cannot.
+`src/test` obey, in ten bands. Almost every id in them migrates by prepending a zero. One
+group cannot, and it cuts across two of the bands rather than being one of them: the id a fixture
+merge names on its canonical side.
 
 `SameAs` says *this local entity turned out to be that Wikidata item*, and its two sides are
 deliberately not interchangeable: the local side must be an id Wikidata can never allocate, and the
