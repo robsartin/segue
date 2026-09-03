@@ -30,7 +30,7 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <ul>
  *   <li>MusicBrainz needs no API key, but does ask for a <b>proactive</b> ~1 request/second pace
- *       rather than a reactive one. See {@link #MIN_REQUEST_INTERVAL}.
+ *       rather than a reactive one. See {@link #DEFAULT_MIN_REQUEST_INTERVAL}.
  *   <li>This client also parses the one response shape it fetches, into {@link ArtistRelation}.
  *       Wikidata splits fetching ({@code WikidataClient}) from interpreting ({@code ClaimMapper},
  *       {@code ReverseClaims}) because it has two endpoints and two shapes to reconcile; this
@@ -68,14 +68,35 @@ public final class MusicBrainzClient {
    * adapters.md} records a probe that drew a "server is currently busy" response at roughly
    * 1-second spacing, so waiting for that response to say so would waste a request MusicBrainz
    * already asked callers not to send.
+   *
+   * <p>The value every production client is built with — {@code SegueConfiguration} calls {@link
+   * #MusicBrainzClient()}, which never overrides it. {@link #minRequestInterval} is the
+   * per-instance field this defaults; only {@link #MusicBrainzClient(URI, Clock, Duration,
+   * Sleeper)}, used by tests, ever passes something else, and it is that constructor's own javadoc
+   * that says why the one test that overrides it passes a <em>larger</em> interval — five minutes,
+   * through a sleeper that records the wait rather than taking it — so that the slots {@link
+   * #reserve} claims cannot be confused with anything a real wait or a descheduled thread could
+   * produce. No test asks for a shorter pace than this, and none would gain anything by it.
    */
-  static final Duration MIN_REQUEST_INTERVAL = Duration.ofSeconds(1);
+  static final Duration DEFAULT_MIN_REQUEST_INTERVAL = Duration.ofSeconds(1);
 
   private final URI baseUri;
   private final HttpClient http;
   private final ObjectMapper mapper = new ObjectMapper();
   private final Path fixture;
   private final Clock clock;
+
+  /**
+   * How far apart this client spaces its request slots. {@link #DEFAULT_MIN_REQUEST_INTERVAL}
+   * unless {@link #MusicBrainzClient(URI, Clock, Duration, Sleeper)} built this instance.
+   */
+  private final Duration minRequestInterval;
+
+  /**
+   * How this client waits out a slot or a backoff. {@link Thread#sleep(Duration)} unless {@link
+   * #MusicBrainzClient(URI, Clock, Duration, Sleeper)} built this instance.
+   */
+  private final Sleeper sleeper;
 
   /**
    * The instant the most recently claimed request is due to leave, or null before any has been
@@ -91,11 +112,16 @@ public final class MusicBrainzClient {
   private final AtomicReference<Instant> lastRequestAt = new AtomicReference<>();
 
   public MusicBrainzClient() {
-    this(DEFAULT_BASE, null, Clock.systemUTC());
+    this(DEFAULT_BASE, null, Clock.systemUTC(), DEFAULT_MIN_REQUEST_INTERVAL, Thread::sleep);
   }
 
   public MusicBrainzClient(URI baseUri) {
-    this(Objects.requireNonNull(baseUri, "baseUri"), null, Clock.systemUTC());
+    this(
+        Objects.requireNonNull(baseUri, "baseUri"),
+        null,
+        Clock.systemUTC(),
+        DEFAULT_MIN_REQUEST_INTERVAL,
+        Thread::sleep);
   }
 
   /**
@@ -111,7 +137,57 @@ public final class MusicBrainzClient {
    * either behaviour; a test that wants an even pace wants an advancing clock, not a fixed one.
    */
   MusicBrainzClient(URI baseUri, Clock clock) {
-    this(Objects.requireNonNull(baseUri, "baseUri"), null, Objects.requireNonNull(clock, "clock"));
+    this(
+        Objects.requireNonNull(baseUri, "baseUri"),
+        null,
+        Objects.requireNonNull(clock, "clock"),
+        DEFAULT_MIN_REQUEST_INTERVAL,
+        Thread::sleep);
+  }
+
+  /**
+   * Package-private: {@link #MusicBrainzClient(URI, Clock)} widened by the two seams that
+   * constructor could not offer — how far apart this client spaces its slots, and how it waits.
+   *
+   * <p><b>Production never calls this.</b> {@code SegueConfiguration:139} builds a client with
+   * {@link #MusicBrainzClient()}, which keeps {@link #DEFAULT_MIN_REQUEST_INTERVAL} and {@link
+   * Thread#sleep(Duration)}; MusicBrainz's ~1 rps is a condition of anonymous {@code ws/2} access,
+   * not a tuning knob (see {@link #DEFAULT_MIN_REQUEST_INTERVAL}'s javadoc), so nothing in this
+   * repository has reason to pass either seam a different value outside a test. Both are pinned
+   * from the other side: {@code shouldKeepTheDefaultRequestIntervalWhenNoInstanceOverrideIsGiven}
+   * asserts a default-constructed client's interval, and {@code
+   * shouldKeepARealSleeperWhenNoInstanceOverrideIsGiven} asks its sleeper for 50ms and asserts that
+   * 50ms passed, so neither a test's short interval nor a test's no-op can leak into production by
+   * an edit made elsewhere.
+   *
+   * <p><b>What the seams are for, and what they are not.</b> The sleeper exists so a test can
+   * assert <em>what this client asked to wait for</em> rather than wait for it; the interval exists
+   * so a test can choose the scale that assertion is made at. They work together and are weakest
+   * apart: {@code concurrentCallersDoNotLeaveTogether} sets a five-minute interval precisely
+   * because nothing waits for it, which puts the slots {@link #reserve} claims minutes away from
+   * anything scheduling could produce by accident.
+   *
+   * <p><b>A no-op sleeper is admissible only where the assertion is an outcome</b> — an exception
+   * type, a relation count, a request count, a claimed slot — and never where the assertion is
+   * elapsed time. {@code throttleAppliesEvenAfterAConnectionFailure} therefore keeps a real sleeper
+   * and the real one-second interval: its assertion <em>is</em> a duration, and either seam applied
+   * to it would make that duration mean nothing. It is the only test left in this class that
+   * verifies end to end that this client really waits.
+   *
+   * <p><b>Measured, not estimated.</b> {@code MusicBrainzClientTest} was 12.836/13.029/13.149 s
+   * before either seam, 11.142/10.938/11.267 s with the interval seam alone, and 3.904/3.931/3.953
+   * s with both — three runs each, read out of {@code build/test-results/test/*.xml} on a machine
+   * at load average 144–253; ten runs of the finished class spanned 3.819–4.220 s. What is left is
+   * almost entirely {@code throttleAppliesEvenAfterAConnectionFailure}'s ~3.01 s, which is the time
+   * this class still spends on purpose.
+   */
+  MusicBrainzClient(URI baseUri, Clock clock, Duration minRequestInterval, Sleeper sleeper) {
+    this(
+        Objects.requireNonNull(baseUri, "baseUri"),
+        null,
+        Objects.requireNonNull(clock, "clock"),
+        Objects.requireNonNull(minRequestInterval, "minRequestInterval"),
+        Objects.requireNonNull(sleeper, "sleeper"));
   }
 
   /**
@@ -121,13 +197,20 @@ public final class MusicBrainzClient {
    */
   public static MusicBrainzClient readingFrom(Path fixture) {
     return new MusicBrainzClient(
-        null, Objects.requireNonNull(fixture, "fixture"), Clock.systemUTC());
+        null,
+        Objects.requireNonNull(fixture, "fixture"),
+        Clock.systemUTC(),
+        DEFAULT_MIN_REQUEST_INTERVAL,
+        Thread::sleep);
   }
 
-  private MusicBrainzClient(URI baseUri, Path fixture, Clock clock) {
+  private MusicBrainzClient(
+      URI baseUri, Path fixture, Clock clock, Duration minRequestInterval, Sleeper sleeper) {
     this.baseUri = baseUri;
     this.fixture = fixture;
     this.clock = clock;
+    this.minRequestInterval = minRequestInterval;
+    this.sleeper = sleeper;
     this.http =
         fixture == null
             ? HttpClient.newBuilder()
@@ -135,6 +218,24 @@ public final class MusicBrainzClient {
                 .followRedirects(HttpClient.Redirect.NORMAL)
                 .build()
             : null;
+  }
+
+  /**
+   * How far apart this client spaces its request slots. Package-private, for control 3: a test
+   * asserts that a default-constructed client still reports {@code Duration.ofSeconds(1)}, so an
+   * edit to a test's short interval cannot silently move production's.
+   */
+  Duration minRequestInterval() {
+    return minRequestInterval;
+  }
+
+  /**
+   * How this client waits. Package-private for the same reason {@link #minRequestInterval()} is: a
+   * test asserts that a default-constructed client's sleeper really waits, so a test's no-op
+   * sleeper cannot silently become production's.
+   */
+  Sleeper sleeper() {
+    return sleeper;
   }
 
   /**
@@ -210,7 +311,7 @@ public final class MusicBrainzClient {
       // MusicBrainz's ~1-request-per-second budget and must still count against it. Claiming
       // this only on success let a run of connection failures retry in a tight loop with no
       // throttle wait between them at all (issue found in fix round 1 of #91's Task 2 review).
-      sleep(reserve());
+      sleep(reserve(), sleeper);
       retryAfter = null;
       try {
         HttpResponse<String> response =
@@ -244,7 +345,7 @@ public final class MusicBrainzClient {
       }
       // No backoff after the final attempt — the decision to fail is already made.
       if (attempt < MAX_ATTEMPTS) {
-        sleep(retryDelay(retryAfter, attempt));
+        sleep(retryDelay(retryAfter, attempt), sleeper);
       }
     }
     throw new MusicBrainzUnavailableException(
@@ -252,9 +353,8 @@ public final class MusicBrainzClient {
   }
 
   /**
-   * Claims this caller a departure slot at least {@link #MIN_REQUEST_INTERVAL} after the slot
-   * claimed before it, and returns how long it must wait to reach that slot. Zero for the first
-   * caller.
+   * Claims this caller a departure slot at least {@link #minRequestInterval} after the slot claimed
+   * before it, and returns how long it must wait to reach that slot. Zero for the first caller.
    *
    * <p><b>One atomic claim, where there used to be a read and then a sleep</b> (<a
    * href="https://github.com/robsartin/segue/issues/146">issue #146</a>). Reading {@code
@@ -273,8 +373,8 @@ public final class MusicBrainzClient {
    * waiting for it, which is what leaves that door open.
    *
    * <p><b>What this does and does not promise.</b> Slots are issued at least {@code
-   * MIN_REQUEST_INTERVAL} apart — {@code sendAt} is by construction {@code previous +
-   * MIN_REQUEST_INTERVAL} or later — and {@link #sleep} only ever overruns, so no request leaves
+   * minRequestInterval} apart — {@code sendAt} is by construction {@code previous +
+   * minRequestInterval} or later — and {@link #sleep} only ever overruns, so no request leaves
    * before its slot. What it cannot promise is that a request leaves close to its slot: a thread
    * descheduled well past its own slot sends late, and could land near the next caller's. That is
    * inherent to every caller sending for itself, and it errs towards sending less often than the
@@ -284,7 +384,8 @@ public final class MusicBrainzClient {
     while (true) {
       Instant previous = lastRequestAt.get();
       Instant now = clock.instant();
-      Duration delay = previous == null ? Duration.ZERO : throttleDelay(previous, now);
+      Duration delay =
+          previous == null ? Duration.ZERO : throttleDelay(previous, now, minRequestInterval);
       Instant sendAt = now.plus(delay);
       if (lastRequestAt.compareAndSet(previous, sendAt)) {
         return delay;
@@ -295,13 +396,16 @@ public final class MusicBrainzClient {
   }
 
   /**
-   * How long to wait before the next request leaves, given when the one before it left. A pure
-   * function for the same reason {@link #retryDelay} is: the rule is what is worth asserting, and
-   * asserting it through {@link #reserve} would mean a test that really waits a second.
+   * How long to wait before the next request leaves, given when the one before it left and how far
+   * apart slots are spaced. A pure function for the same reason {@link #retryDelay} is: the rule is
+   * what is worth asserting, and asserting it through {@link #reserve} would mean a test that
+   * really waits out a full interval. {@code minRequestInterval} is a parameter, not {@link
+   * #DEFAULT_MIN_REQUEST_INTERVAL} read directly, so this stays exercisable at any scale — see
+   * {@link #MusicBrainzClient(URI, Clock, Duration, Sleeper)}'s javadoc for why a test wants that.
    */
-  static Duration throttleDelay(Instant lastRequestAt, Instant now) {
+  static Duration throttleDelay(Instant lastRequestAt, Instant now, Duration minRequestInterval) {
     Duration elapsed = Duration.between(lastRequestAt, now);
-    Duration remaining = MIN_REQUEST_INTERVAL.minus(elapsed);
+    Duration remaining = minRequestInterval.minus(elapsed);
     return remaining.isNegative() ? Duration.ZERO : remaining;
   }
 
@@ -345,10 +449,6 @@ public final class MusicBrainzClient {
     void sleep(Duration delay) throws InterruptedException;
   }
 
-  private static void sleep(Duration delay) {
-    sleep(delay, Thread::sleep);
-  }
-
   /**
    * Waits out {@code delay} through {@code sleeper}, or returns at once when there is nothing to
    * wait for.
@@ -356,15 +456,20 @@ public final class MusicBrainzClient {
    * <p><b>The sleeper is a parameter so that the wait this client asks for has a test.</b> The
    * original defect was {@code Thread.sleep(delay.toMillis())}: {@code toMillis()} truncates, so
    * 999.5ms owed became a 999ms wait and a request left half a millisecond inside {@link
-   * #MIN_REQUEST_INTERVAL} — measured, as a 0.999339625s gap, on the concurrency test's first run.
-   * Nothing could see it afterwards, which is not the same as nothing reaching it. Five tests reach
-   * this method, counted by making the delegation throw and reading the names back off the JUnit
-   * XML: four sleep the exact 200ms retry backoff, where a truncation changes nothing at all, and
-   * the fifth is the concurrency test, which was measured asking for 0.99997s and allows 100ms of
-   * slack — roughly two hundred times the shortfall. Reaching this method and being able to see a
-   * sub-millisecond error inside it are different things, and only the second would have caught the
-   * defect. A recorder passed in here shows what was asked for without waiting for it, which is the
-   * injected collaborator CLAUDE.md's TDD rule names beside a pure function.
+   * #DEFAULT_MIN_REQUEST_INTERVAL} — measured, as a 0.999339625s gap, on the concurrency test's
+   * first run. Nothing could see it afterwards, which is not the same as nothing reaching it. Five
+   * tests reach this method, counted by making the delegation throw and reading the names back off
+   * the JUnit XML: four sleep the exact 200ms retry backoff, where a truncation changes nothing at
+   * all, and the fifth is the concurrency test, which no longer measures a wait at all: it asks for
+   * five-minute slots through a recording sleeper and asserts the instants {@link #reserve}
+   * claimed, with no tolerance and no wall clock, so a sub-millisecond truncation is not something
+   * it could ever have seen. (It was measured asking for 0.99997s against 100ms of slack when this
+   * paragraph was first written, and 0.1s against 20ms after the interval became a seam; the
+   * argument never rested on the numbers, only on their ratio to the shortfall.) Reaching this
+   * method and being able to see a sub-millisecond error inside it are different things, and only
+   * the second would have caught the defect. A recorder passed in here shows what was asked for
+   * without waiting for it, which is the injected collaborator CLAUDE.md's TDD rule names beside a
+   * pure function.
    *
    * <p><b>A {@link Duration} all the way down, not a millisecond count.</b> {@code
    * Thread.sleep(Duration)} does no millisecond conversion: in JDK 25 it is {@code
@@ -380,14 +485,15 @@ public final class MusicBrainzClient {
    * and the {@code catch} by {@code anInterruptedWaitSurfacesAsUnavailableAndRestoresTheFlag},
    * which asserts both the wrapping and the restored flag. That is the whole method.
    *
-   * <p>What nothing guards is the one line above it — {@link #sleep(Duration)}'s choice of {@code
-   * Thread::sleep}. Rewritten as {@code d -> Thread.sleep(d.toMillis())} it leaves every test in
-   * this repository green — measured across all 95 suites, not supposed, and stated as "every"
-   * rather than a count so that adding a test cannot quietly falsify it. It is a smaller residual
-   * than the one this seam replaced, which was a whole method body rather than a delegation, and
-   * the three branches listed above went from untestable to tested in the same move. It is still a
-   * line, and it is the same shape of unrecorded rounding as the defect this class was fixed for,
-   * so it is written here rather than left for the next reader to discover.
+   * <p>What is only half guarded is the sleeper each public constructor passes. That it is a
+   * <em>real</em> one is now pinned: {@code shouldKeepARealSleeperWhenNoInstanceOverrideIsGiven}
+   * asks a default-constructed client's sleeper for 50ms and asserts that 50ms passed, so a no-op
+   * cannot reach production by an edit to a test's client. What survives is the narrower residual —
+   * rewritten as {@code d -> Thread.sleep(d.toMillis())} the delegation leaves every test in this
+   * repository green, measured across all 95 suites, not supposed, and stated as "every" rather
+   * than a count so that adding a test cannot quietly falsify it. It is the same shape of
+   * unrecorded rounding as the defect this class was fixed for, so it is written here rather than
+   * left for the next reader to discover.
    */
   static void sleep(Duration delay, Sleeper sleeper) {
     if (delay.isZero() || delay.isNegative()) {

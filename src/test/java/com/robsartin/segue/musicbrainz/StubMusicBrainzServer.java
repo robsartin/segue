@@ -6,11 +6,8 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.Deque;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -27,17 +24,6 @@ final class StubMusicBrainzServer implements AutoCloseable {
   private final Deque<Integer> statuses = new ArrayDeque<>();
   private final AtomicInteger requests = new AtomicInteger();
 
-  /**
-   * When each request arrived, measured as elapsed time since this stub was built rather than read
-   * off a wall clock. {@link #arrivals} is read by a test that asserts a <i>spacing</i>, and {@code
-   * System.nanoTime} is documented as monotonic where {@code Instant.now()} is not — a clock
-   * correction landing mid-test could otherwise make two arrivals look closer together than they
-   * were.
-   */
-  private final long startedAtNanos = System.nanoTime();
-
-  private final List<Duration> arrivals = new CopyOnWriteArrayList<>();
-
   private volatile String lastUserAgent;
 
   StubMusicBrainzServer() {
@@ -49,7 +35,6 @@ final class StubMusicBrainzServer implements AutoCloseable {
     server.createContext(
         "/",
         exchange -> {
-          arrivals.add(Duration.ofNanos(System.nanoTime() - startedAtNanos));
           requests.incrementAndGet();
           lastUserAgent = exchange.getRequestHeaders().getFirst("User-Agent");
           int status = statuses.isEmpty() ? 200 : statuses.poll();
@@ -79,11 +64,6 @@ final class StubMusicBrainzServer implements AutoCloseable {
 
   int requestCount() {
     return requests.get();
-  }
-
-  /** How long after this stub was built each request arrived, in arrival order. */
-  List<Duration> arrivals() {
-    return List.copyOf(arrivals);
   }
 
   String lastUserAgent() {
