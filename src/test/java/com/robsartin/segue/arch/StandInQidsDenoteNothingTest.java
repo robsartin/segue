@@ -208,6 +208,8 @@ class StandInQidsDenoteNothingTest {
                   code("src/test/java/com/robsartin/segue/domain/RecordInvariantsTest.java"),
                   code("src/test/java/com/robsartin/segue/export/DotWriterTest.java"),
                   code("src/test/java/com/robsartin/segue/export/ImagemapRecipeTest.java"),
+                  code(
+                      "src/test/java/com/robsartin/segue/export/StandInAgreesInEveryHomeTest.java"),
                   code("src/test/java/com/robsartin/segue/export/WhatAHoverShowsTest.java"),
                   code("src/test/java/com/robsartin/segue/musicbrainz/BridgedIdentityTest.java"),
                   code(
