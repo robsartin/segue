@@ -8,7 +8,9 @@ import java.io.UncheckedIOException;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -322,6 +324,25 @@ class StandInQidsDenoteNothingTest {
         .isEmpty();
   }
 
+  @Test
+  @DisplayName("a literal inside an annotation is read apart from one in code")
+  void shouldReadALiteralAsAnAnnotationWhenItSitsInsideAnAnnotationsArguments() {
+    String source =
+        """
+        class Probe {
+          @DisplayName("Q1: a question number")
+          void answers() {
+            store.upsertNode(new NodeRecord("Q1", PERSON, "a node id"));
+          }
+        }
+        """;
+
+    assertThat(
+            literals(source).stream().filter(l -> l.text().startsWith("Q1")).map(Literal::context))
+        .as("the question number is an annotation's argument; the node id is code")
+        .containsExactly(Context.ANNOTATION, Context.CODE);
+  }
+
   // --- the sweep ------------------------------------------------------------------------------
 
   private static Sweep sweep(Path root) {
@@ -360,8 +381,18 @@ class StandInQidsDenoteNothingTest {
     }
   }
 
+  /** Where a sighting sat. An allowlist entry names this, so one reason cannot cover both. */
+  enum Context {
+    /**
+     * A string literal or text block in Java code — and, in a non-Java file, the file's own text.
+     */
+    CODE,
+    /** A string literal inside an annotation's arguments, where a {@code @DisplayName} lives. */
+    ANNOTATION
+  }
+
   /** One string literal or text block, and where its text begins in the file. */
-  private record Literal(int start, String text) {}
+  private record Literal(int start, String text, Context context) {}
 
   /**
    * Every string literal and text block in a Java source, with comments, character literals and
@@ -370,6 +401,7 @@ class StandInQidsDenoteNothingTest {
    */
   private static List<Literal> literals(String source) {
     List<Literal> literals = new ArrayList<>();
+    Deque<Boolean> parens = new ArrayDeque<>();
     int end = source.length();
     int at = 0;
     while (at < end) {
@@ -386,7 +418,8 @@ class StandInQidsDenoteNothingTest {
         while (close < end && !source.startsWith("\"\"\"", close)) {
           close += source.charAt(close) == '\\' ? 2 : 1;
         }
-        literals.add(new Literal(body, source.substring(body, Math.min(close, end))));
+        Context context = parens.contains(Boolean.TRUE) ? Context.ANNOTATION : Context.CODE;
+        literals.add(new Literal(body, source.substring(body, Math.min(close, end)), context));
         at = Math.min(close + 3, end);
       } else if (c == '"' || c == '\'') {
         int body = at + 1;
@@ -395,14 +428,33 @@ class StandInQidsDenoteNothingTest {
           close += source.charAt(close) == '\\' ? 2 : 1;
         }
         if (c == '"') {
-          literals.add(new Literal(body, source.substring(body, Math.min(close, end))));
+          Context context = parens.contains(Boolean.TRUE) ? Context.ANNOTATION : Context.CODE;
+          literals.add(new Literal(body, source.substring(body, Math.min(close, end)), context));
         }
         at = Math.min(close + 1, end);
       } else {
+        if (c == '(') {
+          parens.push(opensAnnotation(source, at));
+        } else if (c == ')' && !parens.isEmpty()) {
+          parens.pop();
+        }
         at++;
       }
     }
     return literals;
+  }
+
+  /** Whether this {@code (} closes an {@code @Ident}, which is what starts an annotation's args. */
+  private static boolean opensAnnotation(String source, int paren) {
+    int at = paren - 1;
+    while (at >= 0 && Character.isWhitespace(source.charAt(at))) {
+      at--;
+    }
+    while (at >= 0
+        && (Character.isJavaIdentifierPart(source.charAt(at)) || source.charAt(at) == '.')) {
+      at--;
+    }
+    return at >= 0 && source.charAt(at) == '@';
   }
 
   private static int lineOf(String text, int index) {
