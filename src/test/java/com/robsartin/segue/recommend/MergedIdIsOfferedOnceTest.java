@@ -74,7 +74,7 @@ class MergedIdIsOfferedOnceTest {
   private static final String CANONICAL = "Q900";
 
   private static final String VIA = "Q900211";
-  private static final String CANDIDATE = "Q900311";
+  private static final String CANDIDATE = "Q0900311";
 
   /** On the {@code --known} file and reaching nothing: the file may not be empty. */
   private static final String ON_THE_FILE = "Q900199";

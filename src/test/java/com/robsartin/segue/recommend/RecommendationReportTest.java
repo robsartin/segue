@@ -26,7 +26,7 @@ class RecommendationReportTest {
   private static final NodeRecord VIA =
       new NodeRecord("Q900201", NodeKind.PERSON, "the artist they cite");
   private static final NodeRecord CANDIDATE =
-      new NodeRecord("Q900301", NodeKind.GROUP, "the invented ancestors");
+      new NodeRecord("Q0900301", NodeKind.GROUP, "the invented ancestors");
 
   private static final Recommendation RECOMMENDED =
       new Recommendation(
@@ -93,7 +93,7 @@ class RecommendationReportTest {
     String written = report(List.of(new Explained(RECOMMENDED, List.of(ROUTE))), sweep());
 
     assertThat(written).contains("the invented ancestors");
-    assertThat(written).contains("Q900301");
+    assertThat(written).contains("Q0900301");
     assertThat(written).contains("0.66");
     assertThat(written).contains("80 edges");
     assertThat(written).contains("1 of yours");

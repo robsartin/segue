@@ -43,16 +43,16 @@ final class InventedWorld {
   static final String THE_ADMIRER = "Q900205";
 
   // Candidates.
-  static final String ANCESTOR = "Q900301";
-  static final String ANOTHER_ANCESTOR = "Q900307";
-  static final String FELLOW_PRIZEWINNER = "Q900302";
-  static final String ALSO_IN_THE_HALL = "Q900303";
-  static final String ALSO_IN_THE_ACADEMY = "Q900304";
-  static final String A_RECORD = "Q900305";
-  static final String A_THIN_BAND = "Q900306";
+  static final String ANCESTOR = "Q0900301";
+  static final String ANOTHER_ANCESTOR = "Q0900307";
+  static final String FELLOW_PRIZEWINNER = "Q0900302";
+  static final String ALSO_IN_THE_HALL = "Q0900303";
+  static final String ALSO_IN_THE_ACADEMY = "Q0900304";
+  static final String A_RECORD = "Q0900305";
+  static final String A_THIN_BAND = "Q0900306";
 
   /** One edge to its name: what expansion adds, and what the floor holds out (issue #134). */
-  static final String JUST_DISCOVERED = "Q900308";
+  static final String JUST_DISCOVERED = "Q0900308";
 
   /** The invented Wikidata class that means "elected, not collaborating" (issue #66). */
   static final String ELECTED_TO = "Q0900801";

@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 class RecommendationTest {
 
   private static final NodeRecord CANDIDATE =
-      new NodeRecord("Q900301", NodeKind.GROUP, "invented band");
+      new NodeRecord("Q0900301", NodeKind.GROUP, "invented band");
 
   @Test
   @DisplayName("the count of things you know is distinct entities, not distinct routes")

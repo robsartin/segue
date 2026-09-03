@@ -56,8 +56,8 @@ class AffinityWeightedRecommendationTest {
   private static final List<String> LUKEWARM =
       List.of("Q900121", "Q900122", "Q900123", "Q900124", "Q900125", "Q900126");
 
-  private static final String BELOVED = "Q900301";
-  private static final String CROWDED = "Q900302";
+  private static final String BELOVED = "Q0900301";
+  private static final String CROWDED = "Q0900302";
 
   /**
    * The shipped floor, by reference and never as a second copy: both candidates sit exactly on it.

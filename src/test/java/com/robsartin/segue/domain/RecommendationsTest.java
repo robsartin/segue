@@ -24,21 +24,21 @@ class RecommendationsTest {
     List<Recommendation> ranked =
         Recommendations.rank(
             List.of(
-                candidate("Q900301", 0.2), candidate("Q900302", 0.9), candidate("Q900303", 0.5)),
+                candidate("Q0900301", 0.2), candidate("Q0900302", 0.9), candidate("Q0900303", 0.5)),
             10);
 
     assertThat(ranked)
         .extracting(r -> r.entity().qid())
-        .containsExactly("Q900302", "Q900303", "Q900301");
+        .containsExactly("Q0900302", "Q0900303", "Q0900301");
   }
 
   @Test
   @DisplayName("a tie is broken by qid, so two runs over one graph produce the same file")
   void tiesAreBrokenByQid() {
     List<Recommendation> ranked =
-        Recommendations.rank(List.of(candidate("Q900399", 0.5), candidate("Q900301", 0.5)), 10);
+        Recommendations.rank(List.of(candidate("Q0900399", 0.5), candidate("Q0900301", 0.5)), 10);
 
-    assertThat(ranked).extracting(r -> r.entity().qid()).containsExactly("Q900301", "Q900399");
+    assertThat(ranked).extracting(r -> r.entity().qid()).containsExactly("Q0900301", "Q0900399");
   }
 
   @Test
@@ -47,7 +47,7 @@ class RecommendationsTest {
     List<Recommendation> ranked =
         Recommendations.rank(
             List.of(
-                candidate("Q900301", 0.9), candidate("Q900302", 0.8), candidate("Q900303", 0.7)),
+                candidate("Q0900301", 0.9), candidate("Q0900302", 0.8), candidate("Q0900303", 0.7)),
             2);
 
     assertThat(ranked).hasSize(2);

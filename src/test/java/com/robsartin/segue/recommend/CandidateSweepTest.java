@@ -432,7 +432,7 @@ class CandidateSweepTest {
   void oneEntityThroughManyWorksIsStillOneEntity() {
     node(graph, ANCESTOR, NodeKind.GROUP, "a session player");
     for (int i = 0; i < 4; i++) {
-      String record = "Q90031" + i;
+      String record = "Q090031" + i;
       node(graph, record, NodeKind.WORK, "record " + i);
       edge(graph, KNOWN_ONE, record, EdgeTypes.PERFORMED.code());
       edge(graph, ANCESTOR, record, EdgeTypes.PERFORMED.code());
