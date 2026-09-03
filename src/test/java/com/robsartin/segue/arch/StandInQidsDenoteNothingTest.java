@@ -8,7 +8,9 @@ import java.io.UncheckedIOException;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -60,14 +62,23 @@ import org.junit.jupiter.api.Test;
  * musicbrainz/MusicBrainzSourceAdapterTest} — and they mint allocatable ids no scan over source
  * text can reach. They are fixed by hand under issue #171. A second limit is smaller and worth
  * saying: this file's own allowlist is a literal in {@code src/test}, so the sweep reads it like
- * any other file's and it covers itself. Both are limits of the mechanism; a limit stated in the
- * test is a limit, and a limit nobody wrote down is a hole.
+ * any other file's, though it matches by id alone — see {@code ALLOWED} — and it covers itself. A
+ * third: a site key names the file and whether a sighting sat inside an annotation, and cannot tell
+ * a node id from a class id inside a file that already declares the id in code — {@code new
+ * NodeRecord("Q5", …)} inside {@code wikidata/KindMapperTest} stays green because {@code Q5} is
+ * legitimately in that file already. Only a parser could. A fourth, in the annotation classifier
+ * itself: {@code opensAnnotation} walks the raw source backwards from a {@code (} looking for a
+ * preceding {@code @Ident}, so a {@code //} comment ending in {@code @Ident} immediately before a
+ * code {@code (} would misclassify that paren as opening an annotation — zero instances of that
+ * shape exist in this tree today. Every one of these is a limit of the mechanism; a limit stated in
+ * the test is a limit, and a limit nobody wrote down is a hole.
  *
  * <p><b>There is one list and no escape hatch.</b> A companion set carried the ids awaiting
  * migration while issue #171 emptied it band by band; it is gone, so an allocatable-form id in
- * {@code src/test} is either a deliberately real entity with a reason in {@code ALLOWED} or a
- * failure. A new test that invents an entity takes the leading-zero form — {@code Q0900100} — which
- * Wikibase's grammar refuses outright.
+ * {@code src/test} is either a deliberately real entity, allowed at the file and context it appears
+ * in with the reason it is real, in {@code ALLOWED} — or a failure. A new test that invents an
+ * entity takes the leading-zero form — {@code Q0900100} — which Wikibase's grammar refuses
+ * outright.
  */
 class StandInQidsDenoteNothingTest {
 
@@ -92,6 +103,55 @@ class StandInQidsDenoteNothingTest {
    */
   private static final Pattern WIKIBASE_ITEM_ID = wikibaseItemIdGrammar();
 
+  /** One place the tree may carry an allowed id. */
+  private record Site(String file, Context context) {
+    @Override
+    public String toString() {
+      return context == Context.ANNOTATION ? file + " (in an annotation)" : file + " (in code)";
+    }
+  }
+
+  /** One deliberately real id: why it is real, and every site allowed to carry it. */
+  private record Allowance(String reason, Set<Site> sites) {}
+
+  private static Allowance real(String reason, Site... sites) {
+    return new Allowance(reason, Set.of(sites));
+  }
+
+  private static Site code(String file) {
+    return new Site(file, Context.CODE);
+  }
+
+  private static Site annotation(String file) {
+    return new Site(file, Context.ANNOTATION);
+  }
+
+  private static String relative(Path file) {
+    return ROOT.relativize(file).toString();
+  }
+
+  /** This file declares ids; every other file has to name the site. */
+  private static boolean isAllowed(Sighting sighting) {
+    Allowance allowance = ALLOWED.get(sighting.id());
+    return allowance != null
+        && (sighting.file().equals(SELF)
+            || allowance.sites().contains(new Site(relative(sighting.file()), sighting.context())));
+  }
+
+  private static String report(Sighting sighting) {
+    Allowance allowance = ALLOWED.get(sighting.id());
+    return allowance == null
+        ? sighting.describe()
+        : sighting.describe()
+            + "  — allowed, but only at "
+            + (allowance.sites().isEmpty()
+                ? "(no site at all)"
+                : allowance.sites().stream()
+                    .map(Site::toString)
+                    .sorted()
+                    .collect(Collectors.joining(", ")));
+  }
+
   /**
    * Ids that are deliberately real, each with the reason it is. Four kinds, and every entry says
    * which it is: a class id production code maps, an entity a recorded response or a live test is
@@ -101,157 +161,764 @@ class StandInQidsDenoteNothingTest {
    * <p>A reason, not a bare set: an allowlist without reasons is a list of numbers nobody can
    * review, and naming a real Wikidata entity in a test is meant to be a deliberate act.
    *
-   * <p><b>An id is allowed whole or not at all, and one group straddles that.</b> {@code
-   * GraphStoreContract} numbers its questions {@code Q1} to {@code Q4} in {@code @DisplayName}.
-   * Every node-id use of {@code Q1}, {@code Q2} and {@code Q3} elsewhere in the tree has taken the
-   * leading-zero form — band H, issue #171 — so all four question numbers are here now, sharing one
-   * reason: the question numbers stay.
+   * <p><b>An entry names its sites, and says why.</b> {@code GraphStoreContract} numbers its
+   * questions {@code Q1} to {@code Q4} in {@code @DisplayName} <b>and</b> mints node ids in the
+   * same file's method bodies — issue #216, measured green on {@code 07d8e2f}: the same id, same
+   * file, same shape of use, allowed for one reason and not the other. A site names the file and
+   * whether the sighting sat inside an annotation's arguments, so the reason stays checkable at
+   * every place it is claimed. Two consequences follow: moving a test file reds twice — once on the
+   * new path as an undeclared site, once on the old path as a dead one — and the failure message
+   * names both paths; and a new file's first genuine use of a real class id has to be declared here
+   * before it is green.
+   *
+   * <p><b>This file is a declaration site.</b> A sighting inside {@code
+   * StandInQidsDenoteNothingTest} itself is allowed once its id is a key at all — no entry names
+   * this file. An allocatable id typed into this class that is not an entry still reds, so the
+   * class still covers itself, one scope wider than every other file.
    */
-  static final Map<String, String> ALLOWED =
+  static final Map<String, Allowance> ALLOWED =
       Map.ofEntries(
           entry(
-              "Q1", "not an identifier — the question number in GraphStoreContract's @DisplayName"),
+              "Q1",
+              real(
+                  "not an identifier — the question number in GraphStoreContract's @DisplayName",
+                  annotation("src/test/java/com/robsartin/segue/port/GraphStoreContract.java"))),
           entry(
-              "Q2", "not an identifier — the question number in GraphStoreContract's @DisplayName"),
+              "Q2",
+              real(
+                  "not an identifier — the question number in GraphStoreContract's @DisplayName",
+                  annotation("src/test/java/com/robsartin/segue/port/GraphStoreContract.java"))),
           entry(
-              "Q3", "not an identifier — the question number in GraphStoreContract's @DisplayName"),
+              "Q3",
+              real(
+                  "not an identifier — the question number in GraphStoreContract's @DisplayName",
+                  annotation("src/test/java/com/robsartin/segue/port/GraphStoreContract.java"))),
           entry(
-              "Q4", "not an identifier — the question number in GraphStoreContract's @DisplayName"),
-          entry("Q5", "class id — mapped by ClassLabels and KindMapper"),
+              "Q4",
+              real(
+                  "not an identifier — the question number in GraphStoreContract's @DisplayName",
+                  annotation("src/test/java/com/robsartin/segue/port/GraphStoreContract.java"))),
+          entry(
+              "Q5",
+              real(
+                  "class id — mapped by ClassLabels and KindMapper",
+                  code(
+                      "src/test/java/com/robsartin/segue/app/WikidataMusicBrainzIdentityTest.java"),
+                  code("src/test/java/com/robsartin/segue/domain/LoggedAssertionTest.java"),
+                  code("src/test/java/com/robsartin/segue/domain/RecordInvariantsTest.java"),
+                  code("src/test/java/com/robsartin/segue/export/DotWriterTest.java"),
+                  code("src/test/java/com/robsartin/segue/export/ImagemapRecipeTest.java"),
+                  code("src/test/java/com/robsartin/segue/export/WhatAHoverShowsTest.java"),
+                  code("src/test/java/com/robsartin/segue/musicbrainz/BridgedIdentityTest.java"),
+                  code(
+                      "src/test/java/com/robsartin/segue/musicbrainz/CorroborationAcrossSourcesTest.java"),
+                  code(
+                      "src/test/java/com/robsartin/segue/musicbrainz/MusicBrainzNeighbourIdentityTest.java"),
+                  code(
+                      "src/test/java/com/robsartin/segue/musicbrainz/NeighbourFetchCountTest.java"),
+                  code("src/test/java/com/robsartin/segue/seed/WikidataFactsTest.java"),
+                  code("src/test/java/com/robsartin/segue/sqlite/SqliteAssertionLogTest.java"),
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"),
+                  code(
+                      "src/test/java/com/robsartin/segue/wikidata/WikidataEntityResolverTest.java"),
+                  code("src/test/resources/musicbrainz/probe-fixture.json"),
+                  code("src/test/resources/wikidata/bad-seeds-reverse.json"),
+                  code("src/test/resources/wikidata/cave-claims.json"),
+                  code("src/test/resources/wikidata/gibson-claims.json"),
+                  code("src/test/resources/wikidata/hofstetter-claims.json"),
+                  code("src/test/resources/wikidata/scalzi-claims.json"))),
           entry(
               "Q42",
-              "negative control, deliberately allocatable — OwnerClaimTest asserts LocalEntity"
-                  + " refuses it"),
-          entry("Q328", "entity — a real value in the recorded proposition-claims.json"),
-          entry("Q515", "class id — mapped by KindMapper"),
-          entry("Q1064", "entity — a real value in the recorded proposition-claims.json"),
-          entry("Q1299", "entity — a real value in the recorded proposition-claims.json"),
-          entry("Q1860", "entity — a real value in the recorded proposition-claims.json"),
-          entry("Q5593", "entity — named by LoggedAssertion"),
-          entry("Q6256", "class id — mapped by KindMapper"),
-          entry("Q7366", "class id — mapped by ClassLabels and KindMapper"),
-          entry("Q7791", "entity — a real value in the recorded proposition-claims.json"),
-          entry("Q11424", "class id — mapped by ClassLabels and KindMapper"),
+              real(
+                  "negative control, deliberately allocatable — OwnerClaimTest asserts LocalEntity"
+                      + " refuses it",
+                  code("src/test/java/com/robsartin/segue/domain/OwnerClaimTest.java"),
+                  code("src/test/java/com/robsartin/segue/sqlite/SqliteAssertionLogTest.java"))),
+          entry(
+              "Q328",
+              real(
+                  "entity — a real value in the recorded proposition-claims.json",
+                  code("src/test/resources/wikidata/proposition-claims.json"))),
+          entry(
+              "Q515",
+              real(
+                  "class id — mapped by KindMapper",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
+              "Q1064",
+              real(
+                  "entity — a real value in the recorded proposition-claims.json",
+                  code("src/test/resources/wikidata/proposition-claims.json"))),
+          entry(
+              "Q1299",
+              real(
+                  "entity — a real value in the recorded proposition-claims.json",
+                  code("src/test/java/com/robsartin/segue/wikidata/ClaimMapperTest.java"),
+                  code("src/test/resources/wikidata/proposition-claims.json"))),
+          entry(
+              "Q1860",
+              real(
+                  "entity — a real value in the recorded proposition-claims.json",
+                  code("src/test/resources/wikidata/proposition-claims.json"))),
+          entry(
+              "Q5593",
+              real(
+                  "entity — named by LoggedAssertion",
+                  code("src/test/java/com/robsartin/segue/domain/CandidateTest.java"),
+                  code("src/test/java/com/robsartin/segue/domain/LoggedAssertionTest.java"),
+                  code("src/test/java/com/robsartin/segue/domain/RecordInvariantsTest.java"),
+                  code("src/test/java/com/robsartin/segue/ingest/IngestServiceTest.java"),
+                  code("src/test/java/com/robsartin/segue/sqlite/SqliteAssertionLogTest.java"),
+                  code("src/test/java/com/robsartin/segue/wikidata/WikidataClientTest.java"))),
+          entry(
+              "Q6256",
+              real(
+                  "class id — mapped by KindMapper",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
+              "Q7366",
+              real(
+                  "class id — mapped by ClassLabels and KindMapper",
+                  code("src/test/java/com/robsartin/segue/port/GraphStoreContract.java"),
+                  code("src/test/java/com/robsartin/segue/wikidata/ReverseClaimsTest.java"),
+                  code("src/test/resources/wikidata/cave-reverse.json"))),
+          entry(
+              "Q7791",
+              real(
+                  "entity — a real value in the recorded proposition-claims.json",
+                  code("src/test/resources/wikidata/proposition-claims.json"))),
+          entry(
+              "Q11424",
+              real(
+                  "class id — mapped by ClassLabels and KindMapper",
+                  code("src/test/java/com/robsartin/segue/export/DotWriterTest.java"),
+                  code("src/test/java/com/robsartin/segue/export/PaletteSeparationTest.java"),
+                  code("src/test/java/com/robsartin/segue/ingest/WikidataIngestEndToEndTest.java"),
+                  code("src/test/java/com/robsartin/segue/seed/SeedResolverTest.java"),
+                  code("src/test/java/com/robsartin/segue/wikidata/ClaimMapperTest.java"),
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"),
+                  code("src/test/java/com/robsartin/segue/wikidata/ReverseClaimsTest.java"),
+                  code(
+                      "src/test/java/com/robsartin/segue/wikidata/WikidataEntityResolverTest.java"),
+                  code("src/test/resources/wikidata/cave-reverse.json"),
+                  code("src/test/resources/wikidata/proposition-claims.json"))),
           entry(
               "Q12345",
-              "not an identifier — the exemplar in Qid.check's \"qid must look like"
-                  + " Q12345\" message, quoted back by BridgedIdentityTest's hasMessage"),
-          entry("Q15416", "class id — mapped by ClassLabels and KindMapper"),
-          entry("Q16473", "entity — named by DotWriter and HoverableSvg"),
-          entry("Q23444", "entity — a real value in the recorded proposition-claims.json"),
-          entry("Q24862", "class id — mapped by ClassLabels and KindMapper"),
-          entry("Q36180", "class id — mapped by Expectations"),
-          entry("Q42998", "class id — mapped by KindMapper"),
-          entry("Q43229", "class id — mapped by KindMapper and RecognitionInstitutions"),
-          entry("Q118066", "entity — a real value in the recorded bad-seeds-claims.json"),
-          entry("Q131186", "class id — mapped by KindMapper"),
-          entry("Q132241", "class id — mapped by KindMapper"),
-          entry("Q134556", "class id — mapped by ClassLabels and KindMapper"),
-          entry("Q163740", "class id — mapped by KindMapper and RecognitionInstitutions"),
-          entry("Q166565", "entity — a real value in the recorded bad-seeds-reverse.json"),
-          entry("Q177220", "class id — mapped by Expectations"),
-          entry("Q178790", "class id — mapped by KindMapper and RecognitionInstitutions"),
-          entry("Q180337", "entity — a real value in two recorded Wikidata responses"),
-          entry("Q182832", "class id — mapped by ClassLabels and KindMapper"),
-          entry("Q188987", "entity — a real value in the recorded gibson-claims.json"),
-          entry("Q192668", "entity — named by EntityTools"),
-          entry("Q193977", "class id — mapped by ClassLabels and KindMapper"),
-          entry("Q202866", "class id — mapped by ClassLabels and KindMapper"),
-          entry("Q207338", "class id — mapped by KindMapper"),
-          entry("Q215380", "class id — mapped by ClassLabels and KindMapper"),
-          entry("Q233046", "entity — a real value in the recorded proposition-claims.json"),
-          entry("Q245068", "class id — mapped by Expectations"),
-          entry("Q255032", "entity — a real value in three recorded Wikidata responses"),
-          entry("Q277308", "entity — a real value in the recorded scalzi-claims.json"),
-          entry("Q316528", "entity — a real value in the recorded bad-seeds-reverse.json"),
-          entry("Q378427", "class id — mapped by ClassLabels"),
-          entry("Q383784", "entity — a real value in the two recorded bad-seeds responses"),
-          entry("Q414147", "class id — mapped by KindMapper and RecognitionInstitutions"),
-          entry("Q482994", "class id — mapped by ClassLabels and KindMapper"),
-          entry("Q486688", "entity — WikidataLiveSmokeTest asks the real API about it"),
-          entry("Q506240", "class id — mapped by ClassLabels and KindMapper"),
-          entry("Q552814", "entity — a real value in the recorded proposition-claims.json"),
-          entry("Q618779", "class id — mapped by ClassLabels and RecognitionInstitutions"),
-          entry("Q639669", "class id — mapped by Expectations"),
-          entry("Q748019", "class id — mapped by RecognitionInstitutions"),
-          entry("Q809003", "entity — a real value in the two recorded bad-seeds responses"),
-          entry("Q829080", "class id — mapped by RecognitionInstitutions"),
-          entry("Q855091", "class id — mapped by Expectations"),
+              real(
+                  "not an identifier — the exemplar in Qid.check's \"qid must look like"
+                      + " Q12345\" message, quoted back by BridgedIdentityTest's hasMessage",
+                  code("src/test/java/com/robsartin/segue/musicbrainz/BridgedIdentityTest.java"))),
+          entry(
+              "Q15416",
+              real(
+                  "class id — mapped by ClassLabels and KindMapper",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
+              "Q16473",
+              real(
+                  "entity — named by DotWriter and HoverableSvg",
+                  code("src/test/java/com/robsartin/segue/domain/RecordInvariantsTest.java"),
+                  code("src/test/java/com/robsartin/segue/sqlite/SqliteAssertionLogTest.java"))),
+          entry(
+              "Q23444",
+              real(
+                  "entity — a real value in the recorded proposition-claims.json",
+                  code("src/test/resources/wikidata/proposition-claims.json"))),
+          entry(
+              "Q24862",
+              real(
+                  "class id — mapped by ClassLabels and KindMapper",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
+              "Q36180",
+              real(
+                  "class id — mapped by Expectations",
+                  code("src/test/java/com/robsartin/segue/seed/ExpectationsTest.java"))),
+          entry(
+              "Q42998",
+              real(
+                  "class id — mapped by KindMapper",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
+              "Q43229",
+              real(
+                  "class id — mapped by KindMapper and RecognitionInstitutions",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"),
+                  code(
+                      "src/test/java/com/robsartin/segue/wikidata/RecognitionInstitutionsTest.java"))),
+          entry(
+              "Q118066",
+              real(
+                  "entity — a real value in the recorded bad-seeds-claims.json",
+                  code("src/test/resources/wikidata/bad-seeds-claims.json"))),
+          entry(
+              "Q131186",
+              real(
+                  "class id — mapped by KindMapper",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
+              "Q132241",
+              real(
+                  "class id — mapped by KindMapper",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
+              "Q134556",
+              real(
+                  "class id — mapped by ClassLabels and KindMapper",
+                  code("src/test/java/com/robsartin/segue/export/DotWriterTest.java"),
+                  code("src/test/java/com/robsartin/segue/export/PaletteSeparationTest.java"),
+                  code("src/test/java/com/robsartin/segue/port/GraphStoreContract.java"),
+                  code("src/test/java/com/robsartin/segue/wikidata/ReverseClaimsTest.java"),
+                  code("src/test/resources/wikidata/bad-seeds-reverse.json"),
+                  code("src/test/resources/wikidata/cave-reverse.json"))),
+          entry(
+              "Q163740",
+              real(
+                  "class id — mapped by KindMapper and RecognitionInstitutions",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"),
+                  code(
+                      "src/test/java/com/robsartin/segue/wikidata/RecognitionInstitutionsTest.java"))),
+          entry(
+              "Q166565",
+              real(
+                  "entity — a real value in the recorded bad-seeds-reverse.json",
+                  code("src/test/java/com/robsartin/segue/wikidata/WikidataSourceAdapterTest.java"),
+                  code("src/test/resources/wikidata/bad-seeds-reverse.json"))),
+          entry(
+              "Q177220",
+              real(
+                  "class id — mapped by Expectations",
+                  code("src/test/java/com/robsartin/segue/domain/RecordInvariantsTest.java"),
+                  code("src/test/java/com/robsartin/segue/sqlite/SqliteAssertionLogTest.java"))),
+          entry(
+              "Q178790",
+              real(
+                  "class id — mapped by KindMapper and RecognitionInstitutions",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"),
+                  code(
+                      "src/test/java/com/robsartin/segue/wikidata/RecognitionInstitutionsTest.java"))),
+          entry(
+              "Q180337",
+              real(
+                  "entity — a real value in two recorded Wikidata responses",
+                  code("src/test/java/com/robsartin/segue/ingest/WikidataIngestEndToEndTest.java"),
+                  code("src/test/java/com/robsartin/segue/mcp/ToolResultsTest.java"),
+                  code("src/test/java/com/robsartin/segue/wikidata/ClaimMapperTest.java"),
+                  code("src/test/java/com/robsartin/segue/wikidata/ReverseClaimsTest.java"),
+                  code(
+                      "src/test/java/com/robsartin/segue/wikidata/WikidataEntityResolverTest.java"),
+                  code("src/test/java/com/robsartin/segue/wikidata/WikidataLiveSmokeTest.java"),
+                  code("src/test/java/com/robsartin/segue/wikidata/WikidataSourceAdapterTest.java"),
+                  code("src/test/resources/wikidata/cave-reverse.json"),
+                  code("src/test/resources/wikidata/proposition-claims.json"))),
+          entry(
+              "Q182832",
+              real(
+                  "class id — mapped by ClassLabels and KindMapper",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
+              "Q188987",
+              real(
+                  "entity — a real value in the recorded gibson-claims.json",
+                  code("src/test/java/com/robsartin/segue/mcp/SharedAwardRouteLiveTest.java"),
+                  code("src/test/java/com/robsartin/segue/mcp/SharedAwardRouteTest.java"),
+                  code("src/test/resources/wikidata/gibson-claims.json"))),
+          entry(
+              "Q192668",
+              real(
+                  "entity — named by EntityTools",
+                  code("src/test/java/com/robsartin/segue/app/SegueConfigurationTest.java"),
+                  code("src/test/java/com/robsartin/segue/mcp/PersonSeededRouteLiveTest.java"),
+                  code("src/test/java/com/robsartin/segue/mcp/ToolResultsTest.java"),
+                  code("src/test/java/com/robsartin/segue/wikidata/ReverseClaimsTest.java"),
+                  code(
+                      "src/test/java/com/robsartin/segue/wikidata/WikidataEntityResolverTest.java"),
+                  code("src/test/java/com/robsartin/segue/wikidata/WikidataLiveSmokeTest.java"),
+                  code("src/test/java/com/robsartin/segue/wikidata/WikidataSourceAdapterTest.java"),
+                  code("src/test/resources/wikidata/bad-seeds-claims.json"),
+                  code("src/test/resources/wikidata/bad-seeds-reverse.json"),
+                  code("src/test/resources/wikidata/cave-claims.json"),
+                  code("src/test/resources/wikidata/proposition-claims.json"),
+                  code("src/test/resources/wikidata/search-cave.json"))),
+          entry(
+              "Q193977",
+              real(
+                  "class id — mapped by ClassLabels and KindMapper",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
+              "Q202866",
+              real(
+                  "class id — mapped by ClassLabels and KindMapper",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
+              "Q207338",
+              real(
+                  "class id — mapped by KindMapper",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
+              "Q215380",
+              real(
+                  "class id — mapped by ClassLabels and KindMapper",
+                  code(
+                      "src/test/java/com/robsartin/segue/app/WikidataMusicBrainzIdentityTest.java"),
+                  code("src/test/java/com/robsartin/segue/export/ImagemapRecipeTest.java"),
+                  code("src/test/java/com/robsartin/segue/export/WhatAHoverShowsTest.java"),
+                  code("src/test/java/com/robsartin/segue/musicbrainz/BridgedIdentityTest.java"),
+                  code("src/test/java/com/robsartin/segue/seed/SeedResolverTest.java"),
+                  code("src/test/java/com/robsartin/segue/seed/SeedRunTest.java"),
+                  code("src/test/java/com/robsartin/segue/seed/WikidataFactsTest.java"),
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"),
+                  code(
+                      "src/test/java/com/robsartin/segue/wikidata/RecognitionInstitutionsTest.java"),
+                  code("src/test/resources/musicbrainz/probe-fixture.json"),
+                  code("src/test/resources/wikidata/bad-seeds-claims.json"),
+                  code("src/test/resources/wikidata/cave-reverse.json"))),
+          entry(
+              "Q233046",
+              real(
+                  "entity — a real value in the recorded proposition-claims.json",
+                  code("src/test/resources/wikidata/proposition-claims.json"))),
+          entry(
+              "Q245068",
+              real(
+                  "class id — mapped by Expectations",
+                  code("src/test/java/com/robsartin/segue/seed/ExpectationsTest.java"))),
+          entry(
+              "Q255032",
+              real(
+                  "entity — a real value in three recorded Wikidata responses",
+                  code("src/test/java/com/robsartin/segue/mcp/SharedAwardRouteTest.java"),
+                  code("src/test/resources/wikidata/gibson-claims.json"),
+                  code("src/test/resources/wikidata/hugo-best-novel.json"),
+                  code("src/test/resources/wikidata/scalzi-claims.json"))),
+          entry(
+              "Q277308",
+              real(
+                  "entity — a real value in the recorded scalzi-claims.json",
+                  code("src/test/java/com/robsartin/segue/mcp/SharedAwardRouteLiveTest.java"),
+                  code("src/test/java/com/robsartin/segue/mcp/SharedAwardRouteTest.java"),
+                  code("src/test/resources/wikidata/scalzi-claims.json"))),
+          entry(
+              "Q316528",
+              real(
+                  "entity — a real value in the recorded bad-seeds-reverse.json",
+                  code("src/test/java/com/robsartin/segue/wikidata/WikidataSourceAdapterTest.java"),
+                  code("src/test/resources/wikidata/bad-seeds-reverse.json"))),
+          entry(
+              "Q378427",
+              real(
+                  "class id — mapped by ClassLabels",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"),
+                  code("src/test/resources/wikidata/hugo-best-novel.json"))),
+          entry(
+              "Q383784",
+              real(
+                  "entity — a real value in the two recorded bad-seeds responses",
+                  code("src/test/java/com/robsartin/segue/wikidata/WikidataSourceAdapterTest.java"),
+                  code("src/test/resources/wikidata/bad-seeds-claims.json"),
+                  code("src/test/resources/wikidata/bad-seeds-reverse.json"))),
+          entry(
+              "Q414147",
+              real(
+                  "class id — mapped by KindMapper and RecognitionInstitutions",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"),
+                  code(
+                      "src/test/java/com/robsartin/segue/wikidata/RecognitionInstitutionsTest.java"))),
+          entry(
+              "Q482994",
+              real(
+                  "class id — mapped by ClassLabels and KindMapper",
+                  code("src/test/java/com/robsartin/segue/export/DotWriterTest.java"),
+                  code("src/test/java/com/robsartin/segue/export/GraphMlWriterTest.java"),
+                  code("src/test/java/com/robsartin/segue/export/PaletteSeparationTest.java"),
+                  code("src/test/java/com/robsartin/segue/export/ViewSelectorTest.java"),
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
+              "Q486688",
+              real(
+                  "entity — WikidataLiveSmokeTest asks the real API about it",
+                  code("src/test/java/com/robsartin/segue/wikidata/WikidataLiveSmokeTest.java"))),
+          entry(
+              "Q506240",
+              real(
+                  "class id — mapped by ClassLabels and KindMapper",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
+              "Q552814",
+              real(
+                  "entity — a real value in the recorded proposition-claims.json",
+                  code("src/test/java/com/robsartin/segue/mcp/PersonSeededRouteLiveTest.java"),
+                  code("src/test/java/com/robsartin/segue/wikidata/ClaimMapperTest.java"),
+                  code("src/test/resources/wikidata/proposition-claims.json"))),
+          entry(
+              "Q618779",
+              real(
+                  "class id — mapped by ClassLabels and RecognitionInstitutions",
+                  code("src/test/java/com/robsartin/segue/export/DotWriterTest.java"),
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"),
+                  code(
+                      "src/test/java/com/robsartin/segue/wikidata/RecognitionInstitutionsTest.java"))),
+          entry(
+              "Q639669",
+              real(
+                  "class id — mapped by Expectations",
+                  code("src/test/java/com/robsartin/segue/seed/AdjudicatorTest.java"),
+                  code("src/test/java/com/robsartin/segue/seed/ExpectationsTest.java"),
+                  code("src/test/java/com/robsartin/segue/seed/WikidataFactsTest.java"))),
+          entry(
+              "Q748019",
+              real(
+                  "class id — mapped by RecognitionInstitutions",
+                  code(
+                      "src/test/java/com/robsartin/segue/wikidata/RecognitionInstitutionsTest.java"))),
+          entry(
+              "Q809003",
+              real(
+                  "entity — a real value in the two recorded bad-seeds responses",
+                  code("src/test/java/com/robsartin/segue/wikidata/WikidataSourceAdapterTest.java"),
+                  code("src/test/resources/wikidata/bad-seeds-claims.json"),
+                  code("src/test/resources/wikidata/bad-seeds-reverse.json"))),
+          entry(
+              "Q829080",
+              real(
+                  "class id — mapped by RecognitionInstitutions",
+                  code(
+                      "src/test/java/com/robsartin/segue/wikidata/RecognitionInstitutionsTest.java"))),
+          entry(
+              "Q855091",
+              real(
+                  "class id — mapped by Expectations",
+                  code("src/test/java/com/robsartin/segue/seed/WikidataFactsTest.java"))),
           entry(
               "Q937857",
-              "class id — AdjudicatorTest's and ExpectationsTest's FOOTBALLER, the occupation the"
-                  + " musician expectation must reject"),
-          entry("Q955824", "class id — mapped by RecognitionInstitutions"),
-          entry("Q1046088", "class id — mapped by RecognitionInstitutions"),
-          entry("Q1051182", "entity — named by EdgeTypes"),
-          entry("Q1147045", "entity — a real value in the recorded cave-claims.json"),
-          entry("Q1259759", "class id — mapped by ClassLabels and KindMapper"),
-          entry("Q1261214", "class id — mapped by ClassLabels and KindMapper"),
-          entry("Q1421784", "entity — a real value in the recorded artist-with-url-relations.json"),
-          entry("Q1535279", "entity — a real value in the recorded cave-claims.json"),
-          entry("Q1538570", "class id — mapped by KindMapper"),
-          entry("Q1656682", "class id — mapped by KindMapper"),
-          entry("Q1738793", "entity — WikidataLiveSmokeTest asks the real API about it"),
-          entry("Q2085381", "class id — mapped by RecognitionInstitutions"),
-          entry("Q2268818", "entity — a real value in the recorded bad-seeds-claims.json"),
-          entry("Q2526255", "class id — mapped by Expectations"),
-          entry("Q2715462", "entity — a real value in the recorded cave-reverse.json"),
-          entry("Q2996499", "entity — a real value in the recorded bad-seeds-claims.json"),
-          entry("Q3129816", "entity — a real value in the recorded bad-seeds-claims.json"),
-          entry("Q3331189", "class id — mapped by ClassLabels"),
-          entry("Q4649799", "entity — a real value in the recorded proposition-claims.json"),
-          entry("Q5398426", "class id — mapped by ClassLabels and KindMapper"),
-          entry("Q5741069", "class id — mapped by ClassLabels and KindMapper"),
-          entry("Q6013406", "entity — a real value in the recorded search-cave.json"),
-          entry("Q6301911", "entity — a real value in the recorded cave-reverse.json"),
-          entry("Q6650163", "entity — WikidataLiveSmokeTest asks the real API about it"),
-          entry("Q6774606", "entity — SharedAwardRouteLiveTest asks the real API about it"),
+              real(
+                  "class id — AdjudicatorTest's and ExpectationsTest's FOOTBALLER, the occupation the"
+                      + " musician expectation must reject",
+                  code("src/test/java/com/robsartin/segue/seed/AdjudicatorTest.java"),
+                  code("src/test/java/com/robsartin/segue/seed/ExpectationsTest.java"))),
+          entry(
+              "Q955824",
+              real(
+                  "class id — mapped by RecognitionInstitutions",
+                  code("src/test/java/com/robsartin/segue/export/ViewSelectorTest.java"),
+                  code("src/test/java/com/robsartin/segue/mcp/SegueServiceTest.java"),
+                  code(
+                      "src/test/java/com/robsartin/segue/wikidata/RecognitionInstitutionsTest.java"))),
+          entry(
+              "Q1046088",
+              real(
+                  "class id — mapped by RecognitionInstitutions",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"),
+                  code(
+                      "src/test/java/com/robsartin/segue/wikidata/RecognitionInstitutionsTest.java"))),
+          entry(
+              "Q1051182",
+              real(
+                  "entity — named by EdgeTypes",
+                  code("src/test/java/com/robsartin/segue/wikidata/ReverseClaimsTest.java"),
+                  code("src/test/java/com/robsartin/segue/wikidata/WikidataLiveSmokeTest.java"),
+                  code("src/test/java/com/robsartin/segue/wikidata/WikidataSourceAdapterTest.java"),
+                  code("src/test/resources/wikidata/bad-seeds-claims.json"),
+                  code("src/test/resources/wikidata/cave-claims.json"),
+                  code("src/test/resources/wikidata/cave-reverse.json"))),
+          entry(
+              "Q1147045",
+              real(
+                  "entity — a real value in the recorded cave-claims.json",
+                  code("src/test/resources/wikidata/cave-claims.json"))),
+          entry(
+              "Q1259759",
+              real(
+                  "class id — mapped by ClassLabels and KindMapper",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
+              "Q1261214",
+              real(
+                  "class id — mapped by ClassLabels and KindMapper",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
+              "Q1421784",
+              real(
+                  "entity — a real value in the recorded artist-with-url-relations.json",
+                  code("src/test/resources/musicbrainz/artist-with-url-relations.json"))),
+          entry(
+              "Q1535279",
+              real(
+                  "entity — a real value in the recorded cave-claims.json",
+                  code("src/test/resources/wikidata/cave-claims.json"))),
+          entry(
+              "Q1538570",
+              real(
+                  "class id — mapped by KindMapper",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
+              "Q1656682",
+              real(
+                  "class id — mapped by KindMapper",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
+              "Q1738793",
+              real(
+                  "entity — WikidataLiveSmokeTest asks the real API about it",
+                  code("src/test/java/com/robsartin/segue/wikidata/WikidataLiveSmokeTest.java"))),
+          entry(
+              "Q2085381",
+              real(
+                  "class id — mapped by RecognitionInstitutions",
+                  code(
+                      "src/test/java/com/robsartin/segue/wikidata/RecognitionInstitutionsTest.java"))),
+          entry(
+              "Q2268818",
+              real(
+                  "entity — a real value in the recorded bad-seeds-claims.json",
+                  code("src/test/resources/wikidata/bad-seeds-claims.json"))),
+          entry(
+              "Q2526255",
+              real(
+                  "class id — mapped by Expectations",
+                  code("src/test/java/com/robsartin/segue/wikidata/ReverseClaimsTest.java"))),
+          entry(
+              "Q2715462",
+              real(
+                  "entity — a real value in the recorded cave-reverse.json",
+                  code("src/test/java/com/robsartin/segue/wikidata/ReverseClaimsTest.java"),
+                  code("src/test/resources/wikidata/cave-reverse.json"))),
+          entry(
+              "Q2996499",
+              real(
+                  "entity — a real value in the recorded bad-seeds-claims.json",
+                  code("src/test/resources/wikidata/bad-seeds-claims.json"))),
+          entry(
+              "Q3129816",
+              real(
+                  "entity — a real value in the recorded bad-seeds-claims.json",
+                  code("src/test/resources/wikidata/bad-seeds-claims.json"))),
+          entry(
+              "Q3331189",
+              real(
+                  "class id — mapped by ClassLabels",
+                  code("src/test/resources/wikidata/cave-reverse.json"))),
+          entry(
+              "Q4649799",
+              real(
+                  "entity — a real value in the recorded proposition-claims.json",
+                  code("src/test/java/com/robsartin/segue/wikidata/ClaimMapperTest.java"),
+                  code("src/test/resources/wikidata/proposition-claims.json"))),
+          entry(
+              "Q5398426",
+              real(
+                  "class id — mapped by ClassLabels and KindMapper",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
+              "Q5741069",
+              real(
+                  "class id — mapped by ClassLabels and KindMapper",
+                  code("src/test/java/com/robsartin/segue/export/LogProjectionTest.java"),
+                  code("src/test/java/com/robsartin/segue/export/ViewSelectorTest.java"),
+                  code("src/test/java/com/robsartin/segue/mcp/SegueServiceTest.java"),
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"),
+                  code(
+                      "src/test/java/com/robsartin/segue/wikidata/RecognitionInstitutionsTest.java"))),
+          entry(
+              "Q6013406",
+              real(
+                  "entity — a real value in the recorded search-cave.json",
+                  code("src/test/resources/wikidata/search-cave.json"))),
+          entry(
+              "Q6301911",
+              real(
+                  "entity — a real value in the recorded cave-reverse.json",
+                  code("src/test/java/com/robsartin/segue/wikidata/ReverseClaimsTest.java"),
+                  code("src/test/resources/wikidata/cave-reverse.json"))),
+          entry(
+              "Q6650163",
+              real(
+                  "entity — WikidataLiveSmokeTest asks the real API about it",
+                  code("src/test/java/com/robsartin/segue/wikidata/WikidataLiveSmokeTest.java"))),
+          entry(
+              "Q6774606",
+              real(
+                  "entity — SharedAwardRouteLiveTest asks the real API about it",
+                  code("src/test/java/com/robsartin/segue/mcp/SharedAwardRouteLiveTest.java"))),
           entry(
               "Q7558495",
-              "class id — a solo-act class leavesTheBandsAlone asserts is never a recognition"
-                  + " institution"),
-          entry("Q7612859", "entity — a real value in the recorded hofstetter-claims.json"),
-          entry("Q7725634", "class id — mapped by ClassLabels and KindMapper"),
-          entry("Q9212979", "class id — mapped by KindMapper"),
-          entry("Q9357859", "entity — a real value in the recorded cave-claims.json"),
-          entry("Q10590726", "class id — mapped by ClassLabels and KindMapper"),
-          entry("Q10800557", "class id — mapped by Expectations"),
-          entry("Q11448906", "class id — mapped by ClassLabels and RecognitionInstitutions"),
-          entry("Q12057459", "class id — mapped by RecognitionInstitutions"),
-          entry("Q13473501", "class id — mapped by KindMapper"),
-          entry("Q16334295", "class id — mapped by KindMapper"),
-          entry("Q18510489", "class id — mapped by KindMapper"),
+              real(
+                  "class id — a solo-act class leavesTheBandsAlone asserts is never a recognition"
+                      + " institution",
+                  code(
+                      "src/test/java/com/robsartin/segue/wikidata/RecognitionInstitutionsTest.java"))),
+          entry(
+              "Q7612859",
+              real(
+                  "entity — a real value in the recorded hofstetter-claims.json",
+                  code("src/test/java/com/robsartin/segue/mcp/SharedAwardRouteLiveTest.java"),
+                  code("src/test/java/com/robsartin/segue/mcp/SharedAwardRouteTest.java"),
+                  code("src/test/resources/wikidata/hofstetter-claims.json"))),
+          entry(
+              "Q7725634",
+              real(
+                  "class id — mapped by ClassLabels and KindMapper",
+                  code("src/test/java/com/robsartin/segue/export/DotWriterTest.java"),
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"),
+                  code("src/test/java/com/robsartin/segue/wikidata/ReverseClaimsTest.java"),
+                  code("src/test/resources/wikidata/cave-reverse.json"))),
+          entry(
+              "Q9212979",
+              real(
+                  "class id — mapped by KindMapper",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
+              "Q9357859",
+              real(
+                  "entity — a real value in the recorded cave-claims.json",
+                  code("src/test/resources/wikidata/cave-claims.json"))),
+          entry(
+              "Q10590726",
+              real(
+                  "class id — mapped by ClassLabels and KindMapper",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
+              "Q10800557",
+              real(
+                  "class id — mapped by Expectations",
+                  code("src/test/java/com/robsartin/segue/seed/ExpectationsTest.java"))),
+          entry(
+              "Q11448906",
+              real(
+                  "class id — mapped by ClassLabels and RecognitionInstitutions",
+                  code(
+                      "src/test/java/com/robsartin/segue/wikidata/RecognitionInstitutionsTest.java"))),
+          entry(
+              "Q12057459",
+              real(
+                  "class id — mapped by RecognitionInstitutions",
+                  code(
+                      "src/test/java/com/robsartin/segue/wikidata/RecognitionInstitutionsTest.java"))),
+          entry(
+              "Q13473501",
+              real(
+                  "class id — mapped by KindMapper",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
+              "Q16334295",
+              real(
+                  "class id — mapped by KindMapper",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
+              "Q18510489",
+              real(
+                  "class id — mapped by KindMapper",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"),
+                  code(
+                      "src/test/java/com/robsartin/segue/wikidata/RecognitionInstitutionsTest.java"))),
           entry(
               "Q19314966",
-              "class id — a comedy class leavesTheBandsAlone asserts is never a recognition"
-                  + " institution"),
-          entry("Q19351429", "class id — mapped by KindMapper"),
-          entry("Q19863965", "entity — a real value in the recorded search-cave.json"),
-          entry("Q21191270", "class id — mapped by ClassLabels and KindMapper"),
-          entry("Q23418635", "entity — a real value in the recorded bad-seeds-claims.json"),
-          entry("Q45400320", "class id — mapped by RecognitionInstitutions"),
-          entry("Q55850593", "class id — mapped by ClassLabels and KindMapper"),
-          entry("Q56816954", "class id — mapped by KindMapper"),
-          entry("Q58483083", "class id — mapped by ClassLabels and KindMapper"),
-          entry("Q96888669", "class id — mapped by RecognitionInstitutions"),
-          entry("Q97798779", "entity — a real value in the recorded cave-reverse.json"),
-          entry("Q105543609", "class id — mapped by ClassLabels and KindMapper"),
-          entry("Q110039749", "class id — mapped by ClassLabels and KindMapper"),
-          entry("Q121998451", "entity — named by ReverseClaims"),
+              real(
+                  "class id — a comedy class leavesTheBandsAlone asserts is never a recognition"
+                      + " institution",
+                  code(
+                      "src/test/java/com/robsartin/segue/wikidata/RecognitionInstitutionsTest.java"))),
+          entry(
+              "Q19351429",
+              real(
+                  "class id — mapped by KindMapper",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
+              "Q19863965",
+              real(
+                  "entity — a real value in the recorded search-cave.json",
+                  code("src/test/resources/wikidata/search-cave.json"))),
+          entry(
+              "Q21191270",
+              real(
+                  "class id — mapped by ClassLabels and KindMapper",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
+              "Q23418635",
+              real(
+                  "entity — a real value in the recorded bad-seeds-claims.json",
+                  code("src/test/resources/wikidata/bad-seeds-claims.json"))),
+          entry(
+              "Q45400320",
+              real(
+                  "class id — mapped by RecognitionInstitutions",
+                  code(
+                      "src/test/java/com/robsartin/segue/wikidata/RecognitionInstitutionsTest.java"))),
+          entry(
+              "Q55850593",
+              real(
+                  "class id — mapped by ClassLabels and KindMapper",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
+              "Q56816954",
+              real(
+                  "class id — mapped by KindMapper",
+                  code("src/test/java/com/robsartin/segue/ingest/GraphProjectorTest.java"),
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"),
+                  code(
+                      "src/test/java/com/robsartin/segue/wikidata/RecognitionInstitutionsTest.java"))),
+          entry(
+              "Q58483083",
+              real(
+                  "class id — mapped by ClassLabels and KindMapper",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
+              "Q96888669",
+              real(
+                  "class id — mapped by RecognitionInstitutions",
+                  code(
+                      "src/test/java/com/robsartin/segue/wikidata/RecognitionInstitutionsTest.java"))),
+          entry(
+              "Q97798779",
+              real(
+                  "entity — a real value in the recorded cave-reverse.json",
+                  code("src/test/java/com/robsartin/segue/wikidata/ReverseClaimsTest.java"),
+                  code("src/test/resources/wikidata/cave-reverse.json"))),
+          entry(
+              "Q105543609",
+              real(
+                  "class id — mapped by ClassLabels and KindMapper",
+                  code("src/test/java/com/robsartin/segue/export/DotWriterTest.java"),
+                  code("src/test/java/com/robsartin/segue/export/GraphMlWriterTest.java"),
+                  code("src/test/java/com/robsartin/segue/export/PaletteSeparationTest.java"),
+                  code("src/test/java/com/robsartin/segue/export/ViewSelectorTest.java"),
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
+              "Q110039749",
+              real(
+                  "class id — mapped by ClassLabels and KindMapper",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
+              "Q121998451",
+              real(
+                  "entity — named by ReverseClaims",
+                  code("src/test/java/com/robsartin/segue/wikidata/ReverseClaimsTest.java"),
+                  code("src/test/resources/wikidata/cave-reverse.json"))),
           entry(
               "Q127334927",
-              "class id — a band class leavesTheBandsAlone asserts is never a recognition"
-                  + " institution"),
-          entry("Q131806449", "entity — WikidataLiveSmokeTest asks the real API about it"),
+              real(
+                  "class id — a band class leavesTheBandsAlone asserts is never a recognition"
+                      + " institution",
+                  code(
+                      "src/test/java/com/robsartin/segue/wikidata/RecognitionInstitutionsTest.java"))),
+          entry(
+              "Q131806449",
+              real(
+                  "entity — WikidataLiveSmokeTest asks the real API about it",
+                  code("src/test/java/com/robsartin/segue/wikidata/WikidataLiveSmokeTest.java"))),
           entry(
               "Q1000000000",
-              "negative control, deliberately allocatable — QidTest asserts Wikibase's grammar"
-                  + " still admits ten digits, which is the upper bound that test pins"));
+              real(
+                  "negative control, deliberately allocatable — QidTest asserts Wikibase's grammar"
+                      + " still admits ten digits, which is the upper bound that test pins",
+                  code("src/test/java/com/robsartin/segue/domain/QidTest.java"))));
 
   /** One allocatable-form id, and where it was found. */
-  private record Sighting(Path file, int line, String id) {
+  private record Sighting(Path file, int line, String id, Context context) {
     String describe() {
-      return "%s:%d  %s".formatted(ROOT.relativize(file), line, id);
+      return context == Context.ANNOTATION
+          ? "%s:%d  %s (in an annotation)".formatted(relative(file), line, id)
+          : "%s:%d  %s".formatted(relative(file), line, id);
     }
   }
 
@@ -263,9 +930,11 @@ class StandInQidsDenoteNothingTest {
   @Test
   @DisplayName("every identifier a test invents is one Wikidata can never allocate")
   void shouldUseAnIdWikidataCannotAllocateWhenATestNamesAnEntityItInvented() {
-    List<Sighting> offending =
-        SWEEP.sightings().stream().filter(s -> !ALLOWED.containsKey(s.id())).toList();
-    String report = offending.stream().map(Sighting::describe).collect(Collectors.joining("\n"));
+    List<Sighting> offending = SWEEP.sightings().stream().filter(s -> !isAllowed(s)).toList();
+    String report =
+        offending.stream()
+            .map(StandInQidsDenoteNothingTest::report)
+            .collect(Collectors.joining("\n"));
 
     assertThat(report)
         .as(
@@ -276,7 +945,9 @@ class StandInQidsDenoteNothingTest {
                 + " which LocalEntity's javadoc already predicts. A merge's canonical side is the"
                 + " one place that shape is refused, and it takes ADR 62's eleven-digit shape"
                 + " instead; see Qid.checkCanonicalSide. Or, if the test is genuinely about a real"
-                + " entity, add it to ALLOWED with the reason it is real",
+                + " entity, add it to ALLOWED with the reason it is real - or, if the id is already"
+                + " allowed elsewhere, add this file to its sites - an id is allowed at the sites"
+                + " its entry names and nowhere else",
             offending.size(), SWEEP.sightings().size(), SWEEP.files().size())
         .isEmpty();
   }
@@ -296,30 +967,68 @@ class StandInQidsDenoteNothingTest {
     assertThat(SWEEP.files())
         .as(
             "this class's own source among the files the sweep read. It is named by an absolute"
-                + " path, and the dead-entry test discounts it - so a rename or a move would leave"
-                + " that test comparing the lists against a tree that still contains every id they"
-                + " name, silently vacuous rather than red")
+                + " path, and isAllowed's file().equals(SELF) check is what keeps this file's own"
+                + " ALLOWED literals from being reported as offending sightings. A moved or renamed"
+                + " SELF reds two tests: this one, directly, because the swept files would no longer"
+                + " contain the stale path - and the offending-id test, because that check stops"
+                + " firing for this file's own literals. Read this one first")
         .contains(SELF);
   }
 
+  /** One id claimed at one site — never at all, when {@link #site} is {@code null}. */
+  private record Claim(String id, Site site) {
+    @Override
+    public String toString() {
+      return site == null ? id + " @ (no site at all)" : id + " @ " + site;
+    }
+  }
+
   @Test
-  @DisplayName("the allowlist carries no id the tree no longer contains")
-  void shouldCarryNoDeadEntryWhenTheAllowlistIsCheckedAgainstTheTree() {
-    Set<String> seen =
+  @DisplayName("the allowlist names no site the tree no longer carries the id at")
+  void shouldCarryNoDeadSiteWhenTheAllowlistIsCheckedAgainstTheTree() {
+    Set<Claim> live =
         SWEEP.sightings().stream()
             .filter(s -> !s.file().equals(SELF))
-            .map(Sighting::id)
+            .map(s -> new Claim(s.id(), new Site(relative(s.file()), s.context())))
             .collect(Collectors.toCollection(LinkedHashSet::new));
 
     List<String> dead =
-        ALLOWED.keySet().stream().filter(id -> !seen.contains(id)).sorted().toList();
+        ALLOWED.entrySet().stream()
+            .flatMap(
+                e ->
+                    e.getValue().sites().isEmpty()
+                        ? Stream.of(new Claim(e.getKey(), null))
+                        : e.getValue().sites().stream().map(s -> new Claim(e.getKey(), s)))
+            .filter(claim -> !live.contains(claim))
+            .map(Claim::toString)
+            .sorted()
+            .toList();
 
     assertThat(dead)
         .as(
-            "ids named by ALLOWED that no longer appear anywhere in src/test outside this"
-                + " file. A reason that outlives the id it was written about is a reason nobody"
-                + " can check against a site; delete the entry")
+            "sites named by ALLOWED that no longer carry the id they were written about, in the"
+                + " context they were written for. A reason that outlives its site is a reason"
+                + " nobody can check; delete the site, or the entry with its last one")
         .isEmpty();
+  }
+
+  @Test
+  @DisplayName("a literal inside an annotation is read apart from one in code")
+  void shouldReadALiteralAsAnAnnotationWhenItSitsInsideAnAnnotationsArguments() {
+    String source =
+        """
+        class Probe {
+          @DisplayName("Q1: a question number")
+          void answers() {
+            store.upsertNode(new NodeRecord("Q1", PERSON, "a node id"));
+          }
+        }
+        """;
+
+    assertThat(
+            literals(source).stream().filter(l -> l.text().startsWith("Q1")).map(Literal::context))
+        .as("the question number is an annotation's argument; the node id is code")
+        .containsExactly(Context.ANNOTATION, Context.CODE);
   }
 
   // --- the sweep ------------------------------------------------------------------------------
@@ -336,10 +1045,10 @@ class StandInQidsDenoteNothingTest {
       String text = RepositoryTree.read(file);
       if (file.getFileName().toString().endsWith(".java")) {
         for (Literal literal : literals(text)) {
-          collect(text, literal.start(), literal.text(), file, sightings);
+          collect(text, literal.start(), literal.text(), literal.context(), file, sightings);
         }
       } else {
-        collect(text, 0, text, file, sightings);
+        collect(text, 0, text, Context.CODE, file, sightings);
       }
     }
     return new Sweep(files, List.copyOf(sightings));
@@ -350,18 +1059,28 @@ class StandInQidsDenoteNothingTest {
    * text}.
    */
   private static void collect(
-      String text, int offset, String scanned, Path file, List<Sighting> into) {
+      String text, int offset, String scanned, Context context, Path file, List<Sighting> into) {
     Matcher token = TOKEN.matcher(scanned);
     while (token.find()) {
       String id = token.group();
       if (WIKIBASE_ITEM_ID.matcher(id).matches()) {
-        into.add(new Sighting(file, lineOf(text, offset + token.start()), id));
+        into.add(new Sighting(file, lineOf(text, offset + token.start()), id, context));
       }
     }
   }
 
+  /** Where a sighting sat. An allowlist entry names this, so one reason cannot cover both. */
+  private enum Context {
+    /**
+     * A string literal or text block in Java code — and, in a non-Java file, the file's own text.
+     */
+    CODE,
+    /** A string literal inside an annotation's arguments, where a {@code @DisplayName} lives. */
+    ANNOTATION
+  }
+
   /** One string literal or text block, and where its text begins in the file. */
-  private record Literal(int start, String text) {}
+  private record Literal(int start, String text, Context context) {}
 
   /**
    * Every string literal and text block in a Java source, with comments, character literals and
@@ -370,6 +1089,7 @@ class StandInQidsDenoteNothingTest {
    */
   private static List<Literal> literals(String source) {
     List<Literal> literals = new ArrayList<>();
+    Deque<Boolean> parens = new ArrayDeque<>();
     int end = source.length();
     int at = 0;
     while (at < end) {
@@ -386,7 +1106,8 @@ class StandInQidsDenoteNothingTest {
         while (close < end && !source.startsWith("\"\"\"", close)) {
           close += source.charAt(close) == '\\' ? 2 : 1;
         }
-        literals.add(new Literal(body, source.substring(body, Math.min(close, end))));
+        literals.add(
+            new Literal(body, source.substring(body, Math.min(close, end)), contextOf(parens)));
         at = Math.min(close + 3, end);
       } else if (c == '"' || c == '\'') {
         int body = at + 1;
@@ -395,14 +1116,38 @@ class StandInQidsDenoteNothingTest {
           close += source.charAt(close) == '\\' ? 2 : 1;
         }
         if (c == '"') {
-          literals.add(new Literal(body, source.substring(body, Math.min(close, end))));
+          literals.add(
+              new Literal(body, source.substring(body, Math.min(close, end)), contextOf(parens)));
         }
         at = Math.min(close + 1, end);
       } else {
+        if (c == '(') {
+          parens.push(opensAnnotation(source, at));
+        } else if (c == ')' && !parens.isEmpty()) {
+          parens.pop();
+        }
         at++;
       }
     }
     return literals;
+  }
+
+  /** A literal sits inside an annotation's arguments exactly when the open-paren stack says so. */
+  private static Context contextOf(Deque<Boolean> parens) {
+    return parens.contains(Boolean.TRUE) ? Context.ANNOTATION : Context.CODE;
+  }
+
+  /** Whether this {@code (} closes an {@code @Ident}, which is what starts an annotation's args. */
+  private static boolean opensAnnotation(String source, int paren) {
+    int at = paren - 1;
+    while (at >= 0 && Character.isWhitespace(source.charAt(at))) {
+      at--;
+    }
+    while (at >= 0
+        && (Character.isJavaIdentifierPart(source.charAt(at)) || source.charAt(at) == '.')) {
+      at--;
+    }
+    return at >= 0 && source.charAt(at) == '@';
   }
 
   private static int lineOf(String text, int index) {
