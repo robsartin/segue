@@ -187,6 +187,13 @@ class StandInKindMatchesTheLocalNodeTest {
   }
 ```
 
+  **Note (final review):** the shipped test is named
+  `shouldTakeTheStandInsKindFromTheCallersRederivationWhenTheCallerReturnsAnotherKind`, with its
+  `@DisplayName` in step. The name above says "when a local side states one", and no fixture here
+  states a class - the local side is a plain `NodeAssertion` and it is the stub, `claim ->
+  claim.withKind(NodeKind.PERSON)`, that returns another kind. Same test, name matched to what it
+  actually varies.
+
   Run the fast loop. **Expect three failures, and check each is the right one:** the new `EquivalencesTest` method fails with `expected: PERSON but was: WORK` (the seam is inert, which is what this step is proving), and the two fold tests from Step 2 still fail with `expected: CONCEPT but was: WORK` — unchanged, because a parameter nothing reads changes no behaviour. Every other `EquivalencesTest` method must **pass**, which is what says `AS_CLAIMED` is honest.
 
 - [ ] **Step 4 — GREEN.** In `Equivalences.localsOfMerges`, apply the operator on the one arm that can carry classes:

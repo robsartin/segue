@@ -301,8 +301,10 @@ class StandInAgreesInEveryHomeTest {
   @Test
   @DisplayName("in each home that exposes a kind, a stand-in agrees with the local node it copies")
   void shouldMatchItsOwnLocalNodesKindWhenEachHomesStandInIsRead() {
+    // Hoisted: inside the filter this scanned the whole log once per row.
+    Set<String> claimedOutright = claimedOutright();
     List<Pinned> rows =
-        PINNED.stream().filter(r -> !claimedOutright().contains(r.canonical())).toList();
+        PINNED.stream().filter(r -> !claimedOutright.contains(r.canonical())).toList();
     List<String> departures = new ArrayList<>();
     for (Pinned row : rows) {
       departures.addAll(standInDeparture(FOLD, IN_THE_FOLD, row));
