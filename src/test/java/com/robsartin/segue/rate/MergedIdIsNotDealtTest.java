@@ -56,7 +56,7 @@ class MergedIdIsNotDealtTest {
   private static final String MINTED = "Q00900042";
 
   private static final String CANONICAL = "Q900";
-  private static final String VIA = "Q900211";
+  private static final String VIA = "Q0900211";
   private static final String ON_THE_FILE = "Q900199";
 
   private static final int FLOOR = 3;

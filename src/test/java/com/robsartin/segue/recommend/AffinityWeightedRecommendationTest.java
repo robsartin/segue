@@ -133,10 +133,10 @@ class AffinityWeightedRecommendationTest {
 
       int intermediate = 0;
       for (String seed : LOVED) {
-        reaches(log, seed, "Q9002" + (10 + intermediate++), BELOVED);
+        reaches(log, seed, "Q09002" + (10 + intermediate++), BELOVED);
       }
       for (String seed : LUKEWARM) {
-        reaches(log, seed, "Q9002" + (10 + intermediate++), CROWDED);
+        reaches(log, seed, "Q09002" + (10 + intermediate++), CROWDED);
       }
 
       // Pad both to the same degree with records nothing on the list touches, so that lift — which

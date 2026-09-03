@@ -310,7 +310,7 @@ class ExportRunTest {
     FakeAssertionLog log =
         new FakeAssertionLog().with(node(WREN, NodeKind.PERSON, "Wren Alderman"));
     for (int i = 1; i <= DotWriter.LABEL_BUDGET + 1; i++) {
-      String qid = "Q9002" + String.format("%02d", i);
+      String qid = "Q09002" + String.format("%02d", i);
       log.with(node(qid, NodeKind.WORK, "Invented Work " + i), edge(WREN, qid, "ACTED_IN"));
     }
     graph = new TinkerGraphStore();

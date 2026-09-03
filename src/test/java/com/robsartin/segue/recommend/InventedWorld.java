@@ -34,13 +34,13 @@ final class InventedWorld {
   static final String KNOWN_TWO = "Q900102";
 
   // Intermediates.
-  static final String SHARED_ARTIST = "Q900201";
-  static final String SHARED_PRIZE = "Q900202";
-  static final String HALL_OF_FAME = "Q900203";
-  static final String THE_ACADEMY = "Q900204";
+  static final String SHARED_ARTIST = "Q0900201";
+  static final String SHARED_PRIZE = "Q0900202";
+  static final String HALL_OF_FAME = "Q0900203";
+  static final String THE_ACADEMY = "Q0900204";
 
   /** An intermediate that cites one of yours, rather than being cited by it (issue #84). */
-  static final String THE_ADMIRER = "Q900205";
+  static final String THE_ADMIRER = "Q0900205";
 
   // Candidates.
   static final String ANCESTOR = "Q0900301";

@@ -17,7 +17,7 @@ class FloorReadingTest {
   private static Recommendation candidate(String qid, int degree, int intermediates) {
     List<SharedIntermediate> shared =
         IntStream.range(0, intermediates)
-            .mapToObj(i -> new SharedIntermediate("Q900101", "Q9002" + i, 4, 1.0))
+            .mapToObj(i -> new SharedIntermediate("Q900101", "Q09002" + i, 4, 1.0))
             .toList();
     return new Recommendation(
         new NodeRecord(qid, NodeKind.GROUP, "invented " + qid), 0.5, degree, shared);

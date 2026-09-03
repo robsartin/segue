@@ -381,10 +381,10 @@ class RateRunTest {
     node(graph, CROWDED, NodeKind.GROUP, "the crowded ancestor");
     int intermediate = 0;
     for (String seed : LOVED) {
-      reaches(graph, seed, "Q9002" + (10 + intermediate++), BELOVED);
+      reaches(graph, seed, "Q09002" + (10 + intermediate++), BELOVED);
     }
     for (String seed : LUKEWARM) {
-      reaches(graph, seed, "Q9002" + (10 + intermediate++), CROWDED);
+      reaches(graph, seed, "Q09002" + (10 + intermediate++), CROWDED);
     }
     // Padded to the same degree, so lift — which divides by the candidate's own degree — compares
     // the two on equal terms.

@@ -23,9 +23,9 @@ class RecommendationTest {
             1.0,
             30,
             List.of(
-                new SharedIntermediate("Q900101", "Q900201", 4, 1.0),
-                new SharedIntermediate("Q900101", "Q900202", 4, 1.0),
-                new SharedIntermediate("Q900101", "Q900203", 4, 1.0)));
+                new SharedIntermediate("Q900101", "Q0900201", 4, 1.0),
+                new SharedIntermediate("Q900101", "Q0900202", 4, 1.0),
+                new SharedIntermediate("Q900101", "Q0900203", 4, 1.0)));
 
     assertThat(reachedOnce.knownReached()).isEqualTo(1);
     assertThat(reachedOnce.intermediates()).isEqualTo(3);
@@ -40,8 +40,8 @@ class RecommendationTest {
             1.0,
             30,
             List.of(
-                new SharedIntermediate("Q900101", "Q900201", 4, 1.0),
-                new SharedIntermediate("Q900102", "Q900201", 4, 1.0)));
+                new SharedIntermediate("Q900101", "Q0900201", 4, 1.0),
+                new SharedIntermediate("Q900102", "Q0900201", 4, 1.0)));
 
     assertThat(shared.knownReached()).isEqualTo(2);
     assertThat(shared.intermediates()).isEqualTo(1);

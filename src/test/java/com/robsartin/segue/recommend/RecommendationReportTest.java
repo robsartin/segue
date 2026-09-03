@@ -24,7 +24,7 @@ class RecommendationReportTest {
 
   private static final NodeRecord KNOWN = new NodeRecord("Q900101", NodeKind.GROUP, "one you know");
   private static final NodeRecord VIA =
-      new NodeRecord("Q900201", NodeKind.PERSON, "the artist they cite");
+      new NodeRecord("Q0900201", NodeKind.PERSON, "the artist they cite");
   private static final NodeRecord CANDIDATE =
       new NodeRecord("Q0900301", NodeKind.GROUP, "the invented ancestors");
 
@@ -170,8 +170,8 @@ class RecommendationReportTest {
             0.5,
             2,
             List.of(
-                new SharedIntermediate(KNOWN.qid(), "Q900201", 4, 1.0),
-                new SharedIntermediate(KNOWN.qid(), "Q900202", 4, 1.0)));
+                new SharedIntermediate(KNOWN.qid(), "Q0900201", 4, 1.0),
+                new SharedIntermediate(KNOWN.qid(), "Q0900202", 4, 1.0)));
     Sweep sweep = new Sweep(List.of(onTheFloor), 815, 0, 41, 0, 0);
 
     StringWriter out = new StringWriter();

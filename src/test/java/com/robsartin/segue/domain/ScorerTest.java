@@ -30,7 +30,7 @@ class ScorerTest {
   @DisplayName("raw counts every connection equally, however busy the intermediate")
   void rawCountsEveryConnectionEqually() {
     List<SharedIntermediate> shared =
-        List.of(via(SEED, "Q900201", 2), via(OTHER_SEED, "Q900202", 100));
+        List.of(via(SEED, "Q0900201", 2), via(OTHER_SEED, "Q0900202", 100));
 
     assertThat(Scorer.RAW.score(shared, 40)).isEqualTo(2.0);
   }
@@ -39,7 +39,7 @@ class ScorerTest {
   @DisplayName("Adamic-Adar discounts the busy intermediate by the log of its degree")
   void adamicAdarDiscountsTheBusyIntermediate() {
     List<SharedIntermediate> shared =
-        List.of(via(SEED, "Q900201", 2), via(OTHER_SEED, "Q900202", 100));
+        List.of(via(SEED, "Q0900201", 2), via(OTHER_SEED, "Q0900202", 100));
 
     assertThat(Scorer.ADAMIC_ADAR.score(shared, 40))
         .isCloseTo(1 / Math.log(2) + 1 / Math.log(100), within(1e-9));
@@ -49,7 +49,7 @@ class ScorerTest {
   @DisplayName("resource allocation discounts it by the degree itself, which is far harsher")
   void resourceAllocationDiscountsItHarder() {
     List<SharedIntermediate> shared =
-        List.of(via(SEED, "Q900201", 2), via(OTHER_SEED, "Q900202", 100));
+        List.of(via(SEED, "Q0900201", 2), via(OTHER_SEED, "Q0900202", 100));
 
     assertThat(Scorer.RESOURCE_ALLOCATION.score(shared, 40))
         .isCloseTo(1.0 / 2 + 1.0 / 100, within(1e-9));
@@ -59,7 +59,7 @@ class ScorerTest {
   @DisplayName("lift is Adamic-Adar over the candidate's own degree")
   void liftNormalisesByTheCandidatesOwnDegree() {
     List<SharedIntermediate> shared =
-        List.of(via(SEED, "Q900201", 2), via(OTHER_SEED, "Q900202", 100));
+        List.of(via(SEED, "Q0900201", 2), via(OTHER_SEED, "Q0900202", 100));
 
     assertThat(Scorer.LIFT.score(shared, 40))
         .isCloseTo((1 / Math.log(2) + 1 / Math.log(100)) / 40, within(1e-9));
@@ -68,7 +68,7 @@ class ScorerTest {
   @Test
   @DisplayName("the weight on a connection multiplies it, so edge type reaches the score")
   void theWeightOnAConnectionMultipliesIt() {
-    List<SharedIntermediate> weak = List.of(new SharedIntermediate(SEED, "Q900201", 2, 0.2));
+    List<SharedIntermediate> weak = List.of(new SharedIntermediate(SEED, "Q0900201", 2, 0.2));
 
     assertThat(Scorer.RAW.score(weak, 10)).isEqualTo(0.2);
   }
@@ -84,11 +84,12 @@ class ScorerTest {
   void theDialIsTheDifferenceBetweenFameAndSurprise() {
     // Famous: touched by three of your things, and by three hundred edges in all.
     List<SharedIntermediate> famous =
-        List.of(via(SEED, "Q900201", 30), via(OTHER_SEED, "Q900202", 30), via(SEED, "Q900203", 30));
+        List.of(
+            via(SEED, "Q0900201", 30), via(OTHER_SEED, "Q0900202", 30), via(SEED, "Q0900203", 30));
     int famousDegree = 300;
     // Surprising: touched by two of your things out of a total of fifteen edges.
     List<SharedIntermediate> surprising =
-        List.of(via(SEED, "Q900201", 30), via(OTHER_SEED, "Q900202", 30));
+        List.of(via(SEED, "Q0900201", 30), via(OTHER_SEED, "Q0900202", 30));
     int surprisingDegree = 15;
 
     assertThat(Scorer.RAW.score(famous, famousDegree))
@@ -102,7 +103,7 @@ class ScorerTest {
   @Test
   @DisplayName("a candidate with no edges at all cannot be normalised, and says so")
   void aCandidateWithNoEdgesIsRefused() {
-    assertThatThrownBy(() -> Scorer.LIFT.score(List.of(via(SEED, "Q900201", 2)), 0))
+    assertThatThrownBy(() -> Scorer.LIFT.score(List.of(via(SEED, "Q0900201", 2)), 0))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("degree");
   }

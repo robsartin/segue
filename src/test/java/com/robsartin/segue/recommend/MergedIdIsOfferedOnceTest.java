@@ -73,7 +73,7 @@ class MergedIdIsOfferedOnceTest {
   /** The id Wikidata turned out to have. Allocatable, which the local side never is. */
   private static final String CANONICAL = "Q900";
 
-  private static final String VIA = "Q900211";
+  private static final String VIA = "Q0900211";
   private static final String CANDIDATE = "Q0900311";
 
   /** On the {@code --known} file and reaching nothing: the file may not be empty. */

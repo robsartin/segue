@@ -15,7 +15,7 @@ class RecommendationsTest {
         new NodeRecord(qid, NodeKind.GROUP, "invented " + qid),
         score,
         20,
-        List.of(new SharedIntermediate("Q900101", "Q900201", 4, 1.0)));
+        List.of(new SharedIntermediate("Q900101", "Q0900201", 4, 1.0)));
   }
 
   @Test
