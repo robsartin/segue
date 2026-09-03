@@ -4,7 +4,6 @@ import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.Qid;
 import java.util.Collection;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -126,7 +125,7 @@ public interface MusicBrainzIdentity {
               // the same outcome — no QID, no neighbour, no flag — and the adapter's GAP 9 guard
               // stays as the second line BridgedIdentity's javadoc says it is.
               if (Qid.looksLikeAQid(qid)) {
-                bridged.put(mbid, new BridgedIdentity(qid, NodeKind.CONCEPT, null, List.of()));
+                bridged.put(mbid, BridgedIdentity.undescribed(qid));
               }
             });
     return Map.copyOf(bridged);

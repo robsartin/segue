@@ -9,6 +9,7 @@ import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.Provenance;
+import com.robsartin.segue.ingest.GraphProjector;
 import com.robsartin.segue.ingest.IngestService;
 import com.robsartin.segue.mcp.SegueService;
 import com.robsartin.segue.port.AffinityStore;
@@ -247,7 +248,7 @@ class MusicBrainzNeighbourIdentityTest {
    */
   @Test
   @DisplayName("should attribute the neighbour's identity to wikidata and the edge to musicbrainz")
-  void shouldAttributeTheNeighboursIdentityToWikidataAndTheEdgeToMusicbrainz() {
+  void shouldStampTheIdentityWikidataAndTheEdgeMusicbrainzWhenTheBridgeDescribes() {
     expandWithoutAFetch(bridgeAnswering(described()));
 
     assertThat(log.readAll())
@@ -266,6 +267,59 @@ class MusicBrainzNeighbourIdentityTest {
         .singleElement()
         .extracting(edge -> edge.provenance().sourceId(), edge -> edge.provenance().confidence())
         .containsExactly("musicbrainz", 0.80);
+  }
+
+  /**
+   * GAP 7 on its unsafe side, which is where the ingest actually gets poisoned (issue #163, fix
+   * round 1).
+   *
+   * <p>{@code IngestService.record} is log-then-graph by contract, and {@code NodeRecord}'s
+   * constructor is what rejects a class id that is not a QID — so a bridge that named one produced
+   * a claim that was <b>already appended</b> when the throw happened. Three things went wrong at
+   * once and all three are asserted here: the expansion aborted unwrapped out of {@code
+   * SegueService.expandEntity}, the neighbour got nothing, and the append-only log (ADR 19) was
+   * left holding a row that {@code GraphProjector} re-throws on at every boot.
+   *
+   * <p>The fix is in two halves and this test only sees the second. {@link BridgedIdentity} refuses
+   * to hold a malformed class at all, and a <b>producer</b> therefore may not construct one from a
+   * row it has not read — it calls {@link BridgedIdentity#describing}, which answers {@link
+   * BridgedIdentity#undescribed} instead. Undescribed is a shape this adapter already handles: the
+   * guard omits it and the fetch below supplies the complete classes.
+   *
+   * <p><b>Watched red, and the replay control watched red separately.</b> Before the fix this test
+   * failed with {@code java.lang.IllegalArgumentException: instanceOf must look like Q12345, got:
+   * human} at {@code NodeRecord.<init>}, through {@code IngestService.record} — <i>after</i> the
+   * append — and out of {@code SegueService.expandEntity}, which wraps nothing. It never reached
+   * assertion (iii), so that assertion had never been seen to fail: a poisoned row was then
+   * appended to the log by hand, and the replay said {@code java.lang.IllegalStateException: replay
+   * failed at sequence 4}. A "the log still replays" assertion that has not been shown to notice a
+   * log that does not is not an assertion.
+   */
+  @Test
+  @DisplayName("should leave the log replayable when the bridge names a class that is not a QID")
+  void shouldLeaveTheLogReplayableWhenTheBridgeNamesAClassThatIsNotAQid() {
+    expand(bridgeAnswering(aRowNamingTheClass("human")));
+
+    // (i) the expansion ran to completion rather than aborting out of expandEntity.
+    assertTheEdgeWasStillRecorded();
+
+    // (ii) the neighbour got exactly what the fallback path gives it, and nothing else: the fetch
+    // described it, because the bridge's answer was reported undescribed.
+    NodeRecord neighbour = graph.node(NEIGHBOUR_QID).orElseThrow();
+    assertThat(neighbour.instanceOf()).containsExactly(HUMAN);
+    assertThat(neighbour.label()).isEqualTo(WIKIDATA_LABEL);
+    assertThat(log.readAll())
+        .filteredOn(NodeAssertion.class::isInstance)
+        .map(NodeAssertion.class::cast)
+        .as("no appended claim carries the unreadable class id")
+        .noneMatch(claim -> claim.instanceOf().contains("human"));
+
+    // (iii) the log replays. An append-only log that cannot be replayed is ADR 19 broken, and the
+    // only way to see it is to replay one.
+    try (GraphStore replayed = new TinkerGraphStore()) {
+      assertThatCode(() -> GraphProjector.project(log, replayed, IdentityMerge.NONE))
+          .doesNotThrowAnyException();
+    }
   }
 
   /**
@@ -318,6 +372,16 @@ class MusicBrainzNeighbourIdentityTest {
     service.expandEntity(SEED_QID, 200);
   }
 
+  /**
+   * A bridge row whose class id is whatever the source sent, readable or not — built through {@link
+   * BridgedIdentity#describing}, which is what a producer reading a row must call, rather than
+   * through the constructor, which refuses it.
+   */
+  private static BridgedIdentity aRowNamingTheClass(String classId) {
+    return BridgedIdentity.describing(
+        NEIGHBOUR_QID, NodeKind.PERSON, BRIDGE_LABEL, List.of(classId));
+  }
+
   /** The neighbour as a bridge that could see it answers: a real label and the class it implies. */
   private static BridgedIdentity described() {
     return new BridgedIdentity(NEIGHBOUR_QID, NodeKind.PERSON, BRIDGE_LABEL, List.of(HUMAN));
@@ -334,7 +398,7 @@ class MusicBrainzNeighbourIdentityTest {
    */
   private static MusicBrainzIdentity bridgeAnswering(BridgedIdentity neighbour) {
     return StubIdentity.describing(
-        Map.of(SEED_MBID, StubIdentity.undescribed(SEED_QID), NEIGHBOUR_MBID, neighbour));
+        Map.of(SEED_MBID, BridgedIdentity.undescribed(SEED_QID), NEIGHBOUR_MBID, neighbour));
   }
 
   /** The neighbour as Wikidata already described it, in the graph before the expansion runs. */

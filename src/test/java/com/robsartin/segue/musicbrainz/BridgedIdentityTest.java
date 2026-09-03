@@ -71,4 +71,61 @@ class BridgedIdentityTest {
 
     assertThat(bridged.label()).isNull();
   }
+
+  /**
+   * The other half of ADR 58's rule, and the half this record was missing (issue #163, fix round
+   * 1). {@code NodeRecord} refuses a class id that is not a QID — but it refuses it inside {@code
+   * IngestService.apply}, which runs <b>after</b> the claim has been appended, so the log is left
+   * holding a row that {@code GraphProjector} re-throws on at every boot. This record is what the
+   * adapter trusts, so this is where the shape has to be established.
+   */
+  @Test
+  @DisplayName("should refuse a class id that is not a QID when the log could not replay it")
+  void shouldRefuseAClassIdThatIsNotAQidWhenTheLogCouldNotReplayIt() {
+    assertThatThrownBy(
+            () ->
+                new BridgedIdentity(
+                    "Q0900002", NodeKind.PERSON, "A Player", List.of("Q5", "human")))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("qid must look like Q12345, got: human");
+  }
+
+  /**
+   * And why a throwing constructor is only half the fix. {@code MusicBrainzSourceAdapter} catches
+   * {@code MusicBrainzIdentityUnavailableException} and nothing else, so a producer that built one
+   * of these from an unread row would send the same aborted expansion through a different door. A
+   * producer calls this instead, and it drops.
+   *
+   * <p><b>The whole identity is reported undescribed, not merely the unreadable class omitted.</b>
+   * ADR 42 keeps the raw classes so a kind can be re-derived offline later, and {@code
+   * TinkerGraphStore.upsertNode} is last-writer-wins on {@code instanceOf} — so a silently
+   * shortened list would overwrite a complete one and then be re-derived from, confidently and
+   * wrongly, forever, with nothing marking it as partial. That is #143's erasure in miniature.
+   * Undescribed costs one {@code EntityResolver.fetch}, which is the fallback that already exists
+   * and which returns the complete list from Wikidata directly.
+   */
+  @Test
+  @DisplayName(
+      "should report the whole identity undescribed when one of its class ids is not a QID")
+  void shouldReportTheWholeIdentityUndescribedWhenOneOfItsClassIdsIsNotAQid() {
+    BridgedIdentity bridged =
+        BridgedIdentity.describing("Q0900002", NodeKind.PERSON, "A Player", List.of("Q5", "human"));
+
+    assertThat(bridged).isEqualTo(BridgedIdentity.undescribed("Q0900002"));
+    assertThat(bridged.instanceOf()).isEmpty();
+    assertThat(bridged.label()).isNull();
+    assertThat(bridged.kind()).isEqualTo(NodeKind.CONCEPT);
+  }
+
+  @Test
+  @DisplayName("should keep every class when the bridge read all of them")
+  void shouldKeepEveryClassWhenTheBridgeReadAllOfThem() {
+    BridgedIdentity bridged =
+        BridgedIdentity.describing(
+            "Q0900002", NodeKind.PERSON, "A Player", List.of("Q5", "Q215380"));
+
+    assertThat(bridged.instanceOf()).containsExactly("Q5", "Q215380");
+    assertThat(bridged.label()).isEqualTo("A Player");
+    assertThat(bridged.kind()).isEqualTo(NodeKind.PERSON);
+  }
 }

@@ -1,9 +1,7 @@
 package com.robsartin.segue.musicbrainz;
 
-import com.robsartin.segue.domain.NodeKind;
 import java.util.Collection;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -41,16 +39,6 @@ final class StubIdentity implements MusicBrainzIdentity {
    */
   static MusicBrainzIdentity describing(Map<String, BridgedIdentity> mbidToIdentity) {
     return new DescribingIdentity(mbidToIdentity);
-  }
-
-  /**
-   * The answer for a neighbour a bridge resolved but could not describe: a QID, {@link
-   * NodeKind#CONCEPT} for "we could not place this" (ADR 22), no label worth believing and no
-   * classes. Identical to what the seam's default produces, spelled once so a test that needs 22 of
-   * them does not spell it 22 times.
-   */
-  static BridgedIdentity undescribed(String qid) {
-    return new BridgedIdentity(qid, NodeKind.CONCEPT, null, List.of());
   }
 
   @Override

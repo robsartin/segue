@@ -147,8 +147,8 @@ class NeighbourFetchCountTest {
   }
 
   @Test
-  @DisplayName("should spend one fetch for each of the neighbours the bridge could not describe")
-  void shouldSpendOneFetchForEachOfTheNeighboursTheBridgeCouldNotDescribe() {
+  @DisplayName("should spend one fetch per neighbour when the bridge describes only some of them")
+  void shouldSpendOneFetchPerNeighbourWhenTheBridgeDescribesOnlySomeOfThem() {
     Expansion expansion = expand(StubIdentity.describing(mbidToIdentity(11)));
 
     assertThat(expansion.fetches())
@@ -201,7 +201,7 @@ class NeighbourFetchCountTest {
           entry.getKey(),
           describeThisOne
               ? new BridgedIdentity(qid, NodeKind.PERSON, BRIDGE_LABEL, List.of(HUMAN))
-              : StubIdentity.undescribed(qid));
+              : BridgedIdentity.undescribed(qid));
     }
     return bridged;
   }

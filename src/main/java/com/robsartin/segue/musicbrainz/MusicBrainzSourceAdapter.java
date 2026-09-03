@@ -324,25 +324,20 @@ public final class MusicBrainzSourceAdapter implements SourceAdapter {
     Map<String, NodeAssertion> neighbours = new LinkedHashMap<>();
     for (ArtistRelation relation : bounded) {
       BridgedIdentity neighbour = bridgedNeighbours.get(relation.targetMbid());
+      // GAP 9's shape check used to be a second `if` here, on targetQid. It moved, and did not
+      // vanish: a BridgedIdentity cannot hold a qid or a class id that is not a QID (its
+      // constructor runs Qid.check on every one), and the seam's default drops a binding whose
+      // qid is malformed rather than constructing one — so by the time a value reaches this loop
+      // it has already been checked, by the same predicate, one layer down. Keeping the branch
+      // here would have been a condition no test could make true and no reader could trust.
+      // The argument it carried is unchanged and still applies where the check now is:
+      // MusicBrainzIdentity is an interface this package neither implements nor constrains, and
+      // whatever supplies it is reading QIDs out of somebody's database — Wikidata's P434 in the
+      // shipped wiring, an external-id whose values are contributor-entered.
       String targetQid = neighbour == null ? null : neighbour.qid();
       if (targetQid == null) {
         // ADR 22 clause 2 declining to reach this neighbour, measured at 49% of artist-relation
         // neighbours and mostly tributes, pseudonyms and billing variants. Not a shortfall.
-        continue;
-      }
-      if (!Qid.looksLikeAQid(targetQid)) {
-        // GAP 9: AssertionRecord validates neither endpoint, so a non-QID would be logged happily
-        // and then reach TinkerGraphStore.requireVertex and throw mid-batch, after the log entry
-        // is already written. ClaimMapper refuses a non-QID object id for the same stated reason,
-        // in the guard that names that exact failure. This is not a defensive check against a
-        // programming error: MusicBrainzIdentity
-        // is an interface this package neither implements nor constrains, and whatever supplies
-        // it is reading QIDs out of somebody's database — Wikidata's P434 in the shipped wiring,
-        // an external-id whose values are contributor-entered. Malformed input arrives from
-        // outside either way, which is why the guard does not depend on which bridge is wired.
-        //
-        // It is one of three such guards rather than the only one, which is what issue #147 was:
-        // the class note enumerates what reaches Provenance and says where each part is checked.
         continue;
       }
       assertions.add(toAssertion(seed.qid(), seedMbid, relation, targetQid, assertedAt));
