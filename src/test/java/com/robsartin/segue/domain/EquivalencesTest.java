@@ -285,7 +285,7 @@ class EquivalencesTest {
             LocalEntity.minted(MINTED, NodeKind.WORK, "The Salt Almanac", WHEN));
 
     assertThat(Equivalences.standIns(log))
-        .as("order is log order - IngestService.carry reads the graph as it stands at the merge")
+        .as("order is log order - IngestService.standIn reads the graph as it stands at the merge")
         .isEmpty();
   }
 

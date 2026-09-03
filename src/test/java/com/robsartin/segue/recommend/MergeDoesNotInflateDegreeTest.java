@@ -25,7 +25,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -34,12 +33,13 @@ import org.junit.jupiter.params.provider.ValueSource;
 /**
  * Issue #178: a merge is an equivalence, not new evidence, so it must not move the page.
  *
- * <p><b>What the defect is.</b> {@code IngestService.carry} copies a merged local entity's edges
- * onto its canonical QID and leaves them on the local id, and {@code LogProjection.carry} does the
- * same to the same log. Two nodes then carry one entity's edges, so every neighbour of the merged
- * entity has one more incident edge than the world justifies. {@code Scorer.LIFT} divides by the
+ * <p><b>What the defect was.</b> {@code IngestService.carry} copied a merged local entity's edges
+ * onto its canonical QID and left them on the local id, and {@code LogProjection.carry} did the
+ * same to the same log. Two nodes then carried one entity's edges, so every neighbour of the merged
+ * entity had one more incident edge than the world justified. {@code Scorer.LIFT} divides by the
  * candidate's own degree and discounts each intermediate by the log of its degree, so the inflation
- * reaches the score twice over.
+ * reached the score twice over. Both folds now read every endpoint through {@code
+ * Equivalences.foldEndpoints} instead, so a merged entity's edges exist once.
  *
  * <p><b>This is the graph half of the defect alone.</b> The owner's entity below is deliberately
  * <em>unrated</em>: issue #92 already folded the ratings so a merged entity counts once, and rating
@@ -47,12 +47,14 @@ import org.junit.jupiter.params.provider.ValueSource;
  * no source knows, minted and connected by the owner — and nothing else.
  *
  * <p><b>Measured before it was written</b>, and the measurement is in {@code
- * docs/superpowers/specs/2026-09-02-merge-degree-design.md}. Against today's {@code carry}, at
- * twenty owner edges the rank-1 candidate loses 12.50 % of its score and drops to rank 2 behind an
- * entity that did not move at all, one entry leaves the page and one enters; at two owner edges a
- * degree-10 candidate loses 9.15 % and moves three places. The same fixture rebuilt with the
- * owner's edges counted <em>once</em> returns the pre-merge top 25 in the pre-merge order with a
- * largest score difference of 0.0000000000 — so the target state is exact and needs no tolerance.
+ * docs/superpowers/specs/2026-09-02-merge-degree-design.md}. Against the copy, at twenty owner
+ * edges the rank-1 candidate loses 12.50 % of its score and drops to rank 2 behind an entity that
+ * did not move at all, one entry leaves the page and one enters; at two owner edges a degree-10
+ * candidate loses 9.15 % and moves three places. Restoring the copy in the boot fold alone reds
+ * this test at all three degrees with exactly those figures, which is the control that says it can
+ * fail. The same fixture rebuilt with the owner's edges counted <em>once</em> returns the pre-merge
+ * top 25 in the pre-merge order with a largest score difference of 0.0000000000 — so the target
+ * state is exact and needs no tolerance.
  *
  * <p><b>The instrument is validated before it is believed.</b> An empty difference and a dead
  * instrument look identical, so the first test replays one unchanged log twice and holds the two
@@ -66,14 +68,13 @@ import org.junit.jupiter.params.provider.ValueSource;
  * cannot notice a score change smaller than 5e-5. That is deliberate: the guard is written against
  * the artefact the operator compares, the same way ADR 45's amendment method compares two runs.
  *
- * <p><b>The guard below is committed {@code @Disabled}, and Task 4 is what removes the
- * annotation.</b> It is not a pending test and not a known-failure to live with: it is the
- * definition of done for the fold, parked red for exactly as long as the defect stands. It is one
- * of <b>two</b> such guards — the other is {@code MergedIdIsDrawnAsAnOrphanTest}, which holds
- * controller ruling 3 — and the gate is what says both came off: today it reports <b>2 skipped</b>,
- * and when Task 4 lands the fold that count must read <b>0</b>. A skip count that stayed above zero
- * would mean the fold shipped with its own guards still switched off, which is the one way these
- * tests could be worthless.
+ * <p><b>The guard below was committed {@code @Disabled} and the fold is what took the annotation
+ * off.</b> It was never a pending test nor a known-failure to live with: it is the definition of
+ * done for the fold, parked red for exactly as long as the defect stood. It was one of <b>two</b>
+ * such guards — the other is {@code MergedIdIsDrawnAsAnOrphanTest}, which holds controller ruling 3
+ * — and the gate is what says both came off: it reported <b>2 skipped</b> while they were parked
+ * and reports <b>0</b> now. A skip count above zero here would mean the fold had shipped with its
+ * own guards switched off, which is the one way these tests could be worthless.
  *
  * <p>Every QID and label here is invented and no known-list is behind them (ADR 40, ADR 51). The
  * canonical side of a merge has to be an id Wikidata could allocate ({@code SameAs} refuses
@@ -128,7 +129,6 @@ class MergeDoesNotInflateDegreeTest {
         .isEqualTo(once);
   }
 
-  @Disabled("#178: red until Task 4 lands the fold — see the task report for the quoted red")
   @DisplayName("a merge does not move the top 25, because an equivalence is not new evidence")
   @ParameterizedTest(name = "the merged entity carries {0} edge(s)")
   @ValueSource(ints = {2, 5, 20})

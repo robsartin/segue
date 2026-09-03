@@ -39,20 +39,22 @@ import org.junit.jupiter.api.io.TempDir;
  * </pre>
  *
  * <p>Exactly doubled. {@code KnownList.promoted} promotes both affinity rows a merge leaves behind,
- * the graph holds both nodes carrying the same edges, and the owner's one opinion seeds the sweep
- * twice. The third line is the same defect from the other side: with only the canonical id rated,
- * segue offers the owner the entity he minted and then told it about.
+ * the graph held both nodes carrying the same edges until #178 folded them onto one, and the
+ * owner's one opinion seeds the sweep twice. The third line is the same defect from the other side:
+ * with only the canonical id rated, segue offers the owner the entity he minted and then told it
+ * about.
  *
- * <p><b>The first test scores by {@code raw}, and the reason is a residual the fix cannot
- * reach.</b> A merge <em>does</em> add an edge to the graph — {@code IngestService.carry} copies
- * the owner's edge onto the canonical id and leaves the local one where it was — so the shared
- * artist's degree grows by one, and {@code lift} discounts each intermediate by the log of that
- * degree. Under the shipped {@code lift} the same fixture reads 0.2236 before the merge, 0.4332
- * after it unfixed (1.94x), and 0.2166 after it fixed: a 3% residual that is the graph having one
+ * <p><b>The first test scores by {@code raw}, and the reason was a residual #92's fix could not
+ * reach.</b> A merge used to <em>add</em> an edge to the graph — {@code IngestService.carry} copied
+ * the owner's edge onto the canonical id and left the local one where it was — so the shared
+ * artist's degree grew by one, and {@code lift} discounts each intermediate by the log of that
+ * degree. Under the shipped {@code lift} the same fixture read 0.2236 before the merge, 0.4332
+ * after it unfixed (1.94x), and 0.2166 after it fixed: a 3% residual that was the graph having one
  * more edge in it, not the rating being counted twice. {@code raw} is the one scorer whose discount
  * is constant, so it isolates the question this test is asking and lets it be asserted without a
- * tolerance. The duplicated edge is real and is recorded as a concern; it is not this task's
- * subject.
+ * tolerance. That residual was the concern recorded here, it became issue #178, and it is gone —
+ * both folds resolve endpoints now, so the merged entity's edges exist once. This test keeps {@code
+ * raw} because the question it asks is still about ratings and not about degree.
  *
  * <p><b>It drives {@link RecommendCli#main} rather than {@link RecommendRun}, for the reason {@code
  * AffinityWeightedRecommendationTest} does</b> — what is under test is a wiring, not an arithmetic.

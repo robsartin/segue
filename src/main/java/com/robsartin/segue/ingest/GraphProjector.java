@@ -72,10 +72,17 @@ public final class GraphProjector {
   public static long project(AssertionLog log, GraphStore store, IdentityMerge merges) {
     List<LoggedAssertion> assertions = log.readAll();
     Retractions retractions = Retractions.in(assertions);
+    // The graph half of a merge (#178), built from the same log and beside the same log's
+    // retractions, because they are the same kind of rule: neither edits a row, and both decide
+    // what the fold makes of one. Equivalences.in already asks Retractions.survives itself, so a
+    // merge a retraction reaches folds nothing.
+    Equivalences equivalences = Equivalences.in(assertions);
     // Every merged entity's canonical id gets its node before anything is applied (#178). See
-    // Equivalences.standIns for why this cannot wait for the merge's own row, and why it is a
-    // no-op until the endpoint fold lands: a real claim about the canonical id, wherever it sits
-    // in the log, lands on top of the stand-in and wins by upsertNode's last-writer-wins.
+    // Equivalences.standIns for why this cannot wait for the merge's own row: an edge whose
+    // endpoint the fold below moves onto the canonical id can be claimed EARLIER in the log than
+    // the merge that names it, and TinkerGraphStore.record refuses an endpoint it has never seen.
+    // A real claim about the canonical id, wherever it sits in the log, lands on top of the
+    // stand-in and wins by upsertNode's last-writer-wins.
     for (NodeRecord standIn : Equivalences.standIns(assertions).values()) {
       store.upsertNode(standIn);
     }
@@ -86,7 +93,7 @@ public final class GraphProjector {
         continue;
       }
       try {
-        IngestService.apply(store, merges, rederived(assertion));
+        IngestService.apply(store, merges, equivalences, rederived(assertion));
         applied++;
       } catch (RuntimeException e) {
         // Sequence is 1-based, matching the log's own autoincrement.

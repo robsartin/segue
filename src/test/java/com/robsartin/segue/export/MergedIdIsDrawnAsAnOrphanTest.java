@@ -19,7 +19,6 @@ import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import java.io.IOException;
 import java.io.StringWriter;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -35,17 +34,17 @@ import org.junit.jupiter.api.Test;
  * above has been made and, once the fold lands, it is the visible behaviour of the artefact
  * somebody keeps and opens in Gephi weeks later.
  *
- * <p><b>The first test below is committed {@code @Disabled} and is red today, for the honest
- * opposite reason: the local id still has its edges.</b> {@code IngestService.carry} and {@code
- * LogProjection.carry} <em>copy</em> them onto the canonical id rather than moving them, so the
- * merged entity is drawn twice over. Issue #178 and {@code
- * docs/superpowers/specs/2026-09-02-merge-degree-design.md} carry the measurement and the ruling;
- * running this test with the annotation removed is what shows the red.
+ * <p><b>The first test below was committed {@code @Disabled}, red for the honest opposite reason:
+ * the local id still had its edges.</b> {@code IngestService.carry} and {@code LogProjection.carry}
+ * <em>copied</em> them onto the canonical id rather than moving them, so the merged entity was
+ * drawn twice over. Issue #178 and {@code docs/superpowers/specs/2026-09-02-merge-degree-design.md}
+ * carry the measurement and the ruling. Both folds now read every endpoint through {@code
+ * Equivalences.foldEndpoints}, and the annotation came off with the fold.
  *
- * <p>It is the second of <b>two</b> guards parked red for exactly as long as the defect stands —
- * the other is {@code MergeDoesNotInflateDegreeTest}. Task 4 removes both annotations, and the gate
- * is what says it did: <b>2 skipped</b> today, and <b>0</b> once the fold lands. A skip count that
- * stayed above zero would mean the fold shipped with its own guards switched off.
+ * <p>It was the second of <b>two</b> guards parked red for exactly as long as the defect stood —
+ * the other is {@code MergeDoesNotInflateDegreeTest} — and the gate is what says both came off:
+ * <b>2 skipped</b> while they were parked, <b>0</b> now. A skip count above zero would have meant
+ * the fold shipped with its own guards switched off.
  *
  * <p>The second test is not disabled and is green in both worlds. It is the half of ruling 3 that
  * does not depend on the fold — that an isolated node is drawn rather than filtered out — so that
@@ -68,7 +67,6 @@ class MergedIdIsDrawnAsAnOrphanTest {
             merged(ALMANAC, PRESSING));
   }
 
-  @Disabled("#178: red until Task 4 lands the fold — see the task report for the quoted red")
   @Test
   @DisplayName(
       "a merged local id keeps its node and loses its edges, which all sit on the canonical id")

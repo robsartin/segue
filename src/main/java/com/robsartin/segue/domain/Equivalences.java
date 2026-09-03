@@ -17,14 +17,14 @@ import java.util.Set;
  * rate} both ask this type the same two questions, so the known-list and the deck cannot answer
  * them differently.
  *
- * <p><b>The graph half of a merge has its rule here, and does not yet use it.</b> {@code
- * IngestService.carry} <em>copies</em> the edges onto the canonical id and leaves them on the local
- * id too, so two nodes carry one entity's edges and every neighbour of a merged entity has one more
- * incident edge than the world justifies — the defect issue #178 measured, in {@code
- * docs/superpowers/specs/2026-09-02-merge-degree-design.md}. {@link #foldEndpoints} is the fix's
- * rule, landed here first and called by nothing: it is a prerequisite leaf, and the commit that
- * makes both projections call it is what removes the copy. Until then this method is exercised by
- * {@code EquivalencesTest} alone.
+ * <p><b>The graph half of a merge has its rule here, and both folds now call it.</b> {@code
+ * IngestService.carry} used to <em>copy</em> the edges onto the canonical id and leave them on the
+ * local id too, so two nodes carried one entity's edges and every neighbour of a merged entity had
+ * one more incident edge than the world justified — the defect issue #178 measured, in {@code
+ * docs/superpowers/specs/2026-09-02-merge-degree-design.md}, worth up to 12.5 % of a candidate's
+ * score and enough to unseat rank 1. {@link #foldEndpoints} is the fix: {@code IngestService.apply}
+ * reads every endpoint through it as the claim is applied, and {@code LogProjection} reads every
+ * endpoint through it as the claim is folded, so the edges exist once and the copy is gone.
  *
  * <p>The local <em>node</em> stays exactly where it was either way, so a route or a log entry
  * recorded last month still resolves — that is what "a merged local id stays resolvable" means, and
@@ -41,10 +41,11 @@ import java.util.Set;
  *   AFTER  merge   candidate 0.4332, 2 shared intermediates
  * </pre>
  *
- * <p>{@code KnownList.promoted} promotes both rows, the graph holds both nodes carrying the same
- * edges, and the owner's one opinion is counted twice. The second face of the same defect is that
- * where only the canonical id is rated, the local entity <em>becomes a candidate</em> — in the same
- * fixture it ranked first, above the entity the run existed to find.
+ * <p>{@code KnownList.promoted} promotes both rows, the graph held both nodes carrying the same
+ * edges until #178 folded them onto one, and the owner's one opinion is counted twice. The second
+ * face of the same defect is that where only the canonical id is rated, the local entity
+ * <em>becomes a candidate</em> — in the same fixture it ranked first, above the entity the run
+ * existed to find.
  *
  * <p><b>Nothing is deleted, here or anywhere.</b> ADR 19 makes the log append-only and {@code
  * AffinityStore} has no delete (ADR 39): the local row is what the owner actually said at the time
@@ -105,16 +106,16 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
    * A node for every canonical id a surviving merge names, to be applied <b>before</b> the log is
    * projected (#178).
    *
-   * <p><b>Why before, and not at the merge's own position.</b> {@code IngestService.carry} creates
-   * the canonical node where the merge sits, which is safe only while the edges it carries are
-   * created at that same moment. Once the endpoints are folded by {@link #foldEndpoints}, an edge
-   * claimed <em>earlier</em> in the log arrives on the canonical id before the merge row that would
-   * have created its node, and {@code TinkerGraphStore.record} refuses an endpoint it has never
-   * seen — {@code assertion references unknown entity … - upsert the node first}, at every boot, on
-   * a row ADR 19 forbids deleting. Hoisting the node is therefore a prerequisite of the fold rather
-   * than part of it, and it is a no-op on its own.
+   * <p><b>Why before, and not at the merge's own position.</b> {@code IngestService.standIn}
+   * creates the canonical node where the merge sits, which is safe only while the edges are created
+   * at that same moment. Once the endpoints are folded by {@link #foldEndpoints}, an edge claimed
+   * <em>earlier</em> in the log arrives on the canonical id before the merge row that would have
+   * created its node, and {@code TinkerGraphStore.record} refuses an endpoint it has never seen —
+   * {@code assertion references unknown entity … - upsert the node first}, at every boot, on a row
+   * ADR 19 forbids deleting. Hoisting the node is therefore a prerequisite of the fold rather than
+   * part of it, and it is a no-op on its own.
    *
-   * <p><b>Offered whether or not a source has named the canonical entity.</b> {@code carry} asks
+   * <p><b>Offered whether or not a source has named the canonical entity.</b> {@code standIn} asks
    * {@code graph.node(canonical).isEmpty()} because it runs mid-log and a source that got there
    * first must not be overwritten. Applied first, the same guarantee comes free from the other
    * direction: every real claim in the log lands on top of this map and wins, by {@code
@@ -129,16 +130,17 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
    * Two passes over the log, one pass over the store.
    *
    * <p><b>Log order, in both senses.</b> A minted entity is read as it stood <em>when the merge was
-   * made</em>, matching {@code carry}'s "order is log order" paragraph, so a claim appended after a
-   * merge is not what the merge stood in for; and where two local ids were merged onto one
-   * canonical id the first merge names the stand-in, matching {@code carry}'s creating a node only
-   * where none exists. The returned map keeps log order for {@link #canonicalByLocal}'s reason.
+   * made</em>, matching {@code standIn}'s "order is log order" paragraph, so a claim appended after
+   * a merge is not what the merge stood in for; and where two local ids were merged onto one
+   * canonical id the first merge names the stand-in, matching {@code standIn}'s creating a node
+   * only where none exists. The returned map keeps log order for {@link #canonicalByLocal}'s
+   * reason.
    *
    * <p><b>Derived from {@link #localsOfMerges}, and that is the point.</b> "Does this merge have a
    * local side, and what does it look like?" is one question, asked by the stand-in here and by
-   * both folds' decision to carry. Answering it in two places is how the two folds drift — which
-   * they did, briefly, when this method read {@link LocalEntity} claims while {@code LogProjection}
-   * still read its own accumulator.
+   * {@code IngestService.standIn} on the live path. Answering it in two places is how the two folds
+   * drift — which they did, briefly, when this method read {@link LocalEntity} claims while {@code
+   * LogProjection} still read its own accumulator to decide whether to copy a merge's edges.
    *
    * @return each canonical id and the node to stand in for it, in log order
    */
@@ -163,11 +165,10 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
    * it.
    *
    * <p><b>One predicate, one home.</b> {@link #standIns} builds the canonical node from this, and
-   * both folds decide whether to carry a merge's edges from this; {@code IngestService.carry} asks
-   * the running graph the same question in the same words ({@code graph.node(local)}). A merge
-   * whose local id nothing has claimed is not an error and carries nothing — the log is
-   * append-only, so a merge may be replayed with the claim it resolves retracted, or with a
-   * retraction sitting between the two.
+   * {@code IngestService.standIn} asks the running graph the same question in the same words
+   * ({@code graph.node(local)}). A merge whose local id nothing has claimed is not an error and
+   * carries nothing — the log is append-only, so a merge may be replayed with the claim it resolves
+   * retracted, or with a retraction sitting between the two.
    *
    * <p><b>Any surviving node claim counts, not only a minted one.</b> Spec ruling 2 is explicit
    * that the fold must not assume every claim naming a merged local id came through {@code OwnCli}:
@@ -184,8 +185,8 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
    * stand-in's kind would lag the local node's own.
    *
    * <p><b>Log order, in both senses.</b> A node is read as it stood <em>when the merge was
-   * made</em>, matching {@code carry}'s "order is log order" paragraph, so a claim appended after a
-   * merge is not what the merge stood in for; and the returned map keeps log order for {@link
+   * made</em>, matching {@code standIn}'s "order is log order" paragraph, so a claim appended after
+   * a merge is not what the merge stood in for; and the returned map keeps log order for {@link
    * #canonicalByLocal}'s reason, which is what lets {@link #standIns} say "the first merge onto a
    * canonical id names it".
    *

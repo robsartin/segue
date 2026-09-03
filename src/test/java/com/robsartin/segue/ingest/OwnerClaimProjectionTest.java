@@ -249,7 +249,7 @@ class OwnerClaimProjectionTest {
     LogProjection projection = LogProjection.of(log);
 
     assertThat(projection.nodes())
-        .as("the canonical node is carried here as IngestService.carry carries it into the graph")
+        .as("the canonical node is stood in for here as Equivalences.standIns does it in the graph")
         .containsOnlyKeys(MINTED, CANONICAL);
     assertThat(projection.edges())
         .as("a merge is a statement about identity; find_paths cannot route along it")

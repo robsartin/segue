@@ -1,13 +1,12 @@
 package com.robsartin.segue.ingest;
 
 import com.robsartin.segue.domain.AssertionRecord;
-import com.robsartin.segue.domain.EdgeRecord;
+import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.OwnerEdge;
-import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.domain.Retraction;
 import com.robsartin.segue.domain.SameAs;
 import com.robsartin.segue.port.AssertionLog;
@@ -46,7 +45,27 @@ public final class IngestService {
     this.merges = Objects.requireNonNull(merges, "merges");
   }
 
-  /** Append one claim to the log, then apply it to the graph. */
+  /**
+   * Append one claim to the log, then apply it to the graph.
+   *
+   * <p><b>The equivalences are {@link Equivalences#NONE} here, and that is a stated limitation
+   * rather than an oversight</b> (#178). {@link #apply} now folds an edge's endpoints through the
+   * merges the log holds, and this path has no such view: it sees one claim, not the log, and
+   * reading the whole log back on every single write is not a trade this method can make. So a
+   * {@link SameAs} arriving here appends and creates its canonical node, and the edges already
+   * recorded against the local id stay where they are until the next boot moves them.
+   *
+   * <p><b>Refusing it was considered and is not what this does.</b> Nothing in production sends one
+   * — {@code OwnRun} appends a merge through {@link #claim}, which has no graph half at all — so a
+   * refusal would fence a path nobody walks, and it would take the live rating carry with it
+   * ({@code MergeCarriesEverythingTest} asserts that half deliberately against the live stores,
+   * because affinity is durable and is rebuilt by nothing). Staleness until the next boot is the
+   * contract {@link #retract} already gives for exactly the same reason (ADR 24): {@link
+   * GraphStore} cannot remove or rewrite an edge, so the running graph catches up when it is
+   * rebuilt, not before. The same limitation applies to any edge claimed here against an id the log
+   * has already merged; {@code OwnRun.labelOrRefuse} refuses to make one, and spec ruling 2 says
+   * the fold must not depend on that refusal — it does not, because replay folds it anyway.
+   */
   public void record(LoggedAssertion assertion) {
     Objects.requireNonNull(assertion, "assertion");
     if (assertion instanceof Retraction) {
@@ -56,7 +75,7 @@ public final class IngestService {
       throw new IllegalArgumentException("a retraction is appended by retract(), not record()");
     }
     log.append(assertion);
-    apply(graph, merges, assertion);
+    apply(graph, merges, Equivalences.NONE, assertion);
   }
 
   /**
@@ -132,9 +151,25 @@ public final class IngestService {
    * <p>Shared with {@link GraphProjector} so replay and live ingest cannot drift. Two copies of
    * this switch would be free to disagree, and a rebuilt graph that silently differs from the one
    * it replaced defeats the point of having a log at all.
+   *
+   * <p><b>Every endpoint is read through the equivalences before anything is applied</b> (#178).
+   * That is the whole of the graph half of a merge: an edge claimed against a merged local id is
+   * applied to the canonical id, once, instead of being applied to the local id and copied. The
+   * rule itself is {@link Equivalences#foldEndpoints}, in {@code domain}, so that {@code
+   * LogProjection} folds with the same code rather than with the same idea — {@code
+   * BothFoldsAgreeTest} is the test that the two hold one graph, and a rule written twice is a rule
+   * that can be corrected once.
+   *
+   * @param equivalences the merges the log holds. {@link Equivalences#NONE} from {@link #record},
+   *     which sees a claim rather than a log - see that method for the limitation that states
    */
-  static void apply(GraphStore graph, IdentityMerge merges, LoggedAssertion assertion) {
-    switch (assertion) {
+  static void apply(
+      GraphStore graph,
+      IdentityMerge merges,
+      Equivalences equivalences,
+      LoggedAssertion assertion) {
+    Objects.requireNonNull(equivalences, "equivalences");
+    switch (equivalences.foldEndpoints(assertion)) {
       case NodeAssertion node -> graph.upsertNode(node.toNode());
       case AssertionRecord edge -> graph.record(edge);
       // Unreachable, and a guard rather than a path. A retraction is honoured by the FOLD - both
@@ -152,12 +187,13 @@ public final class IngestService {
       // so replay and this switch cannot attribute the same claim differently.
       case LocalEntity local -> graph.upsertNode(local.toNode());
       case OwnerEdge edge -> graph.record(edge.toAssertion());
-      // A merge is an asserted equivalence, never an edit (ADR 19, ADR 44): the claims already
-      // made against the local id are carried onto the canonical one, and the local id is left
-      // exactly where it was so every earlier log entry keeps meaning what it meant.
+      // A merge is an asserted equivalence, never an edit (ADR 19, ADR 44). Its edge half is no
+      // longer here at all: the fold above put every edge on the canonical id as it was applied,
+      // so there is nothing left to copy and the local id is left exactly where it was, node and
+      // all, so every earlier log entry keeps meaning what it meant (ADR 59, amended by #178).
       case SameAs merge -> {
-        carry(graph, merge);
-        // The taste half, and it runs on replay too - see carry()'s last paragraph and
+        standIn(graph, merge);
+        // The taste half, and it runs on replay too - see standIn()'s last paragraph and
         // IdentityMerge, which together say why that is a repair rather than a hazard.
         merges.follow(merge.localQid(), merge.canonicalQid());
       }
@@ -165,30 +201,46 @@ public final class IngestService {
   }
 
   /**
-   * Carry what the owner claimed about a local id onto the id Wikidata turned out to have.
+   * Give the id Wikidata turned out to have a node, so that an edge folded onto it has somewhere to
+   * land.
    *
-   * <p><b>Nothing is removed.</b> The local node stays, its edges stay, and the canonical id gains
-   * copies. That is what "a merged local id stays resolvable" means in practice - a route or a
-   * rating recorded last month still names the local id, and a projection that deleted it would
-   * make those entries unreadable while the log still holds them.
+   * <p><b>The edge half used to be here and is gone</b> (#178). It <em>copied</em> every edge off
+   * the local id onto the canonical one and left the originals, so two nodes carried one entity's
+   * edges and every neighbour of a merged entity had one more incident edge than the world
+   * justified — measured in {@code docs/superpowers/specs/2026-09-02-merge-degree-design.md}, up to
+   * 12.5 % off a candidate's score, enough to unseat rank 1. {@link Equivalences#foldEndpoints} now
+   * puts each edge on the canonical id as it is applied, so there is nothing to copy afterwards.
+   * What is left is this: the node.
+   *
+   * <p><b>Nothing is removed.</b> The local node stays, exactly as ADR 59's merge bullet says — a
+   * route or a rating recorded last month still names the local id, and a projection that deleted
+   * it would make those entries unreadable while the log still holds them. It is its <em>edges</em>
+   * that the amendment moves, and it is drawn thereafter as the orphan it has become (spec ruling
+   * 3).
    *
    * <p><b>The canonical id gets a node only when nothing has claimed one.</b> A merge is usually
    * declared before any source has expanded the real item, and {@code TinkerGraphStore.record}
-   * requires both endpoints to exist - so without this, a carried edge would throw, and it would
-   * throw again at every boot on a log row ADR 19 forbids deleting. When a source HAS named the
-   * entity, that claim wins: {@code upsertNode} is last-writer-wins, and overwriting a source's
-   * label with the owner's working title would be the merge editing the world rather than recording
-   * an identity. The stand-in carries no {@code instanceOf}, because the owner stated no classes -
-   * the same reason {@link LocalEntity#toNode()} carries none.
+   * requires both endpoints to exist. When a source HAS named the entity, that claim wins: {@code
+   * upsertNode} is last-writer-wins, and overwriting a source's label with the owner's working
+   * title would be the merge editing the world rather than recording an identity. The stand-in
+   * carries no {@code instanceOf}, because the owner stated no classes - the same reason {@link
+   * LocalEntity#toNode()} carries none.
+   *
+   * <p><b>On replay this is a second helping of a job already done, deliberately.</b> {@link
+   * Equivalences#standIns} builds the same node from the same rule before the fold begins, and it
+   * has to, because a folded edge can be claimed <em>earlier</em> in the log than the merge that
+   * names its endpoint. This one is the live path's copy, where there is no pre-pass and no whole
+   * log to read: it is what keeps {@code record(SameAs)} from leaving a canonical id the running
+   * graph has never heard of. The two agree by construction — same guard, same fields — and {@code
+   * MergeCarriesEverythingTest} holds them to it.
    *
    * <p><b>Order is log order, deliberately.</b> This reads the graph as it stands at the moment the
-   * merge is applied, so claims appended <em>after</em> a merge stay on the id they were made
-   * against. That matches {@link com.robsartin.segue.domain.Retractions}, which also asks what had
-   * already been said when the decision was made, and it keeps live ingest and replay identical.
+   * merge is applied. That matches {@link com.robsartin.segue.domain.Retractions}, which also asks
+   * what had already been said when the decision was made.
    *
-   * <p><b>Replay carries the rating as well as the edges, and the first version of this task said
-   * otherwise on an argument that measurement contradicts.</b> That argument was "a rating carried
-   * again at every boot would overwrite whatever the owner has said since". It would not: {@code
+   * <p><b>Replay carries the rating, and the first version of this task said otherwise on an
+   * argument that measurement contradicts.</b> That argument was "a rating carried again at every
+   * boot would overwrite whatever the owner has said since". It would not: {@code
    * IdentityMerge.carryingRatings} refuses to overwrite a rating whose {@code updatedAt} is newer,
    * so a replayed carry over a canonical id the owner has re-rated changes nothing. The only case a
    * replayed carry alters is a local id re-rated <em>after</em> the merge, where it moves the
@@ -197,32 +249,21 @@ public final class IngestService {
    * to {@link IdentityMerge#NONE}, would strand its rating forever, because affinity is the one
    * thing replay does not rebuild.
    */
-  private static void carry(GraphStore graph, SameAs merge) {
+  private static void standIn(GraphStore graph, SameAs merge) {
     String local = merge.localQid();
     String canonical = merge.canonicalQid();
     Optional<NodeRecord> minted = graph.node(local);
     if (minted.isEmpty()) {
-      // Nothing has been claimed under the local id, so there is nothing to carry. Not an error:
-      // the log is append-only and a merge may legitimately be replayed before the claim it
+      // Nothing has been claimed under the local id, so there is nothing to stand in for. Not an
+      // error: the log is append-only and a merge may legitimately be replayed before the claim it
       // resolves has been re-applied - Retractions can also have dropped that claim and kept this
-      // row, when the retraction lies between them.
+      // row, when the retraction lies between them. Equivalences.localsOfMerges asks the same
+      // question of the log, in the same words, for both folds' pre-pass.
       return;
     }
     if (graph.node(canonical).isEmpty()) {
       graph.upsertNode(
           new NodeRecord(canonical, minted.get().kind(), minted.get().label(), List.of()));
-    }
-    for (EdgeRecord edge : graph.edges(local)) {
-      String from = edge.fromQid().equals(local) ? canonical : edge.fromQid();
-      String to = edge.toQid().equals(local) ? canonical : edge.toQid();
-      // Every supporting assertion, not one: an edge holds the provenance of everyone who claimed
-      // it, and re-recording it as a single assertion would drop the others and change what
-      // EdgeRecord.corroboration() counts on the canonical id.
-      for (Provenance source : edge.sources()) {
-        graph.record(
-            new AssertionRecord(
-                from, to, edge.typeCode(), edge.validFrom(), edge.validTo(), source));
-      }
     }
   }
 }

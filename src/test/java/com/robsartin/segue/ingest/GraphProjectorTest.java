@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.robsartin.segue.domain.AssertionRecord;
+import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.Provenance;
@@ -238,6 +239,7 @@ class GraphProjectorTest {
                   IngestService.apply(
                       store,
                       IdentityMerge.NONE,
+                      Equivalences.NONE,
                       new Retraction("Q900101", "wrong entity", RETRACTED_AT)))
           .isInstanceOf(IllegalStateException.class)
           .hasMessageContaining("Q900101");
