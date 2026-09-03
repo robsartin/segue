@@ -199,3 +199,60 @@ so that three amendments landing in the same week merge cleanly.
   expose the superseded ids; nothing asks for that yet.
 - **How many twice-merged local ids the owner's real graph holds.** Unmeasured, as #178's own
   residual says: nothing here opened `~/.segue/segue.db`.
+
+## Amendment during implementation (2026-09-03)
+
+Task 4's review found that the fix as designed above — `stands` is last-wins alone, so a
+superseded merge names no stand-in at all — makes a **legal, supported-flow log unbootable**.
+Reproduced by the reviewer on `fdd420d`: the log `[node(WREN), minted(CORRECTED),
+merged(CORRECTED→MISHEARD), owned(WREN→MISHEARD, "INFLUENCED_BY"),
+merged(CORRECTED→WATERMARK)]` gives `Equivalences.standIns(log) = [WATERMARK]` — MISHEARD is
+dropped entirely — and `GraphProjector.project` then throws:
+
+```
+java.lang.IllegalStateException: replay failed at sequence 4
+Caused by: java.lang.IllegalStateException: assertion references unknown entity Q10000900109 - upsert the node first
+```
+
+while `LogProjection` tolerates the same `WREN → MISHEARD` edge as dangling rather than throwing,
+so the two folds disagree in the worst direction the design above set out to prevent.
+
+The scenario is reachable through the supported flow, not a constructed edge case: `OwnRun` offers
+a merge's canonical id as a claimable endpoint the moment its stand-in exists (`assertEdge` via
+`labelsInTheProjection`), so an owner who merges, then claims an edge against the new canonical id,
+then corrects the merge, produces exactly this log — and every row in it is one ADR 19 forbids
+deleting.
+
+**Ruling (controller).** A superseded merge's stand-in **survives** while any surviving edge names
+its canonical id: the node is then not an orphan — it has an edge — and the export shows the
+owner's real claim rather than silently dropping it. `Equivalences.stands` is widened from
+last-wins alone to *last-wins OR a surviving `AssertionRecord`/`OwnerEdge` names this merge's
+canonical id as an endpoint*, computed once in `Equivalences.in` from the same pass that builds
+`canonicalByLocal`, over surviving rows only. The **rating carry stays last-wins only** — a
+separate predicate, `Equivalences.last` — because a node surviving on account of an edge is a fact
+about the graph, not the owner's opinion about the thing he corrected himself onto; widening
+`stands` without keeping the carry narrow would have reintroduced the very defect a previous round
+of this issue fixed (a rating written onto every canonical id a local id ever touched, not only the
+one that stands today).
+
+**Two alternatives were considered and rejected:**
+
+- **Re-point the edge onto the corrected canonical id.** Rejected: it silently rewrites what the
+  owner actually claimed — he named the *first* id, not the second, and the first id may itself
+  turn out to be a real, distinct entity the correction says nothing about. Segue does not edit a
+  claim on the owner's behalf; ADR 19 already settles that a correction is a new claim, never an
+  edit of an old one.
+- **Have `GraphProjector` tolerate the missing endpoint as a dangling edge**, matching how
+  `LogProjection` already behaves. Rejected: it replays the owner's claim into nothing without
+  saying so — the same silent-data-loss shape issue #101 fixed once already for the rating deck,
+  and precisely the failure mode `danglingEdges()` exists to report rather than to produce.
+
+Consequence for the four homes named in `Equivalences.standIns`' javadoc: all four (`standIns`,
+`IngestService.standIn`, `OwnRun.labelsInTheProjection`, `ratings/Labels.forQids`) ask
+`Equivalences.stands` directly, so the widening reaches all four by construction, and each was
+checked against its own existing coverage (`OwnRunTest.shouldRefuseTheCanonicalIdOfAMergeWhen…`
+still reds correctly, because that fixture has no surviving edge naming the corrected-away id) and
+given one added case where the surviving-edge path was previously untested
+(`RatingsRunTest.shouldKeepACanonicalIdsLabelWhenASurvivingEdgeNamesItDirectlyThoughALaterMergeCorrectedIt`).
+
+This finding and ruling are also the basis for Task 6's ADR 59 amendment.
