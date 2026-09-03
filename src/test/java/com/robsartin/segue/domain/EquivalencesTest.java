@@ -33,6 +33,13 @@ class EquivalencesTest {
    * Kinds as the claim stated them. Every fixture in this file states no classes, so {@code
    * KindMapper.rederive} would be the identity on all of them (ADR 42) - naming it here says the
    * choice was made rather than defaulted, and keeps {@code wikidata} out of a {@code domain} test.
+   *
+   * <p><b>It is honest only while that stays true.</b> A fixture added here that DOES state classes
+   * would go un-re-derived under this operator with nothing in this file to say so, and would then
+   * assert the claimed kind as though it were the answer both folds give. Nothing here can catch
+   * that - identity is a legitimate answer for a caller to hand in - so the guard is elsewhere:
+   * {@code StandInAgreesInEveryHomeTest} feeds a class-bearing claim through the real {@code
+   * KindMapper.rederive} in every home the rule has.
    */
   private static final UnaryOperator<NodeAssertion> AS_CLAIMED = UnaryOperator.identity();
 
@@ -405,8 +412,8 @@ class EquivalencesTest {
   }
 
   @Test
-  @DisplayName("the stand-in's kind is the caller's re-derivation, not the kind the claim stated")
-  void shouldTakeTheStandInsKindFromTheCallersRederivationWhenALocalSideStatesOne() {
+  @DisplayName("the stand-in's kind is whatever the caller re-derives, not the kind the claim said")
+  void shouldTakeTheStandInsKindFromTheCallersRederivationWhenTheCallerReturnsAnotherKind() {
     // The rule that closes ADR 59's first residual, stated where it lives (#222). KindMapper is in
     // wikidata and domain may not reach it - domainHasNoThirdPartyDependencies allows domain only
     // domain, java and javax - so the re-derivation arrives as a function and both folds hand in

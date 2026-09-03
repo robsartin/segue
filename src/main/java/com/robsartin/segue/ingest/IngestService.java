@@ -229,8 +229,12 @@ public final class IngestService {
    * requires both endpoints to exist. When a source HAS named the entity, that claim wins: {@code
    * upsertNode} is last-writer-wins, and overwriting a source's label with the owner's working
    * title would be the merge editing the world rather than recording an identity. The stand-in
-   * carries no {@code instanceOf}, because the owner stated no classes - the same reason {@link
-   * LocalEntity#toNode()} carries none.
+   * carries no {@code instanceOf}: it copies a kind, and putting the local side's classes on the
+   * canonical id would report as that entity's what no source has stated about it - the same reason
+   * {@link LocalEntity#toNode()} carries none. This used to read "because the owner stated no
+   * classes", which was true only of the path the owner's tool takes: on the bypass path (#222) the
+   * local side is a {@link NodeAssertion} that DID state classes, and they stay where they were
+   * claimed, on the local node.
    *
    * <p><b>On replay this is a second helping of a job already done, deliberately.</b> {@link
    * Equivalences#standIns} builds the same node from the same rule before the fold begins, and it

@@ -191,9 +191,12 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
         NodeRecord local = at.getValue();
         // No instanceOf: a stand-in carries what it was given rather than inventing a class -
         // LocalEntity.toNode()'s own reason. On the bypass path the local side DID state classes,
-        // and they are deliberately dropped here too (#222): local.kind() above is already
-        // rederive's answer to them, so a stand-in built from that kind re-derives to itself and
-        // carrying the raw list forward would assert nothing the kind does not already say.
+        // and they are deliberately dropped here too (#222). Not because they would say nothing:
+        // instanceOf is read on its own, independently of the kind derived from it - DotWriter
+        // tooltips it and shades a WORK by it, GraphMlWriter writes it out as its own attribute -
+        // so carrying the list forward would put the local side's classes on the canonical id and
+        // report them as that entity's, which no source has stated about it. The kind is a
+        // different case and is copied: it is what the stand-in exists to say.
         standIns.putIfAbsent(
             merge.canonicalQid(),
             new NodeRecord(merge.canonicalQid(), local.kind(), local.label(), List.of()));
