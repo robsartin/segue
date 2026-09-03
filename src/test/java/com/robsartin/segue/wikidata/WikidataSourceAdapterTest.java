@@ -131,12 +131,12 @@ class WikidataSourceAdapterTest {
   @DisplayName("an unknown seed yields nothing, and is not reported as unavailable")
   void unknownSeedIsEmpty() {
     try (StubWikidataServer stub = new StubWikidataServer()) {
-      stub.enqueueBody("{\"entities\":{\"Q999999999\":{\"missing\":\"\"}}}");
+      stub.enqueueBody("{\"entities\":{\"Q0999999999\":{\"missing\":\"\"}}}");
 
       ExpandResult result =
           adapterFor(stub)
               .expand(
-                  new NodeRecord("Q999999999", NodeKind.PERSON, "Nobody"),
+                  new NodeRecord("Q0999999999", NodeKind.PERSON, "Nobody"),
                   ExpandContext.defaults());
 
       assertThat(result.assertions()).isEmpty();
@@ -251,11 +251,11 @@ class WikidataSourceAdapterTest {
     // heard of would be a query nobody can use, against a service with a shared budget.
     try (StubWikidataServer actionApi = new StubWikidataServer();
         StubWikidataServer queryService = new StubWikidataServer()) {
-      actionApi.enqueueBody("{\"entities\":{\"Q999999999\":{\"missing\":\"\"}}}");
+      actionApi.enqueueBody("{\"entities\":{\"Q0999999999\":{\"missing\":\"\"}}}");
 
       adapterFor(actionApi, queryService)
           .expand(
-              new NodeRecord("Q999999999", NodeKind.PERSON, "Nobody"), ExpandContext.defaults());
+              new NodeRecord("Q0999999999", NodeKind.PERSON, "Nobody"), ExpandContext.defaults());
 
       assertThat(queryService.requestCount()).isZero();
     }
@@ -316,7 +316,7 @@ class WikidataSourceAdapterTest {
       assertThat(result.assertions())
           .filteredOn(a -> a.typeCode().equals("PERFORMED"))
           .extracting(AssertionRecord::toQid)
-          .containsExactly("Q900790");
+          .containsExactly("Q0900790");
       assertThat(result.sourceUnavailable()).isFalse();
     }
   }

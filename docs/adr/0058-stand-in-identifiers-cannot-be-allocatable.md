@@ -137,3 +137,67 @@ test.
   is a retired slice-0 artefact rather than a decision record, and `sparql_check.py` builds
   `wd:` IRIs and attaches labels to them, so it was swept — the record it preserves is the shape
   of the queries, which the sweep does not touch.
+
+**Amendment (2026-09-02, issue #171): the consequence *"the repository is not clean"* is
+discharged, and the rule is now enforced over the whole test tree rather than over `Fixture`'s
+fifteen constants.**
+
+[Issue #171](https://github.com/robsartin/segue/issues/171) completed on 2026-09-02. The
+measurement above stands as what was true on 2026-08-31 and is not edited; the paragraphs below are
+the retake and the mechanism that replaces the consequence.
+
+**What moved.** Of the distinct allocatable-form ids that consequence counted, **100 were
+stand-ins** — invented ids in exactly the shape this ADR forbids — across **61 files**, falling
+into **ten families** by prefix. They were migrated family by family — one commit each, and
+two where a family had a second half that could not take a leading zero — with the gate green
+after each ([ADR 4](0004-mikado-method-for-changes.md)), and every migrated id is the old one
+carried into an unallocatable shape rather than a fresh number, so each family's diff is
+reviewable by eye.
+The remainder are deliberately real and stay. (A narrower scan — strip comments, then match quoted
+runs — reaches 60 files rather than 61: it cannot read `//` inside a string literal, nor a text
+block, whose quotes do not pair the way it assumes. The distinct-id count is 100 either way.)
+
+**What holds it now.** `StandInQidsDenoteNothingTest` sweeps every file under `src/test` and reds
+on any allocatable-form id it finds, reading Wikibase's grammar from the one constant this
+repository writes it down in. That is the widening the last consequence above said would need an
+allowlist of deliberately-real ids, and the allowlist is that test's, not this ADR's: the reasons
+live beside the ids there and are deliberately not copied here. Each reason says which of four
+kinds it is — a class id production code maps, an entity a recorded response or a live test is
+genuinely about, a deliberately allocatable negative control, and a token that is not an identifier
+at all. A companion assertion reds on an allowed id the tree no longer contains, so a reason cannot
+outlive the site it was written about. There is no second list: the one that carried the ids
+awaiting migration was deleted when it emptied.
+
+**Three unallocatable shapes now, where this ADR left one.** A single leading zero is a stand-in;
+[ADR 59](0059-owner-claims-as-a-third-layer.md)'s two leading zeros are a local entity; and
+[ADR 62](0062-reserve-a-shape-for-a-merges-canonical-side.md)'s eleven digits are a merge's
+canonical side, which cannot take a leading zero without the record ceasing to mean anything. ADR
+62 also narrowed `Qid`'s allocatable pattern to the upper bound this ADR quoted and that code did
+not have.
+
+**What the guard cannot do, accepted rather than hidden.**
+
+- **Six sites build an id at runtime** from a bare `"Q"` and an integer, and no scan over source
+  text can reach them. They were fixed by hand, and each now asserts inside its own loop that the
+  id it just minted is one the grammar refuses — reading that grammar from the same single place,
+  rather than spelling it again.
+- **The allowlist is keyed by the id, so it is context-free.** `Q1`–`Q4` are allowed because
+  `GraphStoreContract` numbers its questions with them, and the guard therefore cannot catch a
+  *new* use of `"Q1"` as a node id. Accepted: an allowlist keyed by site would go stale on every
+  line that moves.
+- **The guard's own allowlist is a literal in the tree it sweeps**, so it covers itself; the
+  dead-entry assertion discounts that one file rather than be quietly vacuous.
+
+**Alternatives rejected while discharging this.**
+
+- **Renumber the stand-ins into a fresh sequence.** Rejected. An id that is the old one plus a zero
+  stays traceable to what it was, which is what made ten family-sized diffs reviewable by eye and
+  the shrinking exclusion list mechanical. A renumbering turns every diff into a puzzle and removes
+  the only cheap check on it.
+- **Pick a numeric floor and require stand-ins above it** — the `Q9000xx` wager again with a larger
+  number. Rejected on this ADR's own postmortem: choosing a number because it looks unused *is*
+  inventing an external identifier, and Wikidata keeps allocating. Enforcing that under a guard
+  would have made the guard hold the defect in place.
+
+`CLAUDE.md`'s companion warning that the fixtures are not clean is retired with this, and the
+developer guide's testing-strategy table names the guard.

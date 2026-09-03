@@ -51,9 +51,9 @@ class GraphMlWriterTest {
     return new GraphView(
         "a made-up view",
         List.of(
-            new ViewNode("Q901", NodeKind.PERSON, "Wren Alderman"),
-            new ViewNode("Q902", NodeKind.GROUP, "The Paper Kettles")),
-        List.of(new ViewEdge("Q901", "Q902", "MEMBER_OF", 0.8, "invented")));
+            new ViewNode("Q0901", NodeKind.PERSON, "Wren Alderman"),
+            new ViewNode("Q0902", NodeKind.GROUP, "The Paper Kettles")),
+        List.of(new ViewEdge("Q0901", "Q0902", "MEMBER_OF", 0.8, "invented")));
   }
 
   private static String dataValue(Element owner, String key) {
@@ -81,7 +81,7 @@ class GraphMlWriterTest {
     Document document = parse(render(oneRelationship()));
 
     Element node = (Element) document.getElementsByTagName("node").item(0);
-    assertThat(node.getAttribute("id")).isEqualTo("Q901");
+    assertThat(node.getAttribute("id")).isEqualTo("Q0901");
     assertThat(dataValue(node, "kind")).isEqualTo("PERSON");
     assertThat(dataValue(node, "label")).isEqualTo("Wren Alderman");
   }
@@ -105,11 +105,11 @@ class GraphMlWriterTest {
   private static GraphView star(int edges) {
     List<ViewNode> nodes = new ArrayList<>();
     List<ViewEdge> spokes = new ArrayList<>();
-    nodes.add(new ViewNode("Q900100", NodeKind.PERSON, "Wren Alderman"));
+    nodes.add(new ViewNode("Q0900100", NodeKind.PERSON, "Wren Alderman"));
     for (int i = 1; i <= edges; i++) {
-      String qid = "Q9001" + String.format("%02d", i);
+      String qid = "Q09001" + String.format("%02d", i);
       nodes.add(new ViewNode(qid, NodeKind.WORK, "Invented Work " + i));
-      spokes.add(new ViewEdge("Q900100", qid, "ACTED_IN", 1.0, "invented"));
+      spokes.add(new ViewEdge("Q0900100", qid, "ACTED_IN", 1.0, "invented"));
     }
     return new GraphView("an invented star", nodes, spokes);
   }
@@ -120,8 +120,8 @@ class GraphMlWriterTest {
     Document document = parse(render(oneRelationship()));
 
     Element edge = (Element) document.getElementsByTagName("edge").item(0);
-    assertThat(edge.getAttribute("source")).isEqualTo("Q901");
-    assertThat(edge.getAttribute("target")).isEqualTo("Q902");
+    assertThat(edge.getAttribute("source")).isEqualTo("Q0901");
+    assertThat(edge.getAttribute("target")).isEqualTo("Q0902");
     assertThat(dataValue(edge, "typeCode")).isEqualTo("MEMBER_OF");
     assertThat(dataValue(edge, "confidence")).isEqualTo("0.8");
     assertThat(dataValue(edge, "sourceId")).isEqualTo("invented");
@@ -149,11 +149,11 @@ class GraphMlWriterTest {
         new GraphView(
             "two relationships between one pair",
             List.of(
-                new ViewNode("Q901", NodeKind.PERSON, "Wren Alderman"),
-                new ViewNode("Q902", NodeKind.GROUP, "The Paper Kettles")),
+                new ViewNode("Q0901", NodeKind.PERSON, "Wren Alderman"),
+                new ViewNode("Q0902", NodeKind.GROUP, "The Paper Kettles")),
             List.of(
-                new ViewEdge("Q901", "Q902", "MEMBER_OF", 1.0, "invented"),
-                new ViewEdge("Q901", "Q902", "PERFORMED_WITH", 0.8, "invented")));
+                new ViewEdge("Q0901", "Q0902", "MEMBER_OF", 1.0, "invented"),
+                new ViewEdge("Q0901", "Q0902", "PERFORMED_WITH", 0.8, "invented")));
     Document document = parse(render(view));
 
     Element graph = (Element) document.getElementsByTagName("graph").item(0);
@@ -169,7 +169,7 @@ class GraphMlWriterTest {
     GraphView view =
         new GraphView(
             "a made-up view",
-            List.of(new ViewNode("Q901", NodeKind.GROUP, "Salt & <Pepper> \"Trio\"")),
+            List.of(new ViewNode("Q0901", NodeKind.GROUP, "Salt & <Pepper> \"Trio\"")),
             List.of());
     Document document = parse(render(view));
 
@@ -185,7 +185,7 @@ class GraphMlWriterTest {
             "a made-up view",
             List.of(
                 new ViewNode(
-                    "Q901", NodeKind.WORK, "Hollow Tide", List.of("Q482994", "Q105543609"))),
+                    "Q0901", NodeKind.WORK, "Hollow Tide", List.of("Q482994", "Q105543609"))),
             List.of());
     Document document = parse(render(view));
 
@@ -209,7 +209,7 @@ class GraphMlWriterTest {
     GraphView view =
         new GraphView(
             "a made-up view",
-            List.of(new ViewNode("Q901", NodeKind.WORK, "Hollow Tide", List.of("Q482994"))),
+            List.of(new ViewNode("Q0901", NodeKind.WORK, "Hollow Tide", List.of("Q482994"))),
             List.of());
 
     assertThat(render(view)).doesNotContain("tooltip").doesNotContain("fillcolor");
@@ -230,8 +230,8 @@ class GraphMlWriterTest {
         new GraphView(
             "a made-up view",
             List.of(
-                new ViewNode("Q901", NodeKind.PERSON, "Wren Alderman").withAffinity(4),
-                new ViewNode("Q902", NodeKind.GROUP, "The Paper Kettles")),
+                new ViewNode("Q0901", NodeKind.PERSON, "Wren Alderman").withAffinity(4),
+                new ViewNode("Q0902", NodeKind.GROUP, "The Paper Kettles")),
             List.of());
     Document document = parse(render(view));
 

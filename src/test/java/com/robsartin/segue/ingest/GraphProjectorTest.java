@@ -30,16 +30,16 @@ class GraphProjectorTest {
   void replayRebuildsTheGraph() {
     try (AssertionLog log = SqliteAssertionLog.inMemory();
         TinkerGraphStore store = new TinkerGraphStore()) {
-      log.append(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
-      log.append(new NodeAssertion("Q2", NodeKind.GROUP, "The Bad Seeds", WIKIDATA));
-      log.append(new AssertionRecord("Q1", "Q2", "MEMBER_OF", null, null, WIKIDATA));
+      log.append(new NodeAssertion("Q01", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+      log.append(new NodeAssertion("Q02", NodeKind.GROUP, "The Bad Seeds", WIKIDATA));
+      log.append(new AssertionRecord("Q01", "Q02", "MEMBER_OF", null, null, WIKIDATA));
 
       GraphProjector.project(log, store, IdentityMerge.NONE);
 
-      assertThat(store.node("Q1")).isPresent();
-      assertThat(store.node("Q1").orElseThrow().label()).isEqualTo("Nick Cave");
+      assertThat(store.node("Q01")).isPresent();
+      assertThat(store.node("Q01").orElseThrow().label()).isEqualTo("Nick Cave");
       assertThat(store.edgeCount()).isEqualTo(1);
-      assertThat(store.edges("Q1"))
+      assertThat(store.edges("Q01"))
           .singleElement()
           .extracting(e -> e.typeCode())
           .isEqualTo("MEMBER_OF");
@@ -57,13 +57,13 @@ class GraphProjectorTest {
 
     try (AssertionLog log = SqliteAssertionLog.inMemory();
         TinkerGraphStore store = new TinkerGraphStore()) {
-      log.append(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
-      log.append(new NodeAssertion("Q2", NodeKind.GROUP, "The Bad Seeds", WIKIDATA));
-      log.append(new AssertionRecord("Q1", "Q2", "MEMBER_OF", null, null, precise));
+      log.append(new NodeAssertion("Q01", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+      log.append(new NodeAssertion("Q02", NodeKind.GROUP, "The Bad Seeds", WIKIDATA));
+      log.append(new AssertionRecord("Q01", "Q02", "MEMBER_OF", null, null, precise));
 
       GraphProjector.project(log, store, IdentityMerge.NONE);
 
-      assertThat(store.edges("Q1"))
+      assertThat(store.edges("Q01"))
           .singleElement()
           .extracting(e -> e.sources().get(0).assertedAt())
           .isEqualTo(nanosecondPrecision);
@@ -113,7 +113,7 @@ class GraphProjectorTest {
         TinkerGraphStore store = new TinkerGraphStore()) {
       log.append(
           new NodeAssertion(
-              "Q0900002", NodeKind.PERSON, "Marisol Kettleby", List.of("Q999999999"), WIKIDATA));
+              "Q0900002", NodeKind.PERSON, "Marisol Kettleby", List.of("Q0999999999"), WIKIDATA));
 
       GraphProjector.project(log, store, IdentityMerge.NONE);
 
@@ -152,9 +152,9 @@ class GraphProjectorTest {
   void replayFailureNamesSequence() {
     try (AssertionLog log = SqliteAssertionLog.inMemory();
         TinkerGraphStore store = new TinkerGraphStore()) {
-      log.append(new NodeAssertion("Q1", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+      log.append(new NodeAssertion("Q01", NodeKind.PERSON, "Nick Cave", WIKIDATA));
       // An edge whose target node was never asserted: applying it must fail...
-      log.append(new AssertionRecord("Q1", "Q404", "MEMBER_OF", null, null, WIKIDATA));
+      log.append(new AssertionRecord("Q01", "Q0404", "MEMBER_OF", null, null, WIKIDATA));
 
       // ...fatally, naming the offending position (the second assertion).
       assertThatThrownBy(() -> GraphProjector.project(log, store, IdentityMerge.NONE))
@@ -171,16 +171,17 @@ class GraphProjectorTest {
     // theLogStillHoldsEveryOriginalClaim below, which is the same log read straight back.
     try (AssertionLog log = SqliteAssertionLog.inMemory();
         TinkerGraphStore store = new TinkerGraphStore()) {
-      log.append(new NodeAssertion("Q900101", NodeKind.GROUP, "The Wrong Ones", WIKIDATA));
-      log.append(new NodeAssertion("Q900102", NodeKind.WORK, "A Painting", WIKIDATA));
-      log.append(new AssertionRecord("Q900101", "Q900102", "PERFORMED", null, null, WIKIDATA));
-      log.append(new Retraction("Q900101", "resolved to the painters, not the band", RETRACTED_AT));
+      log.append(new NodeAssertion("Q0900101", NodeKind.GROUP, "The Wrong Ones", WIKIDATA));
+      log.append(new NodeAssertion("Q0900102", NodeKind.WORK, "A Painting", WIKIDATA));
+      log.append(new AssertionRecord("Q0900101", "Q0900102", "PERFORMED", null, null, WIKIDATA));
+      log.append(
+          new Retraction("Q0900101", "resolved to the painters, not the band", RETRACTED_AT));
 
       GraphProjector.project(log, store, IdentityMerge.NONE);
 
-      assertThat(store.node("Q900101")).isEmpty();
+      assertThat(store.node("Q0900101")).isEmpty();
       assertThat(store.edgeCount()).isZero();
-      assertThat(store.node("Q900102")).isPresent();
+      assertThat(store.node("Q0900102")).isPresent();
     }
   }
 
@@ -191,15 +192,15 @@ class GraphProjectorTest {
     // deletion: everything ADR 19 rests on - replay reproducing the graph, the audit trail,
     // ADR 42's offline re-derivation - would become conditional on nobody having deleted
     // anything if this were false.
-    NodeAssertion wrong = new NodeAssertion("Q900101", NodeKind.GROUP, "The Wrong Ones", WIKIDATA);
+    NodeAssertion wrong = new NodeAssertion("Q0900101", NodeKind.GROUP, "The Wrong Ones", WIKIDATA);
     AssertionRecord edge =
-        new AssertionRecord("Q900101", "Q900102", "PERFORMED", null, null, WIKIDATA);
-    Retraction retraction = new Retraction("Q900101", "wrong entity", RETRACTED_AT);
+        new AssertionRecord("Q0900101", "Q0900102", "PERFORMED", null, null, WIKIDATA);
+    Retraction retraction = new Retraction("Q0900101", "wrong entity", RETRACTED_AT);
 
     try (AssertionLog log = SqliteAssertionLog.inMemory();
         TinkerGraphStore store = new TinkerGraphStore()) {
       log.append(wrong);
-      log.append(new NodeAssertion("Q900102", NodeKind.WORK, "A Painting", WIKIDATA));
+      log.append(new NodeAssertion("Q0900102", NodeKind.WORK, "A Painting", WIKIDATA));
       log.append(edge);
       log.append(retraction);
 
@@ -214,15 +215,15 @@ class GraphProjectorTest {
   void replayHonoursClaimsMadeAfterARetraction() {
     try (AssertionLog log = SqliteAssertionLog.inMemory();
         TinkerGraphStore store = new TinkerGraphStore()) {
-      log.append(new NodeAssertion("Q900101", NodeKind.GROUP, "The Wrong Ones", WIKIDATA));
-      log.append(new Retraction("Q900101", "wrong entity", RETRACTED_AT));
-      log.append(new NodeAssertion("Q900101", NodeKind.GROUP, "The Right Ones", WIKIDATA));
-      log.append(new NodeAssertion("Q900102", NodeKind.WORK, "A Song", WIKIDATA));
-      log.append(new AssertionRecord("Q900101", "Q900102", "PERFORMED", null, null, WIKIDATA));
+      log.append(new NodeAssertion("Q0900101", NodeKind.GROUP, "The Wrong Ones", WIKIDATA));
+      log.append(new Retraction("Q0900101", "wrong entity", RETRACTED_AT));
+      log.append(new NodeAssertion("Q0900101", NodeKind.GROUP, "The Right Ones", WIKIDATA));
+      log.append(new NodeAssertion("Q0900102", NodeKind.WORK, "A Song", WIKIDATA));
+      log.append(new AssertionRecord("Q0900101", "Q0900102", "PERFORMED", null, null, WIKIDATA));
 
       GraphProjector.project(log, store, IdentityMerge.NONE);
 
-      assertThat(store.node("Q900101").orElseThrow().label()).isEqualTo("The Right Ones");
+      assertThat(store.node("Q0900101").orElseThrow().label()).isEqualTo("The Right Ones");
       assertThat(store.edgeCount()).isEqualTo(1);
     }
   }
@@ -240,9 +241,9 @@ class GraphProjectorTest {
                       store,
                       IdentityMerge.NONE,
                       Equivalences.NONE,
-                      new Retraction("Q900101", "wrong entity", RETRACTED_AT)))
+                      new Retraction("Q0900101", "wrong entity", RETRACTED_AT)))
           .isInstanceOf(IllegalStateException.class)
-          .hasMessageContaining("Q900101");
+          .hasMessageContaining("Q0900101");
     }
   }
 }

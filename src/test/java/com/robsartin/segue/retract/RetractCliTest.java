@@ -31,9 +31,9 @@ class RetractCliTest {
   @Test
   @DisplayName("should read the qid, the reason and the database when --db names one")
   void shouldReadTheQidTheReasonAndTheDatabaseWhenDbNamesOne() {
-    RetractCli.Options options = parse("--qid", "Q900101", "--reason", "wrong entity");
+    RetractCli.Options options = parse("--qid", "Q0900101", "--reason", "wrong entity");
 
-    assertThat(options.qid()).isEqualTo("Q900101");
+    assertThat(options.qid()).isEqualTo("Q0900101");
     assertThat(options.reason()).isEqualTo("wrong entity");
     assertThat(options.dryRun()).isFalse();
     assertThat(options.database()).isEqualTo(Path.of(DATABASE));
@@ -42,7 +42,7 @@ class RetractCliTest {
   @Test
   @DisplayName("--dry-run takes no value")
   void parsesDryRun() {
-    assertThat(parse("--qid", "Q900101", "--reason", "why", "--dry-run").dryRun()).isTrue();
+    assertThat(parse("--qid", "Q0900101", "--reason", "why", "--dry-run").dryRun()).isTrue();
   }
 
   @Test
@@ -57,7 +57,7 @@ class RetractCliTest {
         .isThrownBy(
             () ->
                 RetractCli.parse(
-                    new String[] {"--qid", "Q900101", "--reason", "wrong entity"},
+                    new String[] {"--qid", "Q0900101", "--reason", "wrong entity"},
                     null,
                     "/home/invented"))
         // The whole sentence, from the one class that owns it, so this tool cannot drift away
@@ -75,7 +75,7 @@ class RetractCliTest {
     assertThatThrownBy(
             () ->
                 RetractCli.parse(
-                    new String[] {"--qid", "Q900101", "--reason", "why"},
+                    new String[] {"--qid", "Q0900101", "--reason", "why"},
                     "/elsewhere/segue.db",
                     "/home/invented"))
         .isInstanceOf(IllegalArgumentException.class)
@@ -97,7 +97,7 @@ class RetractCliTest {
     assertThatThrownBy(
             () ->
                 RetractCli.run(
-                    new String[] {"--qid", "Q900101", "--reason", "why", "--dry-run"},
+                    new String[] {"--qid", "Q0900101", "--reason", "why", "--dry-run"},
                     null,
                     home.toString()))
         .isInstanceOf(IllegalArgumentException.class)
@@ -118,7 +118,7 @@ class RetractCliTest {
   @Test
   @DisplayName("--reason is required: the log has to say why, and it is never edited afterwards")
   void requiresReason() {
-    assertThatIllegalArgumentException().isThrownBy(() -> parse("--qid", "Q900101"));
+    assertThatIllegalArgumentException().isThrownBy(() -> parse("--qid", "Q0900101"));
   }
 
   @Test
@@ -133,7 +133,7 @@ class RetractCliTest {
   @DisplayName("an unknown option is refused rather than ignored")
   void refusesUnknownOptions() {
     assertThatIllegalArgumentException()
-        .isThrownBy(() -> parse("--qid", "Q900101", "--reason", "why", "--force"));
+        .isThrownBy(() -> parse("--qid", "Q0900101", "--reason", "why", "--force"));
   }
 
   @Test
@@ -153,7 +153,9 @@ class RetractCliTest {
     assertThatThrownBy(
             () ->
                 RetractCli.run(
-                    new String[] {"--db", absent.toString(), "--qid", "Q900101", "--reason", "why"},
+                    new String[] {
+                      "--db", absent.toString(), "--qid", "Q0900101", "--reason", "why"
+                    },
                     null,
                     "/home/invented"))
         .isInstanceOf(IllegalArgumentException.class)
@@ -171,7 +173,7 @@ class RetractCliTest {
       assertThat(created.readAll()).isEmpty();
     }
 
-    // Past both refusals and into RetractRun, which reads the log and finds Q900101 is not in the
+    // Past both refusals and into RetractRun, which reads the log and finds Q0900101 is not in the
     // projection. That message is only reachable from inside an opened database, so it is the
     // proof that a named --db still gets through.
     assertThatThrownBy(
@@ -181,13 +183,13 @@ class RetractCliTest {
                       "--db",
                       database.toString(),
                       "--qid",
-                      "Q900101",
+                      "Q0900101",
                       "--reason",
                       "why",
                       "--dry-run"
                     },
                     null,
                     "/home/invented"))
-        .hasMessageContaining("nothing about Q900101 is in the projection");
+        .hasMessageContaining("nothing about Q0900101 is in the projection");
   }
 }

@@ -22,11 +22,12 @@ import org.junit.jupiter.api.Test;
 /** What a person actually reads, and the two things the file has to say about itself (ADR 45). */
 class RecommendationReportTest {
 
-  private static final NodeRecord KNOWN = new NodeRecord("Q900101", NodeKind.GROUP, "one you know");
+  private static final NodeRecord KNOWN =
+      new NodeRecord("Q0900101", NodeKind.GROUP, "one you know");
   private static final NodeRecord VIA =
-      new NodeRecord("Q900201", NodeKind.PERSON, "the artist they cite");
+      new NodeRecord("Q0900201", NodeKind.PERSON, "the artist they cite");
   private static final NodeRecord CANDIDATE =
-      new NodeRecord("Q900301", NodeKind.GROUP, "the invented ancestors");
+      new NodeRecord("Q0900301", NodeKind.GROUP, "the invented ancestors");
 
   private static final Recommendation RECOMMENDED =
       new Recommendation(
@@ -93,7 +94,7 @@ class RecommendationReportTest {
     String written = report(List.of(new Explained(RECOMMENDED, List.of(ROUTE))), sweep());
 
     assertThat(written).contains("the invented ancestors");
-    assertThat(written).contains("Q900301");
+    assertThat(written).contains("Q0900301");
     assertThat(written).contains("0.66");
     assertThat(written).contains("80 edges");
     assertThat(written).contains("1 of yours");
@@ -106,7 +107,7 @@ class RecommendationReportTest {
     // starts at U2 — so the one thing a reader needs stated is which end is theirs.
     String written = report(List.of(new Explained(RECOMMENDED, List.of(ROUTE))), sweep());
 
-    assertThat(written).contains("from one you know (Q900101):");
+    assertThat(written).contains("from one you know (Q0900101):");
   }
 
   @Test
@@ -170,8 +171,8 @@ class RecommendationReportTest {
             0.5,
             2,
             List.of(
-                new SharedIntermediate(KNOWN.qid(), "Q900201", 4, 1.0),
-                new SharedIntermediate(KNOWN.qid(), "Q900202", 4, 1.0)));
+                new SharedIntermediate(KNOWN.qid(), "Q0900201", 4, 1.0),
+                new SharedIntermediate(KNOWN.qid(), "Q0900202", 4, 1.0)));
     Sweep sweep = new Sweep(List.of(onTheFloor), 815, 0, 41, 0, 0);
 
     StringWriter out = new StringWriter();

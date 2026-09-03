@@ -127,7 +127,7 @@ class PaletteSeparationTest {
   private static Map<String, String> kindFills() throws IOException {
     Map<String, String> fills = new LinkedHashMap<>();
     for (NodeKind kind : NodeKind.values()) {
-      fills.put(kind.name(), fillOf(new ViewNode("Q900901", kind, "x")));
+      fills.put(kind.name(), fillOf(new ViewNode("Q0900901", kind, "x")));
     }
     return fills;
   }
@@ -137,7 +137,7 @@ class PaletteSeparationTest {
     for (Map.Entry<String, String> shaded : SHADED_WORK_CLASSES.entrySet()) {
       fills.put(
           "WORK/" + shaded.getValue(),
-          fillOf(new ViewNode("Q900901", NodeKind.WORK, "x", List.of(shaded.getKey()))));
+          fillOf(new ViewNode("Q0900901", NodeKind.WORK, "x", List.of(shaded.getKey()))));
     }
     return fills;
   }

@@ -71,7 +71,7 @@ public abstract class GraphStoreContract {
   void nodesAreRetrievable() {
     assertThat(store.node(Fixture.CAVE)).isPresent();
     assertThat(store.node(Fixture.CAVE).orElseThrow().label()).isEqualTo("Nick Cave");
-    assertThat(store.node("Q999999")).isEmpty();
+    assertThat(store.node("Q0999999")).isEmpty();
   }
 
   @Test
@@ -83,18 +83,18 @@ public abstract class GraphStoreContract {
     // an order. The kind no longer depends on it (issue #87 ranks the kinds instead); a store
     // that reordered the list would still be editing the claim on its way through.
     store.upsertNode(
-        new NodeRecord("Q100003", NodeKind.WORK, "Probe Song", List.of("Q134556", "Q7366")));
+        new NodeRecord("Q0100003", NodeKind.WORK, "Probe Song", List.of("Q134556", "Q7366")));
 
-    assertThat(store.node("Q100003").orElseThrow().instanceOf())
+    assertThat(store.node("Q0100003").orElseThrow().instanceOf())
         .containsExactly("Q134556", "Q7366");
   }
 
   @Test
   @DisplayName("a node stating no classes reads back with an empty list, not a null")
   void absentInstanceOfReadsBackEmpty() {
-    store.upsertNode(new NodeRecord("Q100004", NodeKind.PERSON, "Classless Probe"));
+    store.upsertNode(new NodeRecord("Q0100004", NodeKind.PERSON, "Classless Probe"));
 
-    assertThat(store.node("Q100004").orElseThrow().instanceOf()).isEmpty();
+    assertThat(store.node("Q0100004").orElseThrow().instanceOf()).isEmpty();
   }
 
   @Test
@@ -209,18 +209,18 @@ public abstract class GraphStoreContract {
     // so the two engines disagreed on any Instant finer than a millisecond. Invisible
     // until the SQLite log started storing real ingest timestamps.
     Instant precise = Instant.parse("2026-08-24T09:15:30.123456789Z");
-    store.upsertNode(new NodeRecord("Q100001", NodeKind.PERSON, "Precision Probe"));
-    store.upsertNode(new NodeRecord("Q100002", NodeKind.WORK, "Probe Work"));
+    store.upsertNode(new NodeRecord("Q0100001", NodeKind.PERSON, "Precision Probe"));
+    store.upsertNode(new NodeRecord("Q0100002", NodeKind.WORK, "Probe Work"));
     store.record(
         new AssertionRecord(
-            "Q100001",
-            "Q100002",
+            "Q0100001",
+            "Q0100002",
             "AUTHORED",
             null,
             null,
             new Provenance("wikidata", "S-precision", precise, 1.0)));
 
-    List<EdgeRecord> edges = store.edges("Q100001");
+    List<EdgeRecord> edges = store.edges("Q0100001");
     assertThat(edges).isNotEmpty();
     assertThat(edges)
         .anySatisfy(
@@ -239,8 +239,8 @@ public abstract class GraphStoreContract {
     // fan-out will hit this constantly, and the two engines must fail the same way.
     AssertionRecord toNowhere =
         new AssertionRecord(
-            "Q999999997",
-            "Q999999996",
+            "Q0999999997",
+            "Q0999999996",
             "AUTHORED",
             null,
             null,

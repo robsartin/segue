@@ -50,14 +50,14 @@ class RateRunTest {
   /**
    * Three things the owner loves, each reaching the first candidate through its own intermediate.
    */
-  private static final List<String> LOVED = List.of("Q900111", "Q900112", "Q900113");
+  private static final List<String> LOVED = List.of("Q0900111", "Q0900112", "Q0900113");
 
   /** Six things the owner is lukewarm about, reaching the second candidate the same way. */
   private static final List<String> LUKEWARM =
-      List.of("Q900121", "Q900122", "Q900123", "Q900124", "Q900125", "Q900126");
+      List.of("Q0900121", "Q0900122", "Q0900123", "Q0900124", "Q0900125", "Q0900126");
 
-  private static final String BELOVED = "Q900301";
-  private static final String CROWDED = "Q900302";
+  private static final String BELOVED = "Q0900301";
+  private static final String CROWDED = "Q0900302";
 
   @Test
   @DisplayName("the deck is built from the graph, and the notes carry counts and no rating")
@@ -270,7 +270,7 @@ class RateRunTest {
               graph,
               List.of(KNOWN_ONE),
               Map.of(),
-              new Equivalences(Map.of(minted, "Q900")),
+              new Equivalences(Map.of(minted, "Q10000000900")),
               10,
               MIN_CANDIDATE_DEGREE,
               OptionalInt.empty(),
@@ -381,10 +381,10 @@ class RateRunTest {
     node(graph, CROWDED, NodeKind.GROUP, "the crowded ancestor");
     int intermediate = 0;
     for (String seed : LOVED) {
-      reaches(graph, seed, "Q9002" + (10 + intermediate++), BELOVED);
+      reaches(graph, seed, "Q09002" + (10 + intermediate++), BELOVED);
     }
     for (String seed : LUKEWARM) {
-      reaches(graph, seed, "Q9002" + (10 + intermediate++), CROWDED);
+      reaches(graph, seed, "Q09002" + (10 + intermediate++), CROWDED);
     }
     // Padded to the same degree, so lift — which divides by the candidate's own degree — compares
     // the two on equal terms.
@@ -416,7 +416,7 @@ class RateRunTest {
   private static void padDegreeTo(TinkerGraphStore graph, String qid, int degree) {
     int already = graph.edges(qid).size();
     for (int i = already; i < degree; i++) {
-      String filler = "Q9009" + i;
+      String filler = "Q09009" + i;
       node(graph, filler, NodeKind.WORK, "filler " + filler);
       edge(graph, qid, filler, EdgeTypes.INFLUENCED_BY.code());
     }

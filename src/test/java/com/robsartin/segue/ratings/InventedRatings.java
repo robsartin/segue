@@ -45,10 +45,11 @@ final class InventedRatings {
 
   /**
    * The id Wikidata turned out to have for {@link #MINTED} (#92). No leading zero at all: a merge's
-   * canonical side is an id Wikidata could really allocate, and {@code Qid.checkAllocatable}
-   * enforces it.
+   * canonical side must be an id Wikidata could really allocate, or ADR 62's eleven-digit stand-in
+   * for one, and {@code Qid.checkCanonicalSide} enforces it. This is the latter, and it keeps the
+   * digits of the id it migrated from (issue #171) in its last places, so the diff reads by eye.
    */
-  static final String CANONICAL = "Q900042";
+  static final String CANONICAL = "Q10000900042";
 
   static final String CANONICAL_LABEL = "The Name A Source Gave It";
 

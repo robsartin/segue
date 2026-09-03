@@ -23,9 +23,11 @@ class DeckTest {
 
   private static final Map<String, NodeRecord> NODES =
       Map.of(
-          "Q0900001", new NodeRecord("Q0900001", NodeKind.GROUP, "Low Degree", List.of("Q900901")),
-          "Q0900002", new NodeRecord("Q0900002", NodeKind.GROUP, "High Degree", List.of("Q900901")),
-          "Q0900003", new NodeRecord("Q0900003", NodeKind.PERSON, "Mid Degree", List.of("Q900902")),
+          "Q0900001", new NodeRecord("Q0900001", NodeKind.GROUP, "Low Degree", List.of("Q0900901")),
+          "Q0900002",
+              new NodeRecord("Q0900002", NodeKind.GROUP, "High Degree", List.of("Q0900901")),
+          "Q0900003",
+              new NodeRecord("Q0900003", NodeKind.PERSON, "Mid Degree", List.of("Q0900902")),
           "Q0900004", new NodeRecord("Q0900004", NodeKind.WORK, "Already Rated", List.of()));
 
   private static final Map<String, Integer> DEGREES =
@@ -64,7 +66,7 @@ class DeckTest {
   @Test
   @DisplayName("an entity on the list but absent from the graph is skipped, not dealt blank")
   void skipsEntitiesMissingFromTheGraph() {
-    List<Card> cards = deal(List.of("Q0900002", "Q900999"), Map.of(), List.of());
+    List<Card> cards = deal(List.of("Q0900002", "Q0900999"), Map.of(), List.of());
 
     assertThat(cards).extracting(Card::qid).containsExactly("Q0900002");
   }
@@ -89,8 +91,8 @@ class DeckTest {
         Map.of(
             "Q0900005", new NodeRecord("Q0900005", NodeKind.GROUP, "Five", List.of()),
             "Q0900006", new NodeRecord("Q0900006", NodeKind.GROUP, "Six", List.of()));
-    Explained one = candidateFor("Q900101", "Candidate One");
-    Explained two = candidateFor("Q900102", "Candidate Two");
+    Explained one = candidateFor("Q0900101", "Candidate One");
+    Explained two = candidateFor("Q0900102", "Candidate Two");
 
     List<Card> cards =
         Deck.deal(
@@ -101,17 +103,17 @@ class DeckTest {
             List.of(one, two),
             OptionalInt.empty());
 
-    assertThat(cards.get(4).qid()).isEqualTo("Q900101");
-    assertThat(cards).extracting(Card::qid).contains("Q900102");
+    assertThat(cards.get(4).qid()).isEqualTo("Q0900101");
+    assertThat(cards).extracting(Card::qid).contains("Q0900102");
     assertThat(cards).hasSize(7);
   }
 
   @Test
   @DisplayName("a candidate that is already rated is not dealt")
   void excludesAlreadyRatedCandidate() {
-    Explained candidate = candidateFor("Q900103", "Already Rated Candidate");
+    Explained candidate = candidateFor("Q0900103", "Already Rated Candidate");
 
-    List<Card> cards = deal(List.of(), Map.of("Q900103", 2), List.of(candidate));
+    List<Card> cards = deal(List.of(), Map.of("Q0900103", 2), List.of(candidate));
 
     assertThat(cards).isEmpty();
   }
@@ -120,9 +122,9 @@ class DeckTest {
   @DisplayName(
       "a candidate's routes reach the dealt card intact, not just Card.candidate's own constructor")
   void candidateRoutesSurviveDealing() {
-    NodeRecord knownEnd = new NodeRecord("Q900501", NodeKind.PERSON, "Route Known", List.of());
+    NodeRecord knownEnd = new NodeRecord("Q0900501", NodeKind.PERSON, "Route Known", List.of());
     NodeRecord candidateEnd =
-        new NodeRecord("Q900502", NodeKind.GROUP, "Route Candidate", List.of());
+        new NodeRecord("Q0900502", NodeKind.GROUP, "Route Candidate", List.of());
     EdgeRecord edge =
         new EdgeRecord(
             knownEnd.qid(),
@@ -247,7 +249,7 @@ class DeckTest {
             q -> DEGREES.getOrDefault(q, 0),
             q -> Optional.ofNullable(NODES.get(q)),
             Map.of("Q0900001", 3),
-            List.of(candidateFor("Q900101", "Candidate One")),
+            List.of(candidateFor("Q0900101", "Candidate One")),
             OptionalInt.of(3));
 
     assertThat(cards).extracting(Card::qid).containsExactly("Q0900001");

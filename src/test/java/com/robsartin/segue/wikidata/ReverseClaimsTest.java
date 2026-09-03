@@ -405,7 +405,7 @@ class ReverseClaimsTest {
     try (StubWikidataServer stub = new StubWikidataServer()) {
       ReverseClaims reverse = lookupAgainst(stub);
 
-      assertThatThrownBy(() -> reverse.lookup("Q1 } INSERT DATA { ", 200, ASSERTED_AT))
+      assertThatThrownBy(() -> reverse.lookup("Q01 } INSERT DATA { ", 200, ASSERTED_AT))
           .isInstanceOf(IllegalArgumentException.class);
       assertThat(stub.requestCount()).isZero();
     }

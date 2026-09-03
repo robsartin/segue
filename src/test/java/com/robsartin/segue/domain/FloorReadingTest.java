@@ -17,7 +17,7 @@ class FloorReadingTest {
   private static Recommendation candidate(String qid, int degree, int intermediates) {
     List<SharedIntermediate> shared =
         IntStream.range(0, intermediates)
-            .mapToObj(i -> new SharedIntermediate("Q900101", "Q9002" + i, 4, 1.0))
+            .mapToObj(i -> new SharedIntermediate("Q0900101", "Q09002" + i, 4, 1.0))
             .toList();
     return new Recommendation(
         new NodeRecord(qid, NodeKind.GROUP, "invented " + qid), 0.5, degree, shared);
@@ -27,7 +27,8 @@ class FloorReadingTest {
   @DisplayName("counts the ranked entries sitting exactly on the floor, because they move first")
   void countsHeadEntriesOnTheFloor() {
     List<Recommendation> head =
-        List.of(candidate("Q900301", 5, 1), candidate("Q900302", 5, 2), candidate("Q900303", 9, 3));
+        List.of(
+            candidate("Q0900301", 5, 1), candidate("Q0900302", 5, 2), candidate("Q0900303", 9, 3));
 
     FloorReading reading = FloorReading.of(head, head, 5, 0, 0);
 
@@ -40,7 +41,8 @@ class FloorReadingTest {
   @DisplayName("counts the ranked entries whose every edge is already being counted as evidence")
   void countsHeadEntriesWhereEveryEdgeIsEvidence() {
     List<Recommendation> head =
-        List.of(candidate("Q900301", 5, 5), candidate("Q900302", 9, 3), candidate("Q900303", 2, 2));
+        List.of(
+            candidate("Q0900301", 5, 5), candidate("Q0900302", 9, 3), candidate("Q0900303", 2, 2));
 
     FloorReading reading = FloorReading.of(head, head, 5, 0, 0);
 
@@ -50,7 +52,7 @@ class FloorReadingTest {
   @Test
   @DisplayName("the median degree is a degree some candidate has, not an average of two")
   void medianDegreeIsAnActualDegree() {
-    List<Recommendation> pool = List.of(candidate("Q900301", 2, 1), candidate("Q900302", 8, 1));
+    List<Recommendation> pool = List.of(candidate("Q0900301", 2, 1), candidate("Q0900302", 8, 1));
 
     FloorReading reading = FloorReading.of(pool, pool, 2, 0, 0);
 
@@ -62,7 +64,8 @@ class FloorReadingTest {
   @DisplayName("the pool and the ranked head are counted separately, because only the head is read")
   void poolAndHeadAreCountedSeparately() {
     List<Recommendation> pool =
-        List.of(candidate("Q900301", 5, 1), candidate("Q900302", 7, 1), candidate("Q900303", 9, 1));
+        List.of(
+            candidate("Q0900301", 5, 1), candidate("Q0900302", 7, 1), candidate("Q0900303", 9, 1));
     List<Recommendation> head = pool.subList(0, 2);
 
     FloorReading reading = FloorReading.of(pool, head, 5, 0, 0);
@@ -76,7 +79,7 @@ class FloorReadingTest {
   @Test
   @DisplayName("what the floor held out is carried through, degree-one growth counted apart")
   void carriesWhatTheFloorHeldOut() {
-    List<Recommendation> head = List.of(candidate("Q900301", 5, 1));
+    List<Recommendation> head = List.of(candidate("Q0900301", 5, 1));
 
     FloorReading reading = FloorReading.of(head, head, 5, 7669, 5874);
 

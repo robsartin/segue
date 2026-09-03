@@ -42,16 +42,22 @@ class OwnerClaimProjectionTest {
   private static final Instant NOW = Instant.parse("2026-08-31T09:00:00Z");
 
   /**
-   * Two leading zeros: the local-entity shape, distinct from a single-leading-zero stand-in (ADR
-   * 58, issue #141). The plan's own literals predate that fix and are refused by {@code
-   * LocalEntity} today.
+   * Two leading zeros: the local-entity shape (ADR 59, issue #92), distinct from a
+   * single-leading-zero stand-in, which is ADR 58's. The plan's own literals predate both and are
+   * refused by {@code LocalEntity} today.
    */
   private static final String MINTED = "Q00900042";
 
   private static final String OTHER_MINTED = "Q00900043";
 
-  /** A real, allocatable Wikidata id - the only thing a merge's canonical side may be. */
-  private static final String CANONICAL = "Q42";
+  /**
+   * A merge's canonical side in ADR 62's eleven-digit shape - unallocatable by Wikibase's grammar,
+   * and the only stand-in {@code SameAs} admits on that side. It was {@code Q42}, Douglas Adams,
+   * which made six fabricated merges assert that a real Wikidata entity is the owner's own minted
+   * work - the exact claim ADR 58 exists to stop, and the allowlist entry that let it stand here is
+   * verbatim the alternative ADR 62 rejects.
+   */
+  private static final String CANONICAL = "Q10000000042";
 
   private AssertionLog log;
   private GraphStore graph;
@@ -99,7 +105,7 @@ class OwnerClaimProjectionTest {
     LocalEntity minted = LocalEntity.minted(MINTED, NodeKind.WORK, "a minted work", NOW);
     LocalEntity other = LocalEntity.minted(OTHER_MINTED, NodeKind.PERSON, "another minted", NOW);
     OwnerEdge owned = OwnerEdge.claimed(MINTED, OTHER_MINTED, "INFLUENCED_BY", NOW);
-    SameAs merge = SameAs.declared(MINTED, "Q42", NOW);
+    SameAs merge = SameAs.declared(MINTED, CANONICAL, NOW);
 
     ingest.recordAll(List.of(minted, other, owned, merge));
 

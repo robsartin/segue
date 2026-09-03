@@ -31,8 +31,8 @@ import org.junit.jupiter.api.Test;
  * read half cannot decode pass every assertion here.
  *
  * <p>The world entities are single-leading-zero stand-ins (ADR 58); the ids the tool mints carry
- * two (issue #141); and a merge's canonical side is {@code Q900}, allocatable because a merge whose
- * canonical side were unallocatable would not be "Wikidata caught up" at all.
+ * two (issue #141); and a merge's canonical side is {@code Q10000000900}, which is ADR 62's shape
+ * rather than either of those - a merge onto a stand-in would not be "Wikidata caught up" at all.
  */
 class OwnRunTest {
 
@@ -42,8 +42,8 @@ class OwnRunTest {
 
   private static final String SOURCED = "Q0900101";
   private static final String OTHER_SOURCED = "Q0900102";
-  private static final String CANONICAL = "Q900";
-  private static final String OTHER_CANONICAL = "Q901";
+  private static final String CANONICAL = "Q10000000900";
+  private static final String OTHER_CANONICAL = "Q10000000901";
   private static final String NEVER_CLAIMED = "Q0900999";
 
   private AssertionLog log;

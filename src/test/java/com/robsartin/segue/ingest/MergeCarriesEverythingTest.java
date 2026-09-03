@@ -47,10 +47,10 @@ class MergeCarriesEverythingTest {
   private static final String MINTED = "Q00900042";
 
   /** Allocatable, because a merge's canonical side is what Wikidata actually caught up with. */
-  private static final String CANONICAL = "Q900";
+  private static final String CANONICAL = "Q10000000900";
 
   /** A second allocatable id, standing for something a source already told us about. */
-  private static final String NEIGHBOUR = "Q901";
+  private static final String NEIGHBOUR = "Q10000000901";
 
   private static final Provenance SOURCE =
       new Provenance("wikidata", "S-1", Instant.parse("2026-01-01T00:00:00Z"), 1.0);

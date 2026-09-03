@@ -47,17 +47,18 @@ import org.junit.jupiter.api.io.TempDir;
  * id as a discovery</b>, which is his own entity handed back under its new name. Resolved, the
  * rating is the canonical id's, the canonical id is known, and it is not dealt at all.
  *
- * <p>Every qid and label is invented. The canonical side of a merge must be an id Wikidata could
- * allocate, so {@code Q900} stands in for one as {@code MergeCarriesEverythingTest} uses it.
+ * <p>Every qid and label is invented. The canonical side of a merge may not take a stand-in's
+ * leading zero, so {@code Q10000000900} stands in for one in ADR 62's shape, as {@code
+ * MergeCarriesEverythingTest} uses it.
  */
 class MergedIdIsNotDealtTest {
 
   /** Two leading zeros: a local entity, not one of ADR 58's single-zero stand-ins. */
   private static final String MINTED = "Q00900042";
 
-  private static final String CANONICAL = "Q900";
-  private static final String VIA = "Q900211";
-  private static final String ON_THE_FILE = "Q900199";
+  private static final String CANONICAL = "Q10000000900";
+  private static final String VIA = "Q0900211";
+  private static final String ON_THE_FILE = "Q0900199";
 
   private static final int FLOOR = 3;
   private static final Instant WHEN = Instant.parse("2026-08-31T09:00:00Z");
@@ -117,7 +118,7 @@ class MergedIdIsNotDealtTest {
   /** Records nobody's list touches: a WORK is never a candidate, whatever its degree. */
   private static void padTo(SqliteAssertionLog log, String qid, int records, int offset) {
     for (int i = 0; i < records; i++) {
-      String record = "Q9009" + (offset + i);
+      String record = "Q09009" + (offset + i);
       log.append(
           new NodeAssertion(record, NodeKind.WORK, "an invented record " + record, sourced()));
       log.append(

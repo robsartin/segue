@@ -14,9 +14,14 @@ import java.util.Objects;
  * {@link LocalEntity}'s own ids - two leading zeros, {@code Q00...} (ADR 58, issue #141) - or a
  * merge could point at another local id and build an equivalence chain nothing resolves, which is
  * the failure mode this record exists to rule out at construction rather than at projection time.
- * {@code canonicalQid} must be a real, allocatable Wikidata id, or the merge is not "Wikidata
+ * {@code canonicalQid} must be an id Wikidata could really allocate, or the merge is not "Wikidata
  * caught up" at all - it is one stand-in pointing at another (including a single-leading-zero
  * stand-in, which is unallocatable but not canonical either).
+ *
+ * <p><b>The one exception is a shape, and it is reserved for this side alone.</b> A test that
+ * invents a merge has to invent a canonical id too, and inventing an allocatable one is exactly
+ * what ADR 58 forbids. ADR 62 reserves the eleven-digit shape for it - unallocatable by the same
+ * grammar and admitted only here, by {@link Qid#checkCanonicalSide}.
  *
  * @param localQid the id the owner minted, before Wikidata had one
  * @param canonicalQid the real Wikidata id it turned out to be
@@ -28,17 +33,18 @@ public record SameAs(String localQid, String canonicalQid, Instant assertedAt)
 
   /**
    * Rebuilds a merge, checking only Wikidata's own grammar on each side - the local side
-   * unallocatable, the canonical side allocatable. Those are the two facts that make the sides
-   * non-interchangeable, and neither can be re-tightened by this project, so both are safe on the
-   * reconstruction path {@code SqliteAssertionLog.readRow} uses. The local-entity <em>shape</em> is
-   * a convention and is checked by {@link #declared} instead; see {@link LocalEntity#minted}.
+   * unallocatable, the canonical side allocatable or in ADR 62's reserved shape. Those are the two
+   * facts that make the sides non-interchangeable, and neither can be re-tightened by this project,
+   * so both are safe on the reconstruction path {@code SqliteAssertionLog.readRow} uses. The
+   * local-entity <em>shape</em> is a convention and is checked by {@link #declared} instead; see
+   * {@link LocalEntity#minted}.
    */
   public SameAs {
     Objects.requireNonNull(localQid, "localQid");
     Objects.requireNonNull(canonicalQid, "canonicalQid");
     Objects.requireNonNull(assertedAt, "assertedAt");
     LocalEntity.checkUnallocatable(localQid);
-    Qid.checkAllocatable(canonicalQid);
+    Qid.checkCanonicalSide(canonicalQid);
   }
 
   /** Declare a merge - the moment of claiming, and where the local-entity shape is enforced. */

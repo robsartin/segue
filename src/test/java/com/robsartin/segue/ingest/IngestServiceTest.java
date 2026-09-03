@@ -67,9 +67,9 @@ class IngestServiceTest {
   void recordAllPreservesOrder() {
     List<LoggedAssertion> batch =
         List.of(
-            new NodeAssertion("Q1", NodeKind.PERSON, "A", WIKIDATA),
-            new NodeAssertion("Q2", NodeKind.GROUP, "B", WIKIDATA),
-            new AssertionRecord("Q1", "Q2", "MEMBER_OF", null, null, WIKIDATA));
+            new NodeAssertion("Q01", NodeKind.PERSON, "A", WIKIDATA),
+            new NodeAssertion("Q02", NodeKind.GROUP, "B", WIKIDATA),
+            new AssertionRecord("Q01", "Q02", "MEMBER_OF", null, null, WIKIDATA));
 
     ingest.recordAll(batch);
 
@@ -82,7 +82,7 @@ class IngestServiceTest {
   void logLeadsTheGraph() {
     // TinkerGraphStore.record calls requireVertex, which throws when an endpoint is unknown.
     AssertionRecord dangling =
-        new AssertionRecord("Q404", "Q405", "MEMBER_OF", null, null, WIKIDATA);
+        new AssertionRecord("Q0404", "Q0405", "MEMBER_OF", null, null, WIKIDATA);
 
     assertThatThrownBy(() -> ingest.record(dangling)).isInstanceOf(IllegalStateException.class);
 
@@ -94,16 +94,16 @@ class IngestServiceTest {
   void liveAndReplayAgree() {
     // Both go through IngestService.apply. If they ever diverged, a rebuilt graph would
     // silently differ from the one it replaced — the failure ADR 19 exists to prevent.
-    ingest.record(new NodeAssertion("Q1", NodeKind.PERSON, "A", WIKIDATA));
-    ingest.record(new NodeAssertion("Q2", NodeKind.GROUP, "B", WIKIDATA));
-    ingest.record(new AssertionRecord("Q1", "Q2", "MEMBER_OF", null, null, WIKIDATA));
+    ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "A", WIKIDATA));
+    ingest.record(new NodeAssertion("Q02", NodeKind.GROUP, "B", WIKIDATA));
+    ingest.record(new AssertionRecord("Q01", "Q02", "MEMBER_OF", null, null, WIKIDATA));
 
     try (GraphStore rebuilt = new TinkerGraphStore()) {
       GraphProjector.project(log, rebuilt, IdentityMerge.NONE);
 
       assertThat(rebuilt.edgeCount()).isEqualTo(graph.edgeCount());
-      assertThat(rebuilt.node("Q1")).isEqualTo(graph.node("Q1"));
-      assertThat(rebuilt.edges("Q1")).hasSameSizeAs(graph.edges("Q1"));
+      assertThat(rebuilt.node("Q01")).isEqualTo(graph.node("Q01"));
+      assertThat(rebuilt.edges("Q01")).hasSameSizeAs(graph.edges("Q01"));
     }
   }
 
@@ -114,14 +114,14 @@ class IngestServiceTest {
     // widening the port to give it one - for a dev tool, on the port that exists to keep the
     // engine choice reversible - is what ADR 41 already refused. The graph catches up the way
     // ADR 24 says it always does, by being rebuilt from the log.
-    ingest.record(new NodeAssertion("Q900101", NodeKind.PERSON, "Wren Alderman", WIKIDATA));
+    ingest.record(new NodeAssertion("Q0900101", NodeKind.PERSON, "Wren Alderman", WIKIDATA));
     Retraction retraction =
-        new Retraction("Q900101", "wrong entity", Instant.parse("2026-08-27T12:00:00Z"));
+        new Retraction("Q0900101", "wrong entity", Instant.parse("2026-08-27T12:00:00Z"));
 
     IngestService.retract(log, retraction);
 
     assertThat(log.readAll()).element(1).isEqualTo(retraction);
-    assertThat(graph.node("Q900101"))
+    assertThat(graph.node("Q0900101"))
         .as("the running graph is stale until the next boot")
         .isPresent();
   }
@@ -133,7 +133,7 @@ class IngestServiceTest {
     // refuses BEFORE appending: a half-done write here would leave a retraction in the log that
     // the caller was told had failed.
     Retraction retraction =
-        new Retraction("Q900101", "wrong entity", Instant.parse("2026-08-27T12:00:00Z"));
+        new Retraction("Q0900101", "wrong entity", Instant.parse("2026-08-27T12:00:00Z"));
 
     assertThatThrownBy(() -> ingest.record(retraction))
         .isInstanceOf(IllegalArgumentException.class)

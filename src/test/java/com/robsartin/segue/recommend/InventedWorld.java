@@ -30,32 +30,32 @@ import java.util.function.Predicate;
 final class InventedWorld {
 
   // The things "you" already know.
-  static final String KNOWN_ONE = "Q900101";
-  static final String KNOWN_TWO = "Q900102";
+  static final String KNOWN_ONE = "Q0900101";
+  static final String KNOWN_TWO = "Q0900102";
 
   // Intermediates.
-  static final String SHARED_ARTIST = "Q900201";
-  static final String SHARED_PRIZE = "Q900202";
-  static final String HALL_OF_FAME = "Q900203";
-  static final String THE_ACADEMY = "Q900204";
+  static final String SHARED_ARTIST = "Q0900201";
+  static final String SHARED_PRIZE = "Q0900202";
+  static final String HALL_OF_FAME = "Q0900203";
+  static final String THE_ACADEMY = "Q0900204";
 
   /** An intermediate that cites one of yours, rather than being cited by it (issue #84). */
-  static final String THE_ADMIRER = "Q900205";
+  static final String THE_ADMIRER = "Q0900205";
 
   // Candidates.
-  static final String ANCESTOR = "Q900301";
-  static final String ANOTHER_ANCESTOR = "Q900307";
-  static final String FELLOW_PRIZEWINNER = "Q900302";
-  static final String ALSO_IN_THE_HALL = "Q900303";
-  static final String ALSO_IN_THE_ACADEMY = "Q900304";
-  static final String A_RECORD = "Q900305";
-  static final String A_THIN_BAND = "Q900306";
+  static final String ANCESTOR = "Q0900301";
+  static final String ANOTHER_ANCESTOR = "Q0900307";
+  static final String FELLOW_PRIZEWINNER = "Q0900302";
+  static final String ALSO_IN_THE_HALL = "Q0900303";
+  static final String ALSO_IN_THE_ACADEMY = "Q0900304";
+  static final String A_RECORD = "Q0900305";
+  static final String A_THIN_BAND = "Q0900306";
 
   /** One edge to its name: what expansion adds, and what the floor holds out (issue #134). */
-  static final String JUST_DISCOVERED = "Q900308";
+  static final String JUST_DISCOVERED = "Q0900308";
 
   /** The invented Wikidata class that means "elected, not collaborating" (issue #66). */
-  static final String ELECTED_TO = "Q900801";
+  static final String ELECTED_TO = "Q0900801";
 
   static final Predicate<String> INSTITUTIONS = ELECTED_TO::equals;
 
@@ -83,7 +83,7 @@ final class InventedWorld {
   /**
    * Attach {@code extra} filler neighbours, so a node reaches a degree the rules care about.
    *
-   * <p>Filler nodes are {@code WORK}s off in {@code Q9009xx}, and they are never candidates: the
+   * <p>Filler nodes are {@code WORK}s off in {@code Q09009xx}, and they are never candidates: the
    * kind rules them out, which keeps them out of every assertion in these tests.
    */
   static void padDegreeTo(TinkerGraphStore graph, String qid, int degree) {
@@ -98,11 +98,11 @@ final class InventedWorld {
   /**
    * The filler id one padding round mints, split out so {@link #padDegreeTo} and any caller that
    * needs the same shape but a different provenance - {@code CandidateSweepTest}'s owner-sourced
-   * padding, for one - share a single formula rather than each spelling it out (issue #171: when
-   * the {@code Q9009xx} range migrates, there is exactly one expression to change).
+   * padding, for one - share a single formula rather than each spelling it out (issue #171: the
+   * {@code Q09009xx} range migrated here as one expression, not one per call site).
    */
   static String fillerQid(String qid, int index) {
-    return "Q9009" + (Math.abs(qid.hashCode()) % 90 + 10) + index;
+    return "Q09009" + (Math.abs(qid.hashCode()) % 90 + 10) + index;
   }
 
   /** A busy CONCEPT, which is what issue #52 calls a hub. */

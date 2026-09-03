@@ -85,8 +85,8 @@ class RecommendationsAreNeverLoggedTest {
       log.append(edge(KNOWN_TWO, SHARED_ARTIST, EdgeTypes.INFLUENCED_BY.code()));
       log.append(edge(SHARED_ARTIST, ANCESTOR, EdgeTypes.INFLUENCED_BY.code()));
       // A second edge, so the candidate clears the lowest floor the command line will accept.
-      log.append(new NodeAssertion("Q900901", NodeKind.WORK, "an invented record", sourced()));
-      log.append(edge(ANCESTOR, "Q900901", EdgeTypes.PERFORMED.code()));
+      log.append(new NodeAssertion("Q0900901", NodeKind.WORK, "an invented record", sourced()));
+      log.append(edge(ANCESTOR, "Q0900901", EdgeTypes.PERFORMED.code()));
     }
     return db;
   }

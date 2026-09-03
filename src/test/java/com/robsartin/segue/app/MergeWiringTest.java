@@ -38,7 +38,7 @@ class MergeWiringTest {
 
   private static final Instant NOW = Instant.parse("2026-08-31T09:00:00Z");
   private static final String MINTED = "Q00900042";
-  private static final String CANONICAL = "Q900";
+  private static final String CANONICAL = "Q10000000900";
 
   private final SegueConfiguration configuration = new SegueConfiguration();
 

@@ -11,7 +11,7 @@ class SharedIntermediateTest {
   @Test
   @DisplayName("an intermediate joins two things, so it cannot have fewer than two edges")
   void anIntermediateHasAtLeastTwoEdges() {
-    assertThatThrownBy(() -> new SharedIntermediate("Q900101", "Q900201", 1, 1.0))
+    assertThatThrownBy(() -> new SharedIntermediate("Q0900101", "Q0900201", 1, 1.0))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("two");
   }
@@ -19,7 +19,7 @@ class SharedIntermediateTest {
   @Test
   @DisplayName("a connection worth nothing is not a connection")
   void aWeightlessConnectionIsRefused() {
-    assertThatThrownBy(() -> new SharedIntermediate("Q900101", "Q900201", 4, 0.0))
+    assertThatThrownBy(() -> new SharedIntermediate("Q0900101", "Q0900201", 4, 0.0))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("weight");
   }

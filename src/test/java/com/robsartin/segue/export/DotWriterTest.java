@@ -43,7 +43,7 @@ class DotWriterTest {
   @DisplayName("emits a directed graph carrying the view's own description")
   void emitsADigraph() throws IOException {
     String dot =
-        render(view(List.of(new ViewNode("Q901", NodeKind.PERSON, "Wren Alderman")), List.of()));
+        render(view(List.of(new ViewNode("Q0901", NodeKind.PERSON, "Wren Alderman")), List.of()));
 
     assertThat(dot).startsWith("digraph");
     assertThat(dot).contains("a made-up view");
@@ -57,27 +57,27 @@ class DotWriterTest {
         render(
             view(
                 List.of(
-                    new ViewNode("Q901", NodeKind.PERSON, "Wren Alderman"),
-                    new ViewNode("Q902", NodeKind.GROUP, "The Paper Kettles"),
-                    new ViewNode("Q903", NodeKind.WORK, "Hollow Tide"),
-                    new ViewNode("Q904", NodeKind.PLACE, "Bracken Hall"),
-                    new ViewNode("Q905", NodeKind.EVENT, "The Bracken Sessions"),
-                    new ViewNode("Q906", NodeKind.CONCEPT, "Invented Prize")),
+                    new ViewNode("Q0901", NodeKind.PERSON, "Wren Alderman"),
+                    new ViewNode("Q0902", NodeKind.GROUP, "The Paper Kettles"),
+                    new ViewNode("Q0903", NodeKind.WORK, "Hollow Tide"),
+                    new ViewNode("Q0904", NodeKind.PLACE, "Bracken Hall"),
+                    new ViewNode("Q0905", NodeKind.EVENT, "The Bracken Sessions"),
+                    new ViewNode("Q0906", NodeKind.CONCEPT, "Invented Prize")),
                 List.of()));
 
-    assertThat(dot).contains("\"Q901\" [label=\"Wren Alderman\", shape=ellipse,");
-    assertThat(dot).contains("\"Q902\" [label=\"The Paper Kettles\", shape=box,");
-    assertThat(dot).contains("\"Q903\" [label=\"Hollow Tide\", shape=note,");
-    assertThat(dot).contains("\"Q904\" [label=\"Bracken Hall\", shape=house,");
-    assertThat(dot).contains("\"Q905\" [label=\"The Bracken Sessions\", shape=diamond,");
-    assertThat(dot).contains("\"Q906\" [label=\"Invented Prize\", shape=octagon,");
+    assertThat(dot).contains("\"Q0901\" [label=\"Wren Alderman\", shape=ellipse,");
+    assertThat(dot).contains("\"Q0902\" [label=\"The Paper Kettles\", shape=box,");
+    assertThat(dot).contains("\"Q0903\" [label=\"Hollow Tide\", shape=note,");
+    assertThat(dot).contains("\"Q0904\" [label=\"Bracken Hall\", shape=house,");
+    assertThat(dot).contains("\"Q0905\" [label=\"The Bracken Sessions\", shape=diamond,");
+    assertThat(dot).contains("\"Q0906\" [label=\"Invented Prize\", shape=octagon,");
   }
 
   @Test
   @DisplayName("every NodeKind has a shape, so a seventh kind cannot render as nothing")
   void hasAShapeForEveryKind() throws IOException {
     for (NodeKind kind : NodeKind.values()) {
-      String dot = render(view(List.of(new ViewNode("Q901", kind, "x")), List.of()));
+      String dot = render(view(List.of(new ViewNode("Q0901", kind, "x")), List.of()));
       assertThat(dot).as("shape for %s", kind).containsPattern("shape=\\w+");
     }
   }
@@ -89,12 +89,12 @@ class DotWriterTest {
         render(
             view(
                 List.of(
-                    new ViewNode("Q901", NodeKind.PERSON, "Wren Alderman"),
-                    new ViewNode("Q902", NodeKind.GROUP, "The Paper Kettles"),
-                    new ViewNode("Q903", NodeKind.WORK, "Hollow Tide"),
-                    new ViewNode("Q904", NodeKind.PLACE, "Bracken Hall"),
-                    new ViewNode("Q905", NodeKind.EVENT, "The Bracken Sessions"),
-                    new ViewNode("Q906", NodeKind.CONCEPT, "Invented Prize")),
+                    new ViewNode("Q0901", NodeKind.PERSON, "Wren Alderman"),
+                    new ViewNode("Q0902", NodeKind.GROUP, "The Paper Kettles"),
+                    new ViewNode("Q0903", NodeKind.WORK, "Hollow Tide"),
+                    new ViewNode("Q0904", NodeKind.PLACE, "Bracken Hall"),
+                    new ViewNode("Q0905", NodeKind.EVENT, "The Bracken Sessions"),
+                    new ViewNode("Q0906", NodeKind.CONCEPT, "Invented Prize")),
                 List.of()));
 
     assertThat(dot).contains("shape=ellipse, fillcolor=\"#84C2EC\"");
@@ -110,7 +110,7 @@ class DotWriterTest {
   void hasADistinctFillForEveryKind() throws IOException {
     Set<String> fills = new LinkedHashSet<>();
     for (NodeKind kind : NodeKind.values()) {
-      String dot = render(view(List.of(new ViewNode("Q901", kind, "x")), List.of()));
+      String dot = render(view(List.of(new ViewNode("Q0901", kind, "x")), List.of()));
       Matcher matcher = Pattern.compile("fillcolor=\"(#[0-9A-Fa-f]{6})\"").matcher(dot);
       assertThat(matcher.find()).as("a fill for %s", kind).isTrue();
       fills.add(matcher.group(1));
@@ -125,17 +125,17 @@ class DotWriterTest {
         render(
             view(
                 List.of(
-                    new ViewNode("Q901", NodeKind.WORK, "Hollow Tide", List.of("Q482994")),
-                    new ViewNode("Q902", NodeKind.WORK, "Bracken Air", List.of("Q105543609")),
-                    new ViewNode("Q903", NodeKind.WORK, "Kettle Song", List.of("Q134556")),
-                    new ViewNode("Q904", NodeKind.WORK, "The Long Marsh", List.of("Q11424"))),
+                    new ViewNode("Q0901", NodeKind.WORK, "Hollow Tide", List.of("Q482994")),
+                    new ViewNode("Q0902", NodeKind.WORK, "Bracken Air", List.of("Q105543609")),
+                    new ViewNode("Q0903", NodeKind.WORK, "Kettle Song", List.of("Q134556")),
+                    new ViewNode("Q0904", NodeKind.WORK, "The Long Marsh", List.of("Q11424"))),
                 List.of()));
 
-    assertThat(dot).contains("\"Q901\" [label=\"Hollow Tide\", shape=note, fillcolor=\"#F8F3C6\"");
-    assertThat(dot).contains("\"Q902\" [label=\"Bracken Air\", shape=note, fillcolor=\"#D9CF3B\"");
-    assertThat(dot).contains("\"Q903\" [label=\"Kettle Song\", shape=note, fillcolor=\"#BFB633\"");
+    assertThat(dot).contains("\"Q0901\" [label=\"Hollow Tide\", shape=note, fillcolor=\"#F8F3C6\"");
+    assertThat(dot).contains("\"Q0902\" [label=\"Bracken Air\", shape=note, fillcolor=\"#D9CF3B\"");
+    assertThat(dot).contains("\"Q0903\" [label=\"Kettle Song\", shape=note, fillcolor=\"#BFB633\"");
     assertThat(dot)
-        .contains("\"Q904\" [label=\"The Long Marsh\", shape=note, fillcolor=\"#A69E2B\"");
+        .contains("\"Q0904\" [label=\"The Long Marsh\", shape=note, fillcolor=\"#A69E2B\"");
   }
 
   @Test
@@ -145,9 +145,9 @@ class DotWriterTest {
         render(
             view(
                 List.of(
-                    new ViewNode("Q901", NodeKind.WORK, "A Novel", List.of("Q7725634")),
-                    new ViewNode("Q902", NodeKind.WORK, "Something", List.of("Q900901")),
-                    new ViewNode("Q903", NodeKind.WORK, "Unclassified", List.of())),
+                    new ViewNode("Q0901", NodeKind.WORK, "A Novel", List.of("Q7725634")),
+                    new ViewNode("Q0902", NodeKind.WORK, "Something", List.of("Q0900901")),
+                    new ViewNode("Q0903", NodeKind.WORK, "Unclassified", List.of())),
                 List.of()));
 
     assertThat(dot.lines().filter(line -> line.contains("fillcolor=\"#F2E87A\"")).count())
@@ -161,8 +161,8 @@ class DotWriterTest {
         render(
             view(
                 List.of(
-                    new ViewNode("Q901", NodeKind.PERSON, "Wren Alderman", List.of("Q482994")),
-                    new ViewNode("Q902", NodeKind.CONCEPT, "Invented Prize", List.of("Q11424"))),
+                    new ViewNode("Q0901", NodeKind.PERSON, "Wren Alderman", List.of("Q482994")),
+                    new ViewNode("Q0902", NodeKind.CONCEPT, "Invented Prize", List.of("Q11424"))),
                 List.of()));
 
     assertThat(dot).contains("shape=ellipse, fillcolor=\"#84C2EC\"");
@@ -177,7 +177,7 @@ class DotWriterTest {
             view(
                 List.of(
                     new ViewNode(
-                        "Q901", NodeKind.WORK, "Kettle Song", List.of("Q900901", "Q134556"))),
+                        "Q0901", NodeKind.WORK, "Kettle Song", List.of("Q0900901", "Q134556"))),
                 List.of()));
 
     assertThat(dot).contains("fillcolor=\"#BFB633\"");
@@ -191,20 +191,20 @@ class DotWriterTest {
             view(
                 List.of(
                     new ViewNode(
-                        "Q901", NodeKind.WORK, "Kettle Song", List.of("Q134556", "Q105543609"))),
+                        "Q0901", NodeKind.WORK, "Kettle Song", List.of("Q134556", "Q105543609"))),
                 List.of()));
     String statedInTheOther =
         render(
             view(
                 List.of(
                     new ViewNode(
-                        "Q901", NodeKind.WORK, "Kettle Song", List.of("Q105543609", "Q134556"))),
+                        "Q0901", NodeKind.WORK, "Kettle Song", List.of("Q105543609", "Q134556"))),
                 List.of()));
 
-    assertThat(fillOf(statedInOneOrder, "Q901"))
+    assertThat(fillOf(statedInOneOrder, "Q0901"))
         .as("the same entity, the same two classes, the other order")
-        .isEqualTo(fillOf(statedInTheOther, "Q901"));
-    assertThat(fillOf(statedInOneOrder, "Q901"))
+        .isEqualTo(fillOf(statedInTheOther, "Q0901"));
+    assertThat(fillOf(statedInOneOrder, "Q0901"))
         .as("single outranks musical work/composition")
         .isEqualTo("#BFB633");
   }
@@ -215,7 +215,7 @@ class DotWriterTest {
     String dot =
         render(
             view(
-                List.of(new ViewNode("Q901", NodeKind.WORK, "Hollow Tide", List.of("Q482994"))),
+                List.of(new ViewNode("Q0901", NodeKind.WORK, "Hollow Tide", List.of("Q482994"))),
                 List.of()));
 
     assertThat(dot).contains("tooltip=\"album\"");
@@ -229,7 +229,7 @@ class DotWriterTest {
             view(
                 List.of(
                     new ViewNode(
-                        "Q901", NodeKind.WORK, "Hollow Tide", List.of("Q482994", "Q105543609"))),
+                        "Q0901", NodeKind.WORK, "Hollow Tide", List.of("Q482994", "Q105543609"))),
                 List.of()));
 
     assertThat(dot).contains("tooltip=\"album, musical work/composition\"");
@@ -241,17 +241,17 @@ class DotWriterTest {
     String dot =
         render(
             view(
-                List.of(new ViewNode("Q901", NodeKind.CONCEPT, "Something", List.of("Q900901"))),
+                List.of(new ViewNode("Q0901", NodeKind.CONCEPT, "Something", List.of("Q0900901"))),
                 List.of()));
 
-    assertThat(dot).contains("tooltip=\"Q900901\"");
+    assertThat(dot).contains("tooltip=\"Q0900901\"");
   }
 
   @Test
   @DisplayName("a node whose source stated no class says exactly that")
   void tooltipsAClasslessNodeHonestly() throws IOException {
     String dot =
-        render(view(List.of(new ViewNode("Q901", NodeKind.PERSON, "Wren Alderman")), List.of()));
+        render(view(List.of(new ViewNode("Q0901", NodeKind.PERSON, "Wren Alderman")), List.of()));
 
     assertThat(dot).contains("tooltip=\"no stated class\"");
   }
@@ -263,11 +263,11 @@ class DotWriterTest {
         render(
             view(
                 List.of(
-                    new ViewNode("Q901", NodeKind.PERSON, "Wren Alderman", List.of("Q5")),
-                    new ViewNode("Q902", NodeKind.GROUP, "The Paper Kettles"),
-                    new ViewNode("Q903", NodeKind.WORK, "Hollow Tide", List.of("Q900901")),
+                    new ViewNode("Q0901", NodeKind.PERSON, "Wren Alderman", List.of("Q5")),
+                    new ViewNode("Q0902", NodeKind.GROUP, "The Paper Kettles"),
+                    new ViewNode("Q0903", NodeKind.WORK, "Hollow Tide", List.of("Q0900901")),
                     new ViewNode(
-                        "Q904", NodeKind.CONCEPT, "The Invented Prize", List.of("Q618779"))),
+                        "Q0904", NodeKind.CONCEPT, "The Invented Prize", List.of("Q618779"))),
                 List.of()));
 
     assertThat(dot.lines().filter(line -> line.contains("tooltip=")).count()).isEqualTo(4);
@@ -288,11 +288,11 @@ class DotWriterTest {
         render(
             view(
                 List.of(
-                    new ViewNode("Q901", NodeKind.PERSON, "Wren Alderman"),
-                    new ViewNode("Q902", NodeKind.GROUP, "The Paper Kettles")),
-                List.of(new ViewEdge("Q901", "Q902", "MEMBER_OF", 1.0, "invented"))));
+                    new ViewNode("Q0901", NodeKind.PERSON, "Wren Alderman"),
+                    new ViewNode("Q0902", NodeKind.GROUP, "The Paper Kettles")),
+                List.of(new ViewEdge("Q0901", "Q0902", "MEMBER_OF", 1.0, "invented"))));
 
-    assertThat(dot).contains("\"Q901\" -> \"Q902\" [label=\"MEMBER_OF\", ");
+    assertThat(dot).contains("\"Q0901\" -> \"Q0902\" [label=\"MEMBER_OF\", ");
   }
 
   @Test
@@ -302,9 +302,9 @@ class DotWriterTest {
         render(
             view(
                 List.of(
-                    new ViewNode("Q901", NodeKind.PERSON, "Wren Alderman"),
-                    new ViewNode("Q902", NodeKind.GROUP, "The Paper Kettles")),
-                List.of(new ViewEdge("Q901", "Q902", "MEMBER_OF", 1.0, "invented"))));
+                    new ViewNode("Q0901", NodeKind.PERSON, "Wren Alderman"),
+                    new ViewNode("Q0902", NodeKind.GROUP, "The Paper Kettles")),
+                List.of(new ViewEdge("Q0901", "Q0902", "MEMBER_OF", 1.0, "invented"))));
 
     assertThat(dot).contains("tooltip=\"Wren Alderman -MEMBER_OF-> The Paper Kettles\"");
   }
@@ -376,11 +376,11 @@ class DotWriterTest {
   private static GraphView star(int edges) {
     List<ViewNode> nodes = new ArrayList<>();
     List<ViewEdge> spokes = new ArrayList<>();
-    nodes.add(new ViewNode("Q900100", NodeKind.PERSON, "Wren Alderman"));
+    nodes.add(new ViewNode("Q0900100", NodeKind.PERSON, "Wren Alderman"));
     for (int i = 1; i <= edges; i++) {
-      String qid = "Q9001" + String.format("%02d", i);
+      String qid = "Q09001" + String.format("%02d", i);
       nodes.add(new ViewNode(qid, NodeKind.WORK, "Invented Work " + i));
-      spokes.add(new ViewEdge("Q900100", qid, "ACTED_IN", 1.0, "invented"));
+      spokes.add(new ViewEdge("Q0900100", qid, "ACTED_IN", 1.0, "invented"));
     }
     return new GraphView("an invented star", nodes, spokes);
   }
@@ -391,7 +391,7 @@ class DotWriterTest {
     String dot =
         render(
             view(
-                List.of(new ViewNode("Q901", NodeKind.WORK, "The \"Quiet\" Back\\Room")),
+                List.of(new ViewNode("Q0901", NodeKind.WORK, "The \"Quiet\" Back\\Room")),
                 List.of()));
 
     assertThat(dot).contains("label=\"The \\\"Quiet\\\" Back\\\\Room\"");
@@ -403,7 +403,7 @@ class DotWriterTest {
     String dot =
         render(
             view(
-                List.of(new ViewNode("Q901", NodeKind.PERSON, "Wren Alderman").withAffinity(4)),
+                List.of(new ViewNode("Q0901", NodeKind.PERSON, "Wren Alderman").withAffinity(4)),
                 List.of()));
 
     assertThat(dot).contains("label=\"Wren Alderman (4/5)\"");

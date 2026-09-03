@@ -86,8 +86,11 @@ class MergeDoesNotInflateDegreeTest {
   /** Two leading zeros: the shape {@code LocalEntity} reserves for something the owner minted. */
   private static final String LOCAL = "Q00930001";
 
-  /** The id the owner later found it already had. Allocatable, which the local side never is. */
-  private static final String CANONICAL = "Q930900";
+  /**
+   * The id the owner later found it already had - never the local side's shape. ADR 62's eleven
+   * digits rather than a real qid, so this fabricated merge names no real entity (issue #171).
+   */
+  private static final String CANONICAL = "Q10000930900";
 
   /** On the {@code --known} file. Four of them, two rated, exactly as the spec measured. */
   private static final int SEEDS = 4;
@@ -339,7 +342,7 @@ class MergeDoesNotInflateDegreeTest {
   private static void padTo(
       SqliteAssertionLog log, Map<String, Integer> degree, int[] filler, String qid, int target) {
     while (degree.getOrDefault(qid, 0) < target) {
-      String record = String.format(Locale.ROOT, "Q94%05d", filler[0]++);
+      String record = String.format(Locale.ROOT, "Q094%05d", filler[0]++);
       log.append(
           new NodeAssertion(record, NodeKind.WORK, "an invented record " + record, sourced()));
       log.append(
@@ -350,14 +353,14 @@ class MergeDoesNotInflateDegreeTest {
   }
 
   private static String seed(int i) {
-    return "Q93000" + (i + 1);
+    return "Q093000" + (i + 1);
   }
 
   private static String via(int j) {
-    return String.format(Locale.ROOT, "Q9301%02d", j);
+    return String.format(Locale.ROOT, "Q09301%02d", j);
   }
 
   private static String candidate(int k) {
-    return String.format(Locale.ROOT, "Q9302%02d", k);
+    return String.format(Locale.ROOT, "Q09302%02d", k);
   }
 }

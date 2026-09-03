@@ -37,9 +37,9 @@ class RetractRunTest {
   private static final Provenance SOURCE =
       new Provenance("invented", "invented:1", Instant.parse("2026-01-01T00:00:00Z"), 1.0);
 
-  private static final String WRONG = "Q900101";
-  private static final String PAINTING = "Q900102";
-  private static final String OTHER = "Q900103";
+  private static final String WRONG = "Q0900101";
+  private static final String PAINTING = "Q0900102";
+  private static final String OTHER = "Q0900103";
 
   private AssertionLog log;
   private RetractRun run;
@@ -139,9 +139,9 @@ class RetractRunTest {
     // reads as a decision somebody made.
     seedAWronglyExpandedEntity();
 
-    assertThatThrownBy(() -> run.run(options("Q900999", "wrong entity", false), notes::add))
+    assertThatThrownBy(() -> run.run(options("Q0900999", "wrong entity", false), notes::add))
         .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("Q900999");
+        .hasMessageContaining("Q0900999");
 
     assertThat(log.readAll()).hasSize(5);
   }

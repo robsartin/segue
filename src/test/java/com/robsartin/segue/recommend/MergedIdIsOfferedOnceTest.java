@@ -61,9 +61,9 @@ import org.junit.jupiter.api.io.TempDir;
  * The equivalence is folded out of the ratings where the ratings are read, and a test that
  * assembled that fold itself would prove nothing about where the fold comes from.
  *
- * <p>Every qid and label below is invented; the canonical side of a merge has to be an id Wikidata
- * could allocate ({@code SameAs} refuses anything else), so {@code Q900} stands in for one exactly
- * as {@code MergeCarriesEverythingTest} uses it.
+ * <p>Every qid and label below is invented; the canonical side of a merge may not take a stand-in's
+ * leading zero ({@code SameAs} refuses it), so {@code Q10000000900} stands in for one in ADR 62's
+ * shape, exactly as {@code MergeCarriesEverythingTest} uses it.
  */
 class MergedIdIsOfferedOnceTest {
 
@@ -71,13 +71,13 @@ class MergedIdIsOfferedOnceTest {
   private static final String MINTED = "Q00900042";
 
   /** The id Wikidata turned out to have. Allocatable, which the local side never is. */
-  private static final String CANONICAL = "Q900";
+  private static final String CANONICAL = "Q10000000900";
 
-  private static final String VIA = "Q900211";
-  private static final String CANDIDATE = "Q900311";
+  private static final String VIA = "Q0900211";
+  private static final String CANDIDATE = "Q0900311";
 
   /** On the {@code --known} file and reaching nothing: the file may not be empty. */
-  private static final String ON_THE_FILE = "Q900199";
+  private static final String ON_THE_FILE = "Q0900199";
 
   /** Low enough that nothing needs padding past three edges, and above the sweep's own minimum. */
   private static final int FLOOR = 3;
@@ -170,7 +170,7 @@ class MergedIdIsOfferedOnceTest {
   /** Records nobody's list touches: a WORK is never a candidate, whatever its degree. */
   private static void padTo(SqliteAssertionLog log, String qid, int records, int offset) {
     for (int i = 0; i < records; i++) {
-      String record = "Q9009" + (offset + i);
+      String record = "Q09009" + (offset + i);
       log.append(
           new NodeAssertion(record, NodeKind.WORK, "an invented record " + record, sourced()));
       log.append(

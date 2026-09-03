@@ -45,8 +45,8 @@ class KindMapperTest {
   @DisplayName("an unmapped class falls back to CONCEPT rather than guessing")
   void unmappedFallsBackToConcept() {
     // ADR 22: record what we could not map rather than inventing a kind for it.
-    assertThat(KindMapper.fromInstanceOf(List.of("Q99999999"))).isEqualTo(NodeKind.CONCEPT);
-    assertThat(KindMapper.isMapped("Q99999999")).isFalse();
+    assertThat(KindMapper.fromInstanceOf(List.of("Q099999999"))).isEqualTo(NodeKind.CONCEPT);
+    assertThat(KindMapper.isMapped("Q099999999")).isFalse();
     assertThat(KindMapper.isMapped("Q5")).isTrue();
   }
 
@@ -62,7 +62,7 @@ class KindMapperTest {
     // Real entities carry several P31 values, most of them classes this list has never heard
     // of. Those are skipped rather than counted, which is what stops an obscure class
     // shadowing "human".
-    assertThat(KindMapper.fromInstanceOf(List.of("Q99999999", "Q5"))).isEqualTo(NodeKind.PERSON);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q099999999", "Q5"))).isEqualTo(NodeKind.PERSON);
   }
 
   @Test
@@ -98,7 +98,7 @@ class KindMapperTest {
   void aMappedClassBeatsTheFallback() {
     // CONCEPT is the answer for "we could not place this" (ADR 22), so it can never outrank a
     // class the list does recognise - otherwise a single unknown class would erase a known one.
-    assertThat(KindMapper.fromInstanceOf(List.of("Q99999999", "Q515", "Q99999998")))
+    assertThat(KindMapper.fromInstanceOf(List.of("Q099999999", "Q515", "Q099999998")))
         .isEqualTo(NodeKind.PLACE);
   }
 

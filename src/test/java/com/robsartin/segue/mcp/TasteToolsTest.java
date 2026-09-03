@@ -90,7 +90,7 @@ class TasteToolsTest {
   @Test
   @DisplayName("rating an entity that is not in the graph is an error RESULT, not a thrown error")
   void unknownEntityIsAnErrorResult() {
-    CallToolResult result = tools.noteAffinity("Q900404", 4, null);
+    CallToolResult result = tools.noteAffinity("Q0900404", 4, null);
 
     // ADR 27: a shortfall the model can act on comes back readable, with isError set — never as
     // a JSON-RPC protocol error.
@@ -104,7 +104,7 @@ class TasteToolsTest {
     tools.noteAffinity("Q0900001", 4, null);
     assertThat(MDC.get(CorrelationId.KEY)).isNull();
 
-    tools.noteAffinity("Q900404", 4, null);
+    tools.noteAffinity("Q0900404", 4, null);
     assertThat(MDC.get(CorrelationId.KEY)).isNull();
   }
 

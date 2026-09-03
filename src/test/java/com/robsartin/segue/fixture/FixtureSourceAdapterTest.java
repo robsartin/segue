@@ -48,7 +48,7 @@ class FixtureSourceAdapterTest {
   void unknownSeedIsEmpty() {
     ExpandResult result =
         adapter.expand(
-            new NodeRecord("Q999999", NodeKind.PERSON, "Nobody"), ExpandContext.defaults());
+            new NodeRecord("Q0999999", NodeKind.PERSON, "Nobody"), ExpandContext.defaults());
 
     assertThat(result.assertions()).isEmpty();
     assertThat(result.sourceUnavailable()).isFalse();

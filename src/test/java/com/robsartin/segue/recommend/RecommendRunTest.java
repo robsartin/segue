@@ -165,7 +165,7 @@ class RecommendRunTest {
   @Test
   @DisplayName("a known entity this graph has never heard of is reported, not fatal")
   void anAbsentKnownEntityIsReported() throws IOException {
-    run(options(KNOWN_ONE, KNOWN_TWO, "Q900999"));
+    run(options(KNOWN_ONE, KNOWN_TWO, "Q0900999"));
 
     assertThat(notes).anyMatch(note -> note.contains("1") && note.contains("not in this graph"));
   }
@@ -176,7 +176,7 @@ class RecommendRunTest {
     run(options(KNOWN_ONE, KNOWN_TWO));
 
     assertThat(notes)
-        .noneMatch(note -> note.contains("Q900") || note.contains("who that artist cites"));
+        .noneMatch(note -> note.contains("Q10000000900") || note.contains("who that artist cites"));
   }
 
   @Test

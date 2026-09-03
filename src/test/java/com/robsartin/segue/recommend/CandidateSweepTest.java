@@ -417,7 +417,7 @@ class CandidateSweepTest {
     Sweep sweep =
         new CandidateSweep(graph, INSTITUTIONS)
             .over(
-                List.of(KNOWN_ONE, KNOWN_TWO, "Q900999"),
+                List.of(KNOWN_ONE, KNOWN_TWO, "Q0900999"),
                 Set.of(),
                 Scorer.LIFT,
                 FLOOR,
@@ -432,7 +432,7 @@ class CandidateSweepTest {
   void oneEntityThroughManyWorksIsStillOneEntity() {
     node(graph, ANCESTOR, NodeKind.GROUP, "a session player");
     for (int i = 0; i < 4; i++) {
-      String record = "Q90031" + i;
+      String record = "Q090031" + i;
       node(graph, record, NodeKind.WORK, "record " + i);
       edge(graph, KNOWN_ONE, record, EdgeTypes.PERFORMED.code());
       edge(graph, ANCESTOR, record, EdgeTypes.PERFORMED.code());
@@ -460,7 +460,7 @@ class CandidateSweepTest {
   void suppressionDoesNotTouchOtherCandidates() {
     influenceChain();
 
-    Sweep sweep = sweep(Set.of("Q900999"));
+    Sweep sweep = sweep(Set.of("Q0900999"));
 
     assertThat(find(sweep, ANCESTOR)).isPresent();
   }

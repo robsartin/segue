@@ -20,10 +20,10 @@ class ExportCliTest {
   @DisplayName("a neighbourhood needs an entity, and defaults to depth 1")
   void parsesANeighbourhood() {
     Options options =
-        parse("--view", "neighbourhood", "--qid", "Q900101", "--out", "/tmp/n.graphml");
+        parse("--view", "neighbourhood", "--qid", "Q0900101", "--out", "/tmp/n.graphml");
 
     assertThat(options.view()).isEqualTo(ViewKind.NEIGHBOURHOOD);
-    assertThat(options.qid()).isEqualTo("Q900101");
+    assertThat(options.qid()).isEqualTo("Q0900101");
     assertThat(options.depth()).isEqualTo(1);
     assertThat(options.format()).isEqualTo(OutputFormat.GRAPHML);
     assertThat(options.includeAffinity()).isFalse();
@@ -35,14 +35,14 @@ class ExportCliTest {
     Options options =
         parse(
             "--view", "route",
-            "--from", "Q900101",
-            "--to", "Q900104",
+            "--from", "Q0900101",
+            "--to", "Q0900104",
             "--max-hops", "4",
             "--format", "dot",
             "--out", "/tmp/r.dot");
 
-    assertThat(options.fromQid()).isEqualTo("Q900101");
-    assertThat(options.toQid()).isEqualTo("Q900104");
+    assertThat(options.fromQid()).isEqualTo("Q0900101");
+    assertThat(options.toQid()).isEqualTo("Q0900104");
     assertThat(options.maxHops()).isEqualTo(4);
     assertThat(options.format()).isEqualTo(OutputFormat.DOT);
   }
@@ -50,7 +50,7 @@ class ExportCliTest {
   @Test
   @DisplayName("a route without both ends is a usage error, not an empty picture")
   void refusesARouteWithOneEnd() {
-    assertThatThrownBy(() -> parse("--view", "route", "--from", "Q900101", "--out", "/tmp/r.dot"))
+    assertThatThrownBy(() -> parse("--view", "route", "--from", "Q0900101", "--out", "/tmp/r.dot"))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("--to");
   }
@@ -161,7 +161,7 @@ class ExportCliTest {
             () ->
                 parse(
                     "--view", "neighbourhood",
-                    "--qid", "Q900101",
+                    "--qid", "Q0900101",
                     "--depth", "0",
                     "--out", "/tmp/n.graphml"))
         .isInstanceOf(IllegalArgumentException.class)
@@ -176,9 +176,9 @@ class ExportCliTest {
             "--view",
             "route",
             "--from",
-            "Q900101",
+            "Q0900101",
             "--to",
-            "Q900104",
+            "Q0900104",
             "--out",
             "/invented/route.dot");
 

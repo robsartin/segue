@@ -120,14 +120,14 @@ class StdioPurityTest {
     sendLine(
         stdin,
         "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":"
-            + "\"get_entity\",\"arguments\":{\"qid\":\"Q999999999\"}}}");
+            + "\"get_entity\",\"arguments\":{\"qid\":\"Q0999999999\"}}}");
     awaitLineCount(stdout, 3, RESPONSE_TIMEOUT, "the get_entity tools/call response");
 
     sendLine(
         stdin,
         "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":"
-            + "\"find_paths\",\"arguments\":{\"fromQid\":\"Q999999998\",\"toQid\":"
-            + "\"Q999999997\"}}}");
+            + "\"find_paths\",\"arguments\":{\"fromQid\":\"Q0999999998\",\"toQid\":"
+            + "\"Q0999999997\"}}}");
     awaitLineCount(stdout, 4, RESPONSE_TIMEOUT, "the find_paths tools/call response");
 
     process.destroy();

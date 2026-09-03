@@ -60,9 +60,17 @@ import java.util.Set;
  * AssertionLog.readAll}, the reconstruction path, where the factory is not called and only the
  * canonical constructor runs. What runs there is the pair that cannot be re-tightened by this
  * project — {@link LocalEntity#checkUnallocatable} on the local side and {@link
- * Qid#checkAllocatable} on the canonical side — and allocatable and unallocatable are complementary
- * by construction, so no id can sit on both sides of the relation whatever the convention does
- * next. If that were false, {@link #resolve} would leave a rating stranded on an intermediate id.
+ * Qid#checkCanonicalSide} on the canonical side — and those two are exact complements over {@code
+ * Q\d+} by construction, so no id can sit on both sides of the relation whatever the convention
+ * does next. If that were false, {@link #resolve} would leave a rating stranded on an intermediate
+ * id.
+ *
+ * <p><b>Complementary, not "allocatable versus unallocatable".</b> That was the same sentence until
+ * ADR 62 reserved an eleven-digit shape which the grammar cannot allocate and a merge's canonical
+ * side may nonetheless take. Had the local side gone on refusing only what is <em>allocatable</em>,
+ * that one shape would have been legal on both sides and the argument above would have been quietly
+ * false; the local check reads the same predicate instead, so the complement is restored by
+ * construction rather than by coincidence.
  *
  * <p><b>One local id merged twice leaves a node behind under the first canonical id.</b> {@link
  * #standIns} is {@code putIfAbsent} and keyed by canonical id, so the first merge names the

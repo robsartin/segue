@@ -69,16 +69,16 @@ class AffinityOverlayTest {
     return new GraphView(
         "a made-up view",
         List.of(
-            new ViewNode("Q900101", NodeKind.PERSON, "Wren Alderman"),
-            new ViewNode("Q900102", NodeKind.GROUP, "The Paper Kettles")),
-        List.of(new ViewEdge("Q900101", "Q900102", "MEMBER_OF", 1.0, "invented")));
+            new ViewNode("Q0900101", NodeKind.PERSON, "Wren Alderman"),
+            new ViewNode("Q0900102", NodeKind.GROUP, "The Paper Kettles")),
+        List.of(new ViewEdge("Q0900101", "Q0900102", "MEMBER_OF", 1.0, "invented")));
   }
 
   @Test
   @DisplayName("a rated entity gains its rating; an unrated one gains nothing")
   void addsRatingsWhereTheyExist() {
     GraphView view =
-        new AffinityOverlay(new FakeAffinityStore().rating("Q900101", 4)).applyTo(twoNodes());
+        new AffinityOverlay(new FakeAffinityStore().rating("Q0900101", 4)).applyTo(twoNodes());
 
     assertThat(view.nodes().get(0).affinity()).isEqualTo(4);
     assertThat(view.nodes().get(1).affinity()).isNull();
@@ -89,11 +89,11 @@ class AffinityOverlayTest {
   void leavesTheRestOfTheViewAlone() {
     GraphView before = twoNodes();
     GraphView after =
-        new AffinityOverlay(new FakeAffinityStore().rating("Q900101", 4)).applyTo(before);
+        new AffinityOverlay(new FakeAffinityStore().rating("Q0900101", 4)).applyTo(before);
 
     assertThat(after.description()).isEqualTo(before.description());
     assertThat(after.edges()).isEqualTo(before.edges());
-    assertThat(after.nodes()).extracting(ViewNode::qid).isEqualTo(List.of("Q900101", "Q900102"));
+    assertThat(after.nodes()).extracting(ViewNode::qid).isEqualTo(List.of("Q0900101", "Q0900102"));
     assertThat(before.carriesAffinity()).as("the input view is not mutated").isFalse();
   }
 
