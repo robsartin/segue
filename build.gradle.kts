@@ -186,6 +186,48 @@ tasks.register<Test>("liveTest") {
     outputs.upToDateWhen { false }
 }
 
+tasks.register<Test>("mbProbe") {
+    group = "verification"
+    description =
+        "Runs the MusicBrainz probe behind ADR 55's magnitudes against the real ws/2 and Query " +
+            "Service, printing its five blocks and asserting their structure rather than their " +
+            "values. Needs network, and needs a COPY: it refuses the owner's own log and " +
+            "anything under \$HOME/.segue, because a probe that opens the real database is the " +
+            "one thing ADR 55 and issue #167 both forbid. Copy it first — cp " +
+            "\$HOME/.segue/segue.db /tmp/segue-probe.db — and pass " +
+            "-Dsegue.probe.db=/tmp/segue-probe.db; -Dsegue.probe.seeds shortens the run from its " +
+            "default. Write \$HOME and not ~ — a tilde does not expand inside double quotes. " +
+            "Example: ./gradlew mbProbe -Dsegue.probe.db=/tmp/segue-probe.db"
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform { includeTags("live") }
+    // The one class, so this task is the probe and not a second liveTest: `liveTest` still reaches
+    // it through the tag, and this task reaches nothing else.
+    filter { includeTestsMatching("com.robsartin.segue.musicbrainz.MusicBrainzProbeLiveTest") }
+    // sqlite-jdbc loads a native library, the same grant tasks.test makes. liveTest does not make
+    // it — nothing tagged `live` opened SQLite until this probe did — so without this line the
+    // probe would meet the JDK's restricted-method warning on the copy it was handed.
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
+    // The copy is named per invocation and never defaulted; an absent property arrives blank and
+    // ProbeDatabase refuses it with the copy step above.
+    systemProperty(
+        "segue.probe.db",
+        providers.systemProperty("segue.probe.db").getOrElse(""),
+    )
+    systemProperty(
+        "segue.probe.seeds",
+        providers.systemProperty("segue.probe.seeds").getOrElse(""),
+    )
+    testLogging {
+        // The table is the whole output, and it is written to stdout: without this the run says
+        // BUILD SUCCESSFUL and shows nobody what it measured.
+        showStandardStreams = true
+        events("failed", "standardError")
+    }
+    // Never up-to-date: the point is to measure the graph and the endpoints as they are now.
+    outputs.upToDateWhen { false }
+}
+
 tasks.register<JavaExec>("resolveNames") {
     group = "application"
     description =

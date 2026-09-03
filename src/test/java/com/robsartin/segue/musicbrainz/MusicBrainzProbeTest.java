@@ -1,6 +1,7 @@
 package com.robsartin.segue.musicbrainz;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
@@ -18,6 +19,8 @@ import com.robsartin.segue.port.SourceAdapter;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -31,6 +34,7 @@ import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.opentest4j.TestAbortedException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -116,6 +120,54 @@ class MusicBrainzProbeTest {
                   + " and every request it made arrived here, so a request that escaped to the real"
                   + " endpoint would be missing from this count")
           .isEqualTo(expected.get("block1").get("bridged").asInt());
+    }
+  }
+
+  @Test
+  @DisplayName("should fail with the refusal, and not skip, when the live run names no database")
+  void shouldFailWithTheRefusalAndNotSkipWhenTheLiveRunNamesNoDatabase() throws Exception {
+    // The live run's own first behaviour, watched offline. MusicBrainzProbeLiveTest carries the
+    // live tag — spelled out rather than quoted, because DeveloperGuideEnumerationsTest derives
+    // the live-tagged set by searching each test source for that annotation as a string, and a
+    // literal in this comment would enrol this class in a set it does not belong to — so
+    // `./gradlew check` never discovers it, and the only way to see what it does with no
+    // -Dsegue.probe.db is to call its test method here — which is exactly what the live run would
+    // execute, resolution and all.
+    //
+    // Nothing reaches the network on this path: the refusal is thrown by the resolution, which is
+    // the method's first statement, before a client, a bridge or a database handle exists. Had it
+    // run any further, the throwable below would be a connection failure or a missing file rather
+    // than this sentence.
+    String named = System.getProperty(ProbeDatabase.PROPERTY);
+    System.clearProperty(ProbeDatabase.PROPERTY);
+    try {
+      Object live = MusicBrainzProbeLiveTest.class.getDeclaredConstructor().newInstance();
+      Method probe =
+          MusicBrainzProbeLiveTest.class.getDeclaredMethod(
+              "shouldPrintTheFiveBlocksWhenRunAgainstACopyOfTheOwnersLog");
+
+      Throwable thrown = catchThrowable(() -> probe.invoke(live));
+
+      assertThat(thrown)
+          .as("the live run threw rather than returning")
+          .isInstanceOf(InvocationTargetException.class);
+      assertThat(thrown.getCause())
+          .as(
+              "and what it threw is ProbeDatabase's own sentence, so the refusal is the live run's"
+                  + " first behaviour rather than something a reader has to trust")
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("-D" + ProbeDatabase.PROPERTY + " is required")
+          .hasMessageContaining("cp ");
+      assertThat(thrown.getCause())
+          .as(
+              "and it is not an aborted assumption. JUnit skips a test on TestAbortedException and"
+                  + " on nothing else, so this is the assertion that says the live run fails rather"
+                  + " than reporting success for a run that never happened")
+          .isNotInstanceOf(TestAbortedException.class);
+    } finally {
+      if (named != null) {
+        System.setProperty(ProbeDatabase.PROPERTY, named);
+      }
     }
   }
 
