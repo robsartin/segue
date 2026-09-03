@@ -255,3 +255,38 @@ so that path is safe, and `MusicBrainzNeighbourIdentityTest`'s third test assert
 - **Nothing in `./gradlew check` needs the network and nothing in it reads `~/.segue/segue.db`.**
   The probe was a scratch `liveTest`, left nothing behind, and read a copy of the log rather than
   the live database.
+
+**Amendment (2026-09-02, issue #167): the instrument is now committed, and the last consequence
+above — *"The probe was a scratch `liveTest`, left nothing behind"* — describes what was true until
+this date and no longer is.** It revises no decision here and adds no figure to any table above.
+
+The probe is `MusicBrainzProbeLiveTest`, driving the same engine the offline `MusicBrainzProbeTest`
+drives against a fixture. Run it with `./gradlew mbProbe -Dsegue.probe.db=<a copy>`: it reads a copy
+of the assertion log and **refuses the real database**, the default and anything under
+`$HOME/.segue`, symlinks resolved — and with no `-Dsegue.probe.db` it fails with the copy step
+rather than skipping. It regenerates the *shape* of the tables above, in the same five blocks, and
+asserts their structure only: that the census sums to the relation total, that the three `isNew`
+buckets partition the resolved neighbours, that median ≤ p90 ≤ max, and that the table names no
+entity. It asserts no value, because the graph grows and every figure above is a dated observation
+of 2026-08 rather than an invariant.
+
+**It will not reproduce the sample above, only its shape.** This ADR records that its seeds were
+"ordered by a deterministic pseudorandom function of the QID" without recording the function or the
+seeds it drew, so that ordering cannot be re-derived; the committed probe draws in log order and
+says so in its own javadoc.
+
+**Two things the committed instrument makes explicit that this ADR left unstated.**
+
+- **The p90 is nearest rank**, `sorted.get(ceil(0.90n) - 1)`. "p90 of 4" above does not say which
+  definition produced it, and a linear interpolation over the same counts gives a different number,
+  so the two cannot be set side by side as if they agreed.
+- **The whitelist is one entry, not two, and the code is what is right.** The consequence above
+  calls it "a two-entry `Map.of`"; `MusicBrainzSourceAdapter.BY_RELATION_TYPE` is
+  `Map.of(MEMBER_OF_BAND, EdgeTypes.MEMBER_OF)` — one mapping, written with the two arguments a
+  single mapping takes, and its own javadoc says "One entry". `git log -S` over that field shows it
+  has held exactly that one mapping since the adapter was first written, through the commit that
+  added this ADR, to today: there was never a second entry to lose. That class stays the authority
+  for what the whitelist contains — this correction deliberately does not restate it, because a
+  table copied into prose goes stale silently. Nothing in either Decision above turns on the count:
+  the argument is that admitting `subgroup` buys one edge, and that is unchanged whether the map
+  it would be added to holds one mapping or two.

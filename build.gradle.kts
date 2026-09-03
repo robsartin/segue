@@ -178,11 +178,65 @@ tasks.test {
 
 tasks.register<Test>("liveTest") {
     group = "verification"
-    description = "Runs the tagged live tests against the real Wikidata API. Needs network."
+    description =
+        "Runs the tagged live smoke tests against the real Wikidata and MusicBrainz APIs. Needs " +
+            "network. The `probe` tag is excluded: see mbProbe, which is the task for it."
     testClassesDirs = sourceSets["test"].output.classesDirs
     classpath = sourceSets["test"].runtimeClasspath
-    useJUnitPlatform { includeTags("live") }
+    // Every `live` test EXCEPT the probes. A smoke test needs the network and nothing else, so
+    // this task can be run on any machine at any time; a probe is an instrument handed a copy of
+    // the assertion log through -Dsegue.probe.db, and it refuses to run without one rather than
+    // skipping. This task forwards no such property, so a probe reached by the `live` tag alone
+    // would make `./gradlew liveTest` unconditionally red — which it was between the commit that
+    // added MusicBrainzProbeLiveTest and this line.
+    useJUnitPlatform {
+        includeTags("live")
+        excludeTags("probe")
+    }
     // Never up-to-date: the point is to re-check the real endpoint.
+    outputs.upToDateWhen { false }
+}
+
+tasks.register<Test>("mbProbe") {
+    group = "verification"
+    description =
+        "Runs the MusicBrainz probe behind ADR 55's magnitudes against the real ws/2 and Query " +
+            "Service, printing its five blocks and asserting their structure rather than their " +
+            "values. Needs network, and needs a COPY: it refuses the owner's own log and " +
+            "anything under \$HOME/.segue, because a probe that opens the real database is the " +
+            "one thing ADR 55 and issue #167 both forbid. Copy it first — cp " +
+            "\$HOME/.segue/segue.db /tmp/segue-probe.db — and pass " +
+            "-Dsegue.probe.db=/tmp/segue-probe.db; -Dsegue.probe.seeds shortens the run from its " +
+            "default. Write \$HOME and not ~ — a tilde does not expand inside double quotes. " +
+            "Example: ./gradlew mbProbe -Dsegue.probe.db=/tmp/segue-probe.db"
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    // The other side of liveTest's exclusion, stated in the same vocabulary: that task is `live`
+    // minus `probe`, this one is `probe`. A class-name filter would put one fully-qualified name
+    // in two tasks and leave the next probe class free to redden liveTest all over again; a tag
+    // enrols it in this task instead, which is the property `live` itself already has.
+    useJUnitPlatform { includeTags("probe") }
+    // sqlite-jdbc loads a native library, the same grant tasks.test makes. liveTest does not make
+    // it — nothing tagged `live` opened SQLite until this probe did — so without this line the
+    // probe would meet the JDK's restricted-method warning on the copy it was handed.
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
+    // The copy is named per invocation and never defaulted; an absent property arrives blank and
+    // ProbeDatabase refuses it with the copy step above.
+    systemProperty(
+        "segue.probe.db",
+        providers.systemProperty("segue.probe.db").getOrElse(""),
+    )
+    systemProperty(
+        "segue.probe.seeds",
+        providers.systemProperty("segue.probe.seeds").getOrElse(""),
+    )
+    testLogging {
+        // The table is the whole output, and it is written to stdout: without this the run says
+        // BUILD SUCCESSFUL and shows nobody what it measured.
+        showStandardStreams = true
+        events("failed", "standardError")
+    }
+    // Never up-to-date: the point is to measure the graph and the endpoints as they are now.
     outputs.upToDateWhen { false }
 }
 
