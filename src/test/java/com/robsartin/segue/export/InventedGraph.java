@@ -65,6 +65,13 @@ final class InventedGraph {
   static final String STANDING = "Q10000900108";
 
   /**
+   * A fourth canonical id: the wrong Wikidata item, named by a merge the owner has since corrected
+   * (#221). ADR 62's eleven-digit shape, for the reason {@link #KETTLES} takes it, keeping the
+   * band-A digits of the ids beside it.
+   */
+  static final String MISHEARD = "Q10000900109";
+
+  /**
    * Two ids the owner minted. Two leading zeros, which Wikibase's item-id grammar can never
    * allocate (ADR 58, ADR 59) - so these are deliberately not from the {@code Q900xxx} family, and
    * issue #171 does not reach them.
@@ -99,6 +106,13 @@ final class InventedGraph {
    * sequence, so it needs no entry in {@code StandInQidsDenoteNothingTest}'s allowlist (#222).
    */
   static final String UNKNOWN_CLASS = "Q0900109";
+
+  /**
+   * A sixth id the owner minted, and the one issue #221 turns on: merged onto {@link #MISHEARD} and
+   * then — the correction — onto {@link #WATERMARK}. Two leading zeros, for {@link #ALMANAC}'s
+   * reason.
+   */
+  static final String CORRECTED = "Q006";
 
   private static final Instant WHEN = Instant.parse("2026-01-01T00:00:00Z");
 
