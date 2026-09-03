@@ -38,7 +38,8 @@ import java.util.Map;
  * <p><b>Node kinds are re-derived from the classes the claim recorded</b>, through the same {@link
  * KindMapper#rederive} the boot projection uses (issue #60, ADR 42). Not a second rule: an exported
  * picture that disagreed with the running graph about what a node IS would be worse than no
- * picture, and DOT colours and shapes every node by its kind.
+ * picture, and DOT colours and shapes every node by its kind. A merge's stand-in node goes through
+ * the same rule, because it stands in for a node this fold re-derived (#222).
  *
  * <p><b>Retractions are honoured through the same shared rule</b>, {@link Retractions} (ADR 44,
  * issue #68), and for a stronger version of the same argument: a picture still showing edges the

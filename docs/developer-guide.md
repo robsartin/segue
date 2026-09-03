@@ -2188,8 +2188,12 @@ copying.** `GraphProjector.project` and `LogProjection.of` each resolve every ed
 **once**, on the canonical id. The local node stays exactly where it was — which is what "stays
 resolvable" means, since a route recorded last month still names it — and the canonical id gets a
 node only when nothing has claimed one, built by `Equivalences.standIns` in a pre-pass that runs
-before either fold begins. An edge claimed against the local id *after* the merge folds onto the
-canonical id too: the resolution is over the whole log, not at the merge's row.
+before either fold begins. It carries the merged entity's label and the kind that fold
+**re-derived** for it, not the kind the claim happened to state — the two are the same node's, and
+a bypass claim carrying classes used to make them differ
+([#222](https://github.com/robsartin/segue/issues/222)). An edge claimed against the local id
+*after* the merge folds onto the canonical id too: the resolution is over the whole log, not at the
+merge's row.
 
 **Until [#178](https://github.com/robsartin/segue/issues/178) it copied instead**, and left the
 edges on the local id as well, so the graph held two nodes carrying one entity's edges and every

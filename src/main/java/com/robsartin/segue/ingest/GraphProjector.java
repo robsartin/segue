@@ -29,7 +29,8 @@ import java.util.List;
  * (ADR 42, issue #60). Replay is the moment the derived state is rebuilt, so it is the moment to
  * rebuild it with today's rules rather than the rules that happened to be compiled in when the
  * claim was first written down. The log is not touched: it keeps saying what the source said and
- * what was made of it at the time, which is what ADR 19 means by append-only.
+ * what was made of it at the time, which is what ADR 19 means by append-only. A merge's stand-in
+ * node goes through the same rule, because it stands in for a node this fold re-derived (#222).
  *
  * <p><b>Always on, deliberately, and not a flag.</b> An opt-in correction is one every future
  * caller has to remember, and the cost of forgetting is invisible - a graph that looks right and
