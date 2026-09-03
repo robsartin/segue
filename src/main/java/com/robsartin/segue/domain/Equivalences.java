@@ -296,16 +296,23 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
     Objects.requireNonNull(assertion, "assertion");
     return switch (assertion) {
       case AssertionRecord claim -> foldEndpoints(claim).map(folded -> folded);
-      case OwnerEdge owned -> {
-        String from = canonical(owned.fromQid());
-        String to = canonical(owned.toQid());
-        if (from.equals(owned.fromQid()) && to.equals(owned.toQid())) {
-          yield Optional.of(owned);
-        }
-        yield from.equals(to)
-            ? Optional.empty()
-            : Optional.of(new OwnerEdge(from, to, owned.typeCode(), owned.assertedAt()));
-      }
+      case OwnerEdge owned ->
+          // Delegated rather than repeated: the three branches - unchanged, collapsed, resolved -
+          // are the AssertionRecord overload's, and an owner edge answers them by lending it its
+          // two endpoints. What comes back is rebuilt AS an owner edge, because IngestService.apply
+          // switches on the kind of claim and a folded owner edge attributed to a source would be
+          // credited to a witness who never said it.
+          foldEndpoints(owned.toAssertion())
+              .map(
+                  folded ->
+                      folded.fromQid().equals(owned.fromQid())
+                              && folded.toQid().equals(owned.toQid())
+                          ? owned
+                          : new OwnerEdge(
+                              folded.fromQid(),
+                              folded.toQid(),
+                              owned.typeCode(),
+                              owned.assertedAt()));
       default -> Optional.of(assertion);
     };
   }
@@ -315,7 +322,9 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
    * #foldEndpoints(LoggedAssertion)} for a caller that already knows it holds a sourced edge, so
    * that the exporter's fold needs no cast to ask its {@code edgeKey}.
    *
-   * <p>The general method delegates here, so there is one rule and not two.
+   * <p><b>Both arms of the general method delegate here</b>, so there is one rule and not two: a
+   * sourced edge is folded by this method directly, and an owner edge lends it its two endpoints
+   * and is rebuilt from the answer. Unchanged, collapsed and resolved are decided in one place.
    */
   public Optional<AssertionRecord> foldEndpoints(AssertionRecord claim) {
     Objects.requireNonNull(claim, "claim");

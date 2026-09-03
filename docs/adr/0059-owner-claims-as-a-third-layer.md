@@ -307,6 +307,10 @@ row; the separate, pre-existing question of node-order determinism in that write
   `OwnRun.labelsInTheProjection` and `ratings/Labels.forQids`. The last two read labels off the log
   rather than nodes off a graph, which is why they are copies rather than callers. Nothing fails if
   one drifts.
+- **How many merges the owner's real graph holds is unmeasured.** Nothing in this work opened
+  `~/.segue/segue.db`; every figure above is from an invented fixture, so the size of the effect this
+  amendment removes — `merges × their degree` — is known for the fixture and unknown for the graph it
+  was built to stand in for. The spec left this open and it stays open.
 - **A local id merged twice leaves an orphan stand-in under the *first* canonical id** while its
   edges land on the last, because the stand-in map is `putIfAbsent` and the canonical map is
   last-wins. Both folds agree about it; it is a correction's leftover rather than anything the owner

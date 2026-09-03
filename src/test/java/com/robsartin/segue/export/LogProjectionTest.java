@@ -168,7 +168,7 @@ class LogProjectionTest {
 
   @Test
   @DisplayName("the exported fold keeps the label of a source that named the canonical id first")
-  void keepsTheSourcesLabelWhenTheSourceNamedTheCanonicalIdBeforeTheMerge() {
+  void shouldKeepTheSourcesLabelWhenTheSourceNamedTheCanonicalIdBeforeTheMerge() {
     LogProjection projection =
         LogProjection.of(
             new FakeAssertionLog()
@@ -187,7 +187,7 @@ class LogProjectionTest {
 
   @Test
   @DisplayName("the exported fold keeps the label of a source that named the canonical id later")
-  void keepsTheSourcesLabelWhenTheSourceNamedTheCanonicalIdAfterTheMerge() {
+  void shouldKeepTheSourcesLabelWhenTheSourceNamedTheCanonicalIdAfterTheMerge() {
     LogProjection projection =
         LogProjection.of(
             new FakeAssertionLog()
@@ -203,7 +203,7 @@ class LogProjectionTest {
 
   @Test
   @DisplayName("the exported fold stands in for a canonical id no source has named")
-  void standsInForACanonicalIdNoSourceHasNamed() {
+  void shouldStandInForTheCanonicalIdWhenNoSourceHasNamedIt() {
     LogProjection projection =
         LogProjection.of(
             new FakeAssertionLog()

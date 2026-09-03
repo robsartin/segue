@@ -63,8 +63,10 @@ Apache Jena.
 
 **Done 2026-09-02.** Probe: 1061 tests, **11 failed**; reverted, re-run, **1061 tests, 0 failed** —
 so all 11 are the probe's. Four prerequisites, under Task 3. The full patch, every failure message
-and two expected-reds-that-were-not are in `.superpowers/sdd/2026-09-02-merge-degree/task-1-report.md`
-(the SDD workspace is gitignored, so that note is not committed). No production code changed.
+and two expected-reds-that-were-not were written up under
+[issue #178](https://github.com/robsartin/segue/issues/178); the measurement they were taken against
+is [What was measured](../specs/2026-09-02-merge-degree-design.md#what-was-measured-before-anything-was-designed).
+No production code changed.
 
 ### Task 2: The guard, seen red for the right reason
 
@@ -97,8 +99,10 @@ Filled in from Task 1's list. Each leaf lands green on unchanged production code
 Task 4 has nothing left to knock over.
 
 **Task 1's probe broke 11 of 1061 tests; the reverted tree is green at 1061/0, so all 11 are the
-probe's.** Evidence and the full failure text are in
-`.superpowers/sdd/2026-09-02-merge-degree/task-1-report.md`. Four leaves, in this order:
+probe's.** The evidence and the full failure text belong to
+[issue #178](https://github.com/robsartin/segue/issues/178), beside
+[What was measured](../specs/2026-09-02-merge-degree-design.md#what-was-measured-before-anything-was-designed).
+Four leaves, in this order:
 
 - [ ] **P3 — three tests assert the LIVE `ingest.record(SameAs…)` path** (`should carry an owner edge
       to the canonical id…`, `should carry an edge that points AT the local id…`, `should carry the
