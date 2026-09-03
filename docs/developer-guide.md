@@ -1209,6 +1209,10 @@ judgement is a pure function, and everything that speaks HTTP is tested against
 tool, and it is **read-only**: it never appends to the log and never writes the graph.
 [ADR 41](adr/0041-graph-exporter-views-and-formats.md) is the decision.
 
+Two exports of one unchanged log are byte-identical, because nodes and edges are emitted in **log
+order** — the position of the first surviving claim that names them — so a diff between two runs
+shows a change to the graph and nothing else (issue #207).
+
 ```bash
 # one entity and its edges, to depth 2
 ./gradlew exportGraph --args="--view neighbourhood --qid Q42 --depth 2 --out $HOME/one.graphml"
