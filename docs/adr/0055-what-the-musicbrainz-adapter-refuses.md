@@ -311,8 +311,10 @@ change — which is precisely the property this ADR predicted the bridge route w
 said the test "does not forbid the bridge-with-classes route".
 
 **Which layer refuses what, since the answer moved.** `BridgedIdentity` checks the shape of the QID
-and of every class id; each bridge drops a row it cannot build, rather than throwing into an
-expansion nothing wraps; and the adapter's guard asks only whether an identity says enough to emit.
+and of every class id; each bridge withholds a description it cannot build — answering
+`undescribed` rather than throwing into an expansion nothing wraps, so the entry survives, the edge
+assertion still lands, and only the node claim is withheld; and the adapter's guard asks only
+whether an identity says enough to emit.
 The adapter's own shape check (GAP 9) is now defence in depth rather than the live check. ADR 61 is
 the authority on all of it.
 

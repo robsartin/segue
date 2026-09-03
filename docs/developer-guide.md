@@ -937,12 +937,14 @@ ambiguous on its own:
 - `assertions` — what the source claims.
 - `neighbors` — identity for entities on the far end, when the source already knows it. Optional; an
   absent neighbour falls back to a `fetch`. This is an optimisation only the adapter can supply, and
-  it stopped an expansion needing one HTTP round trip per discovered neighbour. **Supply one only if
-  you can describe it** ([ADR 61](adr/0061-the-bridge-returns-classes.md)): `SegueService` records a
-  supplied neighbour whether or not the node already exists, and `upsertNode` is last-writer-wins on
-  `instanceOf`, so a neighbour emitted without classes takes away the classes a node already had.
-  Omitting one costs a `fetch`, which is the fallback working; emitting a thin one costs data
-  nothing gets back.
+  it stopped an expansion needing one HTTP round trip per discovered neighbour. **Supply one only
+  where you can describe it as fully as a `fetch` would**
+  ([ADR 61](adr/0061-the-bridge-returns-classes.md)): `SegueService` records a supplied neighbour
+  whether or not the node already exists, and `upsertNode` is last-writer-wins on `instanceOf`, so a
+  neighbour emitted without classes takes away the classes a node already had — and one emitted with
+  a *narrower* class list than the source would give a fetch takes away the difference, with nothing
+  marking the result partial. A real label and the whole class list, or nothing: omitting one costs
+  a `fetch`, which is the fallback working, and a thin one costs data nothing gets back.
 - `sourceUnavailable` — the source could not be reached at all.
 - `truncated` — there was more, and this is a prefix of it.
 

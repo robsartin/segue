@@ -111,11 +111,12 @@ also asserts that the edges landed and that every neighbour node carries its cla
 cannot fall because the guard silently swallowed neighbours or the expansion stopped producing
 anything. The counting resolver was proved able to fail before any row was believed.
 
-**On the same day the widened request line was re-measured**, not reasoned about: it grew by a fixed
-cost and nothing per MBID, so it remains linear in the batch — `351 + 43n` bytes against the 8,192
-request-line ceiling, and the batch size is unchanged with headroom to spare.
-`WikidataMusicBrainzIdentity`'s javadoc carries the table and is the live figure; this paragraph
-records only that the arithmetic was re-taken.
+**On the same day the widened request line was re-measured**, not reasoned about: the label service
+and the class pattern cost a fixed number of bytes and nothing per MBID, so the line stays linear in
+the batch. Measured 2026-09-02 it was `351 + 43n` bytes against an 8,192-byte request-line ceiling,
+and the shipped batch size was left unchanged with headroom to spare.
+`WikidataMusicBrainzIdentity`'s javadoc carries the table and is the authority on the current
+figures.
 
 ### The class-shrinking exposure, and why it does not arise here
 
@@ -124,12 +125,17 @@ classes than `ClaimMapper.instanceOf` reads from full statements, so a bridge-de
 could *shrink* an existing node's `instanceOf` — a milder cousin of #143's erasure, with
 `ReverseClaims` as the accepted precedent since ADR 36.
 
-**It was closed by measurement instead of accepted.** The bridge reads the same statement shape the
-forward mapper reads, and that shape was measured to fit inside the request-line ceiling at the
-shipped batch size, so a refresh through this path cannot return fewer classes than a fetch would.
-`ReverseClaims` still carries the truthy exposure and is unchanged by this decision; if the batched
-query ever cannot carry full statements within the ceiling, the answer is a smaller batch and a
-measurement, not a silent fall back to the truthy form.
+**It was closed rather than accepted, and the two halves of that rest on different evidence.**
+Parity with `ClaimMapper` holds **by the query's shape, not by observation**: the bridge's template
+reads the full `p:P31/ps:P31` statements the forward mapper reads, so a refresh through this path
+cannot return fewer classes than a `fetch` would. That is an argument about the query and it is
+fenced as one — `WikidataMusicBrainzIdentityTest` asserts the shipped template's text contains
+`p:P31/ps:P31`, so the shape cannot be narrowed silently; no response was compared against a fetch's
+class list to observe the parity. **What was measured** is the other half: that carrying full
+statements fits inside the request-line ceiling at the shipped batch size, which is why the choice
+needed no fallback. `ReverseClaims` still carries the truthy exposure and is unchanged by this
+decision; if the batched query ever cannot carry full statements within the ceiling, the answer is a
+smaller batch and a measurement, not a silent fall back to the truthy form.
 
 ## Alternatives considered
 
@@ -168,14 +174,26 @@ measurement, not a silent fall back to the truthy form.
 - **ADR 55 keeps status `Accepted`.** Its `subgroup` decline stands untouched; only its `neighbors()`
   decline is reversed, by this ADR, and its dated amendment says so.
 - **Three layers now refuse a bad identity, and they refuse different things.** `BridgedIdentity`
-  checks the shape of the QID and of every class id; each producer drops the row it cannot build;
-  the adapter's guard asks only whether the identity says *enough*. The adapter's own shape check is
+  checks the shape of the QID and of every class id; each producer withholds a description it cannot
+  build, answering `undescribed` — **the entry survives and the edge assertion still lands; only the
+  node claim is withheld, and the neighbour costs the `fetch` it would have cost anyway**; and the
+  adapter's guard asks only whether the identity says *enough*. The adapter's own shape check is
   consequently defence in depth rather than the live check — a well-formed `BridgedIdentity` cannot
   carry a non-QID past it.
 - **The saving is a property of this fixture and this graph, not of MusicBrainz.** ADR 55's live
   sample is the only measurement here of the real graph, and it is cited rather than re-run.
-- **A future source that supplies `neighbors()` inherits the rule, not the number.** An adapter that
-  cannot describe a neighbour must emit nothing and let the `fetch` happen; the developer guide's
-  "Adding a source adapter" chapter now says so.
+- **A future source that supplies `neighbors()` inherits the rule, not the number, and the rule is
+  completeness.** An adapter may volunteer identity only where it can state a description as full as
+  the one a `fetch` would record — a real label and the whole class list, not merely a non-empty one
+  — and must emit nothing otherwise, letting the `fetch` happen. The developer guide's "Adding a
+  source adapter" chapter now says so.
+- **A narrower described class list would overwrite a fuller one, and nothing on this path stops
+  it.** Probed offline while this change was reviewed: a neighbour already holding two classes,
+  re-described by a bridge with one and a believable label, came back holding one —
+  `upsertNode` is last-writer-wins (ADR 42's hazard) and `describes` tests non-empty rather than
+  complete. It cannot arise on the shipped bridge, whose template reads full statements, and
+  `WikidataMusicBrainzIdentityTest`'s assertion on that template text is what holds it there; the
+  exposure is a *future* implementor of the seam, and it is accepted knowingly rather than guarded
+  against a second time.
 - **Nothing in `./gradlew check` needs the network, and nothing in it reads `~/.segue/segue.db`.**
   The measurement is fixture-driven and offline, and the `@Tag("live")` tests stay excluded.
