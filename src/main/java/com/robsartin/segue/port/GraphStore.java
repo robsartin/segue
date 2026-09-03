@@ -94,10 +94,12 @@ public interface GraphStore extends AutoCloseable {
    * com.robsartin.segue.port.GraphStoreContract#shouldReturnTheOwnerOnlyEdgeWhenTheCorroborationFloorIsZero}
    * pins it on whichever engine runs the contract.
    *
-   * <p><b>Those three references are unchecked.</b> They are {@code @code} and not {@code @link}
-   * because the test source set is not on {@code :javadoc}'s classpath - a {@code @link} to any of
-   * them fails the task with {@code reference not found}, measured. They are written fully
-   * qualified with a {@code #} so a rename's grep finds them; nothing else will.
+   * <p><b>Those three references are {@code @code} and not {@code @link}</b> because the test
+   * source set is not on {@code :javadoc}'s classpath - a {@code @link} to any of them fails the
+   * task with {@code reference not found}, measured. They are checked all the same: {@code
+   * JavadocCitationsTest} resolves every test a main javadoc names against the files under {@code
+   * src/test}, member included, so renaming one of these methods and not following it here reds the
+   * build. They stay written fully qualified with a {@code #} so a rename's grep finds them too.
    */
   List<EdgeRecord> corroborated(int minDistinctSources);
 

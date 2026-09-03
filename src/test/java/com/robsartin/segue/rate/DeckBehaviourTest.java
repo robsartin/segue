@@ -362,9 +362,63 @@ class DeckBehaviourTest {
     return chrome.text("problem");
   }
 
-  /** Long enough for anything the page was going to do to have happened. */
+  /**
+   * Waits until neither side has anything outstanding: the page's own guards say it is idle with a
+   * card on screen ({@code !busy && current !== null}), and the stub is serving nothing.
+   *
+   * <p><strong>The condition, and why those two halves are it.</strong> {@code rate()} sets {@code
+   * busy} before it issues the POST and clears it in the {@code finally} that ends <em>that
+   * fetch</em> — not the handler, which goes on to {@code problem()} and {@code show()} afterwards
+   * — so what {@code busy} covers is the fetch itself, and every attempt Chrome makes inside one,
+   * retries included. {@code current} covers the rest: {@code rate()} nulls it before its first
+   * {@code await} and only {@code show()} sets it again, after the next card has been dealt and
+   * rendered, and nothing yields between {@code rate()}'s {@code finally} and {@code show()}'s own
+   * {@code busy = true}. Together they are "the page has nothing outstanding", which is a positive
+   * observation rather than an interval — and {@code inFlight == 0} adds the half the page cannot
+   * see, an exchange the stub has begun and not yet finished. Bounded and polled, in {@link
+   * #untilSent(int)}'s shape and for its reason.
+   *
+   * <p><strong>The limit of this instrument: a request on the wire is in neither half.</strong> One
+   * that has left Chrome and not yet reached the stub is not an unsettled {@code fetch} the page is
+   * holding and not an exchange the stub has begun, so nothing here excludes it — and the two
+   * halves are read a moment apart, {@code inFlight} first and the page after, as {@link
+   * #untilQuiet()} reads its own two. No sleep excluded it either; a fixed 600 ms merely made the
+   * window a different length. What closes it is the measurement below rather than the instrument,
+   * and if that measurement ever stopped holding, nothing here would go red — the first sign would
+   * be the retried-rating test's ordering assertion failing intermittently.
+   *
+   * <p>This used to be {@code sleep(600)}, which is the thing {@link #untilSent(int)}'s javadoc
+   * argues against in this very file: after a fixed sleep, an ordering or absence assertion says
+   * only "nothing had arrived <em>yet</em>", and a straggler on a loaded runner reads exactly like
+   * a straggler the page correctly never sent. The evidence is what makes a condition sufficient
+   * here: {@code docs/retry-precondition-evidence.md} traced 59 runs and 3 forced failures and saw
+   * <em>no</em> request arrive in the 2500 ms after the assertion point, because Chrome's retries
+   * all happen inside the one {@code fetch} that {@code busy} is held across. So the last attempt
+   * is always spent before the page reports done — and waiting for the page to report done is
+   * therefore enough, where waiting 600 ms was only long enough so far.
+   */
   private void settle() {
-    HeadlessChrome.sleep(600);
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
+    while (System.nanoTime() < deadline) {
+      if (inFlight.get() == 0
+          && Boolean.TRUE.equals(chrome.eval("!!(!busy && current !== null)"))) {
+        return;
+      }
+      HeadlessChrome.sleep(20);
+    }
+    // Both halves, for untilQuiet()'s reason: "0 in flight" alone would not say whether the page
+    // is still working or the stub is, and only one of those is a hung page.
+    throw new AssertionError(
+        "the page never reported it had finished, so nothing here can be said to be in its final"
+            + " order: busy = "
+            + chrome.eval("busy")
+            + ", current = "
+            + chrome.eval("current === null ? 'null' : current.qid")
+            + ", "
+            + inFlight.get()
+            + " still in flight at the stub (last "
+            + lastPath.get()
+            + ")");
   }
 
   /**
@@ -708,6 +762,14 @@ class DeckBehaviourTest {
     // question is whether one of those retries can land AFTER the new rating and put the abandoned
     // value back, which nothing in segue would ever show: the write is last-writer-wins with no
     // history table and no un-rate (ADR 39, ADR 46).
+    assumeTrue(
+        !chrome.flushWait().markerAfterFirstSocket(),
+        () ->
+            "this launch's startup cert-verifier flush landed after the page had its socket, so"
+                + " Chrome's pool was flushed with that socket in it and there is nothing pooled"
+                + " to resend on — the precondition below is gone before the test begins, and a"
+                + " green here would be the vacuous pass issue #193 is about. "
+                + chrome.flushWait().order());
     answer = Answer.SLOW_NO_ANSWER;
 
     // And then press at once. `start()`'s wait for quiet establishes that nothing is *holding* a
@@ -733,7 +795,9 @@ class DeckBehaviourTest {
         "document.querySelector('#card h1').textContent === " + quoted(LABELS.get(1)),
         "the re-rating to land and the deck to move");
     // A retry arriving after everything else has finished is the whole hazard, so the assertions
-    // below must not run while one could still be on its way.
+    // below must not run while one could still be on its way. What holds them back is the page
+    // saying it has nothing outstanding, not a length of time having passed — see settle(), and
+    // issue #187 for the control that plants a late attempt and watches this go red on it.
     settle();
 
     List<Integer> order;

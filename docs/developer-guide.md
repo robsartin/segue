@@ -1052,7 +1052,7 @@ target and the coverage thresholds all live in `build.gradle.kts`; read them the
 
 ### What `./gradlew check` actually runs
 
-`check` is Gradle's standard lifecycle task, and this build attaches four things to it:
+`check` is Gradle's standard lifecycle task, and this build attaches to it:
 
 1. **`spotlessCheck`** — google-java-format over `src/**/*.java`, plus unused-import removal,
    trailing-whitespace and final-newline checks. It is a separate gate from compilation: formatting
@@ -1061,8 +1061,13 @@ target and the coverage thresholds all live in `build.gradle.kts`; read them the
 3. **`jacocoTestReport`** — attached to `check` explicitly in `build.gradle.kts`.
 4. **`jacocoTestCoverageVerification`** — line, instruction and branch minimums, also attached
    explicitly. The thresholds are in `build.gradle.kts`.
+5. **`javadoc`** — every doclint group except `missing`, with `-Werror`, so a `{@link}` that no
+   longer resolves, malformed HTML or a misplaced tag fails the build. `missing` is excluded on
+   purpose: this project's records do not document their components, and requiring that is separate
+   work. The options and the reasoning are in `build.gradle.kts`.
 
-`ArchitectureTest` is an ordinary JUnit test class, so the architecture rules run as part of step 2.
+`ArchitectureTest` is an ordinary JUnit test class, so the architecture rules run as part of the
+`test` step.
 There is no separate arch task.
 
 The `test` task also sets things that are easy to break:
@@ -1077,6 +1082,17 @@ The `test` task also sets things that are easy to break:
   header and prove the DNS-rebinding defence answers 421.
 - `segue.mainRuntimeClasspath`, so `StdioPurityTest` launches a subprocess against exactly what this
   build just compiled rather than a possibly stale jar.
+- `segue.requireBrowser` and `segue.requireGraphviz`, forwarded from the environment variables
+  `SEGUE_REQUIRE_BROWSER` and `SEGUE_REQUIRE_GRAPHVIZ`. **Two dependencies this repository cannot
+  vendor.** `DeckBehaviourTest` and `HeadlessChromeNetworkTest` need a real Chrome
+  ([ADR 52](adr/0052-test-the-deck-page-in-a-real-browser.md)); `WhatAHoverShowsTest` and
+  `ImagemapRecipeTest` need a real Graphviz `dot`, because the `<title>` a browser shows and the
+  imagemap the guide's recipe produces are both written by Graphviz and cannot be asserted from
+  here. Absent the dependency each skips, so `./gradlew check` is green on a machine without one.
+  **CI sets both, and then the skip is an `AssertionError` naming the binary and the flag** — the
+  workflow installs Chrome and Graphviz precisely so those tests run, and a check that never ran is
+  not a check that passed (issues #93 and #164). Set them locally when you want the same answer CI
+  will give you.
 
 ### Why `liveTest` is separate
 
