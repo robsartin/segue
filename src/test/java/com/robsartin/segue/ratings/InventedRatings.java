@@ -5,6 +5,7 @@ import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.domain.OwnerEdge;
 import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.domain.Retraction;
 import com.robsartin.segue.domain.SameAs;
@@ -51,7 +52,22 @@ final class InventedRatings {
    */
   static final String CANONICAL = "Q10000900042";
 
+  /**
+   * A second canonical id, for a merge the owner corrected by merging the same local id again
+   * (#221). ADR 62's shape, for the reason {@link #CANONICAL} takes it.
+   */
+  static final String CORRECTED_CANONICAL = "Q10000900043";
+
+  /**
+   * A third id, given its own node claim so a real fold could replay the edge that names it, for an
+   * edge the owner claims directly against {@link #CANONICAL} while it still stands (#221 fix round
+   * 1) - the surviving-edge case {@code Equivalences.stands} widened this listing to see, alongside
+   * every other of its four homes.
+   */
+  static final String NEIGHBOUR = "Q0900004";
+
   static final String CANONICAL_LABEL = "The Name A Source Gave It";
+  static final String NEIGHBOUR_LABEL = "A Source Named This One";
 
   static final String QUARTET_LABEL = "The Invented Quartet";
   static final String NOVEL_LABEL = "A Placeholder Novel";
@@ -77,6 +93,11 @@ final class InventedRatings {
   /** The owner saying the thing he minted turned out to be a Wikidata item (#92). */
   static SameAs merged(String localQid, String canonicalQid) {
     return SameAs.declared(localQid, canonicalQid, LATE);
+  }
+
+  /** A relationship the owner asserted himself, the way the log holds one (#92). */
+  static OwnerEdge owned(String from, String to) {
+    return OwnerEdge.claimed(from, to, "INFLUENCED_BY", EARLY);
   }
 
   /**

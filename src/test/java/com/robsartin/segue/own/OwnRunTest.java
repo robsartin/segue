@@ -196,6 +196,69 @@ class OwnRunTest {
   }
 
   @Test
+  @DisplayName("should refuse the canonical id of a merge when a later merge corrected it")
+  void shouldRefuseTheCanonicalIdOfAMergeWhenALaterMergeCorrectedIt() {
+    // The stand-in the first merge named is retired by the second (#221), so this id has no node
+    // in the projection any more. Offering it would be worse than unhelpful: the owner would claim
+    // an edge against an endpoint no fold gives a node, and TinkerGraphStore.record refuses one it
+    // has never seen - a replay failure at the next boot, on a row ADR 19 forbids deleting.
+    seedASourcedEntity(SOURCED, "Ines Marlow");
+    String minted = mintOne("A Self-Pressed Record");
+    run.run(merge(minted, false), notes::add);
+    run.run(new OwnCli.Merge(UNUSED, minted, OTHER_CANONICAL, false), notes::add);
+    notes.clear();
+
+    assertThatThrownBy(() -> run.run(claim(SOURCED, CANONICAL, false), notes::add))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining(CANONICAL)
+        .as("the generic \"mint or seed it first\" advice is wrong here - nothing to mint or seed")
+        .hasMessageContaining("corrected")
+        .hasMessageContaining(OTHER_CANONICAL);
+  }
+
+  @Test
+  @DisplayName("should still offer the canonical id of the merge that stands after a correction")
+  void shouldStillOfferTheCanonicalIdOfTheMergeThatStandsAfterACorrection() {
+    seedASourcedEntity(SOURCED, "Ines Marlow");
+    String minted = mintOne("A Self-Pressed Record");
+    run.run(merge(minted, false), notes::add);
+    run.run(new OwnCli.Merge(UNUSED, minted, OTHER_CANONICAL, false), notes::add);
+    notes.clear();
+
+    LoggedAssertion appended = run.run(claim(SOURCED, OTHER_CANONICAL, false), notes::add);
+
+    assertThat(appended).isEqualTo(new OwnerEdge(SOURCED, OTHER_CANONICAL, "INFLUENCED_BY", NOW));
+    assertThat(notes)
+        .as("the correction is the merge that stands, so its id is the one that has the label")
+        .anyMatch(note -> note.contains("A Self-Pressed Record"));
+  }
+
+  @Test
+  @DisplayName(
+      "should still accept the canonical id of a corrected merge when a surviving edge names it")
+  void shouldStillAcceptTheCanonicalIdOfACorrectedMergeWhenASurvivingEdgeNamesIt() {
+    // The counterpart to shouldRefuseTheCanonicalIdOfAMergeWhenALaterMergeCorrectedIt: there,
+    // nothing ever claimed against CANONICAL before it was corrected away, so its stand-in has no
+    // node and OwnRun rightly refuses it. Here an owner edge is claimed against it WHILE it still
+    // stands, so Equivalences.stands (#221, widened in a later round of the same issue) answers
+    // true for the corrected merge too - the node survives on the edge's account - and OwnRun must
+    // go on offering it rather than refusing an endpoint that is genuinely still in the projection.
+    seedASourcedEntity(SOURCED, "Ines Marlow");
+    String minted = mintOne("A Self-Pressed Record");
+    run.run(merge(minted, false), notes::add);
+    run.run(claim(SOURCED, CANONICAL, false), notes::add);
+    run.run(new OwnCli.Merge(UNUSED, minted, OTHER_CANONICAL, false), notes::add);
+    notes.clear();
+
+    LoggedAssertion appended = run.run(claim(SOURCED, CANONICAL, false), notes::add);
+
+    assertThat(appended).isEqualTo(new OwnerEdge(SOURCED, CANONICAL, "INFLUENCED_BY", NOW));
+    assertThat(notes)
+        .as("the stand-in survives on the earlier edge's account, still carrying the local's label")
+        .anyMatch(note -> note.contains("A Self-Pressed Record"));
+  }
+
+  @Test
   @DisplayName("should append the edge and name both labels when both endpoints are present")
   void shouldAppendTheEdgeAndNameBothLabelsWhenBothEndpointsArePresent() {
     seedASourcedEntity(SOURCED, "Ines Marlow");

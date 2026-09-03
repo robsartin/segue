@@ -2,10 +2,13 @@ package com.robsartin.segue.ratings;
 
 import static com.robsartin.segue.ratings.InventedRatings.CANONICAL;
 import static com.robsartin.segue.ratings.InventedRatings.CANONICAL_LABEL;
+import static com.robsartin.segue.ratings.InventedRatings.CORRECTED_CANONICAL;
 import static com.robsartin.segue.ratings.InventedRatings.EARLY;
 import static com.robsartin.segue.ratings.InventedRatings.LATE;
 import static com.robsartin.segue.ratings.InventedRatings.MINTED;
 import static com.robsartin.segue.ratings.InventedRatings.MINTED_LABEL;
+import static com.robsartin.segue.ratings.InventedRatings.NEIGHBOUR;
+import static com.robsartin.segue.ratings.InventedRatings.NEIGHBOUR_LABEL;
 import static com.robsartin.segue.ratings.InventedRatings.NOVEL;
 import static com.robsartin.segue.ratings.InventedRatings.NOVEL_LABEL;
 import static com.robsartin.segue.ratings.InventedRatings.NOVEL_NOTE;
@@ -16,6 +19,7 @@ import static com.robsartin.segue.ratings.InventedRatings.VANISHED;
 import static com.robsartin.segue.ratings.InventedRatings.merged;
 import static com.robsartin.segue.ratings.InventedRatings.minted;
 import static com.robsartin.segue.ratings.InventedRatings.node;
+import static com.robsartin.segue.ratings.InventedRatings.owned;
 import static com.robsartin.segue.ratings.InventedRatings.retract;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -116,6 +120,52 @@ class RatingsRunTest {
         .containsExactlyInAnyOrder(
             org.assertj.core.groups.Tuple.tuple(MINTED, MINTED_LABEL),
             org.assertj.core.groups.Tuple.tuple(CANONICAL, MINTED_LABEL));
+  }
+
+  @Test
+  @DisplayName("should say a canonical id is not in the graph when a later merge corrected it")
+  void shouldSayACanonicalIdIsNotInTheGraphWhenALaterMergeCorrectedIt() throws IOException {
+    // A rating an earlier build carried onto the wrong canonical id stays - AffinityStore has no
+    // delete (ADR 39, ADR 46) - and since #221 that id has no node. "(not in the graph)" is what
+    // that string is for: a rating that outlived its node. Naming it with the merged entity's
+    // label would be this listing insisting on a node both folds have stopped making.
+    FakeAffinityStore ratings = new FakeAffinityStore().rated(CANONICAL, 5, null, LATE);
+    FakeAssertionLog log =
+        new FakeAssertionLog()
+            .with(
+                minted(MINTED, MINTED_LABEL),
+                merged(MINTED, CANONICAL),
+                merged(MINTED, CORRECTED_CANONICAL));
+
+    assertThat(run(ratings, log, SortOrder.RATING))
+        .extracting(AffinityRow::qid, AffinityRow::displayLabel)
+        .containsExactly(org.assertj.core.groups.Tuple.tuple(CANONICAL, AffinityRow.NO_LABEL));
+  }
+
+  @Test
+  @DisplayName(
+      "should keep a canonical id's label when a surviving edge names it directly, though a"
+          + " later merge corrected it")
+  void shouldKeepACanonicalIdsLabelWhenASurvivingEdgeNamesItDirectlyThoughALaterMergeCorrectedIt()
+      throws IOException {
+    // The counterpart to the test above: here an owner edge names CANONICAL directly WHILE it
+    // still stands, so Equivalences.stands (#221 fix round 1) answers true for it and this
+    // listing offers its label rather than NO_LABEL - the same widening
+    // TwiceMergedIdLeavesNoOrphanTest pins for the two graph folds, seen here through the third
+    // of the stand-in rule's four homes.
+    FakeAffinityStore ratings = new FakeAffinityStore().rated(CANONICAL, 5, null, LATE);
+    FakeAssertionLog log =
+        new FakeAssertionLog()
+            .with(
+                node(NEIGHBOUR, NEIGHBOUR_LABEL),
+                minted(MINTED, MINTED_LABEL),
+                merged(MINTED, CANONICAL),
+                owned(NEIGHBOUR, CANONICAL),
+                merged(MINTED, CORRECTED_CANONICAL));
+
+    assertThat(run(ratings, log, SortOrder.RATING))
+        .extracting(AffinityRow::qid, AffinityRow::displayLabel)
+        .containsExactly(org.assertj.core.groups.Tuple.tuple(CANONICAL, MINTED_LABEL));
   }
 
   @Test

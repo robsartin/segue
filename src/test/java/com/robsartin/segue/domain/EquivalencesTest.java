@@ -363,6 +363,45 @@ class EquivalencesTest {
   }
 
   @Test
+  @DisplayName("a merge a later one corrected names no stand-in, so nothing is left under it")
+  void shouldNameNoStandInWhenALaterMergeCorrectedTheCanonicalId() {
+    List<LoggedAssertion> log =
+        List.of(
+            LocalEntity.minted(MINTED, NodeKind.WORK, "The Salt Almanac", WHEN),
+            SameAs.declared(MINTED, CANONICAL, WHEN),
+            SameAs.declared(MINTED, OTHER_CANONICAL, WHEN));
+
+    assertThat(Equivalences.standIns(log, AS_CLAIMED))
+        .as(
+            "the edges fold onto the last canonical id, so a stand-in under the first is a node"
+                + " with the merged entity's label and no edges that nothing ever claimed")
+        .containsExactly(
+            Map.entry(
+                OTHER_CANONICAL,
+                new NodeRecord(OTHER_CANONICAL, NodeKind.WORK, "The Salt Almanac", List.of())));
+  }
+
+  @Test
+  @DisplayName("the same merge declared twice still names its stand-in from the first of them")
+  void shouldStillNameTheStandInWhenTheSameMergeWasDeclaredTwice() {
+    // stands() compares canonical ids, not log positions, so re-declaring one merge changes
+    // nothing - the idempotence IdentityMerge already claims for the rating half. The label is
+    // the one the entity had at the FIRST of the two, which is putIfAbsent's answer unchanged.
+    List<LoggedAssertion> log =
+        List.of(
+            LocalEntity.minted(MINTED, NodeKind.WORK, "The Salt Almanac", WHEN),
+            SameAs.declared(MINTED, CANONICAL, WHEN),
+            LocalEntity.minted(MINTED, NodeKind.WORK, "a name it was given later", WHEN),
+            SameAs.declared(MINTED, CANONICAL, WHEN));
+
+    assertThat(Equivalences.standIns(log, AS_CLAIMED))
+        .containsExactly(
+            Map.entry(
+                CANONICAL,
+                new NodeRecord(CANONICAL, NodeKind.WORK, "The Salt Almanac", List.of())));
+  }
+
+  @Test
   @DisplayName("a stand-in is offered even where a source has already named the canonical entity")
   void shouldOfferAStandInEvenWhereASourceHasAlreadyNamedTheCanonicalEntity() {
     List<LoggedAssertion> log =

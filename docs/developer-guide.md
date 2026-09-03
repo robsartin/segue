@@ -2226,9 +2226,22 @@ surviving merge wins for the rating.
 A second merge of one local id is **said, not refused**, because that is how a wrong merge is
 corrected: `Q00900042 was already merged into Q12345 — the last merge wins, for the rating and for
 the edges alike`. One rule now answers for both halves — the edges land on the last canonical id
-alone, where the copy used to leave one on each. What the first canonical id keeps is an orphan
-stand-in node with the merged entity's label and no edges, which is a correction's leftover rather
-than anything you claimed.
+alone, where the copy used to leave one on each. **Ordinarily the first canonical id keeps nothing**
+([#221](https://github.com/robsartin/segue/issues/221)): a second merge retires the stand-in the
+first named, so there is no labelled orphan under an id you corrected away from, and `listRatings`
+shows any rating still carried there as `(not in the graph)` — there is no un-rate (ADR 39), so an
+older build's carry stays even though nothing claims the id today. **The one exception is a
+surviving edge.** Claim an edge against the first canonical id before you correct the merge, and
+that edge survives the correction (ADR 19 forbids deleting it); dropping its stand-in then would
+leave the edge with an endpoint nothing has ever seen, so the node survives instead, holding the
+merged entity's label and exactly that edge. `Equivalences.stands` is the one rule behind both
+halves — last-wins, OR a surviving edge names the merge's canonical id — and all four homes of the
+stand-in ask it, though not all of the same `Equivalences`: `IngestService.record` is handed
+`Equivalences.NONE`, which holds no log, so on the live write path a superseded stand-in is still
+built and stays until the next boot re-folds the log. The rating carry does not follow the
+exception: it stays last-wins alone
+(`Equivalences.last`), because a node that survives on an edge's account is a fact about the graph,
+not your opinion about the thing you corrected yourself onto.
 
 **So a merged local id draws as an isolated node.** It has a node and no edges, and a `full` or
 `subgraph` export draws it like any other orphan — nothing hides it, and

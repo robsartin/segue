@@ -397,3 +397,115 @@ that moved re-derivation behind a port would close it"*.
   should also run on the live write is a separate question nobody has argued.
 - **The stand-in rule still has four homes.** This closes the kind lag in one of them and unifies
   none of them; that residual stands, and is issue #220.
+
+**Amendment (2026-09-03, issue #221): the last of the residuals above is closed — a local id merged
+twice now leaves nothing under the first canonical id, unless a surviving edge still names it.**
+
+Nothing above is withdrawn and no sentence above is edited, the residual bullet included: it is the
+true account of the code between #178 and this issue, and it is what this amendment answers.
+
+**What was there, measured on `2e01341`** on an invented log (ADR 40, ADR 51: no known-list behind
+it) holding one minted entity with one owner edge, merged onto one canonical id and then onto
+another. The exported fold and the boot replay each held a node under the **first** canonical id
+carrying the merged entity's label and no edges; the `full` DOT drew three nodes under one label for
+one entity, of which the owner had claimed two; and `IdentityMerge.follow` was called for **both**
+merges on every replay, so `carryingRatings` wrote the owner's rating onto the id he had corrected
+away from — which, by [ADR 48](0048-a-high-rating-counts-as-something-you-have.md), goes on telling
+`recommend` he owns it.
+
+**The rule, in one place — first landed last-wins alone, then widened once more before this closed.**
+`Equivalences.stands` answers whether a merge still contributes a node. All four homes of the
+stand-in rule ask it: `Equivalences.standIns` skips a merge it answers false for,
+`IngestService.apply`'s `SameAs` arm does neither half of its job for one, and
+`OwnRun.labelsInTheProjection` and `ratings/Labels.forQids` lend it no label.
+
+**They ask one predicate; they do not ask it of one `Equivalences`, and the difference is visible in
+exactly this case.** Equivalences that have never heard of the local id answer **true**, which is
+what keeps `IngestService.record` — applying one claim with `Equivalences.NONE`, having no log to
+read — creating its live stand-in exactly as before. So three homes agree about a twice-merged local
+id *because* they read the same log, and the live one still builds the stand-in the correction
+retired. That is the shape [ADR 42](0042-store-p31-and-rederive-kind-at-projection.md) already
+accepts for a node's kind, extended to the stand-in on the same terms: the live path applies the one
+claim it was handed and lags until the next boot's fold applies the whole log. Nothing in production
+reaches it — `IngestService.record`'s own javadoc records that nothing sends a `SameAs` there, since
+`OwnRun` appends a merge through `claim`, which has no graph half. `StandInAgreesInEveryHomeTest`
+(issue #220) pins the two answers per home rather than asserting them equal.
+
+**Fixing the exporter's fold alone would not have been a fix, and that is measured too.** With
+`Equivalences.standIns` corrected and `IngestService` untouched, the boot replay went on building
+the same node a second time at the merge's own row, the two folds held different graphs, and the
+whole suite stayed green — `BothFoldsAgreeTest` could not see it because its fixture held no
+twice-merged local id. It holds one now, and removing either half of the fix reds it naming the id.
+
+**A legal, supported-flow log could not be replayed under last-wins alone, and that is what widened
+the rule again before this closed.** Landed first as `stands` = last-wins only — a superseded merge
+contributes no node at all — a fix-round review reproduced, on `fdd420d`, a log the supported flow
+itself can produce: `[node(WREN), minted(CORRECTED), merged(CORRECTED→MISHEARD), owned(WREN→MISHEARD,
+"INFLUENCED_BY"), merged(CORRECTED→WATERMARK)]`. Under last-wins alone,
+`Equivalences.standIns(log)` names only `WATERMARK` — `MISHEARD` is dropped entirely, though an
+`OwnerEdge` still names it — and `GraphProjector.project` then throws `replay failed at sequence 4`,
+`assertion references unknown entity … - upsert the node first`, on a row ADR 19 forbids deleting.
+`LogProjection` tolerates the same edge as dangling rather than throwing, so the two folds disagreed
+in the worst direction this design set out to prevent. The scenario is reachable through the
+supported flow and not a constructed edge case: `OwnRun` offers a merge's canonical id as a claimable
+endpoint the moment its stand-in exists (`labelsInTheProjection`), so an owner who merges, claims an
+edge against the new canonical id, then corrects the merge produces exactly this log, and every row
+in it is one ADR 19 forbids deleting.
+
+**Ruling.** A superseded merge's stand-in survives while any surviving `AssertionRecord` or
+`OwnerEdge` names its canonical id as an endpoint: the node is then not an orphan — it has an edge —
+and the export shows the owner's real claim rather than silently dropping it. `Equivalences.stands`
+is widened from last-wins alone to *last-wins OR a surviving edge names this merge's canonical id*,
+computed once in `Equivalences.in` from the same pass that builds `canonicalByLocal`, over surviving
+rows only (`referencedEndpoints`). The rating carry stays last-wins only — a separate, narrower
+predicate, `Equivalences.last` — because a node surviving on account of an edge is a fact about the
+graph, not the owner's opinion about the thing he corrected himself onto; widening `stands` without
+keeping the carry narrow would have reintroduced the defect the first round of this issue fixed, a
+rating written onto every canonical id a local id ever touched rather than only the one that stands
+today.
+
+**Two alternatives were considered and rejected, for the widening specifically:**
+
+- **Re-point the edge onto the corrected canonical id.** Rejected: it silently rewrites what the
+  owner actually claimed — he named the *first* id, not the second, and the first id may itself turn
+  out to be a real, distinct entity the correction says nothing about. Segue does not edit a claim on
+  the owner's behalf; ADR 19 already settles that a correction is a new claim, never an edit of an
+  old one.
+- **Have `GraphProjector` tolerate the missing endpoint as a dangling edge**, matching how
+  `LogProjection` already behaves. Rejected: it replays the owner's claim into nothing without saying
+  so — the same silent-data-loss shape issue #101 fixed once already for the rating deck, and
+  precisely the failure mode `danglingEdges()` exists to report rather than to produce.
+
+Each of the four homes was checked against its own existing coverage after the widening —
+`OwnRunTest.shouldRefuseTheCanonicalIdOfAMergeWhenALaterMergeCorrectedIt` still reds correctly,
+because that fixture has no surviving edge naming the corrected-away id — and given one added case
+where the surviving-edge path was previously untested,
+`RatingsRunTest.shouldKeepACanonicalIdsLabelWhenASurvivingEdgeNamesItDirectlyThoughALaterMergeCorrectedIt`.
+
+**Rejected, from the original design, and still rejected under the widened rule.**
+
+- **Name the orphan in the export rather than retire it.** Mark the node as a superseded stand-in so
+  a reader knows why it is there. Honest about the log, which holds both merges, and it changes least
+  about what is in the graph. **Lost on three counts.** A stand-in exists so that a folded edge has
+  an endpoint to land on, and a superseded merge that no surviving edge needs folds no edge, so the
+  node has no job left — annotating it is more machinery for less truth. It states a fact about the
+  owner's correction history inside the artefact this ADR's consequences call a picture of the
+  **world** graph, the one that may be shared. And it costs a node attribute reaching `NodeRecord`,
+  both writers and both folds, against one predicate asked in four places — while leaving the taste
+  half writing a rating onto an id the owner corrected away from, which no annotation in the export
+  reaches.
+- **Refuse a second merge of one local id.** `OwnCli` says it, and it must go on saying it: a second
+  merge is how a wrong merge is corrected, and the only alternative left to the owner would be a
+  retraction that takes every other claim about the id with it.
+
+**Residual, and it cannot be closed by any later change either.** A rating an earlier build already
+carried onto a superseded canonical id **stays**: `carryingRatings` copies a score and never removes
+one, and `AffinityStore` has no delete (ADR 39, ADR 46). What this amendment changes is that no
+further boot re-writes it, and — for the ordinary case, where no surviving edge names the superseded
+id — that `ratings/Labels.forQids` no longer supplies it a label, so it reads as `(not in the graph)`, which
+is what that string was written for. Where a surviving edge does name the superseded id, the node
+itself stands and carries the merged entity's label again — but the carried rating is not thereby
+made correct: `Equivalences.last` stayed narrower than `Equivalences.stands` on purpose, so a label
+reappearing on the node does not un-orphan a rating that only ever belonged to the merge that stands
+today. Whether segue should offer any way to disown such a row is a separate decision nobody has
+argued.
