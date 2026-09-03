@@ -374,6 +374,26 @@ tasks.register<JavaExec>("ownClaim") {
     outputs.upToDateWhen { false }
 }
 
+tasks.register<JavaExec>("graphCensus") {
+    group = "application"
+    description =
+        "Counts the graph and prints the counts: nodes by kind, edges by type, source and " +
+            "corroboration, the claim rows and what retraction and merge did to them, the taste " +
+            "layer by score, degree quantiles against ADR 57's floor, and what MusicBrainz " +
+            "reached. Aggregates only — no labels, no ids, no notes — so the output is safe to " +
+            "paste. Reads only; needs no network. See ADR 63. --db is required, and SEGUE_DB " +
+            "does not satisfy it. Write \$HOME and not ~ — a tilde does not expand inside " +
+            "double quotes. Example: ./gradlew graphCensus --args=\"--db \$HOME/.segue/segue.db\""
+    mainClass.set("com.robsartin.segue.census.CensusCli")
+    classpath = sourceSets["main"].runtimeClasspath
+    // sqlite-jdbc loads a native library, the same grant tasks.test makes.
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
+    // The whole graph is folded in memory, and a real log is six figures of assertions.
+    maxHeapSize = "4g"
+    // Never up-to-date: the graph changes under it, and the point is to count it now.
+    outputs.upToDateWhen { false }
+}
+
 spotless {
     java {
         googleJavaFormat(libs.versions.googleJavaFormat.get())

@@ -145,7 +145,7 @@ class ArchitectureTest {
    * fence exists it forbids the return edge, so no cycle can form.
    */
   static final List<String> DEV_TOOL_PACKAGES =
-      List.of("export", "own", "rate", "ratings", "recommend", "retract", "seed");
+      List.of("census", "export", "own", "rate", "ratings", "recommend", "retract", "seed");
 
   /**
    * Every dev-tool package except the ones named, as {@code ..x..} patterns, then {@code
