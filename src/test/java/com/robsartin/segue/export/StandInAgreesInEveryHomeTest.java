@@ -6,6 +6,7 @@ import static com.robsartin.segue.export.InventedGraph.node;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.domain.Equivalences;
+import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
@@ -41,6 +42,17 @@ import org.junit.jupiter.api.Test;
  * NodeRecord} and so answer with a kind; {@code ratings/Labels.forQids} returns a label only, by
  * design, and {@code OwnRun.labelsInTheProjection} does too. Asking a label-only home for a kind
  * would be asking it to answer a question it was built not to ask.
+ *
+ * <p><b>Those two do not agree on the bypass row, and that is the code rather than a drift.</b>
+ * {@code Q10000900202}'s local side is a {@code NodeAssertion} stating a class, so both folds
+ * re-derive that node's kind and, since issue #222, the stand-in built from it as well. The live
+ * path re-derives neither: {@code IngestService.record} upserts the claim as it stands, and {@code
+ * IngestService.standIn} copies the local node as the running graph holds it, so both keep the
+ * claimed kind until the next boot replays the log. That is ADR 42's accepted lag — the one the
+ * local node itself has always had — so the kind on that row is pinned <em>per home</em> rather
+ * than asserted equal across the two, which would be asserting something false about the code. The
+ * invariant that does hold everywhere is asserted instead, in every home that exposes a kind: a
+ * stand-in and the local node it stands for agree about what the entity is.
  *
  * <p><b>It does not close ADR 59's residual.</b> The residual is that the stand-in rule has four
  * homes; after this it still has four. What changes is that nothing failed if one drifted, and now
@@ -108,49 +120,77 @@ class StandInAgreesInEveryHomeTest {
   /**
    * One canonical id and what the four homes say about it today.
    *
+   * @param local the local id the merge names, so that a stand-in can be compared with the node it
+   *     stands for inside one home
    * @param standInKind what {@code Equivalences.standIns} holds before either fold overlays the
-   *     log's own claims; null with {@code standInLabel} when it holds nothing
-   * @param shownKind what the projection shows once those claims have landed - the answer all four
-   *     homes give
+   *     log's own claims; null with {@code standInLabel} when it holds nothing. That pre-pass is
+   *     the two FOLDS' - the live path has no whole log to read and builds its own stand-in inside
+   *     {@code IngestService.standIn}, from the local node as the running graph holds it
+   * @param shownInTheFold what the fold shows once those claims have landed
+   * @param shownInTheLiveGraph what the live graph shows once they have - the same kind as {@code
+   *     shownInTheFold} on every row but the bypass one, where ADR 42's live lag keeps the claimed
+   *     kind until the next boot
    */
   private record Pinned(
       String canonical,
+      String local,
       NodeKind standInKind,
       String standInLabel,
-      NodeKind shownKind,
+      NodeKind shownInTheFold,
+      NodeKind shownInTheLiveGraph,
       String shownLabel) {}
 
   private static final List<Pinned> PINNED =
       List.of(
-          new Pinned(TAPE, NodeKind.WORK, "the April tape", NodeKind.WORK, "the April tape"),
+          new Pinned(
+              TAPE,
+              APRIL,
+              NodeKind.WORK,
+              "the April tape",
+              NodeKind.WORK,
+              NodeKind.WORK,
+              "the April tape"),
+          // The bypass row, and the only one whose two kind-exposing homes differ: the folds
+          // re-derive Q5 to PERSON (#222), the live path holds the claimed WORK until the next
+          // boot (ADR 42). See the class javadoc.
           new Pinned(
               BEACON,
-              NodeKind.WORK,
+              SIGNAL,
+              NodeKind.PERSON,
               "a signal a source named",
+              NodeKind.PERSON,
               NodeKind.WORK,
               "a signal a source named"),
           new Pinned(
               FIRST,
+              TWICE_OVER,
               NodeKind.WORK,
               "the ledger, twice over",
+              NodeKind.WORK,
               NodeKind.WORK,
               "the ledger, twice over"),
           new Pinned(
               SECOND,
+              TWICE_OVER,
               NodeKind.WORK,
               "the ledger, twice over",
+              NodeKind.WORK,
               NodeKind.WORK,
               "the ledger, twice over"),
           new Pinned(
               KNOWN,
+              CLAIMED_LOCAL,
               NodeKind.WORK,
               "the owner's working title",
+              NodeKind.GROUP,
               NodeKind.GROUP,
               "the name the source already had"),
           new Pinned(
               LATER,
+              LATE_LOCAL,
               NodeKind.WORK,
               "the owner's other working title",
+              NodeKind.GROUP,
               NodeKind.GROUP,
               "the name the source brought later"));
 
@@ -222,41 +262,71 @@ class StandInAgreesInEveryHomeTest {
   }
 
   @Test
-  @DisplayName("both homes that expose a kind give each canonical id the same kind")
-  void shouldAgreeOnEveryCanonicalKindWhenBothHomesThatExposeAKindReadOneLog() {
-    List<String> disagreements = new ArrayList<>();
+  @DisplayName("each home that exposes a kind gives each canonical id that home's own pinned kind")
+  void shouldHoldEachHomesOwnPinnedKindWhenBothHomesThatExposeAKindReadOneLog() {
+    List<String> departures = new ArrayList<>();
     long answered = 0;
     for (Pinned row : PINNED) {
       Answer inFold = fromNode(IN_THE_FOLD.get(row.canonical()));
       Answer inGraph = fromNode(IN_THE_LIVE_GRAPH.get(row.canonical()));
       answered += inFold.kind() == null ? 0 : 1;
       answered += inGraph.kind() == null ? 0 : 1;
-      if (!Objects.equals(inFold.kind(), inGraph.kind())) {
-        disagreements.add(
-            row.canonical()
-                + ": "
-                + FOLD
-                + " says "
-                + inFold.describe()
-                + ", "
-                + LIVE
-                + " says "
-                + inGraph.describe());
-      }
+      departures.addAll(departure(FOLD, row.canonical(), inFold, row.shownInTheFold()));
+      departures.addAll(departure(LIVE, row.canonical(), inGraph, row.shownInTheLiveGraph()));
     }
 
     assertThat(answered)
         .as("both kind-exposing homes answered for every canonical id the table says is present")
-        .isEqualTo(2 * PINNED.stream().filter(r -> r.shownKind() != null).count());
-    assertThat(disagreements)
-        .as("the two homes that expose a kind, on one log - each line names the pair")
+        .isEqualTo(
+            PINNED.stream().filter(r -> r.shownInTheFold() != null).count()
+                + PINNED.stream().filter(r -> r.shownInTheLiveGraph() != null).count());
+    assertThat(departures)
+        .as(
+            "each of the two kind-exposing homes against its own pinned kind - they agree on every"
+                + " row but the bypass one, where the folds re-derive (#222) and the live path"
+                + " holds the claimed kind until the next boot (ADR 42)")
+        .isEmpty();
+    assertThat(
+            PINNED.stream()
+                .filter(r -> !Objects.equals(r.shownInTheFold(), r.shownInTheLiveGraph()))
+                .toList())
+        .as(
+            "the two homes are pinned apart on the bypass row and nowhere else - a table pinning"
+                + " them apart anywhere else would be recording a drift as though it were ADR 42's"
+                + " lag, and one pinning them apart nowhere would have stopped recording that lag")
+        .extracting(Pinned::canonical)
+        .containsExactly(BEACON);
+  }
+
+  @Test
+  @DisplayName("in each home that exposes a kind, a stand-in agrees with the local node it copies")
+  void shouldMatchItsOwnLocalNodesKindWhenEachHomesStandInIsRead() {
+    List<Pinned> rows =
+        PINNED.stream().filter(r -> !claimedOutright().contains(r.canonical())).toList();
+    List<String> departures = new ArrayList<>();
+    for (Pinned row : rows) {
+      departures.addAll(standInDeparture(FOLD, IN_THE_FOLD, row));
+      departures.addAll(standInDeparture(LIVE, IN_THE_LIVE_GRAPH, row));
+    }
+
+    assertThat(rows)
+        .as(
+            "the rows whose canonical node IS the stand-in must still include the bypass row (%s),"
+                + " or this asserts the invariant only where nothing re-derives and goes blind",
+            BEACON)
+        .extracting(Pinned::canonical)
+        .contains(BEACON);
+    assertThat(departures)
+        .as(
+            "a stand-in copies the local node as its own home holds it - the one thing both"
+                + " kind-exposing homes say, whether or not that home re-derives")
         .isEmpty();
   }
 
   @Test
   @DisplayName("the stand-in answer today, before and after the log's own claims land on it")
   void shouldHoldTodaysStandInAnswerWhenTheFixtureIsRead() {
-    Map<String, NodeRecord> standIns = Equivalences.standIns(LOG.readAll());
+    Map<String, NodeRecord> standIns = Equivalences.standIns(LOG.readAll(), KindMapper::rederive);
 
     for (Pinned row : PINNED) {
       assertThat(describe(standIns.get(row.canonical())))
@@ -266,8 +336,8 @@ class StandInAgreesInEveryHomeTest {
               row.canonical())
           .isEqualTo(describe(row.standInKind(), row.standInLabel()));
       assertThat(describe(IN_THE_FOLD.get(row.canonical())))
-          .as("what the projection shows for %s once the log's own claims land", row.canonical())
-          .isEqualTo(describe(row.shownKind(), row.shownLabel()));
+          .as("what the fold shows for %s once the log's own claims land", row.canonical())
+          .isEqualTo(describe(row.shownInTheFold(), row.shownLabel()));
     }
 
     assertThat(standIns.keySet())
@@ -288,6 +358,59 @@ class StandInAgreesInEveryHomeTest {
                 + " notice",
             SIGNAL, BYPASS_CLAIM.kind())
         .isNotEqualTo(BYPASS_CLAIM.kind());
+  }
+
+  /** One home's answer against its own pinned kind, as a line naming both or as nothing at all. */
+  private static List<String> departure(
+      String home, String canonical, Answer answer, NodeKind pinned) {
+    if (Objects.equals(answer.kind(), pinned)) {
+      return List.of();
+    }
+    return List.of(canonical + ": " + home + " says " + answer.describe() + ", pinned " + pinned);
+  }
+
+  /**
+   * The qids the log claims a node for outright, derived from the log rather than listed. A
+   * canonical id in this set has a node of its own, which last-writer-wins has put over the
+   * stand-in in every home - so comparing that node against a local working title would be
+   * comparing a source's own claim with the thing it replaced, and the row drops out of the
+   * stand-in comparison instead. Deriving it means a fixture that starts claiming another canonical
+   * id moves the scope with it, rather than leaving an assertion quietly asking the wrong question.
+   */
+  private static Set<String> claimedOutright() {
+    Set<String> claimed = new LinkedHashSet<>();
+    for (LoggedAssertion assertion : LOG.readAll()) {
+      if (assertion instanceof NodeAssertion claim) {
+        claimed.add(claim.qid());
+      }
+      if (assertion instanceof LocalEntity minted) {
+        claimed.add(minted.qid());
+      }
+    }
+    return claimed;
+  }
+
+  /**
+   * One home's answer to "does this stand-in agree with the node it stands for", as a line naming
+   * both or as nothing at all.
+   */
+  private static List<String> standInDeparture(
+      String home, Map<String, NodeRecord> nodes, Pinned row) {
+    Answer standIn = fromNode(nodes.get(row.canonical()));
+    Answer local = fromNode(nodes.get(row.local()));
+    if (Objects.equals(standIn.kind(), local.kind())) {
+      return List.of();
+    }
+    return List.of(
+        home
+            + ": "
+            + row.canonical()
+            + " stands in as "
+            + standIn.describe()
+            + " for "
+            + row.local()
+            + ", which the same home holds as "
+            + local.describe());
   }
 
   /** Every home's answer for one canonical id, in a fixed order so a failure reads alike twice. */
@@ -325,8 +448,13 @@ class StandInAgreesInEveryHomeTest {
     try (TinkerGraphStore graph = new TinkerGraphStore()) {
       IngestService ingest = new IngestService(new FakeAssertionLog(), graph, IdentityMerge.NONE);
       logged.forEach(ingest::record);
+      // The local ids as well as the canonical ones: a stand-in is only checkable against the node
+      // it copies if this home can be asked about both.
       for (String qid : canonicalIds()) {
         graph.node(qid).ifPresent(node -> nodes.put(qid, node));
+      }
+      for (Pinned row : PINNED) {
+        graph.node(row.local()).ifPresent(node -> nodes.put(row.local(), node));
       }
     }
     return nodes;
