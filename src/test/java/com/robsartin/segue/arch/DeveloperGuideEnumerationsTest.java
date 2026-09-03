@@ -2,6 +2,9 @@ package com.robsartin.segue.arch;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.tngtech.archunit.core.domain.JavaClass;
+import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
 import java.io.IOException;
@@ -17,6 +20,8 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Tags;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -44,6 +49,17 @@ class DeveloperGuideEnumerationsTest {
   private static final String GUIDE = RepositoryTree.read(ROOT.resolve("docs/developer-guide.md"));
   private static final Path MAIN = ROOT.resolve("src/main/java/com/robsartin/segue");
   private static final Path TESTS = ROOT.resolve("src/test/java/com/robsartin/segue");
+
+  /**
+   * Every class under {@code com.robsartin.segue}, main and test both — issue #209. {@code
+   * ArchitectureTest} and {@code PackageListsTest} both import with {@code
+   * ImportOption.DoNotIncludeTests}, because their rules are about {@code src/main}; this
+   * derivation omits that option on purpose, because the classes it needs to see ARE the tests.
+   * Main classes come along too, but none carries {@code @Tag}, so {@link #liveTaggedClasses()}
+   * never names one.
+   */
+  private static final JavaClasses ALL_CLASSES =
+      new ClassFileImporter().importPackages("com.robsartin.segue");
 
   /** The guide states counts in words next to some of the sets it enumerates. */
   private static final List<String> NUMBER_WORDS =
@@ -207,11 +223,10 @@ class DeveloperGuideEnumerationsTest {
   @DisplayName(
       "the guide's testing table names exactly the live-tagged test classes, and counts them")
   void shouldNameEveryLiveTaggedClassWhenTheGuideTabulatesTheTestingStrategy() {
-    Set<String> tagged =
-        testSources()
-            .filter(p -> RepositoryTree.read(p).contains("@Tag(\"live\")"))
-            .map(DeveloperGuideEnumerationsTest::simpleName)
-            .collect(Collectors.toCollection(TreeSet::new));
+    Set<String> tagged = liveTaggedClasses();
+    assertThat(tagged)
+        .as("the tree — finding no @Tag(\"live\") class would make this test vacuously true")
+        .isNotEmpty();
 
     String row = tableRowContaining("@Tag(\"live\")");
     Set<String> named =
@@ -261,6 +276,56 @@ class DeveloperGuideEnumerationsTest {
         .filter(f -> f.isAnnotationPresent(ArchTest.class))
         .map(Field::getName)
         .collect(Collectors.toCollection(TreeSet::new));
+  }
+
+  /**
+   * The simple names of every class — or every class declaring a method — annotated
+   * {@code @Tag("live")}, from ArchUnit's class graph rather than a text search over source — issue
+   * #209, the same move issue #165 made for the dev-tool and adapter packages. A comment quoting
+   * the string {@code @Tag("live")} in a non-live class no longer enrols it, and a class tagged
+   * through a constant ({@code @Tag(LIVE)}) is no longer missed, because both are read from the
+   * compiled annotation rather than grepped from the literal.
+   *
+   * <p>{@code probe}-tagged classes are live too and are named here — {@code
+   * MusicBrainzProbeLiveTest} carries both tags — the guide row's prose, not this set, is where the
+   * {@code probe} tag's exclusion from {@code liveTest} is stated.
+   *
+   * <p>{@code @Tag} is {@code @Repeatable}: a class carrying two, as {@code
+   * MusicBrainzProbeLiveTest} does, is compiled to a single {@code @Tags} container rather than two
+   * {@code @Tag} entries, which is why {@link #isLiveTagged} checks for either annotation type and
+   * then reads the real, loaded class through {@link JavaClass#reflect()} — only {@code
+   * Class.getAnnotationsByType}, not ArchUnit's own annotation proxy, is specified to unwrap that
+   * container back into each {@code Tag}.
+   */
+  static Set<String> liveTaggedClasses() {
+    Set<String> live = new TreeSet<>();
+    for (JavaClass candidate : ALL_CLASSES) {
+      if (isLiveTagged(candidate)) {
+        live.add(candidate.getSimpleName());
+      }
+    }
+    return live;
+  }
+
+  private static boolean isLiveTagged(JavaClass candidate) {
+    boolean mayCarryTag =
+        candidate.isAnnotatedWith(Tag.class)
+            || candidate.isAnnotatedWith(Tags.class)
+            || candidate.getMethods().stream()
+                .anyMatch(m -> m.isAnnotatedWith(Tag.class) || m.isAnnotatedWith(Tags.class));
+    if (!mayCarryTag) {
+      return false;
+    }
+    Class<?> reflected = candidate.reflect();
+    if (isTaggedLive(reflected.getAnnotationsByType(Tag.class))) {
+      return true;
+    }
+    return Stream.of(reflected.getDeclaredMethods())
+        .anyMatch(m -> isTaggedLive(m.getAnnotationsByType(Tag.class)));
+  }
+
+  private static boolean isTaggedLive(Tag[] tags) {
+    return Stream.of(tags).anyMatch(t -> t.value().equals("live"));
   }
 
   private static Set<String> mainPackages() {
