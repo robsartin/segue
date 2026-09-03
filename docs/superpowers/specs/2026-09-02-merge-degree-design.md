@@ -301,3 +301,29 @@ seen red has never been tested (#93, #139).
 
 **Ratified by the owner, 2026-09-02:** fold at projection — keep the local node, move its edges onto
 the canonical id, in both folds in one commit; ADR 59's merge bullet gets a dated amendment.
+
+## The open items, closed (2026-09-02, at the end of the build)
+
+Recorded here rather than left hanging; the decision itself is in
+[ADR 59](../../adr/0059-owner-claims-as-a-third-layer.md)'s dated amendment.
+
+1. **Claims appended after a merge — closed, and answered in code.** `Equivalences.in(log)` is built
+   once before either fold walks anything, so `foldEndpoints` resolves an edge at every position and
+   a claim made against a local id after its merge lands on the canonical id. No positional
+   equivalences were needed. `OwnCli` refuses such a claim anyway (ruling 2), and the fold does not
+   depend on that refusal: `BothFoldsAgreeTest` carries the bypass case that proves it.
+2. **How a merged local id is drawn — closed as ruling 3 said.** A node with no edges, drawn in a
+   `full` or `subgraph` export like any other orphan, asserted on the DOT artefact itself by
+   `MergedIdIsDrawnAsAnOrphanTest`. Nothing hides it. What the ruling did not anticipate is the node
+   *ordering*: stand-ins are now listed by the pre-pass rather than at the merge's row, and the
+   separate, pre-existing question of node-order determinism in that writer is issue #207.
+3. **How many merges the real graph holds — still open, and deliberately.** Nothing in this branch
+   opened `~/.segue/segue.db`. Every figure above and every fixture below it is invented. The size of
+   the real effect is still `merges × their degree`, and a run over a copy is the only thing that
+   would settle it.
+4. **Whether the fixture becomes a committed test — closed as ruling 4 said.** It is committed, as
+   `MergeDoesNotInflateDegreeTest`, with its instrument control beside it. Folding it into #171's
+   `InventedWorld` is #171's business once both land.
+
+Ruling 5's differential harness for #176/#177/#178 remains a separate issue, to be filed when this
+lands rather than built here.
