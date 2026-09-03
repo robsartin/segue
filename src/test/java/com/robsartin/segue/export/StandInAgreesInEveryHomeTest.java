@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.LoggedAssertion;
+import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.export.InventedGraph.FakeAssertionLog;
@@ -15,6 +16,7 @@ import com.robsartin.segue.own.ProjectionLabelsProbe;
 import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.ratings.LabelsProbe;
 import com.robsartin.segue.tinker.TinkerGraphStore;
+import com.robsartin.segue.wikidata.KindMapper;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -29,7 +31,7 @@ import org.junit.jupiter.api.Test;
  * The stand-in rule's four homes give one answer, on one log (issue #220).
  *
  * <p><b>This pins today's answers, and does not claim they are right.</b> Every expected value
- * below is what the four homes say today, recorded so that one of them moving alone reds; two of
+ * below is what the four homes say today, recorded so that one of them moving alone reds; three of
  * the pinned rows are behaviours ADR 59 lists as residuals — one for {@code Q10000900203} / {@code
  * Q10000900204} (a local merged twice, issue #221) and one for {@code Q10000900202} (the bypass
  * kind, issue #222) — and pinning them is not agreeing with them.
@@ -37,8 +39,8 @@ import org.junit.jupiter.api.Test;
  * <p><b>A kind is compared only where a home exposes one.</b> Two of the four — {@code
  * Equivalences.standIns} (via the fold) and the live {@code IngestService} graph — return a {@code
  * NodeRecord} and so answer with a kind; {@code ratings/Labels.forQids} returns a label only, by
- * design, and Task 2's {@code OwnRun} home will too. Asking a label-only home for a kind would be
- * asking it to answer a question it was built not to ask.
+ * design, and {@code OwnRun.labelsInTheProjection} does too. Asking a label-only home for a kind
+ * would be asking it to answer a question it was built not to ask.
  *
  * <p><b>It does not close ADR 59's residual.</b> The residual is that the stand-in rule has four
  * homes; after this it still has four. What changes is that nothing failed if one drifted, and now
@@ -64,6 +66,13 @@ class StandInAgreesInEveryHomeTest {
   private static final String LIVE = "IngestService.standIn (live record)";
   private static final String OWN = "OwnRun.labelsInTheProjection";
   private static final String RATINGS = "ratings/Labels.forQids";
+
+  /**
+   * The four homes this guard reads, named independently of {@link #answersFor}'s own map - so that
+   * dropping a {@code byHome.put(...)} line there shrinks one side of the count and not the other,
+   * and the mismatch reds instead of the guard quietly becoming a three-home guard.
+   */
+  private static final List<String> HOMES = List.of(FOLD, LIVE, OWN, RATINGS);
 
   /** The fixture: the spec's table, row for row. No edges and no retractions - see the spec. */
   private static FakeAssertionLog fourHomesLog() {
@@ -161,6 +170,10 @@ class StandInAgreesInEveryHomeTest {
   @Test
   @DisplayName("every home calls each canonical id the same thing")
   void shouldAgreeOnEveryCanonicalLabelWhenAllFourHomesReadOneLog() {
+    assertThat(answersFor(TAPE).keySet())
+        .as("the four homes this guard reads (%s), independent of the count below", HOMES)
+        .containsExactlyElementsOf(HOMES);
+
     List<String> disagreements = new ArrayList<>();
     long answered = 0;
     for (Pinned row : PINNED) {
@@ -254,6 +267,22 @@ class StandInAgreesInEveryHomeTest {
             PINNED.stream().filter(r -> r.standInLabel() != null).map(Pinned::canonical).toList());
   }
 
+  @Test
+  @DisplayName("the bypass row's claimed kind and its re-derived kind differ")
+  void shouldRederiveAKindDifferentFromTheClaimedOneWhenTheBypassRowsClassesAreMapped() {
+    NodeAssertion bypassClaim =
+        node(SIGNAL, NodeKind.WORK, "a signal a source named", List.of("Q5"));
+
+    assertThat(KindMapper.rederive(bypassClaim).kind())
+        .as(
+            "%s's stated class Q5 must re-derive to a kind different from the claimed %s - that gap"
+                + " is the whole reason this row is pinned as the bypass-lag row (issue #222); if it"
+                + " ever agreed, the row would stop discriminating and nothing else here would"
+                + " notice",
+            SIGNAL, bypassClaim.kind())
+        .isNotEqualTo(bypassClaim.kind());
+  }
+
   /** Every home's answer for one canonical id, in a fixed order so a failure reads alike twice. */
   private static Map<String, Answer> answersFor(String canonical) {
     Map<String, Answer> byHome = new LinkedHashMap<>();
@@ -264,9 +293,13 @@ class StandInAgreesInEveryHomeTest {
     return byHome;
   }
 
-  /** How many homes {@link #answersFor} reads - Task 2 makes it four. */
+  /**
+   * How many homes this guard reads - {@link #HOMES}, not {@link #answersFor}'s own map size, so a
+   * home silently dropped from {@link #answersFor} cannot shrink both sides of the vacuity count
+   * together.
+   */
   private static long homeCount() {
-    return answersFor(TAPE).size();
+    return HOMES.size();
   }
 
   /**
@@ -274,9 +307,10 @@ class StandInAgreesInEveryHomeTest {
    * GraphProjector.project}, deliberately. In production, {@code GraphProjector.project} seeds
    * every canonical node from {@code Equivalences.standIns} before its loop runs, so {@code
    * IngestService.standIn}'s own upsert never fires there - the node it would write already exists.
-   * This replay skips that pre-seed, so the upsert does fire here: it is the live home's only probe
-   * of that code, and the reason this method bypasses {@code GraphProjector.project} rather than
-   * reusing it.
+   * {@code record}'s own javadoc goes further still: nothing in production sends a {@code SameAs}
+   * to {@code record} at all - {@code OwnRun} appends a merge through {@code claim}, which has no
+   * graph half. This replay bypasses both, calling {@code record} directly with no pre-seed, so the
+   * upsert does fire here: it is the live home's only probe of that code, anywhere.
    */
   private static Map<String, NodeRecord> liveGraphNodes() {
     Map<String, NodeRecord> nodes = new LinkedHashMap<>();
