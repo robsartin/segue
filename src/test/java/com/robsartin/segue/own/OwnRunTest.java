@@ -234,6 +234,31 @@ class OwnRunTest {
   }
 
   @Test
+  @DisplayName(
+      "should still accept the canonical id of a corrected merge when a surviving edge names it")
+  void shouldStillAcceptTheCanonicalIdOfACorrectedMergeWhenASurvivingEdgeNamesIt() {
+    // The counterpart to shouldRefuseTheCanonicalIdOfAMergeWhenALaterMergeCorrectedIt: there,
+    // nothing ever claimed against CANONICAL before it was corrected away, so its stand-in has no
+    // node and OwnRun rightly refuses it. Here an owner edge is claimed against it WHILE it still
+    // stands, so Equivalences.stands (#221, widened in a later round of the same issue) answers
+    // true for the corrected merge too - the node survives on the edge's account - and OwnRun must
+    // go on offering it rather than refusing an endpoint that is genuinely still in the projection.
+    seedASourcedEntity(SOURCED, "Ines Marlow");
+    String minted = mintOne("A Self-Pressed Record");
+    run.run(merge(minted, false), notes::add);
+    run.run(claim(SOURCED, CANONICAL, false), notes::add);
+    run.run(new OwnCli.Merge(UNUSED, minted, OTHER_CANONICAL, false), notes::add);
+    notes.clear();
+
+    LoggedAssertion appended = run.run(claim(SOURCED, CANONICAL, false), notes::add);
+
+    assertThat(appended).isEqualTo(new OwnerEdge(SOURCED, CANONICAL, "INFLUENCED_BY", NOW));
+    assertThat(notes)
+        .as("the stand-in survives on the earlier edge's account, still carrying the local's label")
+        .anyMatch(note -> note.contains("A Self-Pressed Record"));
+  }
+
+  @Test
   @DisplayName("should append the edge and name both labels when both endpoints are present")
   void shouldAppendTheEdgeAndNameBothLabelsWhenBothEndpointsArePresent() {
     seedASourcedEntity(SOURCED, "Ines Marlow");

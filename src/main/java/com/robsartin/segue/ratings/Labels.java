@@ -133,9 +133,11 @@ final class Labels {
       // "(not in the graph)" while the node was in the graph. The retraction check above already
       // covers this row - a SameAs naming a retracted entity on either side never reaches here.
       if (assertion instanceof SameAs merge && merges.stands(merge)) {
-        // A merge a later one corrected lends nothing (#221): both folds have retired the node it
-        // stood in for, so a label here would deny the "(not in the graph)" the row honestly
-        // deserves.
+        // A merge a later one corrected lends a label only where a surviving edge still names
+        // its canonical id (#221, widened in a later round of the same issue): stands() is then
+        // true because the node survives on that edge's account, not because this merge still
+        // resolves anything. Where stands() is false - no surviving edge either - a label here
+        // would deny the "(not in the graph)" the row honestly deserves.
         String local = labels.get(merge.localQid());
         // Only where nothing has claimed the canonical entity, the stand-in's own guard: a
         // source that HAS named it wins, because overwriting its label with the owner's working

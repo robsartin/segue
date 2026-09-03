@@ -8,9 +8,11 @@ import static com.robsartin.segue.export.InventedGraph.merged;
 import static com.robsartin.segue.export.InventedGraph.minted;
 import static com.robsartin.segue.export.InventedGraph.node;
 import static com.robsartin.segue.export.InventedGraph.owned;
+import static com.robsartin.segue.export.InventedGraph.retract;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.domain.EdgeRecord;
+import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.export.InventedGraph.FakeAssertionLog;
 import com.robsartin.segue.ingest.GraphProjector;
@@ -22,23 +24,37 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Issue #221: a local id merged onto one canonical id and then onto another leaves nothing behind
- * under the first.
+ * Issue #221: a local id merged onto one canonical id and then onto another retires the first
+ * canonical id's stand-in — <b>unless a surviving edge still names it</b> (fix round 1 widened the
+ * original last-wins-only rule; see {@code Equivalences#stands}).
  *
  * <p><b>Why this is not a case inside {@code BothFoldsAgreeTest}.</b> That test compares the two
  * folds with each other, and until #221 they agreed about the orphan — the exporter's fold built it
  * from {@code Equivalences.standIns} and the boot replay built it a second time from {@code
  * IngestService.standIn}. Two folds that agree about a wrong answer is the one failure comparing
- * them cannot see, so this file looks at the thing itself: it asserts the absence, on both folds
- * separately and on the DOT artefact, and {@code BothFoldsAgreeTest} gains the twice-merged local
- * id as well so that a half-fix reds there too.
+ * them cannot see, so this file looks at the thing itself: it asserts the absence where nothing
+ * survives to claim the node, and the survival where something does, on both folds separately and
+ * on the DOT artefact, and {@code BothFoldsAgreeTest} gains the twice-merged local id as well so
+ * that a half-fix reds there too.
  *
  * <p><b>Three of these were committed {@code @Disabled}, red for the honest reason: the orphan was
  * there.</b> Measured on {@code 2e01341}, the exported fold held {@code MISHEARD} carrying the
  * merged entity's label and no edges, the replayed graph held it too, and the {@code full} DOT drew
- * three nodes under one label for one entity. The fourth test below is green in both worlds and
- * stays enabled: it is what says the two folds hold the corrected merge rather than holding
- * nothing, so the absences above mean something.
+ * three nodes under one label for one entity — {@code
+ * shouldHoldNoNodeForTheFirstCanonicalIdWhenALaterMergeCorrectedIt}, {@code
+ * shouldReplayNoNodeForTheFirstCanonicalIdWhenALaterMergeCorrectedIt} and {@code
+ * shouldDrawNoNodeForTheFirstCanonicalIdWhenALaterMergeCorrectedIt} below. {@code
+ * shouldKeepTheLabelAndTheEdgesOnTheCorrectedCanonicalIdWhenAMergeIsRedone} was green in both
+ * worlds from the start and stayed enabled throughout: it is what says the two folds hold the
+ * corrected merge rather than holding nothing, so the absences above mean something.
+ *
+ * <p><b>Fix round 1 added the surviving-edge case</b> — {@code
+ * shouldReplayWithoutThrowingWhenASurvivingEdgeNamesACorrectedCanonicalId} and {@code
+ * shouldKeepTheSupersededStandInInTheExportersFoldWhenASurvivingEdgeNamesItToo} — where a canonical
+ * id a later merge corrected keeps its stand-in precisely because a surviving edge still names it,
+ * so the absence above and the survival here are two faces of one rule rather than a contradiction.
+ * {@code shouldKeepNoSupersededStandInAliveWhenTheOnlyNamingEdgeIsRetracted} closes the gap between
+ * them: retracting that edge's own endpoint returns the case to the plain absence.
  *
  * <p>Every entity here is invented (ADR 40, issue #37).
  */
@@ -171,6 +187,34 @@ class TwiceMergedIdLeavesNoOrphanTest {
     assertThat(folded.danglingEdges())
         .as("retiring the node while keeping the edge would be the defect this test catches")
         .isZero();
+  }
+
+  /**
+   * The surviving-edge fixture above, but with the edge's own endpoint retracted afterwards (#221
+   * fix round 1, LOW finding 4). {@link Equivalences#in} only counts a SURVIVING edge as keeping a
+   * superseded stand-in alive — {@code Retractions.survives} drops an edge naming a retracted
+   * entity at either end (ADR 44) — so once WREN is gone, nothing claims MISHEARD any more and its
+   * stand-in goes back to being retired by the last-wins rule alone.
+   */
+  private static FakeAssertionLog correctedLogWithARetractedSurvivingEdge() {
+    return new FakeAssertionLog()
+        .with(
+            node(WREN, NodeKind.PERSON, "Wren Alderman"),
+            minted(CORRECTED, NodeKind.WORK, "A Self-Pressed Record"),
+            merged(CORRECTED, MISHEARD),
+            owned(WREN, MISHEARD, "INFLUENCED_BY"),
+            merged(CORRECTED, WATERMARK),
+            retract(WREN));
+  }
+
+  @Test
+  @DisplayName("a retracted edge keeps no superseded stand-in alive")
+  void shouldKeepNoSupersededStandInAliveWhenTheOnlyNamingEdgeIsRetracted() {
+    assertThat(Equivalences.standIns(correctedLogWithARetractedSurvivingEdge().readAll()))
+        .as(
+            "the WREN -> MISHEARD edge no longer survives, so nothing keeps MISHEARD's stand-in"
+                + " alive and the last-wins rule alone decides it")
+        .containsOnlyKeys(WATERMARK);
   }
 
   @Test

@@ -7,6 +7,7 @@ import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.OwnerEdge;
 import com.robsartin.segue.domain.Provenance;
+import com.robsartin.segue.domain.Retraction;
 import com.robsartin.segue.domain.SameAs;
 import com.robsartin.segue.port.AssertionLog;
 import java.time.Instant;
@@ -160,6 +161,11 @@ final class InventedGraph {
 
   static AssertionRecord edge(String from, String to, String type, Provenance provenance) {
     return new AssertionRecord(from, to, type, null, null, provenance);
+  }
+
+  /** The owner taking a claim back, the way the log holds one (ADR 44). */
+  static Retraction retract(String qid) {
+    return new Retraction(qid, "an invented reason, unlike anything a real one would say", WHEN);
   }
 
   /**

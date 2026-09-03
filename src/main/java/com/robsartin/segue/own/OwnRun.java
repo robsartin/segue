@@ -224,8 +224,11 @@ public final class OwnRun {
 
   /**
    * The id a merge naming {@code canonicalQid} now points to instead, where the log holds such a
-   * merge and {@link Equivalences#stands} says it has been superseded - {@code null} where {@code
-   * canonicalQid} was never a merge's canonical side, or the merge that named it still stands.
+   * merge and {@link Equivalences#stands} answers false for it - superseded AND not kept alive by a
+   * surviving edge (#221, widened in a later round of the same issue) - {@code null} where {@code
+   * canonicalQid} was never a merge's canonical side, the merge that named it still stands, or a
+   * surviving edge names {@code canonicalQid} directly and this tool offers it as an endpoint
+   * instead of refusing it (see {@link #labelsInTheProjection}).
    */
   private static String correctedTo(
       List<LoggedAssertion> logged, Equivalences merges, String canonicalQid) {
@@ -284,8 +287,12 @@ public final class OwnRun {
         // the projection, so this tool has to offer it - and it is usually the id the owner wants
         // next, since a merge is normally declared the moment Wikidata catches up.
         //
-        // A merge the owner has since corrected lends no label (#221): the second merge retires
-        // the stand-in the first named, so that id has no node to offer as an endpoint.
+        // A merge the owner has since corrected lends a label only where a surviving edge
+        // still names its canonical id (#221, widened in a later round of the same issue): that
+        // is the one case stands() answers true for a superseded merge, because the node
+        // survives on the edge's account and this tool has to offer it as a claimable endpoint.
+        // Otherwise the second merge retired the stand-in the first named, and that id has no
+        // node to offer at all.
         String local = labels.get(merge.localQid());
         if (local != null) {
           labels.put(merge.canonicalQid(), local);

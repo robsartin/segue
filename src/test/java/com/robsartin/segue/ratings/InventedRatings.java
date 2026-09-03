@@ -59,13 +59,15 @@ final class InventedRatings {
   static final String CORRECTED_CANONICAL = "Q10000900043";
 
   /**
-   * A third id, sourced rather than merged, for an edge the owner claims directly against {@link
-   * #CANONICAL} while it still stands (#221 fix round 1) - the surviving-edge case {@code
-   * Equivalences.stands} widened this listing to see, alongside every other of its four homes.
+   * A third id, given its own node claim so a real fold could replay the edge that names it, for an
+   * edge the owner claims directly against {@link #CANONICAL} while it still stands (#221 fix round
+   * 1) - the surviving-edge case {@code Equivalences.stands} widened this listing to see, alongside
+   * every other of its four homes.
    */
   static final String NEIGHBOUR = "Q0900004";
 
   static final String CANONICAL_LABEL = "The Name A Source Gave It";
+  static final String NEIGHBOUR_LABEL = "A Source Named This One";
 
   static final String QUARTET_LABEL = "The Invented Quartet";
   static final String NOVEL_LABEL = "A Placeholder Novel";

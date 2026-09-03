@@ -8,6 +8,7 @@ import static com.robsartin.segue.ratings.InventedRatings.LATE;
 import static com.robsartin.segue.ratings.InventedRatings.MINTED;
 import static com.robsartin.segue.ratings.InventedRatings.MINTED_LABEL;
 import static com.robsartin.segue.ratings.InventedRatings.NEIGHBOUR;
+import static com.robsartin.segue.ratings.InventedRatings.NEIGHBOUR_LABEL;
 import static com.robsartin.segue.ratings.InventedRatings.NOVEL;
 import static com.robsartin.segue.ratings.InventedRatings.NOVEL_LABEL;
 import static com.robsartin.segue.ratings.InventedRatings.NOVEL_NOTE;
@@ -156,6 +157,7 @@ class RatingsRunTest {
     FakeAssertionLog log =
         new FakeAssertionLog()
             .with(
+                node(NEIGHBOUR, NEIGHBOUR_LABEL),
                 minted(MINTED, MINTED_LABEL),
                 merged(MINTED, CANONICAL),
                 owned(NEIGHBOUR, CANONICAL),
