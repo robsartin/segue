@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.UnaryOperator;
 
 /**
  * Which local ids the owner has said are really something else, and what the taste layer does about
@@ -175,9 +176,10 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
    *
    * @return each canonical id and the node to stand in for it, in log order
    */
-  public static Map<String, NodeRecord> standIns(List<LoggedAssertion> log) {
+  public static Map<String, NodeRecord> standIns(
+      List<LoggedAssertion> log, UnaryOperator<NodeAssertion> rederive) {
     Map<String, NodeRecord> standIns = new LinkedHashMap<>();
-    for (Map.Entry<Integer, NodeRecord> at : localsOfMerges(log).entrySet()) {
+    for (Map.Entry<Integer, NodeRecord> at : localsOfMerges(log, rederive).entrySet()) {
       if (log.get(at.getKey()) instanceof SameAs merge) {
         NodeRecord local = at.getValue();
         // No instanceOf: a stand-in carries what it was given rather than inventing a class -
@@ -235,8 +237,10 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
    *
    * @return the log position of each surviving merge that has a local side, and that side's node
    */
-  public static Map<Integer, NodeRecord> localsOfMerges(List<LoggedAssertion> log) {
+  public static Map<Integer, NodeRecord> localsOfMerges(
+      List<LoggedAssertion> log, UnaryOperator<NodeAssertion> rederive) {
     Objects.requireNonNull(log, "log");
+    Objects.requireNonNull(rederive, "rederive");
     Retractions retractions = Retractions.in(log);
     Map<String, NodeRecord> claimed = new LinkedHashMap<>();
     Map<Integer, NodeRecord> atMerge = new LinkedHashMap<>();
@@ -247,7 +251,7 @@ public record Equivalences(Map<String, String> canonicalByLocal) {
       }
       switch (assertion) {
         case LocalEntity local -> claimed.put(local.qid(), local.toNode());
-        case NodeAssertion claim -> claimed.put(claim.qid(), claim.toNode());
+        case NodeAssertion claim -> claimed.put(claim.qid(), rederive.apply(claim).toNode());
         case SameAs merge -> {
           NodeRecord local = claimed.get(merge.localQid());
           if (local != null) {

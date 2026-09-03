@@ -92,6 +92,14 @@ final class InventedGraph {
    */
   static final String TWICE = "Q005";
 
+  /**
+   * A class no whitelist knows, so a claim stating it re-derives to {@code CONCEPT} — {@code
+   * KindMapper.rederive}'s "when classes ARE stated, this list is the authority, including when it
+   * answers CONCEPT" (ADR 42). ADR 58's leading-zero shape, the next free number in this file's own
+   * sequence, so it needs no entry in {@code StandInQidsDenoteNothingTest}'s allowlist (#222).
+   */
+  static final String UNKNOWN_CLASS = "Q0900109";
+
   private static final Instant WHEN = Instant.parse("2026-01-01T00:00:00Z");
 
   private InventedGraph() {}

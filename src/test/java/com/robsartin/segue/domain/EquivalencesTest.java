@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.function.UnaryOperator;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -27,6 +28,13 @@ class EquivalencesTest {
 
   private static final String NEIGHBOUR = "Q0902";
   private static final Instant WHEN = Instant.parse("2026-08-31T09:00:00Z");
+
+  /**
+   * Kinds as the claim stated them. Every fixture in this file states no classes, so {@code
+   * KindMapper.rederive} would be the identity on all of them (ADR 42) - naming it here says the
+   * choice was made rather than defaulted, and keeps {@code wikidata} out of a {@code domain} test.
+   */
+  private static final UnaryOperator<NodeAssertion> AS_CLAIMED = UnaryOperator.identity();
 
   @Test
   @DisplayName("a merged local id's rating reads under the canonical id, and only there")
@@ -285,7 +293,7 @@ class EquivalencesTest {
             LocalEntity.minted(MINTED, NodeKind.WORK, "The Salt Almanac", WHEN),
             SameAs.declared(MINTED, CANONICAL, WHEN));
 
-    assertThat(Equivalences.standIns(log))
+    assertThat(Equivalences.standIns(log, AS_CLAIMED))
         .as(
             "a merge is usually declared before any source has expanded the real item, and a"
                 + " folded edge needs both of its endpoints to exist")
@@ -300,7 +308,7 @@ class EquivalencesTest {
   void shouldStandInForNothingWhenTheLocalIdWasNeverMinted() {
     List<LoggedAssertion> log = List.of(SameAs.declared(MINTED, CANONICAL, WHEN));
 
-    assertThat(Equivalences.standIns(log))
+    assertThat(Equivalences.standIns(log, AS_CLAIMED))
         .as("the log is append-only: a merge may be replayed with the claim it resolves retracted")
         .isEmpty();
   }
@@ -314,7 +322,7 @@ class EquivalencesTest {
             SameAs.declared(MINTED, CANONICAL, WHEN),
             new Retraction(CANONICAL, "the merge named the wrong item", WHEN));
 
-    assertThat(Equivalences.standIns(log)).isEmpty();
+    assertThat(Equivalences.standIns(log, AS_CLAIMED)).isEmpty();
   }
 
   @Test
@@ -325,7 +333,7 @@ class EquivalencesTest {
             SameAs.declared(MINTED, CANONICAL, WHEN),
             LocalEntity.minted(MINTED, NodeKind.WORK, "The Salt Almanac", WHEN));
 
-    assertThat(Equivalences.standIns(log))
+    assertThat(Equivalences.standIns(log, AS_CLAIMED))
         .as("order is log order - IngestService.standIn reads the graph as it stands at the merge")
         .isEmpty();
   }
@@ -340,7 +348,7 @@ class EquivalencesTest {
             SameAs.declared(MINTED, CANONICAL, WHEN),
             SameAs.declared(OTHER_MINTED, CANONICAL, WHEN));
 
-    assertThat(Equivalences.standIns(log))
+    assertThat(Equivalences.standIns(log, AS_CLAIMED))
         .as("carry creates the node only where nothing has claimed one, so the first merge wins")
         .containsExactly(
             Map.entry(
@@ -366,7 +374,7 @@ class EquivalencesTest {
     // offer it here would put the ordering question in two places, and the caller's answer is
     // already the same in both directions. The source's label winning is asserted end-to-end in
     // MergeCarriesEverythingTest and LogProjectionTest.
-    assertThat(Equivalences.standIns(log))
+    assertThat(Equivalences.standIns(log, AS_CLAIMED))
         .containsExactly(
             Map.entry(
                 CANONICAL,
@@ -388,12 +396,37 @@ class EquivalencesTest {
                 new Provenance("invented", "invented:1", WHEN, 1.0)),
             SameAs.declared(MINTED, CANONICAL, WHEN));
 
-    assertThat(Equivalences.standIns(log))
+    assertThat(Equivalences.standIns(log, AS_CLAIMED))
         .containsExactly(
             Map.entry(
                 CANONICAL,
                 new NodeRecord(
                     CANONICAL, NodeKind.WORK, "a local-shaped id a source named", List.of())));
+  }
+
+  @Test
+  @DisplayName("the stand-in's kind is the caller's re-derivation, not the kind the claim stated")
+  void shouldTakeTheStandInsKindFromTheCallersRederivationWhenALocalSideStatesOne() {
+    // The rule that closes ADR 59's first residual, stated where it lives (#222). KindMapper is in
+    // wikidata and domain may not reach it - domainHasNoThirdPartyDependencies allows domain only
+    // domain, java and javax - so the re-derivation arrives as a function and both folds hand in
+    // the one they already apply to every node claim. The stub below stands in for it.
+    List<LoggedAssertion> log =
+        List.of(
+            new NodeAssertion(
+                MINTED,
+                NodeKind.WORK,
+                "a local-shaped id a source named",
+                new Provenance("invented", "invented:1", WHEN, 1.0)),
+            SameAs.declared(MINTED, CANONICAL, WHEN));
+
+    assertThat(Equivalences.standIns(log, claim -> claim.withKind(NodeKind.PERSON)))
+        .as("both folds re-derive this claim's kind, and the stand-in is the same entity")
+        .containsExactly(
+            Map.entry(
+                CANONICAL,
+                new NodeRecord(
+                    CANONICAL, NodeKind.PERSON, "a local-shaped id a source named", List.of())));
   }
 
   @Test
@@ -405,7 +438,7 @@ class EquivalencesTest {
             LocalEntity.minted(MINTED, NodeKind.WORK, "The Salt Almanac", WHEN),
             SameAs.declared(MINTED, CANONICAL, WHEN));
 
-    assertThat(Equivalences.localsOfMerges(log))
+    assertThat(Equivalences.localsOfMerges(log, AS_CLAIMED))
         .as("the merge at position 0 names an id nothing had claimed yet, and carries nothing")
         .containsExactly(
             Map.entry(2, new NodeRecord(MINTED, NodeKind.WORK, "The Salt Almanac", List.of())));

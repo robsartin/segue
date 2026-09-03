@@ -112,7 +112,8 @@ public record LogProjection(
     // method the boot replay seeds itself with. A real node claim about the canonical id, wherever
     // it sits in the log, lands on top of the stand-in below and wins - which is the guarantee
     // that used to come from asking whether the id had been claimed yet at the merge's own row.
-    Map<String, NodeRecord> nodes = new LinkedHashMap<>(Equivalences.standIns(logged));
+    Map<String, NodeRecord> nodes =
+        new LinkedHashMap<>(Equivalences.standIns(logged, KindMapper::rederive));
     // The graph half of a merge, over the whole log and from the same type the boot replay uses
     // (#178). Every edge below has both of its endpoints read through this, so an edge claimed
     // against a merged local id is folded onto the canonical id once - which is why there is no

@@ -83,7 +83,7 @@ public final class GraphProjector {
     // the merge that names it, and TinkerGraphStore.record refuses an endpoint it has never seen.
     // A real claim about the canonical id, wherever it sits in the log, lands on top of the
     // stand-in and wins by upsertNode's last-writer-wins.
-    for (NodeRecord standIn : Equivalences.standIns(assertions).values()) {
+    for (NodeRecord standIn : Equivalences.standIns(assertions, KindMapper::rederive).values()) {
       store.upsertNode(standIn);
     }
     long applied = 0;
