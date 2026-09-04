@@ -253,3 +253,111 @@ discriminator and not a source they might go looking for.
   again costs a Wikidata round trip and re-stamps `assertedAt`, which ADR 20 treats as real. On a
   wrongly-resolved entity that is the correct cost — there was nothing worth keeping — and it is a
   genuine cost, recorded here rather than glossed.
+
+**Amendment (2026-09-03, issue #224): question 1's granularity has one more clause. A retraction of
+a local id the owner had merged also reaches the edges that name the stand-in that merge created —
+and nothing else.**
+
+Nothing above is withdrawn and no sentence above is edited. *"The unit is the entity"* stands, and
+so does *"it does not cascade"*: what this adds is not a cascade to a neighbour but the same
+entity's own node under the other name the owner himself gave it.
+
+**What was there, measured on `0783492`** — the commit that landed
+[ADR 59](0059-owner-claims-as-a-third-layer.md)'s 2026-09-03 amendment, so the surviving-edge
+widening was already in place and does not reach this case. An invented log (ADR 40,
+[ADR 51](0051-what-an-adr-may-quote.md): no known list behind it) holding `node(WREN)`, one minted
+entity, a merge of it onto a canonical id no source has claimed, an owner edge naming that canonical
+id directly, and a retraction of the local id. `Equivalences.standIns` named nothing — the local no
+longer survives, so `localsOfMerges` filtered the merge out before `stands` was asked anything —
+`LogProjection` reported `danglingEdges() == 1` and carried on, and `GraphProjector` threw `replay
+failed at sequence 5`, `assertion references unknown entity … - upsert the node first`. The export
+looked correct and the application refused to start at the next restart, on rows
+[ADR 19](0019-assertion-log-source-of-truth.md) forbids deleting. Every row in that log is one the
+supported flow produces: `OwnRun` offers a merge's canonical id as a claimable endpoint the moment
+its stand-in exists, and `retractEntity` is the tool this ADR builds.
+
+**Ruling.** A canonical id is a *retracted stand-in* when a merge named it, a retraction of that
+merge's **local** side dropped the merge, and nothing else in the projection holds a node for the id
+— no surviving node claim, and no surviving merge whose stand-in it still is. An edge claim naming
+one at either end does not reach the projection. The rule is `Equivalences.retractedStandIns`, in
+`domain`, computed once and carried by the `Equivalences` both folds build through
+`Equivalences.folding`; `Equivalences.foldEndpoints` — which both folds already call for every edge,
+and which already yields nothing for an edge a merge would collapse onto itself — yields nothing for
+this one too. Neither fold's loop changed. Those classes are the authority for the mechanics; this
+amendment mirrors no table of theirs.
+
+**This rule does not follow question 4's reach, and that is deliberate rather than a loose end left
+for the reader to reconcile.** Question 4 above says a retraction reaches *"backwards only, by
+position in the log"* — it retracts what precedes it, and a claim appended afterwards stands. That
+reach does not carry over to withdrawal. `Equivalences.retractedStandIns` computes the emptied ids
+over the whole log, and `Equivalences.foldEndpoints` takes no index, so an edge naming an emptied
+canonical id is withdrawn whether it was claimed before the retraction or after. This was tried the
+other way first, and measured wrong: a position-aware version of the rule, filtered to retractions
+that reach the row being folded, left `[node(WREN), minted(LAPSE), merged(LAPSE→FORFEIT),
+retract(LAPSE), owned(WREN→FORFEIT)]` — the edge claimed last — with `danglingEdges() == 1` and
+`GraphProjector` throwing `replay failed … assertion references unknown entity … - upsert the node
+first`, the exact break this amendment exists to close, re-created by which row happens to come
+after which rather than fixed. The two reaches answer different questions. A retraction's own
+backwards-only reach answers *"which claims did the owner take back"*, and position is the right
+unit for that — a claim made after the retraction was not one of the ones taken back. Withdrawal
+answers *"does the endpoint this edge names exist in the folded graph"*, and a node either exists in
+a projection or it does not: there is no index at which an emptied canonical id has a node again, so
+there is no index at which an edge naming it could be applied. `RetractedStandInTakesItsEdgesTest`
+pins both folds on that log in both directions.
+
+**The two exclusions are the ruling, not caveats on it.** Without them, retracting one thing the
+owner minted would strip the edges off a real Wikidata entity's whole expansion — which contradicts
+this ADR's own reach and the developer guide's promise that *"what a source claimed about the
+canonical id is untouched"*. Both were measured green before the change and are pinned by
+`RetractedStandInTakesItsEdgesTest` and `EquivalencesTest`.
+
+**Only the local side counts.** A merge dropped because its *canonical* side was retracted leaves
+nothing to repair: that id is retracted outright and `Retractions.survives` has already dropped
+every edge naming it. Telling the two apart is why `Retractions.reaches` is public.
+
+**Rejected, with the reason each lost.**
+
+- **Let the stand-in survive the retraction while a surviving edge names it**, as ADR 59's
+  2026-09-03 amendment does for a *corrected* merge. The symmetry is the first thing to reach for.
+  **Lost on what the node would be made of.** There, the local node still stands and the stand-in
+  copies a claim that is still true; here the local claim is retracted, so building the node means
+  reading a retracted `LocalEntity` for its kind and its label and putting the owner's withdrawn
+  working title on a live node in an export somebody keeps — a node assembled entirely out of
+  retracted rows. That is this ADR inverted: the projection would go on saying the thing the
+  retraction exists to stop it saying. A label-less or annotated stand-in is the *"name the orphan
+  in the export"* alternative ADR 59 already rejected.
+- **Have `GraphProjector` tolerate the unknown endpoint as `LogProjection` does**, so the two folds
+  agree on a dangling edge. Rejected once already in ADR 59's 2026-09-03 amendment, and the question
+  here was whether anything is different. One thing is: there the missing endpoint was a defect with
+  a fix, and here the absence is correct — the owner really did retract the entity. It does not save
+  the option. Tolerance buys this one case by removing the loud failure from **every** case: a
+  corrupt log, a future fold's bug, a source adapter emitting an edge before its node all stop
+  failing at boot and start being counted in a field whose javadoc says it should always be zero.
+  `LogProjection.danglingEdges` exists to report that failure, not to produce it. Dropping the edge
+  for a stated reason keeps the boot loud for everything else.
+- **Refuse the retraction at the tool** when the local id has been merged and a surviving edge names
+  its canonical id. **Lost twice.** The fold must cope with the row regardless — the log is
+  append-only and a refusal cannot reach a row already written — so it would be a guard in front of
+  a fold that still could not replay; and it takes away the owner's only way back out of a wrong
+  mint, which ADR 59's amendment already declined to do from the other side.
+- **Re-point the edge onto the local id.** Rejected for ADR 59's reason, unchanged: segue does not
+  rewrite a claim on the owner's behalf. He named the canonical id.
+
+**Consequence for `retractEntity`.** The report before the append names each id the retraction
+empties and counts the edge claims that stop projecting with it — by distinct edge, not by claim
+row: two sources corroborating one relationship name one edge, and the count that matters is the
+one that agrees with `LogProjection.withdrawnEdges` and with a `full` export of the same log, both
+of which group corroborating claims the same way before counting. A row count was tried during
+review and rejected for exactly that disagreement — it read a different size than the export the
+moment two sources backed one withdrawn edge — and issue #227's census is written to read this
+number rather than re-derive it, so the three had to already agree. `Effect`'s two counts keep their
+meaning — claims naming the qid being retracted — because they are what decides whether *"nothing to
+retract"* is refused. Silence was half of what the tolerate-the-dangle option was rejected for, and
+it is not allowed to arrive at the tool instead.
+
+**A consequence above is stale, and it is recorded rather than repaired.** *"The ratings tool is
+deliberately not part of this. `Labels.forQids` reads node claims straight out of the log without
+applying the rule"* has been false since issue #92: that method asks `Retractions.survives` before a
+claim can name or rename anything, and cites this ADR as the precedent for doing so. Nothing in this
+issue depends on which of the two is right, and an ADR is not edited to match what the code became.
+Whether the ratings listing *should* honour retractions is a decision nobody has argued in writing.

@@ -2261,8 +2261,16 @@ edge claim, and a `SameAs` naming the qid on *either* side as an edge claim — 
 `SameAs` holds a relationship between two ids rather than asserting that either exists. So the two
 ends of a merge are not the same act:
 
-- **Retract the local id** and its node claim, its owner edges and the merge all stop projecting.
-  What a source claimed about the canonical id is untouched.
+- **Retract the local id** and its node claim, its owner edges and the merge all stop projecting —
+  and so do the edges that named the canonical id **the merge was standing in for**
+  ([#224](https://github.com/robsartin/segue/issues/224)). `merge` gives that id a node and
+  `ownClaim assert` will then offer it as an endpoint, so an edge claimed against it is a claim
+  about the entity you are now taking back, written under the name your own merge gave it; dropping
+  the merge without it left the boot replay refusing an endpoint nothing had ever claimed. It
+  reaches no further than that: a canonical id a **source** has claimed as a node of its own, or one
+  a second merge still stands in for, keeps its node and every edge naming it. What a source claimed
+  about the canonical id is untouched. `retractEntity` names the ids it empties and counts those
+  edges before it appends anything.
 - **Retract the canonical id** and the world entity's whole expansion goes — every node and edge
   claim naming it — and the merge with it. The local node stays standing, and so does every edge of
   its own that does *not* name the retracted id: `Retractions.survives` drops an `OwnerEdge` when
