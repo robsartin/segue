@@ -88,14 +88,15 @@ public final class GraphProjector {
    */
   public static long project(AssertionLog log, GraphStore store, IdentityMerge merges) {
     List<LoggedAssertion> assertions = log.readAll();
-    Fold fold = Fold.of(assertions, KindMapper::rederive);
     // The graph half of a merge (#178), built from the same log and beside the same log's
     // retractions, because they are the same kind of rule: neither edits a row, and both decide
     // what the fold makes of one. Equivalences.in already asks Retractions.survives itself, so a
     // merge a retraction reaches folds nothing. folding() rather than in(): the fold is also where
-    // an edge naming a stand-in a retraction took away stops projecting (#224).
-    Equivalences equivalences = Equivalences.folding(assertions);
-    refuseRowsNamingAnEntityNoNodeStandsFor(assertions, fold.retractions(), equivalences);
+    // an edge naming a stand-in a retraction took away stops projecting (#224). Fold.of calls
+    // folding() for exactly this reason, and now builds the whole fold here once, rather than the
+    // pre-flight and the replay loop each paying for their own piece of it.
+    Fold fold = Fold.of(assertions, KindMapper::rederive);
+    refuseRowsNamingAnEntityNoNodeStandsFor(assertions, fold.retractions(), fold.equivalences());
     // Every merged entity's canonical id gets its node before anything is applied (#178). See
     // Equivalences.standIns for why this cannot wait for the merge's own row: an edge whose
     // endpoint the fold below moves onto the canonical id can be claimed EARLIER in the log than
@@ -112,7 +113,7 @@ public final class GraphProjector {
         continue;
       }
       try {
-        if (IngestService.apply(store, merges, equivalences, rederived(assertion))) {
+        if (IngestService.apply(store, merges, fold.equivalences(), rederived(assertion))) {
           applied++;
         }
       } catch (RuntimeException e) {
