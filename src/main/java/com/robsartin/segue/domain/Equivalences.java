@@ -390,10 +390,45 @@ public record Equivalences(
    * {@code retract} — which needs this set for its report and must not learn Wikidata's vocabulary
    * (ADR 44: "a retraction is nobody's vocabulary") — can call it.
    */
-  public static Set<String> retractedStandIns(List<LoggedAssertion> log) {
+  /**
+   * Every id the fold will hold a node for: the stand-ins it builds, plus every id a surviving node
+   * claim or minted entity names (#228).
+   *
+   * <p><b>Promoted from a local, because three readers now ask it.</b> {@link #retractedStandIns}
+   * asks it to decide whether a merge's canonical id is emptied; {@code IngestService.claim} asks
+   * it to refuse an owner claim naming an endpoint the fold would hold no node for, before the
+   * append rather than at the next boot; and {@code GraphProjector.project} asks it to name the
+   * rows of a log that already carries one. A second copy of this walk is how the gate and the fold
+   * would come to disagree about which entities exist, which is the one disagreement that stops the
+   * application starting.
+   *
+   * <p><b>It is exactly {@code LogProjection.of(log).nodes().keySet()}</b>, computed without
+   * folding a single edge, and exactly the node set a {@code GraphProjector} replay leaves. That is
+   * asserted rather than claimed - {@code
+   * BothFoldsAgreeTest.shouldNameExactlyTheNodesTheFoldHoldsWhenAskedOfOneLog} compares all three
+   * over the fixture that holds every shape the third layer has.
+   *
+   * <p><b>No re-derivation parameter</b>, for {@link #retractedStandIns}' reason exactly: this
+   * reads which ids have a node, never what kind it is, and {@link #standIns}' key set cannot
+   * depend on the re-derivation.
+   */
+  public static Set<String> nodesTheFoldHolds(List<LoggedAssertion> log) {
     Objects.requireNonNull(log, "log");
+    return Collections.unmodifiableSet(
+        nodesHeld(log, standIns(log, UnaryOperator.identity()).keySet()));
+  }
+
+  /**
+   * {@link #nodesTheFoldHolds}' walk, over a stand-in key set the caller has already decided.
+   *
+   * <p>Separate from the public method for one caller: {@link #retractedStandIns}' own computation
+   * has to ask this question of a stand-in set it is still working out, and calling the public
+   * method there would ask {@link #standIns} - which reads {@link #in} - in the middle of deciding
+   * what {@link #in} answers.
+   */
+  private static Set<String> nodesHeld(List<LoggedAssertion> log, Set<String> standInIds) {
     Retractions retractions = Retractions.in(log);
-    Set<String> held = new LinkedHashSet<>(standIns(log, UnaryOperator.identity()).keySet());
+    Set<String> held = new LinkedHashSet<>(standInIds);
     for (int i = 0; i < log.size(); i++) {
       LoggedAssertion assertion = log.get(i);
       if (!retractions.survives(i, assertion)) {
@@ -412,6 +447,13 @@ public record Equivalences(
         case Retraction ignored -> {}
       }
     }
+    return held;
+  }
+
+  public static Set<String> retractedStandIns(List<LoggedAssertion> log) {
+    Objects.requireNonNull(log, "log");
+    Retractions retractions = Retractions.in(log);
+    Set<String> held = nodesHeld(log, standIns(log, UnaryOperator.identity()).keySet());
     Set<String> emptied = new LinkedHashSet<>();
     for (int i = 0; i < log.size(); i++) {
       if (log.get(i) instanceof SameAs merge

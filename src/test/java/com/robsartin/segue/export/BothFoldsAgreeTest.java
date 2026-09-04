@@ -28,6 +28,7 @@ import static com.robsartin.segue.export.InventedGraph.retract;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.domain.EdgeRecord;
+import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.Retraction;
@@ -306,6 +307,29 @@ class BothFoldsAgreeTest {
                   + " re-merge, so it is withdrawn for the same reason as WREN -> FORFEIT above."
                   + " So it is every row in this log but those five and that one owner edge.")
           .isEqualTo(30);
+    }
+  }
+
+  @Test
+  @DisplayName("the shared held-node question answers exactly the nodes both folds hold")
+  void shouldNameExactlyTheNodesTheFoldHoldsWhenAskedOfOneLog() {
+    FakeAssertionLog log = ownedLog();
+    Set<String> held = Equivalences.nodesTheFoldHolds(log.readAll());
+
+    assertThat(held)
+        .as(
+            "the producer guard and the boot refusal both read this rather than re-deriving which"
+                + " entities exist, so it has to be the fold's own answer (#228)")
+        .containsExactlyInAnyOrderElementsOf(LogProjection.of(log).nodes().keySet());
+
+    try (TinkerGraphStore replayed = new TinkerGraphStore()) {
+      GraphProjector.project(log, replayed, IdentityMerge.NONE);
+
+      for (String qid : OWNED_QIDS) {
+        assertThat(replayed.node(qid).isPresent())
+            .as("and the boot replay agrees about %s", qid)
+            .isEqualTo(held.contains(qid));
+      }
     }
   }
 
