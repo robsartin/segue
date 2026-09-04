@@ -7,6 +7,7 @@ import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.OwnerEdge;
+import com.robsartin.segue.domain.Qid;
 import com.robsartin.segue.domain.Retraction;
 import com.robsartin.segue.domain.SameAs;
 import com.robsartin.segue.port.AssertionLog;
@@ -169,10 +170,21 @@ public final class IngestService {
    * building block - so a second home for "does the fold hold a node for this id" existed here for
    * exactly one caller, and {@code nodesTheFoldHolds}'s own javadoc naming this method as a reader
    * was not yet true. Asking one method for both ids means the two arms cannot drift into
-   * disagreeing about what the fold holds, and it costs one read of {@code would} rather than two -
-   * {@code nodesTheFoldHolds} is a handful of linear passes over the log plus the merges' fixed
-   * point ({@link Equivalences#in}), and the only caller appends exactly one row per invocation, so
-   * that cost is paid once per own-tool command, not per claim.
+   * disagreeing about what the fold holds.
+   *
+   * <p><b>Cost, stated rather than glossed</b> (#228 fix round 1). The earlier wording here -
+   * "costs one read of {@code would} rather than two" - overstated what either arm pays, and was
+   * never true of the {@code OwnerEdge} arm. A claim is exactly one of the three types the switch
+   * in {@link #claim} accepts, so the two arms below never both run for one call - a {@link
+   * LocalEntity} reads {@code held} zero times, and {@code held} is now computed inside the arm
+   * that reads it rather than once up front for every call. What each arm that DOES run actually
+   * pays: a {@link SameAs} pays one {@link Equivalences#nodesTheFoldHolds} walk - a handful of
+   * linear passes over {@code would} plus the merges' fixed point ({@link Equivalences#in}). An
+   * {@link OwnerEdge} pays that AND {@link Equivalences#folding}, which builds {@link
+   * Equivalences#in} - the same fixed point - a second time, independently, to fold the edge's own
+   * endpoints; an owner-edge claim reads {@code would} twice over, not once. Both totals are still
+   * paid once per own-tool command rather than per claim, because the only caller appends exactly
+   * one row per invocation - that half of the old claim holds.
    *
    * <p>{@code OwnRun.declareMerge} still asks its own narrower question - a merge's local side must
    * be something the owner MINTED, because pointing a merge at a sourced entity is a different
@@ -191,50 +203,92 @@ public final class IngestService {
       List<LoggedAssertion> logged, LoggedAssertion claim) {
     List<LoggedAssertion> would = new ArrayList<>(logged);
     would.add(claim);
-    Set<String> held = Equivalences.nodesTheFoldHolds(would);
-    if (claim instanceof SameAs merge && !held.contains(merge.localQid())) {
-      throw new IllegalArgumentException(
-          "the projection holds no node for "
-              + merge.localQid()
-              + ", so this merge would build no stand-in for "
-              + merge.canonicalQid()
-              + " — the first edge naming that id would stop the boot replay, on rows ADR 19"
-              + " forbids deleting (#228). Claim a node for "
-              + merge.localQid()
-              + " first, or merge an id the projection does hold");
+    if (claim instanceof SameAs merge) {
+      Set<String> held = Equivalences.nodesTheFoldHolds(would);
+      if (!held.contains(merge.localQid())) {
+        throw new IllegalArgumentException(
+            "the projection holds no node for "
+                + merge.localQid()
+                + ", so this merge would build no stand-in for "
+                + merge.canonicalQid()
+                + " — the first edge naming that id would stop the boot replay, on rows ADR 19"
+                + " forbids deleting (#228). Claim a node for "
+                + merge.localQid()
+                + " first, or merge an id the projection does hold");
+      }
     }
     if (claim instanceof OwnerEdge owned) {
+      Set<String> held = Equivalences.nodesTheFoldHolds(would);
       Equivalences.folding(would)
           .foldEndpoints(owned.toAssertion())
-          .ifPresent(
-              folded -> {
-                refuseAnEndpointNothingHolds(owned.fromQid(), folded.fromQid(), held);
-                refuseAnEndpointNothingHolds(owned.toQid(), folded.toQid(), held);
-              });
+          .ifPresent(folded -> refuseEndpointsNothingHolds(owned, folded, held));
     }
   }
 
   /**
-   * Refuse one endpoint of an owner edge the fold would hold no node for (#228).
+   * Refuse an owner edge whose fold holds no node for one or both endpoints (#228 fix round 1).
    *
-   * <p>Asked of the FOLDED id rather than the claimed one, and both are named when they differ, so
-   * that an operator reading the refusal can see whether the id he typed is the id the projection
-   * complained about. A folded pair the fold yields nothing for is not asked at all - a withdrawn
-   * or collapsed edge applies nothing and the log boots, which is the only thing this guard is for.
+   * <p><b>Both endpoints are checked before anything is thrown.</b> The version this replaces threw
+   * on the first missing endpoint and never looked at the second, so an edge naming two ids the
+   * fold holds no node for was reported as if only one were wrong - and the message named no row,
+   * so an operator staring at two ids with no obvious relationship had nothing telling him they
+   * were even the same edge. Both are collected into one message here, which also names the edge
+   * itself, by {@link AssertionRecord#edgeKey()} of the FOLDED assertion.
+   *
+   * <p>Each endpoint is asked of its FOLDED id rather than the claimed one, and both are named when
+   * they differ, so that an operator reading the refusal can see whether the id he typed is the id
+   * the projection complained about. A folded pair the fold yields nothing for is never reached -
+   * the caller only enters this method once {@link Equivalences#foldEndpoints} has already yielded
+   * one; a withdrawn or collapsed edge applies nothing and the log boots, which is the only thing
+   * this guard is for.
    */
-  private static void refuseAnEndpointNothingHolds(
-      String claimed, String folded, Set<String> held) {
-    if (held.contains(folded)) {
+  private static void refuseEndpointsNothingHolds(
+      OwnerEdge owned, AssertionRecord folded, Set<String> held) {
+    List<String> missing = new ArrayList<>();
+    describeIfMissing(owned.fromQid(), folded.fromQid(), held, missing);
+    describeIfMissing(owned.toQid(), folded.toQid(), held, missing);
+    if (missing.isEmpty()) {
       return;
     }
     throw new IllegalArgumentException(
         "the projection holds no node for "
-            + folded
-            + (folded.equals(claimed)
-                ? ""
-                : " (claimed against " + claimed + ", which folds onto " + folded + ")")
-            + " — an owner edge naming an endpoint the fold holds no node for stops the boot"
-            + " replay, on a row ADR 19 forbids deleting (#228). Mint or seed it first");
+            + String.join("; ", missing)
+            + " — the owner edge "
+            + folded.edgeKey()
+            + " names an endpoint the fold holds no node for, which stops the boot replay, on a row"
+            + " ADR 19 forbids deleting (#228)");
+  }
+
+  /**
+   * Append a description of one owner-edge endpoint to {@code missing}, if the fold holds no node
+   * for it (#228 fix round 1).
+   *
+   * <p><b>The advice differs by shape.</b> An ordinary or leading-zero local-shaped id can still be
+   * minted or seeded, so it is told to be - that is still the right advice for most of what this
+   * guard refuses. A canonical-shaped id (ADR 62's reserved eleven-or-more digits, no leading zero)
+   * cannot: it is not a shape Wikidata could ever allocate, so it cannot be seeded, and {@link
+   * LocalEntity#minted} refuses that exact shape too (ADR 59 reserves the leading zero for a minted
+   * local id, not this one) - so the only way it ever gets a stand-in is a merge landing on it,
+   * which this guard cannot do on the caller's behalf. Telling an operator to "mint or seed it
+   * first" would be advice about an action nothing in the system can perform; {@code
+   * OwnRun.labelOrRefuse} already gives an operator equivalent news about a merged-away local id
+   * the same way - naming the id and telling him what to do about it rather than repeating advice
+   * that does not apply.
+   */
+  private static void describeIfMissing(
+      String claimed, String folded, Set<String> held, List<String> missing) {
+    if (held.contains(folded)) {
+      return;
+    }
+    String named = folded.equals(claimed) ? folded : folded + " (claimed against " + claimed + ")";
+    if (Qid.isCanonicalSide(folded) && !Qid.isAllocatable(folded)) {
+      missing.add(
+          named
+              + " - shaped like a merge's canonical id (ADR 62); it cannot be minted or seeded,"
+              + " only merged onto");
+    } else {
+      missing.add(named + " - mint or seed it first");
+    }
   }
 
   /** Record a batch in order; each claim is logged and applied before the next is considered. */

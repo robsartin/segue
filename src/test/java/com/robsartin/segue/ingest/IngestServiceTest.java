@@ -386,4 +386,62 @@ class IngestServiceTest {
 
     assertThat(log.readAll()).hasSize(4).endsWith(edge);
   }
+
+  @Test
+  @DisplayName(
+      "should append an owner edge whose folded endpoint is held only by a legacy bypass merge"
+          + " the gate never saw")
+  void shouldAppendAnOwnerEdgeWhoseFoldedEndpointIsHeldOnlyThroughALegacyBypassMerge() {
+    // Fix round 1, review finding 1 (#228). A plant that asks the RAW claimed endpoint instead of
+    // the folded one passes every other test in the suite, because in every other test the raw and
+    // folded ids happen to agree on whether the fold holds them. This shape forces them to
+    // disagree: Q00900042 (raw) is never held; Q10000900120 (folded) is, but only because a
+    // SEPARATE
+    // legitimate merge (Q00900043 -> Q10000900120) already gave the canonical id a stand-in before
+    // this bypass row was appended.
+    ingest.record(new NodeAssertion("Q0900101", NodeKind.PERSON, "Ines Marlow", WIKIDATA));
+    IngestService.claim(
+        log,
+        LocalEntity.minted("Q00900043", NodeKind.WORK, "a properly-claimed record", CLAIMED_AT));
+    IngestService.claim(log, SameAs.declared("Q00900043", "Q10000900120", CLAIMED_AT));
+    // Appended directly through the log, bypassing claim()'s own gate - the gate would refuse this
+    // merge outright, because Q00900042 was never claimed a node. A legacy log written before #228
+    // existed could hold exactly this row anyway.
+    log.append(SameAs.declared("Q00900042", "Q10000900120", CLAIMED_AT));
+    OwnerEdge edge = OwnerEdge.claimed("Q0900101", "Q00900042", "INFLUENCED_BY", CLAIMED_AT);
+
+    IngestService.claim(log, edge);
+
+    assertThat(log.readAll()).hasSize(5).endsWith(edge);
+  }
+
+  @Test
+  @DisplayName("should name every endpoint the fold holds no node for, not just the first")
+  void shouldNameEveryMissingEndpointWhenAnOwnerEdgeNamesTwo() {
+    OwnerEdge edge = OwnerEdge.claimed("Q0900301", "Q0900302", "INFLUENCED_BY", CLAIMED_AT);
+
+    assertThatThrownBy(() -> IngestService.claim(log, edge))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("Q0900301")
+        .hasMessageContaining("Q0900302");
+
+    assertThat(log.readAll()).isEmpty();
+  }
+
+  @Test
+  @DisplayName(
+      "should advise merging onto a canonical-shaped endpoint rather than minting or seeding it")
+  void shouldAdviseMergingOntoACanonicalShapedEndpointRatherThanMintingOrSeedingIt() {
+    IngestService.claim(
+        log, LocalEntity.minted("Q00900050", NodeKind.PERSON, "someone claimed", CLAIMED_AT));
+    OwnerEdge edge = OwnerEdge.claimed("Q00900050", "Q10000900199", "INFLUENCED_BY", CLAIMED_AT);
+
+    assertThatThrownBy(() -> IngestService.claim(log, edge))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("Q10000900199")
+        .hasMessageContaining("merged onto")
+        .hasMessageNotContaining("mint or seed");
+
+    assertThat(log.readAll()).hasSize(1);
+  }
 }
