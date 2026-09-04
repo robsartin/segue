@@ -681,9 +681,29 @@ public record Equivalences(
    * lists and what to offer, and neither folds an edge nor asks that question.
    */
   public static Equivalences folding(List<LoggedAssertion> log) {
-    Equivalences merges = Equivalences.in(log);
+    Objects.requireNonNull(log, "log");
+    Set<String> emptied = retractedStandIns(log);
+    return folding(in(log, emptied), emptied);
+  }
+
+  /**
+   * This class's own construction of a fold's {@code Equivalences}, for a caller that already holds
+   * the merges and the emptied set — {@link #in(List, Set)}'s reason exactly, one fixed point paid
+   * once rather than twice.
+   *
+   * <p>This stays the one construction site for a fold's {@code Equivalences}, for {@link
+   * #folding(List)}'s own reason: an overload that quietly gives a fold the edge-blind answer —
+   * {@link #retractedStandIns} left empty — is how the two folds drift.
+   *
+   * <p>{@code
+   * EquivalencesTest.shouldGiveTheSameFoldWhenHandedTheMergesAndEmptiedSetFoldingWouldCompute} pins
+   * the two forms to one answer.
+   */
+  public static Equivalences folding(Equivalences merges, Set<String> retractedStandIns) {
+    Objects.requireNonNull(merges, "merges");
+    Objects.requireNonNull(retractedStandIns, "retractedStandIns");
     return new Equivalences(
-        merges.canonicalByLocal(), merges.referencedEndpoints(), retractedStandIns(log));
+        merges.canonicalByLocal(), merges.referencedEndpoints(), retractedStandIns);
   }
 
   /**

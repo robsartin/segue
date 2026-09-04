@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.UnaryOperator;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -700,6 +701,22 @@ class EquivalencesTest {
         .isEqualTo(Equivalences.in(log));
     assertThat(Equivalences.retractedStandIns(log))
         .as("and the emptied set is not empty, so the comparison above is not vacuous")
+        .containsExactly(CANONICAL);
+  }
+
+  @Test
+  @DisplayName("a fold built from prebuilt merges and emptied set is the one folding() builds")
+  void shouldGiveTheSameFoldWhenHandedTheMergesAndEmptiedSetFoldingWouldCompute() {
+    List<LoggedAssertion> log = foldedLog();
+    Set<String> emptied = Equivalences.retractedStandIns(log);
+
+    assertThat(Equivalences.folding(Equivalences.in(log, emptied), emptied))
+        .as(
+            "folding(merges, emptied) is where the boot's Equivalences is constructed; a"
+                + " different answer here is the two folds drifting")
+        .isEqualTo(Equivalences.folding(log));
+    assertThat(Equivalences.folding(log).retractedStandIns())
+        .as("and the fold names a retracted stand-in, so the comparison is not vacuous")
         .containsExactly(CANONICAL);
   }
 
