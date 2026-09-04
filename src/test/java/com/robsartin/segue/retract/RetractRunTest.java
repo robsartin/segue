@@ -4,11 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.robsartin.segue.domain.AssertionRecord;
+import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.domain.OwnerEdge;
 import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.domain.Retraction;
+import com.robsartin.segue.domain.SameAs;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import java.nio.file.Path;
@@ -40,6 +43,8 @@ class RetractRunTest {
   private static final String WRONG = "Q0900101";
   private static final String PAINTING = "Q0900102";
   private static final String OTHER = "Q0900103";
+  private static final String WORKING_TITLE = "Q00900201";
+  private static final String CAUGHT_UP = "Q10000900301";
 
   private AssertionLog log;
   private RetractRun run;
@@ -170,5 +175,23 @@ class RetractRunTest {
     assertThat(effect.label()).isEqualTo("The Right Ones");
     assertThat(effect.nodeClaims()).isEqualTo(1);
     assertThat(effect.edgeClaims()).isZero();
+  }
+
+  @Test
+  @DisplayName("retracting a merged local id reports the edges that go with its stand-in")
+  void shouldReportTheStrandedEdgesWhenTheRetractedIdWasMerged() {
+    log.append(new NodeAssertion(OTHER, NodeKind.PERSON, "Ines Marlow", SOURCE));
+    log.append(LocalEntity.minted(WORKING_TITLE, NodeKind.WORK, "a working title", NOW));
+    log.append(SameAs.declared(WORKING_TITLE, CAUGHT_UP, NOW));
+    log.append(OwnerEdge.claimed(OTHER, CAUGHT_UP, "INFLUENCED_BY", NOW));
+
+    run.run(options(WORKING_TITLE, "the mint was a mistake", true), notes::add);
+
+    assertThat(notes)
+        .as(
+            "the merge goes with the local id, and it was the only thing holding a node under the"
+                + " canonical id - so the edge claimed against that id stops projecting too, and"
+                + " the operator has to be told before the row is written (#224)")
+        .anySatisfy(note -> assertThat(note).contains(CAUGHT_UP).contains("1 edge claim"));
   }
 }

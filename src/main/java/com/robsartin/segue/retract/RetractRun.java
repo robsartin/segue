@@ -1,6 +1,7 @@
 package com.robsartin.segue.retract;
 
 import com.robsartin.segue.domain.AssertionRecord;
+import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
@@ -12,8 +13,10 @@ import com.robsartin.segue.ingest.IngestService;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.retract.RetractCli.Options;
 import java.time.Clock;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Consumer;
 
 /**
@@ -93,6 +96,10 @@ public final class RetractRun {
     notes.accept(
         "the log keeps every one of them — a retraction is a new claim, not a deletion (ADR 44)");
 
+    for (String stranded : strandedByThisRetraction(options)) {
+      notes.accept(stranded);
+    }
+
     if (options.dryRun()) {
       notes.accept("dry run: nothing was appended");
       return effect;
@@ -169,5 +176,55 @@ public final class RetractRun {
       }
     }
     return new Effect(qid, label, nodeClaims, edgeClaims);
+  }
+
+  /**
+   * What ELSE stops projecting: the canonical ids this retraction empties, and the edge claims that
+   * go with them (#224).
+   *
+   * <p>Retracting a local id the owner had merged drops the merge — {@link Retractions#survives}
+   * drops a {@link com.robsartin.segue.domain.SameAs} when either of its ids is retracted — and
+   * with it the only node the canonical id may ever have had. Both folds then drop the edges that
+   * named it, so the report has to name them: {@link Effect}'s two counts are claims naming the qid
+   * being retracted, and these name a different id. They are reported rather than added to those
+   * counts for that reason, and because the counts decide whether "nothing to retract" is refused.
+   *
+   * <p><b>Asked of the log this retraction would produce</b>, not of the log as it stands: the rule
+   * is about what a retraction reaches, and there is no retraction in the log yet. Nothing is
+   * appended — the row is built in memory, and {@link #run} may still be a dry run.
+   */
+  private List<String> strandedByThisRetraction(Options options) {
+    List<LoggedAssertion> after = new ArrayList<>(log.readAll());
+    after.add(new Retraction(options.qid(), options.reason(), clock.instant()));
+    Set<String> emptied = Equivalences.retractedStandIns(after);
+    if (emptied.isEmpty()) {
+      return List.of();
+    }
+    Retractions retractions = Retractions.in(after);
+    List<String> notes = new ArrayList<>();
+    for (String canonical : emptied) {
+      int edges = 0;
+      for (int i = 0; i < after.size(); i++) {
+        LoggedAssertion assertion = after.get(i);
+        if (!retractions.survives(i, assertion)) {
+          continue;
+        }
+        if (assertion instanceof AssertionRecord edge
+            && (edge.fromQid().equals(canonical) || edge.toQid().equals(canonical))) {
+          edges++;
+        }
+        if (assertion instanceof OwnerEdge owned
+            && (owned.fromQid().equals(canonical) || owned.toQid().equals(canonical))) {
+          edges++;
+        }
+      }
+      notes.add(
+          "the merge onto "
+              + canonical
+              + " goes too, and nothing else holds a node for that id, so "
+              + edges
+              + " edge claim(s) naming it stop projecting with it (#224)");
+    }
+    return notes;
   }
 }
