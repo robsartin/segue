@@ -423,6 +423,15 @@ public record Equivalences(
    * it would open by asking {@link #in(List)} for — {@link #in(List, Set)}'s reason again, one
    * fixed point paid once rather than twice.
    *
+   * <p><b>Trusts the caller.</b> {@code merges} is taken as given rather than checked against the
+   * log; handing it anything but the value {@link #in(List)} derives from this exact log answers a
+   * different question. It exists for the boot fold's own construction method — the single per-boot
+   * fold that computes {@link #in(List)}'s answer once and hands it to every reader that would
+   * otherwise recompute it — and is fenced to that one caller.
+   *
+   * <p>{@code EquivalencesTest.shouldGiveTheSameStandInsWhenHandedTheMergesStandInsWouldCompute}
+   * pins the two forms to one answer.
+   *
    * @param merges the merges this fold reads — {@link #in(List)}'s own answer for this log, or the
    *     answer {@link #in(List, Set)} gives a caller that has already computed the emptied set
    */
@@ -727,6 +736,13 @@ public record Equivalences(
    * This class's own construction of a fold's {@code Equivalences}, for a caller that already holds
    * the merges and the emptied set — {@link #in(List, Set)}'s reason exactly, one fixed point paid
    * once rather than twice.
+   *
+   * <p><b>Trusts the caller.</b> Both {@code merges} and {@code retractedStandIns} are taken as
+   * given rather than checked against a log; handing either one anything but the value {@link
+   * #folding(List)} derives from this exact log answers a different question. It exists for the
+   * boot fold's own construction method — the single per-boot fold that computes {@link
+   * #retractedStandIns} once and hands it to every reader that would otherwise recompute it — and
+   * is fenced to that one caller.
    *
    * <p>This stays the one construction site for a fold's {@code Equivalences}, for {@link
    * #folding(List)}'s own reason: an overload that quietly gives a fold the edge-blind answer —

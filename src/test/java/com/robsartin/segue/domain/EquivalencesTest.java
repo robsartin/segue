@@ -37,6 +37,25 @@ class EquivalencesTest {
   /** A third canonical id, for the second-order chain below. ADR 62's eleven digits, as above. */
   private static final String THIRD_CANONICAL = "Q10000000902";
 
+  /**
+   * A fourth minted id, for {@code foldedLog()}'s surviving-superseded merge (fix round 1, #238
+   * task 2 findings): merged once, corrected onto a different canonical id, and never retracted.
+   * Two leading zeros, the next free id after {@link #THIRD_MINTED} (ADR 59).
+   */
+  private static final String SUPERSEDED_MINTED = "Q00900045";
+
+  /**
+   * The surviving-superseded merge's first, later-corrected canonical id. ADR 62's eleven digits,
+   * as above.
+   */
+  private static final String SUPERSEDED_FIRST_CANONICAL = "Q10000000903";
+
+  /**
+   * The surviving-superseded merge's final canonical id — the one {@link #SUPERSEDED_MINTED}
+   * resolves to today. ADR 62's eleven digits, as above.
+   */
+  private static final String SUPERSEDED_SECOND_CANONICAL = "Q10000000904";
+
   private static final String NEIGHBOUR = "Q0902";
   private static final Instant WHEN = Instant.parse("2026-08-31T09:00:00Z");
 
@@ -764,6 +783,21 @@ class EquivalencesTest {
    * retraction above reaches {@code MINTED}'s own node claim as well as its merge (retraction is
    * per-entity, not per-claim), so without this second pair the log-taking form answers an empty
    * map on every fixture above and the comparisons that use it would be vacuous.
+   *
+   * <p>A third addition — {@code SUPERSEDED_MINTED} merged onto {@code SUPERSEDED_FIRST_CANONICAL}
+   * and then, later and without any retraction, re-merged onto {@code SUPERSEDED_SECOND_CANONICAL}
+   * — is there so the {@code standIns(list, rederive, merges)} pin actually discriminates on its
+   * {@code merges} argument (fix round 1, #238 task 2 findings). Under the real {@code
+   * Equivalences.in(log)}, {@link Equivalences#last} answers false for the first merge (its local
+   * id now resolves to the second canonical id) and no kept edge names {@code
+   * SUPERSEDED_FIRST_CANONICAL}, so {@link Equivalences#stands} answers false and it gets no
+   * stand-in. Handed {@link Equivalences#NONE} instead — which has never heard of {@code
+   * SUPERSEDED_MINTED} — {@link Equivalences#last} answers true unconditionally and a stand-in is
+   * built for {@code SUPERSEDED_FIRST_CANONICAL} that should not exist, which is exactly the
+   * difference the pin is supposed to catch. Neither of the first two additions can show this: the
+   * only merge either one reaches inside {@code standIns} is a local id {@code NONE} has also never
+   * heard of, so {@link Equivalences#last} answers true either way and the wrong argument is never
+   * felt.
    */
   private static List<LoggedAssertion> foldedLog() {
     return List.of(
@@ -778,6 +812,9 @@ class EquivalencesTest {
         SameAs.declared(MINTED, CANONICAL, WHEN),
         LocalEntity.minted(OTHER_MINTED, NodeKind.WORK, "an invented other local work", WHEN),
         SameAs.declared(OTHER_MINTED, OTHER_CANONICAL, WHEN),
-        edge(NEIGHBOUR, MINTED));
+        edge(NEIGHBOUR, MINTED),
+        LocalEntity.minted(SUPERSEDED_MINTED, NodeKind.WORK, "a corrected local work", WHEN),
+        SameAs.declared(SUPERSEDED_MINTED, SUPERSEDED_FIRST_CANONICAL, WHEN),
+        SameAs.declared(SUPERSEDED_MINTED, SUPERSEDED_SECOND_CANONICAL, WHEN));
   }
 }
