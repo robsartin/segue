@@ -130,4 +130,20 @@ class RecordInvariantsTest {
             NodeKind.EVENT,
             NodeKind.CONCEPT);
   }
+
+  @Test
+  @DisplayName("an edge names two entities, and a self-loop names one")
+  void anEdgeNamesTwoEntitiesAndASelfLoopNamesOne() {
+    // One rule, three readers (#228): IngestService.record's gate asks the running graph about
+    // each of these, IngestService.claim's gate asks the log's fold, and GraphProjector's boot
+    // diagnosis names each one it holds no node for. Written three ways it was three chances to
+    // report a self-loop as two things to repair.
+    Provenance said = new Provenance("wikidata", null, WHEN, 1.0);
+
+    assertThat(new AssertionRecord("Q01", "Q02", "MEMBER_OF", null, null, said).endpoints())
+        .containsExactly("Q01", "Q02");
+    assertThat(new AssertionRecord("Q01", "Q01", "MEMBER_OF", null, null, said).endpoints())
+        .as("a self-loop is one entity, not two")
+        .containsExactly("Q01");
+  }
 }

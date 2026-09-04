@@ -207,6 +207,10 @@ public final class GraphProjector {
    * One line per endpoint the fold holds no node for, naming the claim as the log wrote it and the
    * endpoint as the fold resolved it — so an operator can see whether the id he typed is the id the
    * boot complained about.
+   *
+   * <p>How many entities the folded edge names is {@link AssertionRecord#endpoints()}, in {@code
+   * domain} since #228's reconciliation: a self-loop is one thing to repair, not two, and both of
+   * {@code IngestService}'s gates read that same rule rather than a copy of it.
    */
   private static void describe(
       List<String> rows,
@@ -214,7 +218,7 @@ public final class GraphProjector {
       AssertionRecord claimed,
       AssertionRecord folded,
       Set<String> held) {
-    for (String endpoint : endpointsOf(folded)) {
+    for (String endpoint : folded.endpoints()) {
       if (!held.contains(endpoint)) {
         rows.add(
             "  sequence "
@@ -226,18 +230,6 @@ public final class GraphProjector {
                 + ", which no node stands for");
       }
     }
-  }
-
-  /**
-   * The distinct entities one edge names: two, or one where it is a self-loop the fold did not
-   * create. Checked once rather than reported twice, so a row naming one unclaimed entity does not
-   * read as two things to repair — {@code IngestService.refuseEndpointsNothingHolds} guards the
-   * same case at the append, the way #233 guards it on the live path.
-   */
-  private static List<String> endpointsOf(AssertionRecord folded) {
-    return folded.fromQid().equals(folded.toQid())
-        ? List.of(folded.fromQid())
-        : List.of(folded.fromQid(), folded.toQid());
   }
 
   /** A node claim with today's kind; anything else unchanged. */

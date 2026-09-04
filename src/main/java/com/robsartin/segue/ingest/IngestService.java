@@ -243,9 +243,11 @@ public final class IngestService {
    * <p><b>A self-loop names one entity, and is reported once.</b> {@code fromQid} and {@code toQid}
    * can be the same id — {@link Equivalences#foldEndpoints} collapses a pair the fold brought
    * together, but leaves a self-loop the claim itself wrote — and describing it twice would tell an
-   * operator to repair two things where there is one. #233's {@code requireBothEndpoints} guards
-   * the identical case on the sourced path, and {@code GraphProjector}'s boot diagnosis guards it
-   * on a row already written.
+   * operator to repair two things where there is one. How many entities an edge names is {@link
+   * AssertionRecord#endpoints()}, in {@code domain}, since #228's reconciliation: {@code
+   * requireBothEndpoints} on the sourced path and {@code GraphProjector}'s boot diagnosis read the
+   * same rule, where all three used to spell it for themselves. The FOLDED assertion is asked, not
+   * the claimed one, because it is the folded pair the graph would be handed.
    *
    * <p><b>Both endpoints are checked before anything is thrown.</b> The version this replaces threw
    * on the first missing endpoint and never looked at the second, so an edge naming two ids the
@@ -266,7 +268,7 @@ public final class IngestService {
     List<String> unheld = new ArrayList<>();
     List<String> missing = new ArrayList<>();
     describeIfMissing(owned.fromQid(), folded.fromQid(), held, unheld, missing);
-    if (!folded.toQid().equals(folded.fromQid())) {
+    if (folded.endpoints().size() == 2) {
       describeIfMissing(owned.toQid(), folded.toQid(), held, unheld, missing);
     }
     if (missing.isEmpty()) {
@@ -551,15 +553,16 @@ public final class IngestService {
    * Both endpoints are checked before either is thrown for (#233 final review, minor 2), so an edge
    * naming two unknown entities is refused ONCE naming both — not once, on the first, leaving the
    * second undiscovered until a retry. {@code fromQid} and {@code toQid} can name the same entity
-   * (a self-loop); that is checked once, not reported twice.
+   * (a self-loop); that is checked once, not reported twice, and since #228 the rule for that is
+   * {@link AssertionRecord#endpoints()} in {@code domain} rather than a copy here — the same rule
+   * {@code claim}'s gate and {@code GraphProjector}'s boot diagnosis read.
    */
   private void requireBothEndpoints(AssertionRecord edge) {
     List<String> missing = new ArrayList<>(2);
-    if (graph.node(edge.fromQid()).isEmpty()) {
-      missing.add(edge.fromQid());
-    }
-    if (!edge.toQid().equals(edge.fromQid()) && graph.node(edge.toQid()).isEmpty()) {
-      missing.add(edge.toQid());
+    for (String endpoint : edge.endpoints()) {
+      if (graph.node(endpoint).isEmpty()) {
+        missing.add(endpoint);
+      }
     }
     if (!missing.isEmpty()) {
       throw new UnknownEndpointException(missing, edge);
