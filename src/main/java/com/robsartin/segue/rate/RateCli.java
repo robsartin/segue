@@ -25,7 +25,7 @@ import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/** The sixth dev-side tool: {@code ./gradlew rate --args="--known …"}. See ADR 46. */
+/** The entry point, run from Gradle: {@code ./gradlew rate --args="--known …"}. See ADR 46. */
 public final class RateCli {
 
   private static final Logger log = LoggerFactory.getLogger(RateCli.class);

@@ -594,14 +594,15 @@ class ArchitectureTest {
    * durable changes: no claim reaches the log, the database or a store the exporter did not create
    * itself.
    *
-   * <p><b>There are two dev-side tools that write, not one.</b> This Javadoc said "the one dev-side
-   * tool that [writes]" while ADR 46 was adding a second — {@code rate}, which writes a rating
-   * through {@code AffinityStore.put} — so the sentence was literally false and the rule below
-   * covered only half of what it claimed. They write to different layers: {@code retract} appends a
-   * world-fact claim through {@code IngestService}, {@code rate} writes the taste layer and never
-   * touches {@code ingest} at all (ADR 33).
+   * <p><b>More than one dev-side tool writes.</b> This Javadoc said "the one dev-side tool that
+   * [writes]" while ADR 46 was adding a second — {@code rate}, which writes a rating through {@code
+   * AffinityStore.put} — so the sentence was literally false and the rule below covered only half
+   * of what it claimed. They write to different layers: {@code retract} appends a world-fact claim
+   * through {@code IngestService}, {@code rate} writes the taste layer and never touches {@code
+   * ingest} at all (ADR 33). {@code own} has since joined {@code retract} on the world-fact side
+   * (#92).
    *
-   * <p><b>Every sibling is banned now, not only the two that write</b> (<a
+   * <p><b>Every sibling is banned now, not only the ones that write</b> (<a
    * href="https://github.com/robsartin/segue/issues/105">issue #105</a>). Naming the writers was
    * the narrowest reading of the fence: the reason a sibling is forbidden is that reaching it lets
    * this package inherit that sibling's fence instead of its own, and a read-only sibling has a
@@ -823,9 +824,9 @@ class ArchitectureTest {
   /**
    * ADR 43: the ratings tool reads, and it cannot write either layer.
    *
-   * <p>The third dev-side tool, and the one whose fence needs a clause no other rule in this file
-   * has: <b>{@code AffinityStore.put}</b>. {@link #onlyIngestAppliesClaimsToTheGraph} guards the
-   * three world-fact writes from everywhere, and {@link #theExporterOnlyReads} repeats them at
+   * <p>A dev-side tool, and the first whose fence had to carry a clause no other rule in this file
+   * then had: <b>{@code AffinityStore.put}</b>. {@link #onlyIngestAppliesClaimsToTheGraph} guards
+   * the three world-fact writes from everywhere, and {@link #theExporterOnlyReads} repeats them at
    * {@code export} - but nothing anywhere forbids writing a <em>rating</em>, because until now the
    * only class outside {@code mcp} holding an {@code AffinityStore} looked up one qid at a time.
    * This tool holds the whole table, and affinity is the one part of segue that cannot be
@@ -952,11 +953,10 @@ class ArchitectureTest {
   /**
    * ADR 45: the recommender reads, and it cannot write either layer.
    *
-   * <p>The fifth dev-side tool, and the second one whose fence has to name {@code
-   * AffinityStore.put} - not because it holds ratings, but because it is the tool that would most
-   * plausibly be extended to write one. A recommender that could record "I liked this suggestion"
-   * would be a taste-layer writer wearing a world-fact tool's fence, and ADR 33 keeps {@code
-   * note_affinity} the only writer there is.
+   * <p>A dev-side tool whose fence names {@code AffinityStore.put} - not because it holds ratings,
+   * but because it is the tool that would most plausibly be extended to write one. A recommender
+   * that could record "I liked this suggestion" would be a taste-layer writer wearing a world-fact
+   * tool's fence, and ADR 33 keeps {@code note_affinity} the only writer there is.
    *
    * <p>{@code IngestService} is banned as a type for the reason {@link #theExporterOnlyReads} bans
    * it: without that clause a class here could route a claim through the one legitimate writer and
@@ -1258,8 +1258,8 @@ class ArchitectureTest {
   /**
    * ADR 44: the retraction tool writes exactly one thing, and cannot write anything else.
    *
-   * <p>The fourth dev-side tool, and the first one that <b>writes</b> - which is why its fence is
-   * shaped differently from the other three. {@code seed} may not open a store at all, {@code
+   * <p>A dev-side tool, and the first one that <b>writes</b> - which is why its fence is shaped
+   * differently from those of the tools before it. {@code seed} may not open a store at all, {@code
    * export} and {@code ratings} may read one; this appends. What it may append is one retraction,
    * through {@link IngestService#retract}, which is the only reason it is allowed to depend on
    * {@code ingest} at all.
@@ -1337,10 +1337,10 @@ class ArchitectureTest {
   /**
    * #92: the owner-claim tool appends through {@code ingest} and opens nothing else.
    *
-   * <p><b>The seventh dev-side tool, and the second that writes a world-fact claim.</b> Its fence
-   * is deliberately the same shape as {@link #theRetractionToolOpensNothingElse}'s, and the reason
-   * is not that the two tools are alike — it is that they are unalike in the one way that would
-   * have argued for a graph, and still do not get one. A retraction genuinely <em>has</em> no graph
+   * <p><b>A dev-side tool, and the second that writes a world-fact claim.</b> Its fence is
+   * deliberately the same shape as {@link #theRetractionToolOpensNothingElse}'s, and the reason is
+   * not that the two tools are alike — it is that they are unalike in the one way that would have
+   * argued for a graph, and still do not get one. A retraction genuinely <em>has</em> no graph
    * half. An owner claim does: {@code IngestService.apply} has a case for each of the three, and a
    * minted entity becomes a node the moment the log is replayed. What both tools lack is a
    * <em>running</em> graph to apply it to, so the projection catches up at the next boot (ADR 24)

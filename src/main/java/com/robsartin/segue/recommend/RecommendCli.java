@@ -22,10 +22,10 @@ import org.slf4j.LoggerFactory;
 /**
  * The entry point, run from Gradle: {@code ./gradlew recommend --args="--known … --out …"}.
  *
- * <p><b>The fifth dev-side tool, and the one with the best case for being a seventh MCP tool —
- * which it is still not.</b> ADR 26 pins the surface at six, and ADR 40, ADR 41, ADR 43 and ADR 44
- * each declined to add to it for reasons that do not all apply here: "what should I explore next?"
- * is genuinely a question one would want to ask in conversation, which was never true of seeding,
+ * <p><b>A dev-side tool, and the one with the best case for being a seventh MCP tool — which it is
+ * still not.</b> ADR 26 pins the surface at six, and ADR 40, ADR 41, ADR 43 and ADR 44 each
+ * declined to add to it for reasons that do not all apply here: "what should I explore next?" is
+ * genuinely a question one would want to ask in conversation, which was never true of seeding,
  * exporting, listing ratings or retracting. ADR 45 decides it the same way anyway, and the argument
  * is short: this tool's input is a file of everything you already know, and its output is a list
  * derived from it. Handing a model a path to that file is exactly what ADR 40 refused for the

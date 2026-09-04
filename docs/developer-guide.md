@@ -1524,7 +1524,7 @@ needs no second file kept beside it.
 
 ## Looking at what you have rated
 
-`ratings` lists the taste layer for the person who owns it. It is the **third** dev-side tool,
+`ratings` lists the taste layer for the person who owns it. It is a dev-side tool, arriving
 after `seed` and `export`, and like both of them it is deliberately not a seventh MCP tool.
 [ADR 43](adr/0043-listing-your-own-ratings.md) is the decision.
 
@@ -2024,8 +2024,8 @@ argument on its own terms, and it amends ADR 26 rather than arriving as a field 
 
 ## Rating one card at a time
 
-`rate` is the sixth dev-side tool, and like the other five it is deliberately not a seventh MCP
-tool. [ADR 46](adr/0046-the-rating-deck.md) is the decision — read it before changing the Origin
+`rate` is a dev-side tool, and like the others it is deliberately not a seventh MCP tool.
+[ADR 46](adr/0046-the-rating-deck.md) is the decision — read it before changing the Origin
 check or the ordering; both are narrower or stricter than they look, on purpose.
 
 ```bash
