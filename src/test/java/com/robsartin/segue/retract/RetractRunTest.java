@@ -265,6 +265,31 @@ class RetractRunTest {
   }
 
   @Test
+  @DisplayName("retracting a canonical id whose merge is already gone strands no edges and says so")
+  void shouldReportNoStrandingLineWhenTheRetractedCanonicalIdStrandsNothing() {
+    // A source claimed the canonical id, the owner merged something onto it, and the local side
+    // was retracted first - so the merge is already gone and the id is still held by the source's
+    // own node claim. Retracting the canonical id NOW takes that node claim away too, which is
+    // what puts the id into retractedStandIns for the first time. But every edge naming it was
+    // dropped by its own retraction (Retractions.survives, either endpoint), so there is nothing
+    // for a stranding line to report: the merge went at the EARLIER retraction, the id named
+    // would be the one the operator just typed, and the count would be zero (#224).
+    log.append(new NodeAssertion(CAUGHT_UP, NodeKind.GROUP, "The Caught Up", SOURCE));
+    log.append(LocalEntity.minted(WORKING_TITLE, NodeKind.WORK, "a working title", NOW));
+    log.append(SameAs.declared(WORKING_TITLE, CAUGHT_UP, NOW));
+
+    run.run(options(WORKING_TITLE, "the mint was a mistake", false), notes::add);
+    notes.clear();
+    run.run(options(CAUGHT_UP, "and the entity itself was wrong", true), notes::add);
+
+    assertThat(notes)
+        .as(
+            "a stranding line exists to name edges that stop projecting; one that names none is"
+                + " telling the operator about a merge that went at an earlier retraction (#224)")
+        .noneMatch(note -> note.contains("0 edge(s)"));
+  }
+
+  @Test
   @DisplayName("a single newly-stranded id gets no closing distinct-total line")
   void shouldNotAddAClosingLineWhenOnlyOneCanonicalIdIsNewlyStranded() {
     log.append(new NodeAssertion(OTHER, NodeKind.PERSON, "Ines Marlow", SOURCE));

@@ -291,7 +291,7 @@ class BothFoldsAgreeTest {
                   + " backwards along with everything else about it, the merge does not survive"
                   + " the retraction, the WREN -> FORFEIT edge is withdrawn because it names the"
                   + " stand-in the retraction emptied, and the retraction row itself is never"
-                  + " applied (#224). So it is 34 rows less five, still 29")
+                  + " applied (#224). So it is every row in this log but those five")
           .isEqualTo(29);
     }
   }

@@ -64,11 +64,20 @@ public final class ExportRun {
 
     notes.accept(view.description());
     notes.accept(view.describeSize());
-    if (options.view().readsTheWholeLog() && selector.danglingEdges() > 0) {
+    // Two ways an edge in the log reaches no export, on one line so that neither is read as the
+    // whole story (#224, final review). A dangling edge is a defect - LogProjection.danglingEdges
+    // is the count whose own javadoc says it should be zero - and a withdrawn one is the fold
+    // obeying a retraction. Reporting only the first left an operator with a quietly smaller
+    // export and nothing in the tool saying why: the retraction tool's own report covers the
+    // moment of the retraction, and every later export was silent.
+    if (options.view().readsTheWholeLog()
+        && (selector.danglingEdges() > 0 || selector.withdrawnEdges() > 0)) {
       notes.accept(
           selector.danglingEdges()
-              + " edge(s) in the log name an entity that was never claimed as a node, and are"
-              + " not in this export");
+              + " edge(s) in the log name an entity that was never claimed as a node, and "
+              + selector.withdrawnEdges()
+              + " named a canonical id a retraction emptied (#224); neither kind is in this"
+              + " export");
     }
 
     // Then whatever the format itself has to say about this view — DOT drops its edge labels on a

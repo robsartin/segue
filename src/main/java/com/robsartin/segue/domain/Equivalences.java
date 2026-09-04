@@ -425,15 +425,23 @@ public record Equivalences(
 
   /**
    * The merges as a fold reads them: {@link #in}, plus the canonical ids a retraction emptied
-   * (#224).
+   * (#224) — and, for one caller that is not a fold, the same answer a fold would get.
    *
    * <p><b>Named rather than an overload of {@link #in}, on {@link #localsOfMerges}' reason.</b> The
    * two folds are the only callers of {@link #foldEndpoints} that hold a log, and an overload
    * quietly giving one of them the older, edge-blind answer is how the two would drift while
    * looking identical at the call site. {@code GraphProjector.project} and {@code LogProjection.of}
-   * both build their equivalences here; every other caller of {@link #in} — {@code OwnRun}, {@code
+   * both build their equivalences here.
+   *
+   * <p><b>{@code RetractRun.strandedByThisRetraction} is the third caller, and folds nothing.</b>
+   * It builds an {@link Equivalences} over the log the retraction WOULD produce, purely to ask
+   * {@link #namesARetractedStandIn} of every surviving claim, so that the edges its report names
+   * are the edges the export will actually withdraw. It has to come through here rather than
+   * through {@link #in} for the same drift reason: {@link #in} carries an empty {@link
+   * #retractedStandIns}, so that predicate would answer {@code false} for everything and the report
+   * would silently name nothing. Every other caller of {@link #in} — {@code OwnRun}, {@code
    * RateCli}, {@code ratings/Labels} and {@code RecommendCli} — asks about ratings, labels, known
-   * lists and what to offer, and folds no edge.
+   * lists and what to offer, and neither folds an edge nor asks that question.
    */
   public static Equivalences folding(List<LoggedAssertion> log) {
     Equivalences merges = Equivalences.in(log);
@@ -632,11 +640,14 @@ public record Equivalences(
    * Whether this edge names a canonical id a retraction emptied, and is therefore withdrawn rather
    * than folded (#224).
    *
-   * <p><b>One home for the question, because two readers ask it.</b> {@link #foldEndpoints} asks it
-   * to decide what to yield, and {@code LogProjection} asks it to decide what to count — the export
+   * <p><b>One home for the question, because three readers ask it.</b> {@link #foldEndpoints} asks
+   * it to decide what to yield; {@code LogProjection} asks it to decide what to count — the export
    * has to say how many edges it withdrew, and a withdrawn edge never reaches its missing-endpoint
-   * check because the fold yielded nothing for it. Reading {@link #retractedStandIns} twice would
-   * put "what withdrawal means" in two places, which is this class's own standing objection.
+   * check because the fold yielded nothing for it; and {@code RetractRun.strandedByThisRetraction}
+   * asks it to decide what to warn the operator about before the retraction is appended, which is
+   * how that report and that count come to agree by construction rather than by two people counting
+   * alike. Reading {@link #retractedStandIns} twice would put "what withdrawal means" in two
+   * places, which is this class's own standing objection.
    */
   public boolean namesARetractedStandIn(AssertionRecord claim) {
     Objects.requireNonNull(claim, "claim");

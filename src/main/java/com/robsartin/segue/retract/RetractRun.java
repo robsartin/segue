@@ -221,6 +221,19 @@ public final class RetractRun {
    * double-count. With exactly one newly-emptied id the per-id line already says the whole story
    * and no closing line is added.
    *
+   * <p><b>An id that strands no edge gets no line, final review.</b> The line exists to name the
+   * edges that stop projecting, so one saying "0 edge(s)" tells the operator nothing and misleads
+   * about the rest of the sentence. The case that produces one is the qid being retracted here
+   * being itself a canonical id: a source claimed it, the owner merged something onto it, the local
+   * side was retracted earlier — so the merge is already gone and the source's node claim is all
+   * that still holds the id — and retracting the id NOW takes that claim away, which is what newly
+   * empties it. Every edge naming it went with its own retraction ({@link Retractions#survives},
+   * either endpoint) and is already in {@link Effect}'s counts, so the set is always empty there.
+   * The guard is on the set rather than on {@code options.qid()} because emptiness is the property
+   * the line is about: any other id this retraction empties without stranding an edge has the same
+   * nothing to report. The closing total then counts the lines that were actually written, not the
+   * ids that were emptied, so it cannot appear beside a single line.
+   *
    * <p><b>Asked of the log this retraction would produce</b>, not of the log as it stands: the rule
    * is about what a retraction reaches, and there is no retraction in the log yet. Nothing is
    * appended — the row is built in memory, and {@link #run} may still be a dry run.
@@ -274,14 +287,20 @@ public final class RetractRun {
 
     List<String> notes = new ArrayList<>();
     for (String canonical : newlyEmptied) {
+      Set<String> stranded = edgeKeysByCanonical.get(canonical);
+      if (stranded.isEmpty()) {
+        // Nothing stops projecting under this id, so there is nothing for a line to say - see
+        // this method's javadoc on the qid being retracted.
+        continue;
+      }
       notes.add(
           "the merge onto "
               + canonical
               + " goes too, and nothing else holds a node for that id, so "
-              + edgeKeysByCanonical.get(canonical).size()
+              + stranded.size()
               + " edge(s) naming it stop projecting with it (#224)");
     }
-    if (newlyEmptied.size() > 1) {
+    if (notes.size() > 1) {
       notes.add(allStrandedEdgeKeys.size() + " distinct edge(s) stop projecting in all (#224)");
     }
     return notes;
