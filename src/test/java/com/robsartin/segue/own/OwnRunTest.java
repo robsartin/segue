@@ -26,7 +26,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * The seventh dev tool, against the real {@code SqliteAssertionLog} the way {@code RetractRunTest}
+ * The owner-claim tool, against the real {@code SqliteAssertionLog} the way {@code RetractRunTest}
  * and {@code IngestServiceTest} use it - a double would let a claim the write half accepts and the
  * read half cannot decode pass every assertion here.
  *

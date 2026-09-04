@@ -9,19 +9,21 @@ import java.nio.file.Path;
  * records for {@code QidList}: shared logic moves here rather than let it create a dependency
  * between two dev-tool packages, each of which carries its own ArchUnit fence.
  *
- * <p><b>Two of the six tools, {@code RetractCli} and {@code OwnCli}, deliberately do not use this
- * class, and never call {@link #resolve}.</b> They append a first-person claim about the world, and
- * the default this class resolves is exactly the hole issue #179 closes — an agent's shell inherits
- * {@code SEGUE_DB} from the owner's profile, so the environment variable cannot stand in for a flag
- * typed per invocation. Those two tools now <b>require {@code --db}</b> and have no default left to
- * resolve: neither carries a copy of this logic any more, and each reads {@code SEGUE_DB} for one
- * purpose only, to quote the path it would once have used back in its refusal. <b>Two ArchUnit
- * rules now hold that absence rather than intend it</b>: {@code
+ * <p><b>{@code RetractCli} and {@code OwnCli} deliberately do not use this class, and never call
+ * {@link #resolve}.</b> They append a first-person claim about the world, and the default this
+ * class resolves is exactly the hole issue #179 closes — an agent's shell inherits {@code SEGUE_DB}
+ * from the owner's profile, so the environment variable cannot stand in for a flag typed per
+ * invocation. Those two tools now <b>require {@code --db}</b> and have no default left to resolve:
+ * neither carries a copy of this logic any more, and each reads {@code SEGUE_DB} for one purpose
+ * only, to quote the path it would once have used back in its refusal. <b>Two ArchUnit rules now
+ * hold that absence rather than intend it</b>: {@code
  * ArchitectureTest.theClaimToolsHaveNoDefaultDatabase} forbids either package from depending on
  * this class at all, and {@code ArchitectureTest.theClaimToolsTakeTheirDatabaseFromTheFlagAlone}
  * forbids taking a {@link Path} out of {@code support} by any route — including through {@link
  * RequiredDatabase}, which does call {@link #resolve} and which both tools do depend on. See ADR
- * 60.
+ * 60. {@code CensusCli} declines the default too, under its own pair of rules ({@code
+ * ArchitectureTest.theCensusHasNoDefaultDatabase} and {@code
+ * ArchitectureTest.theCensusTakesItsDatabaseFromTheFlagAlone}; ADR 63).
  *
  * <p><b>Pure.</b> No {@code System.getenv} and no {@code System.getProperty} inside it — the four
  * tools that still keep a default call {@link #resolve} exactly as they called their own copy of

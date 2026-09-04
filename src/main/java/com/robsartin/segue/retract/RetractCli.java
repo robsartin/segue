@@ -37,11 +37,12 @@ import org.slf4j.LoggerFactory;
  * back out" - ADR 44 deliberately does not open it. This is the owner's judgement about their own
  * graph, made on their own machine.
  *
- * <p>Fourth of four dev-side tools, after {@code seed} (ADR 40), {@code export} (ADR 41) and {@code
- * ratings} (ADR 43) - and the first one that writes. Its fence says exactly what that means: it may
- * append a retraction through {@link com.robsartin.segue.ingest.IngestService}, and it may not
- * touch a {@code GraphStore}, an {@code AffinityStore}, an engine, an export or a network. See
- * {@code ArchitectureTest.theRetractionToolWritesOnlyRetractions}.
+ * <p>One of the dev-side tools {@code ArchitectureTest.DEV_TOOL_PACKAGES} lists, after {@code seed}
+ * (ADR 40), {@code export} (ADR 41) and {@code ratings} (ADR 43) - and the first one that writes.
+ * Its fence says exactly what that means: it may append a retraction through {@link
+ * com.robsartin.segue.ingest.IngestService}, and it may not touch a {@code GraphStore}, an {@code
+ * AffinityStore}, an engine, an export or a network. See {@code
+ * ArchitectureTest.theRetractionToolWritesOnlyRetractions}.
  */
 public final class RetractCli {
 

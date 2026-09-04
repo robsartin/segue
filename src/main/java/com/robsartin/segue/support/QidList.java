@@ -19,12 +19,12 @@ import java.util.regex.Pattern;
  * into QIDs, the subgraph shows the acts actually on the list and how they connect, with the
  * discovered intermediates stripped out.
  *
- * <p><b>It lives in {@code support} because two dev-side tools read the same file (ADR 45).</b> The
- * recommender's known-list is the same shape and answers a different question of it - which
- * entities are already known, so that a well-connected entity absent from it is a recommendation.
- * The tools may not depend on each other: each carries its own ArchUnit fence, and a dependency on
- * a sibling would let one inherit the other's. A shared reader neither of them owns is the way both
- * read the file identically without either learning the other exists.
+ * <p><b>It lives in {@code support} because more than one dev-side tool reads the same file (ADR
+ * 45).</b> The recommender's known-list is the same shape and answers a different question of it -
+ * which entities are already known, so that a well-connected entity absent from it is a
+ * recommendation. The tools may not depend on each other: each carries its own ArchUnit fence, and
+ * a dependency on a sibling would let one inherit the other's. A shared reader none of them owns is
+ * the way they all read the file identically without any of them learning the others exist.
  *
  * <p><b>The rule is: the first comma-separated field on a line that is exactly a QID.</b> That
  * reads a bare one-per-line list and the mapping file with the same code and no header handling. It
