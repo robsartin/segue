@@ -1,6 +1,7 @@
 package com.robsartin.segue.retract;
 
 import com.robsartin.segue.domain.AssertionRecord;
+import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
@@ -12,8 +13,13 @@ import com.robsartin.segue.ingest.IngestService;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.retract.RetractCli.Options;
 import java.time.Clock;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Consumer;
 
 /**
@@ -93,6 +99,10 @@ public final class RetractRun {
     notes.accept(
         "the log keeps every one of them — a retraction is a new claim, not a deletion (ADR 44)");
 
+    for (String stranded : strandedByThisRetraction(options)) {
+      notes.accept(stranded);
+    }
+
     if (options.dryRun()) {
       notes.accept("dry run: nothing was appended");
       return effect;
@@ -169,5 +179,130 @@ public final class RetractRun {
       }
     }
     return new Effect(qid, label, nodeClaims, edgeClaims);
+  }
+
+  /**
+   * What ELSE stops projecting: the canonical ids THIS retraction newly empties, and the distinct
+   * edges that go with them (#224).
+   *
+   * <p>Retracting a local id the owner had merged drops the merge — {@link Retractions#survives}
+   * drops a {@link com.robsartin.segue.domain.SameAs} when either of its ids is retracted — and
+   * with it the only node the canonical id may ever have had. Both folds then drop the edges that
+   * named it, so the report has to name them: {@link Effect}'s two counts are claims naming the qid
+   * being retracted, and these name a different id. They are reported rather than added to those
+   * counts for that reason, and because the counts decide whether "nothing to retract" is refused.
+   *
+   * <p><b>Only what THIS retraction newly strands, fix round 1.</b> {@link
+   * Equivalences#retractedStandIns} answers "which canonical ids has the log, as given, emptied" -
+   * asked of the log this retraction would produce, that includes every canonical id an earlier
+   * retraction already emptied and already reported. The set difference against the log as it
+   * stands is what is actually new here; without it, an unrelated later retraction repeated every
+   * earlier one's stranded-edge notes forever.
+   *
+   * <p><b>Counted by edge key, matching {@code LogProjection.withdrawnEdges}, fix round 1.</b> That
+   * count runs over the grouped claims, so two sources corroborating one withdrawn relationship are
+   * one withdrawal there - and this report has to agree, or the same retraction would read as two
+   * different sizes in two places. {@link Equivalences#namesARetractedStandIn} is the shared
+   * predicate both readers ask, over {@link Equivalences#folding}, rather than a second,
+   * hand-rolled idea of what "names this canonical id" means.
+   *
+   * <p><b>One pass, and one edge key can go under two ids, fix round 2.</b> A local id merged onto
+   * one canonical id and later corrected onto another strands BOTH of them if a surviving edge
+   * names either directly (see {@link Equivalences#stands}'s widening) — and an edge whose two ends
+   * land on two ids this same retraction strands names both, honestly, so it belongs on both ids'
+   * lines. Scanning the log once per canonical id used to decide that per line in isolation;
+   * scanning it ONCE instead and bucketing each withdrawn edge key under every newly-emptied id it
+   * names is the same answer without the rescans, and it is what makes the closing total below
+   * possible to state honestly: the per-id lines can share an edge, so their sizes may sum to more
+   * than what actually stopped projecting. The distinct count across ALL of them — one {@link Set}
+   * of edge keys, added to regardless of which id a claim matched — is the number that agrees with
+   * {@code LogProjection.withdrawnEdges}, and a closing line states it whenever more than one id is
+   * newly emptied, so the owner sees the export's number rather than adding up lines that
+   * double-count. With exactly one newly-emptied id the per-id line already says the whole story
+   * and no closing line is added.
+   *
+   * <p><b>An id that strands no edge gets no line, final review.</b> The line exists to name the
+   * edges that stop projecting, so one saying "0 edge(s)" tells the operator nothing and misleads
+   * about the rest of the sentence. The case that produces one is the qid being retracted here
+   * being itself a canonical id: a source claimed it, the owner merged something onto it, the local
+   * side was retracted earlier — so the merge is already gone and the source's node claim is all
+   * that still holds the id — and retracting the id NOW takes that claim away, which is what newly
+   * empties it. Every edge naming it went with its own retraction ({@link Retractions#survives},
+   * either endpoint) and is already in {@link Effect}'s counts, so the set is always empty there.
+   * The guard is on the set rather than on {@code options.qid()} because emptiness is the property
+   * the line is about: any other id this retraction empties without stranding an edge has the same
+   * nothing to report. The closing total then counts the lines that were actually written, not the
+   * ids that were emptied, so it cannot appear beside a single line.
+   *
+   * <p><b>Asked of the log this retraction would produce</b>, not of the log as it stands: the rule
+   * is about what a retraction reaches, and there is no retraction in the log yet. Nothing is
+   * appended — the row is built in memory, and {@link #run} may still be a dry run.
+   */
+  private List<String> strandedByThisRetraction(Options options) {
+    List<LoggedAssertion> before = log.readAll();
+    List<LoggedAssertion> after = new ArrayList<>(before);
+    after.add(new Retraction(options.qid(), options.reason(), clock.instant()));
+
+    Set<String> newlyEmptied = new LinkedHashSet<>(Equivalences.retractedStandIns(after));
+    newlyEmptied.removeAll(Equivalences.retractedStandIns(before));
+    if (newlyEmptied.isEmpty()) {
+      return List.of();
+    }
+
+    Retractions retractions = Retractions.in(after);
+    Equivalences equivalences = Equivalences.folding(after);
+    Map<String, Set<String>> edgeKeysByCanonical = new LinkedHashMap<>();
+    for (String canonical : newlyEmptied) {
+      edgeKeysByCanonical.put(canonical, new LinkedHashSet<>());
+    }
+    Set<String> allStrandedEdgeKeys = new LinkedHashSet<>();
+
+    for (int i = 0; i < after.size(); i++) {
+      LoggedAssertion assertion = after.get(i);
+      if (!retractions.survives(i, assertion)) {
+        continue;
+      }
+      AssertionRecord claim =
+          switch (assertion) {
+            case AssertionRecord sourced -> sourced;
+            case OwnerEdge owned -> owned.toAssertion();
+            default -> null;
+          };
+      if (claim == null || !equivalences.namesARetractedStandIn(claim)) {
+        continue;
+      }
+      boolean namesANewlyEmptiedId = false;
+      if (newlyEmptied.contains(claim.fromQid())) {
+        edgeKeysByCanonical.get(claim.fromQid()).add(claim.edgeKey());
+        namesANewlyEmptiedId = true;
+      }
+      if (newlyEmptied.contains(claim.toQid())) {
+        edgeKeysByCanonical.get(claim.toQid()).add(claim.edgeKey());
+        namesANewlyEmptiedId = true;
+      }
+      if (namesANewlyEmptiedId) {
+        allStrandedEdgeKeys.add(claim.edgeKey());
+      }
+    }
+
+    List<String> notes = new ArrayList<>();
+    for (String canonical : newlyEmptied) {
+      Set<String> stranded = edgeKeysByCanonical.get(canonical);
+      if (stranded.isEmpty()) {
+        // Nothing stops projecting under this id, so there is nothing for a line to say - see
+        // this method's javadoc on the qid being retracted.
+        continue;
+      }
+      notes.add(
+          "the merge onto "
+              + canonical
+              + " goes too, and nothing else holds a node for that id, so "
+              + stranded.size()
+              + " edge(s) naming it stop projecting with it (#224)");
+    }
+    if (notes.size() > 1) {
+      notes.add(allStrandedEdgeKeys.size() + " distinct edge(s) stop projecting in all (#224)");
+    }
+    return notes;
   }
 }

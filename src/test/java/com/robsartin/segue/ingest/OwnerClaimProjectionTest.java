@@ -273,7 +273,7 @@ class OwnerClaimProjectionTest {
 
     try (GraphStore rebuilt = new TinkerGraphStore()) {
       assertThat(GraphProjector.project(log, rebuilt, IdentityMerge.NONE))
-          .as("the count is rows the projection consumed, and #92 Task 4 gives a merge an effect")
+          .as("the count is rows the projection applied, and #92 Task 4 gives a merge an effect")
           .isEqualTo(2);
     }
   }

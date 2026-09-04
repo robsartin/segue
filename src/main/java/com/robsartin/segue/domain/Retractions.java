@@ -86,6 +86,22 @@ public record Retractions(Map<String, Integer> lastRetraction) {
     };
   }
 
+  /**
+   * Whether a retraction of {@code qid} reaches the row at {@code index} — {@link #survives}'s own
+   * test, asked about one id rather than about a whole row.
+   *
+   * <p><b>Public for one question {@link #survives} cannot answer</b> (#224). A {@link SameAs} is
+   * dropped when <em>either</em> of its two ids is retracted, and {@code
+   * Equivalences.retractedStandIns} has to tell those two cases apart: a merge dropped because its
+   * LOCAL side went leaves a canonical id holding a node nothing else supports, and one dropped
+   * because its canonical side went does not. Answering it with a second copy of the comparison
+   * would put the "last, not first" rule in two places.
+   */
+  public boolean reaches(int index, String qid) {
+    Objects.requireNonNull(qid, "qid");
+    return isRetractedAt(index, qid);
+  }
+
   private boolean isRetractedAt(int index, String qid) {
     Integer cut = lastRetraction.get(qid);
     return cut != null && index < cut;

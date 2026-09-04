@@ -206,6 +206,15 @@ public final class ViewSelector {
     return projection().danglingEdges();
   }
 
+  /**
+   * Edges dropped because they named a canonical id a retraction emptied (#224) — routinely
+   * non-zero on a log the owner has retracted a merged local id from, and its sibling above is the
+   * alarm rather than this.
+   */
+  public int withdrawnEdges() {
+    return projection().withdrawnEdges();
+  }
+
   // ---- shared -----------------------------------------------------------
 
   private LogProjection projection() {

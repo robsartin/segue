@@ -103,8 +103,20 @@ import java.util.function.UnaryOperator;
  *     whenever an assertion over an {@code Equivalences} fails, and a salted iteration would print
  *     one unchanged log two ways on two JVMs. {@code Set} equality is order-blind, so {@code
  *     equals} reads the same either way
+ * @param retractedStandIns the canonical ids a retraction emptied (#224): a merge named each of
+ *     them and a retraction of that merge's LOCAL side dropped it, and nothing else in the
+ *     projection holds a node for the id — no surviving node claim, and no surviving merge whose
+ *     stand-in it still is. {@link #foldEndpoints} yields nothing for an edge naming one, because
+ *     the endpoint the edge was claimed against was the retracted entity under the name its merge
+ *     gave it. Populated only by {@link #folding}; empty everywhere else, including {@link #NONE}
+ *     and {@link #in}, which have no edge to fold. Insertion-ordered for {@link
+ *     #referencedEndpoints}' reason - nothing reads the order, and a record's {@code toString}
+ *     prints it into every failing assertion over an {@code Equivalences}
  */
-public record Equivalences(Map<String, String> canonicalByLocal, Set<String> referencedEndpoints) {
+public record Equivalences(
+    Map<String, String> canonicalByLocal,
+    Set<String> referencedEndpoints,
+    Set<String> retractedStandIns) {
 
   /** A projection with no merges in it, named at the call site rather than defaulted. */
   public static final Equivalences NONE = new Equivalences(Map.of());
@@ -117,6 +129,19 @@ public record Equivalences(Map<String, String> canonicalByLocal, Set<String> ref
         Collections.unmodifiableSet(
             new LinkedHashSet<>(
                 Objects.requireNonNull(referencedEndpoints, "referencedEndpoints")));
+    retractedStandIns =
+        Collections.unmodifiableSet(
+            new LinkedHashSet<>(Objects.requireNonNull(retractedStandIns, "retractedStandIns")));
+  }
+
+  /**
+   * A caller that has the merges and the surviving edges but no fold to perform — {@link #in},
+   * whose readers ask about ratings, labels and known lists and never about an edge's endpoints. An
+   * empty {@link #retractedStandIns} is exactly as accurate there as a computed one: {@link
+   * #foldEndpoints} is the only method that reads it, and no caller of {@link #in} calls it.
+   */
+  public Equivalences(Map<String, String> canonicalByLocal, Set<String> referencedEndpoints) {
+    this(canonicalByLocal, referencedEndpoints, Set.of());
   }
 
   /**
@@ -311,6 +336,120 @@ public record Equivalences(Map<String, String> canonicalByLocal, Set<String> ref
   }
 
   /**
+   * The canonical ids a retraction emptied — a merge gave each of them its only node, a retraction
+   * of that merge's local side took the merge away, and nothing else holds a node for the id
+   * (#224).
+   *
+   * <p><b>Why an edge naming one does not project, and why that is ADR 44 rather than a delete.</b>
+   * {@code OwnRun} offers a merge's canonical id as a claimable endpoint the moment its stand-in
+   * exists, so the owner can claim an edge against it. Retracting the local id afterwards drops the
+   * merge — {@link Retractions#survives} drops a {@link SameAs} on the edge rule, either side — and
+   * with it the only node that id ever had. The edge survives on its own terms, names an endpoint
+   * no fold holds, and {@code TinkerGraphStore.record} refuses it: {@code replay failed at sequence
+   * … assertion references unknown entity … - upsert the node first}, at every boot, on rows ADR 19
+   * forbids deleting. The claim was one the owner made about the entity he has just retracted,
+   * written under the name his own merge gave it, so it goes with it. Nothing is deleted: the log
+   * keeps every row, and this changes only what the fold makes of them.
+   *
+   * <p><b>Position-blind, and that is the one place this rule does NOT follow ADR 44.</b> A
+   * retraction reaches backwards only, by position in the log — {@link Retractions#survives} is
+   * asked about a row's index for exactly that reason — but this set is whole-log and {@link
+   * #foldEndpoints} takes no index, so an edge claimed <em>after</em> the retraction that names an
+   * emptied canonical id is withdrawn just the same. That is deliberate. A backwards-only rule
+   * would leave the log {@code [node, minted, merge, retract, edge-naming-the-canonical-id]} naming
+   * an endpoint no fold holds, and {@code TinkerGraphStore.record} would refuse it at every boot —
+   * the very break this rule exists to close, re-created by the ordering rather than fixed. What is
+   * emptied is emptied for the whole projection, because a node either exists in the folded graph
+   * or it does not, and no edge may name one that does not. {@code
+   * RetractedStandInTakesItsEdgesTest} pins both folds on that log; the design spec's 2026-09-03
+   * amendment records the finding and the ruling.
+   *
+   * <p><b>Only the local side counts</b>, which is why {@link Retractions#reaches} exists. A merge
+   * dropped because its CANONICAL side was retracted leaves nothing to repair here: that id is
+   * retracted outright, and {@link Retractions#survives} has already dropped every edge naming it.
+   *
+   * <p><b>A canonical id the projection holds on its own account is not emptied.</b> A source may
+   * have claimed it as a node — the developer guide's promise that "what a source claimed about the
+   * canonical id is untouched" — and then the merge was never the only thing holding it up. Without
+   * this, retracting one thing the owner minted would strip the edges off a real Wikidata entity's
+   * whole expansion.
+   *
+   * <p><b>Nor is one a surviving merge still stands in for.</b> Two local ids merged onto one
+   * canonical id and only one of them retracted leaves the other merge's stand-in exactly where it
+   * was, so the id has a node and the edges naming it have an endpoint. {@link #standIns} is the
+   * one place that answers "which canonical ids have a stand-in", and this reads it rather than
+   * deciding it again.
+   *
+   * <p><b>No re-derivation parameter, unlike {@link #standIns} and {@link #localsOfMerges}.</b>
+   * This reads which canonical ids have a stand-in, never what kind that node is, and the key set
+   * of {@link #standIns} cannot depend on the re-derivation: {@link #localsOfMerges} decides which
+   * merges have a local side by survival alone and {@link #stands} reads no kind, so the operator
+   * only ever sets a value this method discards. It is checked rather than asserted — {@code
+   * EquivalencesTest.shouldNameTheSameCanonicalIdsWhateverKindTheFoldDerives} compares the key sets
+   * under two re-derivations that disagree about every kind. The parameter is left off so that
+   * {@code retract} — which needs this set for its report and must not learn Wikidata's vocabulary
+   * (ADR 44: "a retraction is nobody's vocabulary") — can call it.
+   */
+  public static Set<String> retractedStandIns(List<LoggedAssertion> log) {
+    Objects.requireNonNull(log, "log");
+    Retractions retractions = Retractions.in(log);
+    Set<String> held = new LinkedHashSet<>(standIns(log, UnaryOperator.identity()).keySet());
+    for (int i = 0; i < log.size(); i++) {
+      LoggedAssertion assertion = log.get(i);
+      if (!retractions.survives(i, assertion)) {
+        continue;
+      }
+      switch (assertion) {
+        case NodeAssertion claim -> held.add(claim.qid());
+        case LocalEntity minted -> held.add(minted.qid());
+        // An edge, a merge and a retraction all claim no node. Named explicitly rather than
+        // through a default, matching Retractions.survives and Equivalences.in: a default arm
+        // would let a seventh LoggedAssertion that DOES claim a node compile silently into
+        // "claims nothing" and empty a canonical id the log holds.
+        case AssertionRecord ignored -> {}
+        case OwnerEdge ignored -> {}
+        case SameAs ignored -> {}
+        case Retraction ignored -> {}
+      }
+    }
+    Set<String> emptied = new LinkedHashSet<>();
+    for (int i = 0; i < log.size(); i++) {
+      if (log.get(i) instanceof SameAs merge
+          && retractions.reaches(i, merge.localQid())
+          && !held.contains(merge.canonicalQid())) {
+        emptied.add(merge.canonicalQid());
+      }
+    }
+    return Collections.unmodifiableSet(emptied);
+  }
+
+  /**
+   * The merges as a fold reads them: {@link #in}, plus the canonical ids a retraction emptied
+   * (#224) — and, for one caller that is not a fold, the same answer a fold would get.
+   *
+   * <p><b>Named rather than an overload of {@link #in}, on {@link #localsOfMerges}' reason.</b> The
+   * two folds are the only callers of {@link #foldEndpoints} that hold a log, and an overload
+   * quietly giving one of them the older, edge-blind answer is how the two would drift while
+   * looking identical at the call site. {@code GraphProjector.project} and {@code LogProjection.of}
+   * both build their equivalences here.
+   *
+   * <p><b>{@code RetractRun.strandedByThisRetraction} is the third caller, and folds nothing.</b>
+   * It builds an {@link Equivalences} over the log the retraction WOULD produce, purely to ask
+   * {@link #namesARetractedStandIn} of every surviving claim, so that the edges its report names
+   * are the edges the export will actually withdraw. It has to come through here rather than
+   * through {@link #in} for the same drift reason: {@link #in} carries an empty {@link
+   * #retractedStandIns}, so that predicate would answer {@code false} for everything and the report
+   * would silently name nothing. Every other caller of {@link #in} — {@code OwnRun}, {@code
+   * RateCli}, {@code ratings/Labels} and {@code RecommendCli} — asks about ratings, labels, known
+   * lists and what to offer, and neither folds an edge nor asks that question.
+   */
+  public static Equivalences folding(List<LoggedAssertion> log) {
+    Equivalences merges = Equivalences.in(log);
+    return new Equivalences(
+        merges.canonicalByLocal(), merges.referencedEndpoints(), retractedStandIns(log));
+  }
+
+  /**
    * What each surviving merge's local side looked like at the moment the merge was made (#178) —
    * the one answer to "does this merge have a local side", for everything that has to agree about
    * it.
@@ -420,6 +559,12 @@ public record Equivalences(Map<String, String> canonicalByLocal, Set<String> ref
    * Scorer}'s degree and {@code find_paths} would both read it. The edge is dropped instead. Task
    * 5's ADR amendment records the decision.
    *
+   * <p><b>The second thing that yields nothing is a retraction, and it is a decision too</b>
+   * (#224). An edge naming a {@link #retractedStandIns} id was claimed against a stand-in a
+   * retraction has taken away, so the fold has no endpoint for it and neither would the store. It
+   * is dropped rather than replayed into nothing: see that component, and ADR 44's 2026-09-03
+   * amendment for why tolerating it as a dangling edge was refused a second time.
+   *
    * <p><b>A self-loop the fold did not create is left exactly where it is</b>, which is why the
    * check is on {@code from.equals(to)} <em>after</em> the untouched-claim shortcut above rather
    * than on the folded pair alone. {@link AssertionRecord} does not forbid a claim from an entity
@@ -461,10 +606,19 @@ public record Equivalences(Map<String, String> canonicalByLocal, Set<String> ref
    *
    * <p><b>Both arms of the general method delegate here</b>, so there is one rule and not two: a
    * sourced edge is folded by this method directly, and an owner edge lends it its two endpoints
-   * and is rebuilt from the answer. Unchanged, collapsed and resolved are decided in one place.
+   * and is rebuilt from the answer. All four outcomes — withdrawn, unchanged, collapsed and
+   * resolved — are decided in one place.
    */
   public Optional<AssertionRecord> foldEndpoints(AssertionRecord claim) {
     Objects.requireNonNull(claim, "claim");
+    if (namesARetractedStandIn(claim)) {
+      // A retraction took away the merge that gave this endpoint its only node (#224). Above the
+      // shortcut below, deliberately: such an edge usually names no merged id at all, so the
+      // "most of a log names nothing merged" fast path would return it unchanged. Above the
+      // resolution too, because the endpoint this edge names is going nowhere - there is nothing
+      // to resolve it to.
+      return Optional.empty();
+    }
     String from = canonical(claim.fromQid());
     String to = canonical(claim.toQid());
     if (from.equals(claim.fromQid()) && to.equals(claim.toQid())) {
@@ -480,6 +634,24 @@ public record Equivalences(Map<String, String> canonicalByLocal, Set<String> ref
     return Optional.of(
         new AssertionRecord(
             from, to, claim.typeCode(), claim.validFrom(), claim.validTo(), claim.provenance()));
+  }
+
+  /**
+   * Whether this edge names a canonical id a retraction emptied, and is therefore withdrawn rather
+   * than folded (#224).
+   *
+   * <p><b>One home for the question, because three readers ask it.</b> {@link #foldEndpoints} asks
+   * it to decide what to yield; {@code LogProjection} asks it to decide what to count — the export
+   * has to say how many edges it withdrew, and a withdrawn edge never reaches its missing-endpoint
+   * check because the fold yielded nothing for it; and {@code RetractRun.strandedByThisRetraction}
+   * asks it to decide what to warn the operator about before the retraction is appended, which is
+   * how that report and that count come to agree by construction rather than by two people counting
+   * alike. Reading {@link #retractedStandIns} twice would put "what withdrawal means" in two
+   * places, which is this class's own standing objection.
+   */
+  public boolean namesARetractedStandIn(AssertionRecord claim) {
+    Objects.requireNonNull(claim, "claim");
+    return retractedStandIns.contains(claim.fromQid()) || retractedStandIns.contains(claim.toQid());
   }
 
   /**
