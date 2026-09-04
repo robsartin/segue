@@ -25,6 +25,7 @@ Everything here was checked against the source in `src/main/java/com/robsartin/s
 - [Bulk seeding](#bulk-seeding)
 - [Looking at the graph](#looking-at-the-graph)
 - [Looking at what you have rated](#looking-at-what-you-have-rated)
+- [Looking at the shape of your graph](#looking-at-the-shape-of-your-graph)
 - [Taking something back out](#taking-something-back-out)
 - [What to explore next](#what-to-explore-next)
 - [Rating one card at a time](#rating-one-card-at-a-time)
@@ -261,6 +262,7 @@ graph TD
   recommend["recommend<br/>RecommendCli, CandidateSweep, Routes"]
   rate["rate<br/>RateCli, RateRun, Deck, RateServer, Card"]
   own["own<br/>OwnCli, OwnRun"]
+  census["census<br/>CensusCli, CensusRun, Census, CensusReport"]
 
   app --> mcp
   app --> ingest
@@ -328,6 +330,12 @@ graph TD
   own --> ingest
   own --> sqlite
   own --> support
+  census --> port
+  census --> support
+  census --> domain
+  census --> sqlite
+  census --> wikidata
+  census ==>|"one fold, not two"| export
 ```
 
 **What the diagram shows.** Dependencies point downward and never back up. `domain` sits at the
@@ -358,7 +366,7 @@ that `app` imports nothing from `domain`; that stopped being true in ADR 54**, b
 `WikidataMusicBrainzIdentity` validates a seed QID with `Qid.looksLikeAQid` before putting it in a
 SPARQL query, so the bridge in `app` holds one `domain` type.
 
-`seed`, `export`, `ratings`, `retract`, `recommend`, `rate` and `own` are the seven dev-side tools. None is
+`seed`, `export`, `ratings`, `retract`, `recommend`, `rate`, `own` and `census` are the eight dev-side tools. None is
 reachable from the application — nothing imports any of them, and each is entered through its own
 `main` behind a Gradle `JavaExec` task — and their arrows are the interesting part, because each
 has a different relationship with the data and a different fence to match.
@@ -378,10 +386,10 @@ has a different relationship with the data and a different fence to match.
 - **`recommend` reaches `sqlite`, `tinker`, `ingest` and `wikidata`**, because it replays the log
   into a throwaway projection and traverses it, and it writes nothing at all
   ([ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md)).
-- **`rate` reaches the same four and `recommend` itself**, the one dependency between two dev
-  tools, for the candidate half of the deck. It is the other tool that writes — to the taste layer
-  only, through `AffinityStore.updateRating`, never through `IngestService`
-  ([ADR 46](adr/0046-the-rating-deck.md)).
+- **`rate` reaches the same four and `recommend` itself**, one of the two dependencies between
+  dev tools (the other is `census → export`), for the candidate half of the deck. It is the other
+  tool that writes — to the taste layer only, through `AffinityStore.updateRating`, never through
+  `IngestService` ([ADR 46](adr/0046-the-rating-deck.md)).
 - **`own` reaches `sqlite` and `ingest`, and is the second that writes a world-fact claim.** It
   appends one of the owner's own claims — a minted entity, an owner edge, or a merge — through
   `IngestService.claim`, and holds no `GraphStore`: those claims do have a graph half, but a
@@ -389,6 +397,11 @@ has a different relationship with the data and a different fence to match.
   the way it does after a retraction ([ADR 24](adr/0024-sqlite-assertion-log.md)). Its sibling
   fence is `theOwnerClaimToolOpensNothingElse`, and the decision is recorded in
   [ADR 59](adr/0059-owner-claims-as-a-third-layer.md).
+- **`census` reaches `sqlite`, `support`, `export` and `wikidata`, and is the only dev-side tool
+  whose whole output is aggregates.** It folds the log through `export.LogProjection` rather than folding
+  it again — a third fold of one log is the drift `BothFoldsAgreeTest` exists to catch — and counts
+  what comes out. It writes nothing, and `--db` is required
+  ([ADR 63](adr/0063-a-read-only-census-of-the-graph.md)).
 
 Tools with opposite relationships to the store cannot share a package and keep any fence
 meaningful, which is why ADR 41 made the first two siblings, ADR 43 added a third rather than a
@@ -467,6 +480,7 @@ line is drawn there.
 | `recommend` | The recommender ([ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md)): ranks entities absent from the known-list by how much more of that list reaches them than their size predicts, and explains each with real routes. Run as `./gradlew recommend`. The list is the supplied `--known` file plus everything rated 4 or 5 that the file does not name, through `KnownList.promoted` ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)) — so a highly rated entity stops being offered back — and since [ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md) the sweep also takes `KnownList.suppressed` as a separate set, so an entity rated 2 or below stops being offered back too. Plain Java, read-only, offline, and since issue #85 it weights every candidate by the owner's ratings — `Recommendations.regardFor` over `AffinityStore.readRatings`, the note-free half of the taste layer. (This row said it "cannot see the taste layer at all" until the final review of issue #101; that was already false on `main`.) | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `support` |
 | `own` | The owner-claim tool (issue [#92](https://github.com/robsartin/segue/issues/92)): mints a local entity Wikidata does not model, asserts an edge between two ids, or merges a local id into the QID it turned out to be — one operation per run, as `./gradlew ownClaim`. Plain Java, offline, and the second dev tool that writes a world-fact claim; it appends through `IngestService.claim` and holds no graph, so the projection catches up at the next boot. Deliberately not an MCP tool: an owner claim is exempt from the corroboration count, so a model must not be able to make one. Since #179 it has no default database: `--db` is required, `SEGUE_DB` does not satisfy it, and `./gradlew own` still resolves to `:ownClaim` — it refuses rather than reporting an unknown task ([ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md)). | `port`, `domain`, `ingest`, `sqlite`, `support` |
 | `rate` | The rating deck ([ADR 46](adr/0046-the-rating-deck.md)): a loopback page on 127.0.0.1:8090 dealing one unrated entity per keystroke, run as `./gradlew rate`. Plain Java, offline, and the only dev tool that writes a rating. Composes its known list through the same `KnownList.promoted` `recommend` does ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)), passes the same `KnownList.suppressed` to its sweep, and deals revisions over `KnownList.revisitable` ([ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md)). | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `recommend`, `support` |
+| `census` | The graph census: nodes by kind, edges by type, source and corroboration, the claim rows and what retraction and merge did to them, the taste layer by score, degree quantiles against `Recommendations.MIN_CANDIDATE_DEGREE`, and what MusicBrainz reached. Run as `./gradlew graphCensus`. Plain Java, read-only, offline, and the whole output is aggregates — no label, no id, no note — so it is safe to paste. `--db` is required, and `SEGUE_DB` does not satisfy it. | `port`, `domain`, `sqlite`, `support`, `export`, `wikidata` |
 
 ### Which rules a machine enforces
 
@@ -487,6 +501,8 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `seedNeverOpensAStore` | `seed` depending on `sqlite`, `tinker`, `jena`, `ingest`, `mcp`, `app` or every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`, so a new tool joins every fence at once) — it resolves names and must not open the database even to read it | [ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md) |
 | `theExporterOnlyReads` | `export` calling `GraphStore.record`/`upsertNode` or `AssertionLog.append`, or depending on `IngestService`, or on every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`, so a new tool joins every fence at once), at all | [ADR 41](adr/0041-graph-exporter-views-and-formats.md) |
 | `theExporterNeverSpeaksToANetwork` | `export` depending on `java.net`, `javax.net`, the whole `musicbrainz` package, or any class of this project's that reaches a network API itself or through a chain of other classes here — so no HTTP client is named and none has to be remembered. The last clause replaced a `..wikidata.WikidataClient` argument that was a class name passed to a package predicate and matched nothing (issue #139) | [ADR 41](adr/0041-graph-exporter-views-and-formats.md) |
+| `theCensusOnlyReads` | `census` calling the three world-fact writes or either taste-layer write (`AffinityStore.put`, `updateRating`), depending on `IngestService`, or depending on any dev tool but `export`. `export` is permitted deliberately: the census counts `LogProjection`'s fold rather than writing a third one, and a third fold of one log is the drift `BothFoldsAgreeTest` exists to catch | [ADR 63](adr/0063-a-read-only-census-of-the-graph.md) |
+| `theCensusOpensNothingElse` | `census` depending on `tinker`, `jena`, `ingest`, `mcp`, `app`, the whole `musicbrainz` package, `java.net`, `javax.net`, or any class of this project's that reaches a network. `wikidata` is not banned, for the exporter's reason — `KindMapper.rederive` is a static table | [ADR 63](adr/0063-a-read-only-census-of-the-graph.md) |
 | `theRatingsToolOnlyReads` | `ratings` calling the three world-fact writes **or either taste-layer write, `AffinityStore.put` and `updateRating`** — the only rule anywhere guarding the rating write | [ADR 43](adr/0043-listing-your-own-ratings.md) |
 | `theRatingsToolOpensNothingElse` | `ratings` depending on `tinker`, `jena`, `ingest`, `mcp`, `app`, `java.net`, `javax.net` or every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`, so a new tool joins every fence at once) | [ADR 43](adr/0043-listing-your-own-ratings.md) |
 | `onlyTheRatingsToolReadsEveryRating` | calling `AffinityStore.readAll` from outside `ratings` — the bulk read exists for the owner's dev tool and for nothing on the MCP surface | [ADR 16](adr/0016-privacy-and-data-handling.md), [ADR 39](adr/0039-affinity-capture-and-read.md), [ADR 43](adr/0043-listing-your-own-ratings.md) |
@@ -495,7 +511,7 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `theRecommenderOnlyReads` | `recommend` calling the three world-fact writes or either taste-layer write (`AffinityStore.put`, `updateRating`), or depending on `IngestService` at all | [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
 | `theRecommenderReadsRatingsAndNeverNotes` | `recommend` depending on `AffinityRecord` **as a type**, or calling `AffinityStore.find` or `readAll` — it may hold the store and call the note-free `readRatings`, and nothing that carries free text | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 39](adr/0039-affinity-capture-and-read.md), [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
 | `onlyTheRatingsToolReadsANote` | calling `AffinityRecord.note()` from outside `ratings` and `sqlite` — the score is ordinary data, the note is the owner's and is read on their own machine | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 43](adr/0043-listing-your-own-ratings.md) |
-| `onlyTheRecommenderReadsEveryRating` | calling `AffinityStore.readRatings` from outside `recommend` **and `rate`** — the note-free bulk read belongs to the two dev-side tools that weight and deal by it, and ADR 26 still pins the surface at six tools | [ADR 26](adr/0026-mcp-tool-surface.md), [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
+| `onlyTheRecommenderReadsEveryRating` | calling `AffinityStore.readRatings` from outside `recommend`, `rate` **and `census`** — the note-free bulk read belongs to the three dev-side tools that weight, deal or count by it, and ADR 26 still pins the surface at six tools | [ADR 26](adr/0026-mcp-tool-surface.md), [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md), [ADR 63](adr/0063-a-read-only-census-of-the-graph.md) |
 | `theRecommenderOpensNothingElse` | `recommend` depending on `jena`, `mcp`, `app`, `java.net`, `javax.net` or every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`, so a new tool joins every fence at once) — `rate` depends on `recommend` by design, and this is what keeps that trip one-way | [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
 | `theRatingDeckWritesOnlyAffinity` | `rate` calling the three world-fact writes, or depending on `IngestService` **as a type** — the deck records what the owner thinks, never what the world says, and cannot route a claim through the one class allowed to write one | [ADR 46](adr/0046-the-rating-deck.md) |
 | `theRatingDeckNeverReadsANote` | `rate` calling `AffinityRecord.note()` — it writes the score and must not be able to display the note | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 46](adr/0046-the-rating-deck.md) |
@@ -504,6 +520,8 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `theOwnerClaimToolOpensNothingElse` | `own` depending on `GraphStore` **as a type**, on `AffinityStore`, or on `tinker`, `jena`, `mcp`, `app`, `java.net`, `javax.net` or every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`, so a new tool joins every fence at once) — an owner claim *does* have a graph half, unlike a retraction, but this tool has no running graph to apply it to, so the projection catches up at the next boot. The `AffinityStore` clause is what keeps the merge subcommand away from the ratings it carries at read time | [ADR 59](adr/0059-owner-claims-as-a-third-layer.md) |
 | `theClaimToolsHaveNoDefaultDatabase` | `retract` or `own` depending on `support.DefaultDatabase` at all — the two tools that append a first-person claim require `--db` and have no default left to resolve. Second line of defence, not first: the refusal tests red three-per-tool against every reintroduction tried, and this holds when those tests are edited to match. `dependOnClassesThat` rather than a call predicate, so a method reference (`DefaultDatabase::resolve`, reported as *references*) or a field of that type is caught as readily as a call; javadoc naming the class in prose is not a dependency and is deliberately still allowed | issue [#179](https://github.com/robsartin/segue/issues/179) |
 | `theClaimToolsTakeTheirDatabaseFromTheFlagAlone` | `retract` or `own` calling any `support` method that returns a `java.nio.file.Path`, or reading any `support` field of that type. The sibling rule forbids a *name*; this forbids the *capability*, and the gap between them was measured — a `Path`-returning method added to `support.RequiredDatabase` (which both tools already use for the refusal sentence) and wired in restores the default while leaving `theClaimToolsHaveNoDefaultDatabase` green. `Path` is the line because a `String` has to be parsed back by a line a reviewer can see, which is why `RequiredDatabase.refusal` returns one | issue [#179](https://github.com/robsartin/segue/issues/179) |
+| `theCensusHasNoDefaultDatabase` | `census` depending on `support.DefaultDatabase` at all. A third rule rather than a wider one: ADR 60's two are named for claim tools, ADR 60 names both and is immutable, and its consequences say a third tool joins by hand | [ADR 63](adr/0063-a-read-only-census-of-the-graph.md), [ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md) |
+| `theCensusTakesItsDatabaseFromTheFlagAlone` | `census` calling any `support` method that returns a `java.nio.file.Path`, or reading any `support` field of that type — the capability, where the rule above forbids the name | [ADR 63](adr/0063-a-read-only-census-of-the-graph.md), [ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md) |
 | `ownerClaimsAreMadeThroughTheirFactories` | calling — or referencing — the constructor of `LocalEntity`, `OwnerEdge` or `SameAs` from outside `domain` and `sqlite`. Those constructors enforce only what Wikidata's grammar fixes, so that an append-only row stays decodable after a convention moves; the conventions themselves (two leading zeros, the controlled relation vocabulary) live in `minted()`, `claimed()` and `declared()`. This rule is what makes every *maker* of a claim go through them, with no second copy of a rule to fall out of date. `sqlite` is exempt because `readRow` reconstructs rather than claims | [ADR 22](adr/0022-wikidata-identity-and-vocabulary.md), [ADR 19](adr/0019-assertion-log-source-of-truth.md), [ADR 58](adr/0058-stand-in-identifiers-cannot-be-allocatable.md) |
 | `bridgedIdentitiesAreBuiltThroughTheirFactory` | calling — or referencing — the constructor of `BridgedIdentity` from anywhere but the record itself. `BridgedIdentity.describing` *drops* a row whose class id is not a QID, answering `undescribed`; the constructor *throws*. The two are not interchangeable in a bridge: `MusicBrainzSourceAdapter` catches only `MusicBrainzIdentityUnavailableException` and `SegueService.expandEntity` wraps `adapter.expand` in no `try`, so an `IllegalArgumentException` from a producer aborts a whole expansion across every adapter — and `NodeRecord` refuses the same value only from inside `IngestService.apply`, after the claim has been appended. Rules run over `src/main` only, so the test doubles that build rows directly are outside the import rather than exempted | [ADR 19](adr/0019-assertion-log-source-of-truth.md), [ADR 58](adr/0058-stand-in-identifiers-cannot-be-allocatable.md), issue [#163](https://github.com/robsartin/segue/issues/163) |
 | `nothingWritesToStandardOut` | reading `System.out` anywhere except the one named exception, `SegueApplication` | [ADR 28](adr/0028-mcp-transports.md) |
@@ -1591,6 +1609,86 @@ data is a pure function of one local file.
 The join between the two layers happens above both ports and nowhere else (ADR 33). Here the class
 names say which side of that line each one is on — rename either and the build tells you.
 
+## Looking at the shape of your graph
+
+```bash
+# every count there is, over the database you name
+./gradlew graphCensus --args="--db $HOME/.segue/segue.db"
+```
+
+It prints one block of counts and writes nothing. **`--db` is required and `SEGUE_DB` does not
+satisfy it**, for the reason [ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md) gives
+about the two claim tools, arriving at a read from a different direction: an agent's shell inherits
+the variable, and this output is the shape of your whole graph and taste layer. Write `$HOME`, not
+`~`.
+
+### What it is for
+
+Three questions this repository has left open need a number nobody has, and all three are aggregates
+over the one database nobody but you may open:
+
+- how many merges the real graph holds, which [ADR 59](adr/0059-owner-claims-as-a-third-layer.md)'s
+  residual says is unmeasured;
+- where the whole graph's degree distribution sits relative to
+  `Recommendations.MIN_CANDIDATE_DEGREE`, which [ADR 57](adr/0057-the-floor-reports-itself.md)
+  re-opens on figures `FloorReading` takes over one recommender run's candidate pool — nothing
+  reports the nodes that pool never considers;
+- how much of what MusicBrainz reached the graph can describe, which
+  [ADR 55](adr/0055-what-the-musicbrainz-adapter-refuses.md) and issue #167 left open.
+
+`CensusReport` is the authority on which counts are emitted and in what order; this chapter does not
+list them, because a list here would be a second copy going stale on its own. What it prints is a
+header line, then a section heading per group with its counts indented under it, labels padded to
+one width and the numbers right-aligned in another — both widths derived from the census itself, so
+a six-figure count moves the column rather than jutting out of it.
+
+### Why the output is safe to paste
+
+Every value is an integer, and every label is a literal in `CensusReport` but for two it reads off
+the log — the edge type codes and the source ids, in `of type …` and `backed by …`. Those are
+vocabulary rather than entities, and the test's "nothing `Q`-shaped anywhere" clause covers them;
+what the remaining labels interpolate is a score or a corroboration count, which are numbers. No
+qid, label or note reaches the output, so [ADR 51](adr/0051-what-an-adr-may-quote.md)'s line — an
+aggregate over your data may be published, an entity presented as yours may not — is satisfied by
+construction rather than by care. `CensusIsSafeToPasteTest` holds it: it feeds a graph containing a
+label, a note and a `Q` id inside that note, captures every log line at TRACE, and asserts that none
+of the three appears anywhere. ADR 51 says its rule cannot be tested in general and explains why;
+this is the one artefact where it can be, and
+[ADR 63](adr/0063-a-read-only-census-of-the-graph.md) records why.
+
+That guarantee is about the census itself, not about everything a run can put on your terminal: a
+refusal names the database path you gave it, and a run that fails prints a stack trace like any
+other tool's — one out of the log decoder can carry a malformed row's own id text. Neither is a log
+line, so the test cannot see either; ADR 63 records the limit, and the answer is to read what you
+paste when a run has failed.
+
+One thing to expect when you do paste it: the lines arrive through SLF4J, and this tool has no
+Spring context, so `logback-spring.xml` is never loaded and Logback's own default layout goes in
+front of every line, on stdout. The prefix is the same on every line, so the aligned column survives
+— ADR 63 records it as a limit rather than a feature.
+
+### It counts the export's fold, not a second one
+
+`Census` names its sections, and the ones whose `of` takes a `LogProjection` and nothing else count
+that fold alone — the same fold `exportGraph` draws and, through `Equivalences` and `Retractions`,
+the same rules `GraphProjector` replays at boot. Of the rest, the claims section reads the raw log
+rows beside it, and the taste section the score map through `AffinityStore.readRatings` as well as
+both. A census
+with a fold of its own could disagree with the picture about how many nodes there are, which is the
+drift `BothFoldsAgreeTest` exists to catch. That is why `census` depends on `export`, the second of
+the two dependencies between dev tools.
+
+### Three things this is not allowed to do
+
+- **Write, or reach a sibling other than `export`.** `theCensusOnlyReads` forbids the three
+  world-fact writes, both taste-layer writes, `IngestService` — and every dev tool but `export`,
+  which is the one clause that had to be argued for.
+- **Name anything.** There is no per-entity output and no `--out`; the counts go to the terminal
+  through SLF4J, because `nothingWritesToStandardOut` bans `System.out` project-wide and there is
+  nothing here a log line may not carry.
+- **Reach the network or an engine.** `theCensusOpensNothingElse` bans `tinker`, `jena`, `ingest`,
+  `mcp`, `app` and `musicbrainz`, and names `REACHES_A_NETWORK` rather than any HTTP client.
+
 ## Taking something back out
 
 ```bash
@@ -2078,9 +2176,11 @@ dev tool whose shape is an HTTP server — what the network ban buys `ratings`, 
 `retract` is bought here by the loopback bind and the `Origin` allowlist instead.
 
 `ArchitectureTest.onlyTheRecommenderReadsEveryRating` also now names `..rate..`, beside
-`..recommend..`, as the only packages allowed to call `AffinityStore.readRatings()`. That widening
-is the ADR-level decision the rule's own javadoc asks for — see ADR 46 rather than assuming a bulk
-read that was reserved to one dev tool now belongs to any of them.
+`..recommend..`, as one of the packages allowed to call `AffinityStore.readRatings()`. That
+widening is the ADR-level decision the rule's own javadoc asks for — see ADR 46 rather than
+assuming a bulk read that was reserved to one dev tool now belongs to any of them. Issue #227
+widened it a second time, to `..census..`, on the same ADR-level argument — see
+[ADR 63](adr/0063-a-read-only-census-of-the-graph.md).
 
 ### Why this is not a controller in the running app, and not a seventh MCP tool
 

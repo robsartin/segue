@@ -22,8 +22,9 @@ import org.slf4j.LoggerFactory;
  * the <em>owner</em> could not see their own ratings either - and affinity is the one part of segue
  * that cannot be regenerated from a source. ADR 43 separates the two audiences: a model still
  * cannot enumerate the taste layer, and the person who owns it can, through a tool that runs on
- * their own machine and writes to a path they name. Third of three dev-side tools, after {@code
- * seed} (ADR 40) and {@code export} (ADR 41).
+ * their own machine and writes to a path they name. One of the dev-side tools {@code
+ * ArchitectureTest.DEV_TOOL_PACKAGES} lists, after {@code seed} (ADR 40) and {@code export} (ADR
+ * 41).
  *
  * <p><b>It reads two stores and writes neither.</b> See {@link RatingsRun} for the fence, and note
  * what it covers that no other rule does: the taste-layer writes, {@code AffinityStore.put} and

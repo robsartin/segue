@@ -145,17 +145,17 @@ class ArchitectureTest {
    * fence exists it forbids the return edge, so no cycle can form.
    */
   static final List<String> DEV_TOOL_PACKAGES =
-      List.of("export", "own", "rate", "ratings", "recommend", "retract", "seed");
+      List.of("census", "export", "own", "rate", "ratings", "recommend", "retract", "seed");
 
   /**
    * Every dev-tool package except the ones named, as {@code ..x..} patterns, then {@code
    * alsoFenced} unchanged.
    *
    * <p>{@code permitted} always contains the tool's own package, and contains a second entry only
-   * where a decision allows one sibling — today only {@code rate → recommend} (ADR 46). Written as
-   * an allowlist rather than a denylist so that the exception is the thing a reader has to justify,
-   * and so a new tool is fenced from every one of its siblings the moment it joins {@link
-   * #DEV_TOOL_PACKAGES}.
+   * where a decision allows one sibling — today {@code rate → recommend} (ADR 46) and {@code census
+   * → export} (ADR 63). Written as an allowlist rather than a denylist so that the exception is the
+   * thing a reader has to justify, and so a new tool is fenced from every one of its siblings the
+   * moment it joins {@link #DEV_TOOL_PACKAGES}.
    *
    * @throws IllegalArgumentException if {@code permitted} names something that is not a dev tool —
    *     a typo would otherwise silently widen or invert the fence it was meant to describe
@@ -742,6 +742,85 @@ class ArchitectureTest {
                   + " export time would make a picture depend on the internet being up");
 
   /**
+   * ADR 63: the census reads, and it cannot write either layer.
+   *
+   * <p>A dev-side tool, and its fence is the exporter's with one clause moved: {@code
+   * AffinityStore.put} and {@code updateRating} are named here, as they are for {@code ratings} and
+   * {@code recommend}, because this tool holds the whole score map and affinity is the one part of
+   * segue that cannot be regenerated from a source.
+   *
+   * <p><b>{@code export} is the one sibling this tool may reach, and that is a decision rather than
+   * an oversight.</b> The fold is what the sections count: {@code Census}'s components are the list
+   * and say which reads what — most take a {@code LogProjection} and nothing else, {@code
+   * ClaimCensus} takes the raw log rows beside it, and {@code TasteCensus} takes the score map read
+   * through {@code AffinityStore.readRatings} as well as both. There are two ways to have a fold:
+   * read {@code LogProjection}, or write a third one. {@code BothFoldsAgreeTest} exists because two
+   * folds of one log drifted, and {@code Equivalences.foldEndpoints} and {@code
+   * Retractions.survives} were both moved into {@code domain} to stop it recurring — so a census
+   * that disagreed with the export about how many nodes there are would be exactly the defect this
+   * repository has spent three issues preventing. The borrowed fence is bounded the way {@code rate
+   * → recommend} is bounded (ADR 46): {@link #theExporterOnlyReads} makes {@code export} read-only,
+   * so nothing reachable through it can write.
+   */
+  @ArchTest
+  static final ArchRule theCensusOnlyReads =
+      noClasses()
+          .that()
+          .resideInAPackage("..census..")
+          .should(
+              ArchConditions.accessTargetWhere(
+                      APPLIES_A_CLAIM
+                          .or(callTo("put", AffinityStore.class))
+                          .or(callTo("updateRating", AffinityStore.class)))
+                  .or(
+                      ArchConditions.dependOnClassesThat(
+                          JavaClass.Predicates.equivalentTo(IngestService.class)))
+                  .or(
+                      ArchConditions.dependOnClassesThat(
+                          JavaClass.Predicates.resideInAnyPackage(
+                              otherDevToolsAnd(List.of("census", "export"))))))
+          .because(
+              "ADR 63: counting is a read — the census never appends to the log, never writes the"
+                  + " graph, never writes a rating, and reaches exactly one sibling, export, so"
+                  + " that there is one fold of the log rather than two");
+
+  /**
+   * ADR 63: the census opens the two stores in one file, folds the log, and reaches nothing else.
+   *
+   * <p>No traversal, so no {@code tinker} and no {@code jena}; no replay, so no {@code ingest};
+   * nothing to serve, so no {@code mcp} and no {@code app}. {@code wikidata} is deliberately NOT
+   * banned, for the reason {@link #theExporterNeverSpeaksToANetwork} gives: {@code
+   * KindMapper.rederive} is a static table and no more a network call than {@code ClassLabels} is,
+   * and both {@code LogProjection} and {@code Equivalences.standIns} are driven by it. {@code
+   * musicbrainz} IS banned as a package, exactly as it is for the exporter — the census reads the
+   * source id {@code "musicbrainz"} as text off the log, which is the only thing the log holds, and
+   * importing the adapter would buy it nothing but a second HTTP client.
+   *
+   * <p>{@link #REACHES_A_NETWORK} is the clause that names no client, and it is here for issue
+   * #139's reason: a census is a pure function of one local file, and the entity a count is short
+   * of is exactly the row that makes fetching one look like an improvement.
+   */
+  @ArchTest
+  static final ArchRule theCensusOpensNothingElse =
+      noClasses()
+          .that()
+          .resideInAPackage("..census..")
+          .should()
+          .dependOnClassesThat(
+              JavaClass.Predicates.resideInAnyPackage(
+                      "..tinker..",
+                      "..jena..",
+                      "..ingest..",
+                      "..mcp..",
+                      "..app..",
+                      "..musicbrainz..")
+                  .or(ON_A_NETWORK_API)
+                  .or(REACHES_A_NETWORK))
+          .because(
+              "ADR 63: the census folds the log and counts what comes out — it needs no engine, no"
+                  + " replay and no network, and cannot become an MCP tool by accident");
+
+  /**
    * ADR 43: the ratings tool reads, and it cannot write either layer.
    *
    * <p>The third dev-side tool, and the one whose fence needs a clause no other rule in this file
@@ -976,18 +1055,26 @@ class ArchitectureTest {
    * are already rated and must not be dealt again, which is the resume mechanism {@code Deck}'s
    * class comment describes. Both readers are dev-side tools off the MCP surface, so the thing this
    * rule actually protects is unchanged.
+   *
+   * <p>Widened again by issue #227 (ADR 63): the census reports how many ratings sit at each score,
+   * and needs the same note-free map to do it. <b>The note-carrying reads are untouched</b> —
+   * {@link #onlyTheRatingsToolReadsEveryRating} keeps {@code readAll} to the listing tool and
+   * {@link #onlyTheRatingsToolReadsANote} keeps the accessor there — so what this widening admits
+   * is a {@code Map<String, Integer>} with nowhere to put a note, which is the same fence the
+   * recommender's own rule turns on. All three readers are dev-side tools off the MCP surface, so
+   * the thing this rule actually protects is unchanged.
    */
   @ArchTest
   static final ArchRule onlyTheRecommenderReadsEveryRating =
       noClasses()
           .that()
-          .resideOutsideOfPackages("..recommend..", "..rate..")
+          .resideOutsideOfPackages("..recommend..", "..rate..", "..census..")
           .should()
           .accessTargetWhere(callTo("readRatings", AffinityStore.class))
           .because(
-              "ADR 26 and issues #85 and #101: the score is ordinary data, and reading every score"
-                  + " at once is a dev-side tool's job — the recommender or the rating deck — rather"
-                  + " than a field on an MCP tool");
+              "ADR 26 and issues #85, #101 and #227: the score is ordinary data, and reading every"
+                  + " score at once is a dev-side tool's job — the recommender, the rating deck or"
+                  + " the census — rather than a field on an MCP tool");
 
   /**
    * Issue #101: the deck writes the taste layer and nothing else.
@@ -1088,22 +1175,28 @@ class ArchitectureTest {
   /**
    * ADR 46: the deck needs a log, an engine, the recommender's sweep and nothing else.
    *
-   * <p>The sixth tool's half of the fence every dev tool carries — {@link #seedNeverOpensAStore},
-   * {@link #theRatingsToolOpensNothingElse}, {@link #theRecommenderOpensNothingElse}, {@link
+   * <p>The deck's half of the fence every dev tool carries — {@link #seedNeverOpensAStore}, {@link
+   * #theRatingsToolOpensNothingElse}, {@link #theRecommenderOpensNothingElse}, {@link
    * #theRetractionToolOpensNothingElse} — and for the same reason: a dependency on a sibling lets
    * this tool inherit that sibling's fence instead of its own. It writes a rating and nothing else,
    * so reaching {@code retract} (which appends a world-fact claim) or {@code ratings} (which reads
    * every note) would each be a way around a rule this package is otherwise held to.
    *
-   * <p><b>{@code recommend} is deliberately NOT banned, and it is the only one of the thirty
-   * ordered pairs six dev tools make that is left open.</b> It is expressed as the second entry in
-   * this rule's {@code permitted} list rather than as an omission from a hand-written denylist,
-   * which is what makes it reviewable: the exception is the thing a reader has to justify. The
-   * candidate half of the deck is the recommender's own {@code CandidateSweep}, {@code Routes} and
-   * {@code Sweep}, so that a card's routes are the routes that tool would give for the same pair
-   * rather than a second implementation that can drift. ADR 46 argues that dependency and ADR 45
-   * moved {@code QidList} into {@code support} rather than let a shared reader create it by
-   * accident. It runs one way only: {@link #theRecommenderOpensNothingElse} bans the return trip.
+   * <p><b>{@code recommend} is deliberately NOT banned, and it is one of the two dependencies
+   * between dev tools that are left open — the other is {@code census → export} ({@link
+   * #theCensusOnlyReads}, ADR 63).</b> No arithmetic over the pairs is given here on purpose: the
+   * number of them changes with every tool the build registers, and it was already stale once.
+   * {@link #DEV_TOOL_PACKAGES} and {@link #otherDevToolsAnd} are the authority — each rule's {@code
+   * permitted} list is the whole of its exception, and {@code otherDevToolsAnd} throws on a name
+   * that is not a dev tool, so the two open pairs cannot quietly become three. It is expressed as
+   * the second entry in this rule's {@code permitted} list rather than as an omission from a
+   * hand-written denylist, which is what makes it reviewable: the exception is the thing a reader
+   * has to justify. The candidate half of the deck is the recommender's own {@code CandidateSweep},
+   * {@code Routes} and {@code Sweep}, so that a card's routes are the routes that tool would give
+   * for the same pair rather than a second implementation that can drift. ADR 46 argues that
+   * dependency and ADR 45 moved {@code QidList} into {@code support} rather than let a shared
+   * reader create it by accident. It runs one way only: {@link #theRecommenderOpensNothingElse}
+   * bans the return trip.
    *
    * <p><b>{@code java.net} is deliberately NOT banned either</b>, and this is the one dev tool that
    * could not carry that clause. Its whole shape is an HTTP server: {@code RateServer} binds an
@@ -1424,6 +1517,53 @@ class ArchitectureTest {
               "#179: retraction and owner-claim take the database from the --db they were typed"
                   + " with — support may hand them the default path inside a refusal sentence, and"
                   + " may not hand either of them a Path they could open");
+
+  /**
+   * ADR 63: the census has no default database either, and it is fenced separately from ADR 60's
+   * two claim tools.
+   *
+   * <p><b>Why a third rule rather than a wider one.</b> {@link #theClaimToolsHaveNoDefaultDatabase}
+   * and {@link #theClaimToolsTakeTheirDatabaseFromTheFlagAlone} are named for the tools that append
+   * a first-person claim, ADR 60 names both rules in its text and is immutable, and its
+   * consequences say in as many words that a third tool would have to be added by hand. Widening
+   * them would make two rule names describe something that is not a claim tool.
+   *
+   * <p><b>Why the census requires the flag at all, when nothing here writes.</b> ADR 60's central
+   * clause rather than its consequence: an agent's shell is initialised from the owner's profile
+   * and inherits {@code SEGUE_DB}, and this tool's output is the shape of the owner's whole graph
+   * and taste layer. Aggregates are publishable (ADR 51); whether to publish them is the owner's
+   * decision per invocation.
+   */
+  @ArchTest
+  static final ArchRule theCensusHasNoDefaultDatabase =
+      noClasses()
+          .that()
+          .resideInAPackage("..census..")
+          .should()
+          .dependOnClassesThat(JavaClass.Predicates.equivalentTo(DefaultDatabase.class))
+          .because(
+              "ADR 63: the census names its database on the command line — SEGUE_DB is inherited by"
+                  + " any shell started from the owner's profile, so it cannot stand in for a flag"
+                  + " typed per invocation");
+
+  /**
+   * The sibling of {@link #theCensusHasNoDefaultDatabase}, and the reason ADR 60 gives for having
+   * two: the first forbids a <em>name</em> and the second forbids the <em>capability</em>. {@code
+   * census} depends on {@code support.RequiredDatabase} for the refusal sentence, and that class
+   * calls {@code DefaultDatabase} itself — so a {@code Path}-returning method added there and wired
+   * in restores the default while the rule above stays green. Planted exactly that way for ADR 60,
+   * measured green; the same hole is the same hole here.
+   */
+  @ArchTest
+  static final ArchRule theCensusTakesItsDatabaseFromTheFlagAlone =
+      noClasses()
+          .that()
+          .resideInAPackage("..census..")
+          .should(ArchConditions.accessTargetWhere(A_PATH_TAKEN_OUT_OF_SUPPORT))
+          .because(
+              "ADR 63, on ADR 60's measurement: a fence that forbids a class name stops only the"
+                  + " lazy version — what has to be unavailable is any route from support to a"
+                  + " java.nio.file.Path");
 
   /**
    * The taste layer, by type rather than by package.
