@@ -270,7 +270,8 @@ entity, a merge of it onto a canonical id no source has claimed, an owner edge n
 id directly, and a retraction of the local id. `Equivalences.standIns` named nothing — the local no
 longer survives, so `localsOfMerges` filtered the merge out before `stands` was asked anything —
 `LogProjection` reported `danglingEdges() == 1` and carried on, and `GraphProjector` threw `replay
-failed at sequence 5`, `assertion references unknown entity … - upsert the node first`. The export
+failed at sequence 4`, `assertion references unknown entity … - upsert the node first` — sequence 4
+being the owner edge, the fourth of that log's five rows. The export
 looked correct and the application refused to start at the next restart, on rows
 [ADR 19](0019-assertion-log-source-of-truth.md) forbids deleting. Every row in that log is one the
 supported flow produces: `OwnRun` offers a merge's canonical id as a claimable endpoint the moment
@@ -361,3 +362,23 @@ applying the rule"* has been false since issue #92: that method asks `Retraction
 claim can name or rename anything, and cites this ADR as the precedent for doing so. Nothing in this
 issue depends on which of the two is right, and an ADR is not edited to match what the code became.
 Whether the ratings listing *should* honour retractions is a decision nobody has argued in writing.
+
+**Two more residuals, recorded rather than repaired.**
+
+- **A withdrawn edge still counts as a reference.** `Equivalences.referencedEndpoints` is built from
+  the *surviving* edges rather than the *folded* ones, so an edge that names an emptied canonical id
+  still keeps a **different** canonical id alive through the surviving-edge widening
+  [ADR 59](0059-owner-claims-as-a-third-layer.md)'s 2026-09-03 amendment added: a superseded
+  canonical whose stand-in was justified only by that edge keeps its stand-in after the edge is
+  gone. The result is a node with no edges in a `full` export. Replay is unaffected — a node
+  nothing names is exactly what boots — and this is the safe direction of the two, since the
+  opposite would take a node away from an edge that might still name it. Measured during the final
+  review of issue #224, on a log holding both shapes at once.
+- **Two legal logs still stop the boot replay, and neither is a regression.** A local id retracted
+  and then merged again onto a *different* canonical id leaves that second canonical with neither a
+  node nor a withdrawal, and an edge naming a local id that itself folds onto an emptied canonical
+  escapes the check in `Equivalences.namesARetractedStandIn`, which reads the claim's raw endpoints
+  before the fold resolves them. Both were measured throwing on `0783492` as well, so this
+  amendment neither introduced nor repaired them, and `OwnRun.declareMerge` refuses the merge that
+  would produce either — it reads only what the projection has minted and still survives. They are
+  filed as **issue #228** with both logs, rather than widened into this ruling on the way past.

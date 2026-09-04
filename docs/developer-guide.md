@@ -1619,6 +1619,19 @@ rateable — and an expansion is not identifiable from what the log records).
 It reaches **backwards only**, by position in the log. Claims appended after a retraction stand,
 which is why re-adding an entity is how it comes back and why there is no un-retract verb.
 
+**One consequence of a retraction is not positional, and the two statements have to be read
+together.** What a retraction *removes* is backwards-only, as above. What it *empties* is not. If
+the retracted id is a local id the owner had merged, the canonical id that merge stood in for is
+left with no node at all, and every edge naming that id is withdrawn from both projections whatever
+its position — including one claimed *after* the retraction, and including one an ingest run
+records later against that canonical QID, which is a real Wikidata id somebody can arrive at
+again. The reason is bootability: a node either exists in the folded graph or it does not, so an
+edge naming one that does not stops `GraphProjector` at the next boot on a row
+[ADR 19](adr/0019-assertion-log-source-of-truth.md) forbids deleting — and a backwards-only rule
+here would re-create the exact break the withdrawal exists to close, which was measured before it
+was ruled on. [ADR 44](adr/0044-retraction-as-a-new-claim.md)'s 2026-09-03 amendment argues why the
+two reaches differ.
+
 It does **not cascade**. Retract a wrongly-expanded group and the neighbours that expansion
 discovered stay behind as nodes with no edges. Their claims are not wrong, and cascading would
 delete neighbours that correct expansions also reached. An orphan node is invisible to `find_paths`
@@ -2279,8 +2292,13 @@ ends of a merge are not the same act:
   into anything.
 
 It reaches backwards only, by position in the log, so a claim appended after the retraction stands
-and re-adding is how something comes back. The rest is
-[Taking something back out](#taking-something-back-out).
+and re-adding is how something comes back — **except for the withdrawal in the first bullet, which
+is position-blind**. An edge naming a canonical id the retraction emptied is withdrawn whether it
+was claimed before the retraction or after it, because a node either exists in the folded graph or
+it does not, and an edge naming one that does not stops the boot replay. The pair belongs together:
+what a retraction *removes* is positional, what it *empties* is not.
+[ADR 44](adr/0044-retraction-as-a-new-claim.md)'s 2026-09-03 amendment argues why the two reaches
+differ. The rest is [Taking something back out](#taking-something-back-out).
 
 ### Four things this is not allowed to do
 
