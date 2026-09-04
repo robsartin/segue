@@ -45,6 +45,7 @@ class RetractRunTest {
   private static final String OTHER = "Q0900103";
   private static final String WORKING_TITLE = "Q00900201";
   private static final String CAUGHT_UP = "Q10000900301";
+  private static final String SECOND_CANONICAL = "Q10000900302";
 
   private AssertionLog log;
   private RetractRun run;
@@ -235,5 +236,48 @@ class RetractRunTest {
                 + " relationship are one withdrawn edge, not two - this report has to agree"
                 + " (#224)")
         .anySatisfy(note -> assertThat(note).contains(CAUGHT_UP).contains("1 edge"));
+  }
+
+  @Test
+  @DisplayName(
+      "an edge naming two ids this retraction newly strands is reported under both, and the"
+          + " distinct total across all lines matches the export's count")
+  void shouldReportADistinctTotalWhenOneEdgeNamesTwoNewlyStrandedIds() {
+    // WORKING_TITLE is merged onto CAUGHT_UP, then corrected onto SECOND_CANONICAL - two SameAs
+    // rows off the same local id, so retracting it strands BOTH canonical ids (retractedStandIns
+    // does not pick only the last-wins merge). The surviving edge names both directly, so it
+    // truthfully belongs to each id's own line - but LogProjection.withdrawnEdges counts it once,
+    // and the report's closing total has to agree with that, not with the sum of the per-id lines.
+    log.append(LocalEntity.minted(WORKING_TITLE, NodeKind.WORK, "a working title", NOW));
+    log.append(SameAs.declared(WORKING_TITLE, CAUGHT_UP, NOW));
+    log.append(SameAs.declared(WORKING_TITLE, SECOND_CANONICAL, NOW));
+    log.append(OwnerEdge.claimed(CAUGHT_UP, SECOND_CANONICAL, "INFLUENCED_BY", NOW));
+
+    run.run(options(WORKING_TITLE, "corrected twice, then retracted", true), notes::add);
+
+    assertThat(notes)
+        .as(
+            "each id's own line is true - the edge does name it - but the closing line has to"
+                + " give the DISTINCT total across all of them, matching the export (#224)")
+        .anySatisfy(note -> assertThat(note).contains(CAUGHT_UP).contains("1 edge"))
+        .anySatisfy(note -> assertThat(note).contains(SECOND_CANONICAL).contains("1 edge"))
+        .anySatisfy(note -> assertThat(note).contains("1 distinct edge"));
+  }
+
+  @Test
+  @DisplayName("a single newly-stranded id gets no closing distinct-total line")
+  void shouldNotAddAClosingLineWhenOnlyOneCanonicalIdIsNewlyStranded() {
+    log.append(new NodeAssertion(OTHER, NodeKind.PERSON, "Ines Marlow", SOURCE));
+    log.append(LocalEntity.minted(WORKING_TITLE, NodeKind.WORK, "a working title", NOW));
+    log.append(SameAs.declared(WORKING_TITLE, CAUGHT_UP, NOW));
+    log.append(OwnerEdge.claimed(OTHER, CAUGHT_UP, "INFLUENCED_BY", NOW));
+
+    run.run(options(WORKING_TITLE, "the mint was a mistake", true), notes::add);
+
+    assertThat(notes)
+        .as(
+            "only one id is newly stranded, so its own line already says the whole story and a"
+                + " closing total would just repeat it (#224)")
+        .noneMatch(note -> note.contains("distinct edge"));
   }
 }
