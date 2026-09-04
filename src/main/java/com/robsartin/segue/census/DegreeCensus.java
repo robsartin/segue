@@ -22,6 +22,16 @@ import java.util.Objects;
  * An empty graph reads as zero, distinguishable from every real reading because every floor is at
  * least one.
  *
+ * <p><b>{@code p50} and {@code FloorReading.medianDegree} are not the same statistic, and must not
+ * be compared as one number.</b> This is ADR 55's nearest rank; {@code FloorReading} takes {@code
+ * degrees.get(size / 2)}, the <em>upper</em> of the two middles, and keeps it — that decision was
+ * made for the candidate population and this one may not reach into it and change the recommender's
+ * reported figure. On an even population the two rules differ by one position: on {@code
+ * DegreeCensusTest}'s ten-node fixture, five zeros and five twos, this reads 0 and {@code
+ * FloorReading}'s rule would read 2. They describe different populations anyway — every node here,
+ * the surviving candidates there — so the two figures answer different questions and their
+ * difference is not a drift to reconcile.
+ *
  * <p><b>Isolated nodes are in the population</b>, at degree zero. "At or below the floor" against a
  * denominator that had already dropped what nothing reaches would be a different question.
  *

@@ -1656,6 +1656,12 @@ of the three appears anywhere. ADR 51 says its rule cannot be tested in general 
 this is the one artefact where it can be, and
 [ADR 63](adr/0063-a-read-only-census-of-the-graph.md) records why.
 
+That guarantee is about the census itself, not about everything a run can put on your terminal: a
+refusal names the database path you gave it, and a run that fails prints a stack trace like any
+other tool's — one out of the log decoder can carry a malformed row's own id text. Neither is a log
+line, so the test cannot see either; ADR 63 records the limit, and the answer is to read what you
+paste when a run has failed.
+
 One thing to expect when you do paste it: the lines arrive through SLF4J, and this tool has no
 Spring context, so `logback-spring.xml` is never loaded and Logback's own default layout goes in
 front of every line, on stdout. The prefix is the same on every line, so the aligned column survives
@@ -1665,7 +1671,9 @@ front of every line, on stdout. The prefix is the same on every line, so the ali
 
 `Census` names its sections, and the ones whose `of` takes a `LogProjection` and nothing else count
 that fold alone — the same fold `exportGraph` draws and, through `Equivalences` and `Retractions`,
-the same rules `GraphProjector` replays at boot. The rest read the raw log rows beside it. A census
+the same rules `GraphProjector` replays at boot. Of the rest, the claims section reads the raw log
+rows beside it, and the taste section the score map through `AffinityStore.readRatings` as well as
+both. A census
 with a fold of its own could disagree with the picture about how many nodes there are, which is the
 drift `BothFoldsAgreeTest` exists to catch. That is why `census` depends on `export`, the second of
 the two dependencies between dev tools.

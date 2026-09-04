@@ -45,9 +45,10 @@ Four properties are the decision, and each is enforced.
 
 ### Every value is an integer, and that is what makes ADR 51 testable here
 
-ADR 51's two reasons are true in general and **neither reaches one tool's output**. There is no
-framing to judge, because the census emits no free text from the data at all: every value is an
-integer and every label is a literal in `CensusReport`. And there is nothing to look up, because the
+ADR 51's two reasons are true in general and **neither reaches one tool's report**. There is no
+framing to judge, because the report carries no free text from the data at all: every value is an
+integer and every label is a literal in `CensusReport`. The property is over **the census the tool
+emits**, and not over everything a run can put on a terminal — see the limits below. And there is nothing to look up, because the
 assertion is over the *shape* of the text rather than over what a name means — no label from the
 fixture, no note from the fixture, and nothing matching `\bQ\d+\b` anywhere.
 
@@ -67,8 +68,9 @@ held by review. What is added is that one named artefact's compliance is now mec
 
 ### It counts the exporter's fold, so `census` depends on `export`
 
-Four of the six sections count nothing but the folded graph, and the other two read it beside the
-raw log rows. There are exactly two ways to have a fold: read `export.LogProjection`, or write a
+`Census`'s components are the sections and say which reads what: most count nothing but the folded
+graph, `ClaimCensus` reads the raw log rows beside it, and `TasteCensus` reads the score map through
+`AffinityStore.readRatings` as well as both. There are exactly two ways to have a fold: read `export.LogProjection`, or write a
 third one. `BothFoldsAgreeTest` exists because two folds of one log drifted;
 `Equivalences.foldEndpoints` and `Retractions.survives` were both moved into `domain` to make
 drifting impossible rather than merely detectable. A census that disagreed with the exported picture
@@ -224,6 +226,17 @@ entity, so no row can attribute a rating to one.
   level on one thread — so the aligned column survives being pasted, prefix and all. Stripping it would mean a logging
   configuration of this tool's own, which is a change to how the whole project logs (ADR 30) for a
   cosmetic gain.
+
+- **"Safe to paste" is a claim about the report, and a failed run is not the report.** Two paths put
+  text on the terminal that no assertion covers, and both are shared with `ExportCli` and
+  `RatingsCli` rather than new here: a refusal names the database path it was given, and an
+  exception prints a stack trace — `SqliteAssertionLog`'s "cannot decode assertion log row at
+  sequence N" over a cause such as `Qid`'s "qid must look like Q12345, got: …", which puts a
+  malformed row's own id text on screen. `CensusIsSafeToPasteTest` captures Logback events and a
+  thrown exception is not one, so the test cannot see either. The leak surface is a qid or a class
+  id — nothing in the decode path validates a label or a note — and the answer is the ordinary one:
+  read what you paste when a run has failed. Narrowing the guarantee is the decision; catching and
+  rewriting every adapter's exceptions for one dev tool is not.
 
 - **Nothing here makes the owner's numbers public.** The tool produces text that is *safe* to paste;
   what is pasted, and where, stays the owner's decision — which is the whole reason `--db` is typed

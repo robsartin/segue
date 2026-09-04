@@ -21,7 +21,13 @@ import java.util.TreeMap;
  * answering a different question. {@code CensusIsSafeToPasteTest}'s "no Q-shaped token anywhere"
  * assertion is what covers the one hazard that comes with printing stored text.
  *
- * <p>Sorted maps rather than {@code Map.copyOf}, for {@link NodeCensus}'s reason.
+ * <p><b>{@code TreeMap} rather than {@code Map.copyOf}</b>, which iterates in an order salted per
+ * JVM — so the report would come out differently on two runs over one unchanged log, against ADR
+ * 43. {@link NodeCensus} solves the same problem with an {@code EnumMap} because its keys are a
+ * fixed enum with a meaningful declaration order; these keys are arbitrary text — source ids and
+ * type codes off the log, and a corroboration count — so ascending is the only order available and
+ * it is a real one. What the report shows is pinned by {@code containsExactly} in {@code
+ * EdgeCensusTest}, not by {@code CensusReport}, which walks these maps and adds nothing.
  */
 public record EdgeCensus(
     Map<String, Integer> byType,

@@ -750,9 +750,12 @@ class ArchitectureTest {
    * segue that cannot be regenerated from a source.
    *
    * <p><b>{@code export} is the one sibling this tool may reach, and that is a decision rather than
-   * an oversight.</b> Four of the six sections are counts over the fold, and there are two ways to
-   * have a fold: read {@code LogProjection}, or write a third one. {@code BothFoldsAgreeTest}
-   * exists because two folds of one log drifted, and {@code Equivalences.foldEndpoints} and {@code
+   * an oversight.</b> The fold is what the sections count: {@code Census}'s components are the list
+   * and say which reads what — most take a {@code LogProjection} and nothing else, {@code
+   * ClaimCensus} takes the raw log rows beside it, and {@code TasteCensus} takes the score map read
+   * through {@code AffinityStore.readRatings} as well as both. There are two ways to have a fold:
+   * read {@code LogProjection}, or write a third one. {@code BothFoldsAgreeTest} exists because two
+   * folds of one log drifted, and {@code Equivalences.foldEndpoints} and {@code
    * Retractions.survives} were both moved into {@code domain} to stop it recurring — so a census
    * that disagreed with the export about how many nodes there are would be exactly the defect this
    * repository has spent three issues preventing. The borrowed fence is bounded the way {@code rate
@@ -1179,15 +1182,21 @@ class ArchitectureTest {
    * so reaching {@code retract} (which appends a world-fact claim) or {@code ratings} (which reads
    * every note) would each be a way around a rule this package is otherwise held to.
    *
-   * <p><b>{@code recommend} is deliberately NOT banned, and it is the only one of the thirty
-   * ordered pairs six dev tools make that is left open.</b> It is expressed as the second entry in
-   * this rule's {@code permitted} list rather than as an omission from a hand-written denylist,
-   * which is what makes it reviewable: the exception is the thing a reader has to justify. The
-   * candidate half of the deck is the recommender's own {@code CandidateSweep}, {@code Routes} and
-   * {@code Sweep}, so that a card's routes are the routes that tool would give for the same pair
-   * rather than a second implementation that can drift. ADR 46 argues that dependency and ADR 45
-   * moved {@code QidList} into {@code support} rather than let a shared reader create it by
-   * accident. It runs one way only: {@link #theRecommenderOpensNothingElse} bans the return trip.
+   * <p><b>{@code recommend} is deliberately NOT banned, and it is one of the two dependencies
+   * between dev tools that are left open — the other is {@code census → export} ({@link
+   * #theCensusOnlyReads}, ADR 63).</b> No arithmetic over the pairs is given here on purpose: the
+   * number of them changes with every tool the build registers, and it was already stale once.
+   * {@link #DEV_TOOL_PACKAGES} and {@link #otherDevToolsAnd} are the authority — each rule's {@code
+   * permitted} list is the whole of its exception, and {@code otherDevToolsAnd} throws on a name
+   * that is not a dev tool, so the two open pairs cannot quietly become three. It is expressed as
+   * the second entry in this rule's {@code permitted} list rather than as an omission from a
+   * hand-written denylist, which is what makes it reviewable: the exception is the thing a reader
+   * has to justify. The candidate half of the deck is the recommender's own {@code CandidateSweep},
+   * {@code Routes} and {@code Sweep}, so that a card's routes are the routes that tool would give
+   * for the same pair rather than a second implementation that can drift. ADR 46 argues that
+   * dependency and ADR 45 moved {@code QidList} into {@code support} rather than let a shared
+   * reader create it by accident. It runs one way only: {@link #theRecommenderOpensNothingElse}
+   * bans the return trip.
    *
    * <p><b>{@code java.net} is deliberately NOT banned either</b>, and this is the one dev tool that
    * could not carry that clause. Its whole shape is an HTTP server: {@code RateServer} binds an

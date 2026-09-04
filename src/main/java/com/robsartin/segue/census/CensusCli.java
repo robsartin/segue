@@ -17,8 +17,14 @@ import org.slf4j.LoggerFactory;
  * <p><b>The only dev-side tool whose whole output is aggregates.</b> ADR 51 draws the line — a
  * count over the owner's data may be published, an entity presented as the owner's may not — and
  * says in as many words that the line is held by review and nothing else. That is true in general
- * and false for one artefact: this tool emits no free text from the data at all, so {@code
- * CensusIsSafeToPasteTest} can hold it mechanically. See ADR 63.
+ * and false for one artefact: the census this tool emits carries no free text from the data at all,
+ * so {@code CensusIsSafeToPasteTest} can hold it mechanically. See ADR 63.
+ *
+ * <p><b>The claim is over the report, not over a failed run.</b> A refusal below names the path it
+ * was given, and an exception out of an adapter prints a stack trace like any other tool's — {@code
+ * SqliteAssertionLog} wrapping a malformed row can carry that row's own id text through its cause.
+ * Neither is a log line, so neither reaches that test; ADR 63 states the limit rather than leaving
+ * a reader to find it.
  *
  * <p><b>{@code --db} is required, and {@code SEGUE_DB} does not satisfy it.</b> Not ADR 60's
  * consequence — nothing here writes, and a wrong count costs a re-run — but ADR 60's central
