@@ -40,6 +40,11 @@ import java.util.Optional;
  * canonical id in between and one is merged twice with nothing naming it, so standing, superseded
  * and superseded-but-edge-referenced are each non-empty and different; one node's degree is exactly
  * ADR 57's floor and one is above it, so "at or below the floor" cannot pass with {@code &lt;}.
+ * <b>The one retraction here reaches {@link #GONE}, a node a SOURCE claimed, not the local side of
+ * a merge</b> — so the withdrawn-edge count this fixture pins is zero, which cannot distinguish
+ * "counts nothing" from "counts correctly." {@code
+ * EdgeCensusTest#shouldCountOneWithdrawnEdgeWhenARetractionEmptiesAMergesCanonicalId} builds its
+ * own small log for the case that reads non-zero (#227).
  */
 final class InventedCensus {
 
