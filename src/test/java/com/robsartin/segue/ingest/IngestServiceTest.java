@@ -8,6 +8,7 @@ import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.domain.OwnerEdge;
 import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.domain.Retraction;
 import com.robsartin.segue.port.AssertionLog;
@@ -27,7 +28,9 @@ import org.junit.jupiter.api.Test;
  *
  * <p>The ordering is the whole point (ADR 19). It is deliberately not atomic, and the direction of
  * that non-atomicity is chosen: if the graph write fails, the log is ahead and a restart replays
- * it. The reverse would lose the claim for good.
+ * it. The reverse would lose the claim for good. That argument assumes the graph write can
+ * eventually succeed; see {@link IngestService#record}'s caveat (#233) for the row where it cannot,
+ * exercised by {@code shouldRefuseASourcedEdgeItCannotApplyWhenRecordIsCalled} below.
  */
 class IngestServiceTest {
 
@@ -78,14 +81,32 @@ class IngestServiceTest {
   }
 
   @Test
-  @DisplayName("record refuses an edge it cannot apply rather than appending one it must keep")
-  void recordRefusesAnEdgeItCannotApply() {
+  @DisplayName(
+      "should refuse a sourced edge it cannot apply when record is called, rather than appending"
+          + " one it must keep")
+  void shouldRefuseASourcedEdgeItCannotApplyWhenRecordIsCalled() {
     // #233. This method used to be logLeadsTheGraph and asserted the opposite: that the log had
     // already kept a claim the caller was told had failed. The ORDERING that name described is
     // unchanged and is still asserted by liveAndReplayAgree and retractAppendsAndTouchesNoGraph;
     // what changed is that a claim which cannot survive the ordering never enters it.
     AssertionRecord dangling =
         new AssertionRecord("Q0404", "Q0405", "MEMBER_OF", null, null, WIKIDATA);
+
+    assertThatThrownBy(() -> ingest.record(dangling))
+        .isInstanceOf(UnknownEndpointException.class)
+        .hasMessageContaining("Q0404");
+
+    assertThat(log.readAll()).isEmpty();
+  }
+
+  @Test
+  @DisplayName("should refuse an owner edge it cannot apply when record is called")
+  void shouldRefuseAnOwnerEdgeItCannotApplyWhenRecordIsCalled() {
+    // #233 review. requireEveryEndpointIsInTheGraph's OwnerEdge arm (record() accepts one today -
+    // nothing in production sends it, but MergeWiringTest's sibling path does) had no test of its
+    // own; the AssertionRecord case above does not exercise it.
+    OwnerEdge dangling =
+        OwnerEdge.claimed("Q0404", "Q0405", "MEMBER_OF", Instant.parse("2026-08-31T20:00:00Z"));
 
     assertThatThrownBy(() -> ingest.record(dangling))
         .isInstanceOf(UnknownEndpointException.class)

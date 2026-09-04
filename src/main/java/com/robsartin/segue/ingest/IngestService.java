@@ -26,7 +26,8 @@ import java.util.Optional;
  * <p><b>Order matters and is not an accident.</b> The log is appended first, then the graph is
  * updated, and the two are deliberately not atomic. If the graph update fails, the log is ahead —
  * the recoverable direction, because a restart replays it. The reverse ordering would lose the
- * claim permanently and leave the log authoritative in name only.
+ * claim permanently and leave the log authoritative in name only. That argument assumes the graph
+ * update can eventually succeed; see {@link #record}'s caveat (#233) for the row where it cannot.
  */
 public final class IngestService {
 
@@ -80,9 +81,12 @@ public final class IngestService {
       // retraction in the log that the caller had been told did not happen.
       throw new IllegalArgumentException("a retraction is appended by retract(), not record()");
     }
-    requireEveryEndpointIsInTheGraph(assertion);
+    // Hoisted to one local (#233 review) so the gate and the apply below cannot spell this two
+    // ways that drift: both must ask the SAME equivalences the same question about this claim.
+    Equivalences equivalences = Equivalences.NONE;
+    requireEveryEndpointIsInTheGraph(assertion, equivalences);
     log.append(assertion);
-    apply(graph, merges, Equivalences.NONE, assertion);
+    apply(graph, merges, equivalences, assertion);
   }
 
   /**
@@ -345,9 +349,14 @@ public final class IngestService {
    *
    * <p>A fold that yields nothing needs no check: {@link #apply} returns false for it and reaches
    * the graph with nothing at all.
+   *
+   * @param equivalences the same value {@link #record} is about to hand {@link #apply} — hoisted to
+   *     one local at the call site (#233 review) so the two calls cannot ask a different question
+   *     about which endpoints have to exist.
    */
-  private void requireEveryEndpointIsInTheGraph(LoggedAssertion assertion) {
-    Optional<LoggedAssertion> folded = Equivalences.NONE.foldEndpoints(assertion);
+  private void requireEveryEndpointIsInTheGraph(
+      LoggedAssertion assertion, Equivalences equivalences) {
+    Optional<LoggedAssertion> folded = equivalences.foldEndpoints(assertion);
     if (folded.isEmpty()) {
       return;
     }
