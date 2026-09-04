@@ -394,6 +394,28 @@ tasks.register<JavaExec>("graphCensus") {
     outputs.upToDateWhen { false }
 }
 
+tasks.register<JavaExec>("evaluate") {
+    group = "application"
+    description =
+        "Holds out a deterministic slice of the PERSON and GROUP entities you rated highly, runs " +
+            "the recommender's own candidate sweep from what is left over a fixed grid of scorers " +
+            "and degree floors (`Setting.GRID` is the authority), and reports where the held-out " +
+            "entities land and where the ones you rated down would have. Aggregates only — no " +
+            "labels, no ids, no notes, no ratings — so the output is safe to paste. Reads only; " +
+            "needs no network. Changes no constant. See ADR 65. --db is required, and SEGUE_DB " +
+            "does not satisfy it. Write \$HOME and not ~ — a tilde does not expand inside double " +
+            "quotes. Example: ./gradlew evaluate --args=\"--db \$HOME/.segue/segue.db --known " +
+            "\$HOME/known.csv\""
+    mainClass.set("com.robsartin.segue.evaluate.EvaluateCli")
+    classpath = sourceSets["main"].runtimeClasspath
+    // sqlite-jdbc loads a native library, the same grant tasks.test makes.
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
+    // The whole graph is replayed into memory, and a real one is six figures of assertions.
+    maxHeapSize = "4g"
+    // Never up-to-date: the graph changes under it, and the point is to measure it now.
+    outputs.upToDateWhen { false }
+}
+
 spotless {
     java {
         googleJavaFormat(libs.versions.googleJavaFormat.get())

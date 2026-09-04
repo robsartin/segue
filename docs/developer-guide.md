@@ -341,6 +341,10 @@ graph TD
   evaluate --> recommend
   evaluate --> port
   evaluate --> support
+  evaluate --> ingest
+  evaluate --> sqlite
+  evaluate --> tinker
+  evaluate --> wikidata
 ```
 
 **What the diagram shows.** Dependencies point downward and never back up. `domain` sits at the
@@ -371,7 +375,7 @@ that `app` imports nothing from `domain`; that stopped being true in ADR 54**, b
 `WikidataMusicBrainzIdentity` validates a seed QID with `Qid.looksLikeAQid` before putting it in a
 SPARQL query, so the bridge in `app` holds one `domain` type.
 
-`seed`, `export`, `ratings`, `retract`, `recommend`, `rate`, `own` and `census` are the eight dev-side tools. None is
+`seed`, `export`, `ratings`, `retract`, `recommend`, `rate`, `own`, `census` and `evaluate` are the nine dev-side tools. None is
 reachable from the application — nothing imports any of them, and each is entered through its own
 `main` behind a Gradle `JavaExec` task — and their arrows are the interesting part, because each
 has a different relationship with the data and a different fence to match.
@@ -407,6 +411,12 @@ has a different relationship with the data and a different fence to match.
   it again — a third fold of one log is the drift `BothFoldsAgreeTest` exists to catch — and counts
   what comes out. It writes nothing, and `--db` is required
   ([ADR 63](adr/0063-a-read-only-census-of-the-graph.md)).
+- **`evaluate` reaches `sqlite`, `tinker`, `ingest`, `wikidata`, `support` and `recommend`, and is
+  the only dev-side tool that measures another one.** It replays the log once, hides a deterministic
+  fifth of what you rated highly, and runs `recommend`'s own `CandidateSweep` from what is left,
+  once per setting on a fixed grid — the third dependency between dev tools, after `rate → recommend`
+  and `census → export`, and deliberate for the same reason: a harness with a sweep of its own would
+  answer a question about itself. It writes nothing, and `--db` is required (ADR 65).
 
 Tools with opposite relationships to the store cannot share a package and keep any fence
 meaningful, which is why ADR 41 made the first two siblings, ADR 43 added a third rather than a
@@ -517,7 +527,7 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `theRecommenderOnlyReads` | `recommend` calling the three world-fact writes or either taste-layer write (`AffinityStore.put`, `updateRating`), or depending on `IngestService` at all | [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
 | `theRecommenderReadsRatingsAndNeverNotes` | `recommend` depending on `AffinityRecord` **as a type**, or calling `AffinityStore.find` or `readAll` — it may hold the store and call the note-free `readRatings`, and nothing that carries free text | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 39](adr/0039-affinity-capture-and-read.md), [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
 | `onlyTheRatingsToolReadsANote` | calling `AffinityRecord.note()` from outside `ratings` and `sqlite` — the score is ordinary data, the note is the owner's and is read on their own machine | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 43](adr/0043-listing-your-own-ratings.md) |
-| `onlyTheRecommenderReadsEveryRating` | calling `AffinityStore.readRatings` from outside `recommend`, `rate` **and `census`** — the note-free bulk read belongs to the three dev-side tools that weight, deal or count by it, and ADR 26 still pins the surface at six tools | [ADR 26](adr/0026-mcp-tool-surface.md), [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md), [ADR 63](adr/0063-a-read-only-census-of-the-graph.md) |
+| `onlyTheRecommenderReadsEveryRating` | calling `AffinityStore.readRatings` from outside `recommend`, `rate`, `census` **and `evaluate`** — the note-free bulk read belongs to the four dev-side tools that weight, deal, count or evaluate by it, and ADR 26 still pins the surface at six tools | [ADR 26](adr/0026-mcp-tool-surface.md), [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md), [ADR 63](adr/0063-a-read-only-census-of-the-graph.md), ADR 65 |
 | `theRecommenderOpensNothingElse` | `recommend` depending on `jena`, `mcp`, `app`, `java.net`, `javax.net` or every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`, so a new tool joins every fence at once) — `rate` depends on `recommend` by design, and this is what keeps that trip one-way | [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
 | `theRatingDeckWritesOnlyAffinity` | `rate` calling the three world-fact writes, or depending on `IngestService` **as a type** — the deck records what the owner thinks, never what the world says, and cannot route a claim through the one class allowed to write one | [ADR 46](adr/0046-the-rating-deck.md) |
 | `theRatingDeckNeverReadsANote` | `rate` calling `AffinityRecord.note()` — it writes the score and must not be able to display the note | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 46](adr/0046-the-rating-deck.md) |

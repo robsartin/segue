@@ -149,7 +149,8 @@ class ArchitectureTest {
    * fence exists it forbids the return edge, so no cycle can form.
    */
   static final List<String> DEV_TOOL_PACKAGES =
-      List.of("census", "export", "own", "rate", "ratings", "recommend", "retract", "seed");
+      List.of(
+          "census", "evaluate", "export", "own", "rate", "ratings", "recommend", "retract", "seed");
 
   /**
    * Every dev-tool package except the ones named, as {@code ..x..} patterns, then {@code
@@ -1067,18 +1068,24 @@ class ArchitectureTest {
    * is a {@code Map<String, Integer>} with nowhere to put a note, which is the same fence the
    * recommender's own rule turns on. All three readers are dev-side tools off the MCP surface, so
    * the thing this rule actually protects is unchanged.
+   *
+   * <p>Widened again by issue #239 (ADR 65): the evaluation harness splits, weights and reports by
+   * the same note-free map, and holding it off {@code readRatings} would mean re-deriving the
+   * owner's ratings from somewhere else. All four readers are dev-side tools off the MCP surface,
+   * so the thing this rule actually protects — ADR 26's six tools — is unchanged.
    */
   @ArchTest
   static final ArchRule onlyTheRecommenderReadsEveryRating =
       noClasses()
           .that()
-          .resideOutsideOfPackages("..recommend..", "..rate..", "..census..")
+          .resideOutsideOfPackages("..recommend..", "..rate..", "..census..", "..evaluate..")
           .should()
           .accessTargetWhere(callTo("readRatings", AffinityStore.class))
           .because(
-              "ADR 26 and issues #85, #101 and #227: the score is ordinary data, and reading every"
-                  + " score at once is a dev-side tool's job — the recommender, the rating deck or"
-                  + " the census — rather than a field on an MCP tool");
+              "ADR 26 and issues #85, #101, #227 and #239: the score is ordinary data, and reading"
+                  + " every score at once is a dev-side tool's job — the recommender, the rating"
+                  + " deck, the census or the evaluation harness — rather than a field on an MCP"
+                  + " tool");
 
   /**
    * Issue #101: the deck writes the taste layer and nothing else.
