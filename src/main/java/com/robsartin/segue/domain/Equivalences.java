@@ -648,10 +648,20 @@ public record Equivalences(
    * how that report and that count come to agree by construction rather than by two people counting
    * alike. Reading {@link #retractedStandIns} twice would put "what withdrawal means" in two
    * places, which is this class's own standing objection.
+   *
+   * <p><b>It asks about the endpoints the fold resolves, not the ones the claim wrote</b> (#228).
+   * An edge naming a merged local id whose merge points at an emptied canonical id is claimed
+   * against the same absent endpoint as one that names that id directly - the endpoint the fold
+   * would give it is the entity the retraction took away - so the raw read let the rule miss its
+   * own case: {@code [minted(L), merged(L to A), retract(L), merged(L to A), owned(WREN to L)]}
+   * threw {@code replay failed at sequence 6} on {@code a7c3455} while {@code retractedStandIns}
+   * already named {@code A}. Reading through {@link #canonical} costs nothing where no merge is
+   * involved, because that map answers with the id it was given.
    */
   public boolean namesARetractedStandIn(AssertionRecord claim) {
     Objects.requireNonNull(claim, "claim");
-    return retractedStandIns.contains(claim.fromQid()) || retractedStandIns.contains(claim.toQid());
+    return retractedStandIns.contains(canonical(claim.fromQid()))
+        || retractedStandIns.contains(canonical(claim.toQid()));
   }
 
   /**

@@ -169,7 +169,13 @@ class BothFoldsAgreeTest {
             minted(LAPSE, NodeKind.WORK, "a working title he took back"),
             merged(LAPSE, FORFEIT),
             owned(WREN, FORFEIT, "INFLUENCED_BY"),
-            retract(LAPSE));
+            retract(LAPSE),
+            // #228: the merge re-declared onto the id the retraction already emptied, and an owner
+            // edge naming the retracted LOCAL id after it. The edge reaches FORFEIT through
+            // canonicalByLocal rather than by name, which is the case Equivalences
+            // .namesARetractedStandIn missed while it read a claim's raw endpoints.
+            merged(LAPSE, FORFEIT),
+            owned(WREN, LAPSE, "INFLUENCED_BY"));
   }
 
   /** Everything {@link #ownedLog} names, including both canonical ids a merge introduces. */
@@ -291,8 +297,12 @@ class BothFoldsAgreeTest {
                   + " backwards along with everything else about it, the merge does not survive"
                   + " the retraction, the WREN -> FORFEIT edge is withdrawn because it names the"
                   + " stand-in the retraction emptied, and the retraction row itself is never"
-                  + " applied (#224). So it is every row in this log but those five")
-          .isEqualTo(29);
+                  + " applied (#224). So it is every row in this log but those five"
+                  + " The re-merge #228 added applies nothing to the graph either - its local side"
+                  + " does not survive the retraction, so standIn() finds no node to copy - but a"
+                  + " SameAs counts as applied whether or not it builds one, so the count moves by"
+                  + " one row and not by two: the owner edge beside it is withdrawn.")
+          .isEqualTo(30);
     }
   }
 
