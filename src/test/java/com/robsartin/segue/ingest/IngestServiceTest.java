@@ -299,7 +299,7 @@ class IngestServiceTest {
     assertThatThrownBy(
             () ->
                 IngestService.claim(log, SameAs.declared("Q00900042", "Q10000900120", CLAIMED_AT)))
-        .isInstanceOf(IllegalArgumentException.class)
+        .isInstanceOf(UnknownEndpointException.class)
         .hasMessageContaining("Q00900042")
         .hasMessageContaining("Q10000900120")
         .hasMessageContaining("holds no node");
@@ -341,7 +341,7 @@ class IngestServiceTest {
     assertThatThrownBy(
             () ->
                 IngestService.claim(log, SameAs.declared("Q00900042", "Q10000900121", CLAIMED_AT)))
-        .isInstanceOf(IllegalArgumentException.class)
+        .isInstanceOf(UnknownEndpointException.class)
         .hasMessageContaining("Q00900042")
         .hasMessageContaining("Q10000900121")
         .hasMessageContaining("holds no node");
@@ -362,7 +362,7 @@ class IngestServiceTest {
             () ->
                 IngestService.claim(
                     log, OwnerEdge.claimed("Q00900042", "Q0900199", "INFLUENCED_BY", CLAIMED_AT)))
-        .isInstanceOf(IllegalArgumentException.class)
+        .isInstanceOf(UnknownEndpointException.class)
         .hasMessageContaining("Q0900199")
         .hasMessageContaining("holds no node");
 
@@ -421,7 +421,7 @@ class IngestServiceTest {
     OwnerEdge edge = OwnerEdge.claimed("Q0900301", "Q0900302", "INFLUENCED_BY", CLAIMED_AT);
 
     assertThatThrownBy(() -> IngestService.claim(log, edge))
-        .isInstanceOf(IllegalArgumentException.class)
+        .isInstanceOf(UnknownEndpointException.class)
         .hasMessageContaining("Q0900301")
         .hasMessageContaining("Q0900302");
 
@@ -437,7 +437,7 @@ class IngestServiceTest {
     OwnerEdge edge = OwnerEdge.claimed("Q00900050", "Q10000900199", "INFLUENCED_BY", CLAIMED_AT);
 
     assertThatThrownBy(() -> IngestService.claim(log, edge))
-        .isInstanceOf(IllegalArgumentException.class)
+        .isInstanceOf(UnknownEndpointException.class)
         .hasMessageContaining("Q10000900199")
         .hasMessageContaining("merged onto")
         .hasMessageNotContaining("mint or seed");
@@ -455,7 +455,7 @@ class IngestServiceTest {
     OwnerEdge selfLoop = OwnerEdge.claimed("Q0900301", "Q0900301", "MEMBER_OF", CLAIMED_AT);
 
     assertThatThrownBy(() -> IngestService.claim(log, selfLoop))
-        .isInstanceOf(IllegalArgumentException.class)
+        .isInstanceOf(UnknownEndpointException.class)
         .hasMessageContaining("Q0900301")
         .extracting(thrown -> occurrences(thrown.getMessage(), "mint or seed it first"))
         .isEqualTo(1);

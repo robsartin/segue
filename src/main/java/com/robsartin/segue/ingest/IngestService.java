@@ -198,6 +198,17 @@ public final class IngestService {
    * <p><b>It reads the whole log.</b> The only caller is a dev-side tool that has already read it
    * once in the same run and appends exactly one row, so this is a second read per invocation
    * rather than per claim.
+   *
+   * <p><b>Both refusals throw #233's {@link UnknownEndpointException}, not a second type</b> (#228
+   * reconciliation). This gate and {@link #requireEveryEndpointIsInTheGraph} ask one question —
+   * does the projection this claim is about hold a node for the id it needs — of two different
+   * projections, so they share the type and each writes its own sentence: this one says "the fold
+   * holds no node for", because it asked the log's fold; {@code record}'s says "the graph holds no
+   * node for", because it asked the running graph. Naming the wrong witness is the misdescription
+   * that constructor's javadoc exists to prevent. The refusal is not an {@code
+   * IllegalArgumentException} any more, which is a NARROWING: {@code UnknownEndpointException}
+   * extends {@code IllegalStateException}, so a caller that was catching the former must now catch
+   * this. Nothing in this repository was.
    */
   private static void refuseAClaimTheFoldCouldNotHold(
       List<LoggedAssertion> logged, LoggedAssertion claim) {
@@ -206,8 +217,9 @@ public final class IngestService {
     if (claim instanceof SameAs merge) {
       Set<String> held = Equivalences.nodesTheFoldHolds(would);
       if (!held.contains(merge.localQid())) {
-        throw new IllegalArgumentException(
-            "the projection holds no node for "
+        throw new UnknownEndpointException(
+            List.of(merge.localQid()),
+            "the fold holds no node for "
                 + merge.localQid()
                 + ", so this merge would build no stand-in for "
                 + merge.canonicalQid()
@@ -251,21 +263,22 @@ public final class IngestService {
    */
   private static void refuseEndpointsNothingHolds(
       OwnerEdge owned, AssertionRecord folded, Set<String> held) {
+    List<String> unheld = new ArrayList<>();
     List<String> missing = new ArrayList<>();
-    describeIfMissing(owned.fromQid(), folded.fromQid(), held, missing);
+    describeIfMissing(owned.fromQid(), folded.fromQid(), held, unheld, missing);
     if (!folded.toQid().equals(folded.fromQid())) {
-      describeIfMissing(owned.toQid(), folded.toQid(), held, missing);
+      describeIfMissing(owned.toQid(), folded.toQid(), held, unheld, missing);
     }
     if (missing.isEmpty()) {
       return;
     }
-    throw new IllegalArgumentException(
-        "the projection holds no node for "
+    throw new UnknownEndpointException(
+        unheld,
+        "the fold holds no node for "
             + String.join("; ", missing)
             + " — the owner edge "
             + folded.edgeKey()
-            + " names an endpoint the fold holds no node for, which stops the boot replay, on a row"
-            + " ADR 19 forbids deleting (#228)");
+            + " names it, which stops the boot replay, on a row ADR 19 forbids deleting (#228)");
   }
 
   /**
@@ -285,10 +298,14 @@ public final class IngestService {
    * that does not apply.
    */
   private static void describeIfMissing(
-      String claimed, String folded, Set<String> held, List<String> missing) {
+      String claimed, String folded, Set<String> held, List<String> unheld, List<String> missing) {
     if (held.contains(folded)) {
       return;
     }
+    // The bare id goes to UnknownEndpointException.endpoints(), which is what a caller reads
+    // programmatically; the sentence below goes to the message. Kept as two lists rather than one
+    // parsed apart, so nothing has to split prose back into ids.
+    unheld.add(folded);
     String named = folded.equals(claimed) ? folded : folded + " (claimed against " + claimed + ")";
     if (Qid.isCanonicalSide(folded) && !Qid.isAllocatable(folded)) {
       missing.add(

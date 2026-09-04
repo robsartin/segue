@@ -22,18 +22,23 @@ import java.util.List;
  * only the first and silently repeat the same undercount; there is no singular accessor left to
  * reach for by habit.
  *
- * <p><b>The message text — "the graph holds no node for" — names {@code record}'s own precondition,
- * not a general one, and that is a real constraint on reusing this type.</b> {@code record} asks
- * the RUNNING graph, through {@code GraphStore.node}; issue #228's `claim` gate asks a different
- * projection — the LOG's fold ({@code Equivalences.nodesTheFoldHolds}), because {@code claim} has a
- * log and no graph view at all. Adopting this type for that refusal (the spec's reconciliation note
- * says it should) cannot mean reusing this constructor as-is: a message that says "the graph" while
- * the check asked the log would misdescribe what was asked, the exact class of bug ADR 27 exists to
- * keep out of a caller-facing string. The shape that avoids it is a second constructor — or a
- * parameterised witness phrase ("the graph holds no node for" / "the log holds no claim for")
- * passed in by the caller — not a second exception type; {@code ARefusedEdgeNeverReachesTheLogTest}
- * is the test file #228's own refusal test should extend, the way this issue's tests extend it
- * rather than duplicating {@code IngestServiceTest}'s ordering assertions.
+ * <p><b>Two constructors, because there are two witnesses, and the message has to name the right
+ * one</b> (#228). {@code record} asks the RUNNING graph, through {@code GraphStore.node}, and the
+ * first constructor below writes its message: <i>"the graph holds no node for"</i>. {@code
+ * IngestService.claim} asks a different projection — the LOG's fold ({@code
+ * Equivalences.nodesTheFoldHolds}), because {@code claim} holds a log and no graph view at all —
+ * and says <i>"the fold holds no node for"</i>. Reusing the first constructor there would say "the
+ * graph" about a check that asked the log, the exact class of caller-facing misdescription ADR 27
+ * exists to keep out. What is shared is the TYPE and {@link #endpoints()}, which is the part a
+ * caller reads programmatically; the sentence is the gate's own.
+ *
+ * <p><b>The second constructor takes a built message rather than a witness phrase, and that is a
+ * judgement worth stating.</b> A phrase parameter would have forced {@code claim}'s two refusals
+ * into this one's skeleton, and they do not fit it: #228's reviews settled per-endpoint repair
+ * advice on that path (an id shaped like a merge's canonical side can only be merged onto, never
+ * minted or seeded), and the merge arm refuses a claim that names no edge at all. One skeleton for
+ * three shapes would have to lose one of them. So the type carries the contract and the caller
+ * carries the prose — and this class is still the only refusal type either gate throws.
  *
  * <p><b>The repair it names is the one that is correct AT THIS MOMENT, and only at this moment.</b>
  * Before the append, recording the node claim first fixes it. After the append it does not: replay
@@ -61,8 +66,24 @@ public final class UnknownEndpointException extends IllegalStateException {
   }
 
   /**
-   * Every endpoint nothing has claimed, in the order checked ({@code fromQid} then {@code toQid}),
-   * so a caller can name all of them without parsing the message.
+   * The log-fold witness (#228): {@code IngestService.claim} has already written the sentence,
+   * because its repair advice is per-id-shape and its merge arm refuses a claim that names no edge.
+   *
+   * @param endpoints the ids the fold holds no node for, for {@link #endpoints()}
+   * @param message the refusal, in the fold's own words rather than the graph's
+   */
+  UnknownEndpointException(List<String> endpoints, String message) {
+    super(message);
+    this.endpoints = List.copyOf(endpoints);
+  }
+
+  /**
+   * Every id the witnessing projection holds no node for, in the order checked ({@code fromQid}
+   * then {@code toQid} for an edge), so a caller can name all of them without parsing the message.
+   *
+   * <p>On {@code IngestService.claim}'s merge arm (#228) the one id here is the merge's LOCAL side
+   * — the id the fold holds no node for, which is why the canonical side would end up an endpoint
+   * no later edge could land on.
    */
   public List<String> endpoints() {
     return endpoints;
