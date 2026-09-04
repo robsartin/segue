@@ -267,6 +267,26 @@ class GraphProjectorTest {
     }
   }
 
+  @Test
+  @DisplayName("should count rows, not endpoint sightings, when one row names two unheld entities")
+  void shouldCountRowsNotEndpointSightingsWhenOneRowNamesTwoUnheldEntities() {
+    // Folded in from task 6's review (#228). The count came from the LINE list, which carries one
+    // line per unheld endpoint, so a single edge with both ends unheld announced "2 row(s)" and
+    // sent an operator looking for a second row that does not exist. Both lines still belong in
+    // the list - each names an id he has to repair - but the headline counts rows.
+    try (AssertionLog log = SqliteAssertionLog.inMemory();
+        TinkerGraphStore store = new TinkerGraphStore()) {
+      log.append(new AssertionRecord("Q0900301", "Q0900302", "MEMBER_OF", null, null, WIKIDATA));
+
+      assertThatThrownBy(() -> GraphProjector.project(log, store, IdentityMerge.NONE))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("1 row(s)")
+          .extracting(thrown -> lines(thrown, "which no node stands for"))
+          .as("both endpoints are still named; it is the count that was wrong")
+          .isEqualTo(2L);
+    }
+  }
+
   private static long lines(Throwable thrown, String containing) {
     return thrown.getMessage().lines().filter(line -> line.contains(containing)).count();
   }

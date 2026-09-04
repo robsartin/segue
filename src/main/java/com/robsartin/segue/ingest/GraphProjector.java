@@ -12,6 +12,7 @@ import com.robsartin.segue.port.GraphStore;
 import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.wikidata.KindMapper;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -144,7 +145,11 @@ public final class GraphProjector {
    * the same codebase; {@code GraphStoreContract} pins both halves for both engines. What this
    * still adds over the store is the row, the count and the list. A merge is the other repair that
    * works, and works for a reason worth stating: its stand-in is built before the replay loop
-   * starts, so it reaches a row earlier in the log than the merge itself.
+   * starts, so it reaches a row earlier in the log than the merge itself. The message names it with
+   * a caveat, added in #228's reconciliation: a merge is a claim that two ids are the same thing,
+   * and everything downstream — the ratings it carries, the edges it folds — follows that claim.
+   * Offering it as a way to make a boot succeed, with nothing said about it being true, invites an
+   * operator to assert an identity he does not mean in order to start a server.
    *
    * <p><b>Before anything is applied, and reporting every row rather than the first.</b> The store
    * is untouched when this throws, so a refused boot leaves no half-built graph; and an operator
@@ -160,6 +165,9 @@ public final class GraphProjector {
       List<LoggedAssertion> assertions, Retractions retractions, Equivalences equivalences) {
     Set<String> held = Equivalences.nodesTheFoldHolds(assertions);
     List<String> rows = new ArrayList<>();
+    // Counted separately from the lines, because one row with both ends unheld earns two lines
+    // and is still one row to repair (#228, task 6 review).
+    Set<Integer> offending = new LinkedHashSet<>();
     for (int i = 0; i < assertions.size(); i++) {
       LoggedAssertion assertion = assertions.get(i);
       if (!retractions.survives(i, assertion)) {
@@ -176,22 +184,26 @@ public final class GraphProjector {
         // missing an endpoint.
         continue;
       }
-      describe(rows, i + 1, claimed.get(), asEdge(kept.get()).orElseThrow(), held);
+      if (describe(rows, i + 1, claimed.get(), asEdge(kept.get()).orElseThrow(), held)) {
+        offending.add(i + 1);
+      }
     }
     if (rows.isEmpty()) {
       return;
     }
     throw new IllegalStateException(
         "replay refused: "
-            + rows.size()
+            + offending.size()
             + " row(s) name an entity no node stands for.\n"
             + String.join("\n", rows)
             + "\nNothing is deleted (ADR 19). To repair: retract the endpoint, which withdraws the"
             + " edge under ADR 44 without deleting anything. Appending a node claim for the named"
             + " id does NOT repair it — replay is positional, so a claim later than the row leaves"
             + " the boot failing at that same sequence. A merge whose local side the projection"
-            + " does hold repairs it too, because the stand-in it builds is created before replay"
-            + " begins. See ADR 44, ADR 59 and issue #228.");
+            + " does hold repairs it too — if the equivalence is one you actually mean, because"
+            + " it says the two ids are the same thing and every rating and edge follows it."
+            + " It works because the stand-in it builds is created before replay begins."
+            + " See ADR 44, ADR 59 and issue #228.");
   }
 
   /**
@@ -214,15 +226,22 @@ public final class GraphProjector {
    * <p>How many entities the folded edge names is {@link AssertionRecord#endpoints()}, in {@code
    * domain} since #228's reconciliation: a self-loop is one thing to repair, not two, and both of
    * {@code IngestService}'s gates read that same rule rather than a copy of it.
+   *
+   * @return whether this row earned any line at all, so the caller can count ROWS. One row with
+   *     both ends unheld earns two lines and is still one row; counting the lines announced "2
+   *     row(s)" for it and sent an operator looking for a row that does not exist (#228, task 6
+   *     review).
    */
-  private static void describe(
+  private static boolean describe(
       List<String> rows,
       int sequence,
       AssertionRecord claimed,
       AssertionRecord folded,
       Set<String> held) {
+    boolean any = false;
     for (String endpoint : folded.endpoints()) {
       if (!held.contains(endpoint)) {
+        any = true;
         rows.add(
             "  sequence "
                 + sequence
@@ -233,6 +252,7 @@ public final class GraphProjector {
                 + ", which no node stands for");
       }
     }
+    return any;
   }
 
   /** A node claim with today's kind; anything else unchanged. */
