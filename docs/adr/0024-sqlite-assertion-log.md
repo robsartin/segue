@@ -130,11 +130,11 @@ sequence 4`, wrapping `assertion references unknown entity … - upsert the node
 **The witness that would see it is the log's fold, and it costs too much to ask per claim.**
 `AssertionLog` offers one read, `readAll`, and the fold rules are computed over the whole list.
 Measured on a synthetic log of 131,000 rows in a temp file — about the size this log has reached —
-`readAll` took 407 ms and the fold's own passes 116 ms. `segue.expand.max-new-edges` defaults to 200
-and an expansion records once per edge and once more per neighbour a source described, so a single
-`expand_entity` would pay that half-second up to four hundred times, and would go on paying more of
-it as the log grows. Issue #228 asks the same question of the same method on the owner path and can
-afford to, because its caller is a dev tool that appends one row per invocation.
+`readAll` took 407 ms and the fold's own passes 116 ms. `segue.expand.max-new-edges` defaulted to 200
+when this was measured, and an expansion records once per edge and once more per neighbour a source
+described, so a single `expand_entity` would pay that half-second up to four hundred times, and would
+go on paying more of it as the log grows. Issue #228 asks the same question of the same method on the
+owner path and can afford to, because its caller is a dev tool that appends one row per invocation.
 
 **And reaching this at all takes two writers on one database, which the consequence above already
 says is not supported.** Nothing inside the server can append a retraction — the MCP surface has no
