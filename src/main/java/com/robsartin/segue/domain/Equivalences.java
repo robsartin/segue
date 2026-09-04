@@ -480,6 +480,28 @@ public record Equivalences(
   }
 
   /**
+   * {@link #nodesTheFoldHolds(List)}'s own answer, for a caller that has already computed the
+   * stand-in id set — {@link #standIns(List, UnaryOperator, Equivalences)}'s key set under the real
+   * re-derivation, not only {@link UnaryOperator#identity()} — so it need not walk {@link
+   * #standIns} a second time under {@code identity()} to ask this.
+   *
+   * <p>A stand-in key set built under the real re-derivation is the same set the log-taking form
+   * computes under {@code identity()}: {@link #retractedStandIns}' own javadoc already relies on
+   * this, and {@code EquivalencesTest.shouldNameTheSameCanonicalIdsWhateverKindTheFoldDerives} is
+   * what pins it. {@code
+   * EquivalencesTest.shouldNameTheSameNodesWhenHandedTheStandInIdsItWouldCompute} pins this
+   * overload to the log-taking form's own answer.
+   *
+   * @param standInIds the stand-in id set this fold holds — {@link #standIns(List, UnaryOperator,
+   *     Equivalences)}'s key set for this log, under whichever re-derivation the calling fold uses
+   */
+  public static Set<String> nodesTheFoldHolds(List<LoggedAssertion> log, Set<String> standInIds) {
+    Objects.requireNonNull(log, "log");
+    Objects.requireNonNull(standInIds, "standInIds");
+    return Collections.unmodifiableSet(nodesHeld(log, standInIds));
+  }
+
+  /**
    * {@link #nodesTheFoldHolds}' walk, over a stand-in key set the caller has already decided.
    *
    * <p>Separate from the public method for one caller: {@link #retractedStandIns}' own computation

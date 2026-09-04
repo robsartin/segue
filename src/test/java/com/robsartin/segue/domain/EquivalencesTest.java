@@ -732,6 +732,21 @@ class EquivalencesTest {
         .isEqualTo(Equivalences.standIns(log, AS_CLAIMED));
   }
 
+  @Test
+  @DisplayName("the nodes the fold holds are the same when the stand-in ids are handed in")
+  void shouldNameTheSameNodesWhenHandedTheStandInIdsItWouldCompute() {
+    List<LoggedAssertion> log = foldedLog();
+
+    assertThat(Equivalences.nodesTheFoldHolds(log, Equivalences.standIns(log, AS_CLAIMED).keySet()))
+        .as(
+            "nodesTheFoldHolds(log) computes that key set itself; the overload lets a caller"
+                + " that already has it skip a second standIns walk, and must answer the same")
+        .isEqualTo(Equivalences.nodesTheFoldHolds(log));
+    assertThat(Equivalences.nodesTheFoldHolds(log))
+        .as("and it names something, so the comparison above is not comparing two empty sets")
+        .isNotEmpty();
+  }
+
   private static AssertionRecord edge(String from, String to) {
     return new AssertionRecord(
         from, to, "INFLUENCED_BY", null, null, new Provenance("invented", "invented:1", WHEN, 1.0));
