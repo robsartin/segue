@@ -411,8 +411,9 @@ withdraws an edge naming an emptied canonical id (this ADR's #224 rule), and it 
 whose two ends a merge brought onto the same id, since an equivalence does not make a thing relate
 to itself ([ADR 59](0059-owner-claims-as-a-third-layer.md), #178). Both claim nothing in the
 projection, so neither keeps a superseded stand-in alive. Reading only the withdrawal arm left the
-same orphan reachable through a self-loop; the reference set asks `foldEndpoints` for its whole
-answer instead. The wording of the widening this narrows is
+same orphan reachable through a self-loop; the reference set re-asks both of `foldEndpoints`'s own
+reasons for yielding nothing — withdrawal and collapse — inline, rather than delegating to it. The
+wording of the widening this narrows is
 [ADR 59](0059-owner-claims-as-a-third-layer.md)'s own, and its 2026-09-04 amendment corrects it
 there.
 

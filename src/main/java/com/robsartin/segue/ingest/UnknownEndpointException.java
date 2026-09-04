@@ -4,8 +4,8 @@ import com.robsartin.segue.domain.AssertionRecord;
 import java.util.List;
 
 /**
- * A claim refused BEFORE the append, because the projection it is about holds no node for one or
- * both of its endpoints (#233).
+ * A claim refused BEFORE the append, because the projection it is about holds no node for an id the
+ * row names (#233).
  *
  * <p><b>Named rather than a plain {@link IllegalStateException}, for one caller's sake.</b> {@code
  * SegueService.expandEntity} has to tell this condition apart from a genuine store failure, a log

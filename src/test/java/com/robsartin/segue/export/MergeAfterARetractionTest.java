@@ -161,7 +161,8 @@ class MergeAfterARetractionTest {
           .hasMessageContaining("sequence 6")
           .hasMessageContaining(RESUMED)
           .hasMessageContaining("no node stands for")
-          .hasMessageContaining("retract the endpoint");
+          .hasMessageContaining("retract the endpoint")
+          .hasMessageContaining("actually mean");
     }
   }
 

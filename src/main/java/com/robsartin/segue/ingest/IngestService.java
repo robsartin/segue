@@ -503,12 +503,13 @@ public final class IngestService {
    *
    * <p><b>This is the store's own precondition, asked one step earlier.</b> {@code
    * TinkerGraphStore.requireVertex} and {@code JenaGraphStore.requireKnown} both throw {@code
-   * "assertion references unknown entity … - upsert the node first"} for exactly this case, and
+   * "assertion references unknown entity … - upsert the node first …"} for exactly this case, and
    * {@code GraphStoreContract} pins the pair as an agreed contract rather than one engine's habit.
-   * Neither is changed: a store must keep refusing whatever a producer does. What this adds is that
-   * the refusal now happens while it is still free. ADR 24's ordering — log first, then graph — is
-   * untouched and so is its argument; see that ADR's 2026-09-04 amendment for what the argument
-   * does NOT cover.
+   * Both still throw the same exception type: #228 qualified their message to also name the
+   * retraction repair once a log already carries the row, but a store must keep refusing whatever a
+   * producer does. What this adds is that the refusal now happens while it is still free. ADR 24's
+   * ordering — log first, then graph — is untouched and so is its argument; see that ADR's
+   * 2026-09-04 amendment for what the argument does NOT cover.
    *
    * <p><b>It asks {@link Equivalences#foldEndpoints}, the same call {@link #apply} is about to
    * make</b>, rather than reading {@code fromQid} and {@code toQid} off the claim. The two must not
