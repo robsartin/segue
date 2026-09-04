@@ -1267,6 +1267,90 @@ class ArchitectureTest {
                   + " an MCP tool by accident");
 
   /**
+   * ADR 65: measuring the recommender is a read.
+   *
+   * <p>The same fence {@link #theRecommenderOnlyReads} carries, on the tool that measures it. A
+   * harness that could write would be able to change the thing it is reporting on, which is the one
+   * failure mode a calibration tool cannot have.
+   */
+  @ArchTest
+  static final ArchRule theEvaluationHarnessOnlyReads =
+      noClasses()
+          .that()
+          .resideInAPackage("..evaluate..")
+          .should(
+              ArchConditions.accessTargetWhere(
+                      APPLIES_A_CLAIM
+                          .or(callTo("put", AffinityStore.class))
+                          .or(callTo("updateRating", AffinityStore.class)))
+                  .or(
+                      ArchConditions.dependOnClassesThat(
+                          JavaClass.Predicates.equivalentTo(IngestService.class))))
+          .because(
+              "ADR 65: measuring the recommender is a read — the harness never appends to the log,"
+                  + " never writes the graph, never writes a rating, and cannot reach the one class"
+                  + " that is allowed to");
+
+  /**
+   * ADR 65: the harness needs a log, an engine and the recommender, and nothing else.
+   *
+   * <p><b>{@code recommend} is the permitted sibling, and it is the third such exception this
+   * project has</b> — after {@code rate → recommend} (ADR 46) and {@code census → export} (ADR 63).
+   * It is the whole design: the harness measures the shipped {@code CandidateSweep}, and a harness
+   * with a walk of its own would answer a question about itself. It runs one way only — {@link
+   * #theRecommenderOpensNothingElse} bans the return trip, over {@link #DEV_TOOL_PACKAGES}, from
+   * the moment {@code evaluate} joins that list.
+   *
+   * <p>{@code java.net} because a measurement is a pure function of one local file; {@code jena} as
+   * the reference adapter nothing outside the bake-off reaches; {@code tinker} deliberately not,
+   * because the throwaway projection is a {@code TinkerGraphStore} exactly as the recommender's is.
+   */
+  @ArchTest
+  static final ArchRule theEvaluationHarnessOpensNothingElse =
+      noClasses()
+          .that()
+          .resideInAPackage("..evaluate..")
+          .should()
+          .dependOnClassesThat()
+          .resideInAnyPackage(
+              otherDevToolsAnd(
+                  List.of("evaluate", "recommend"),
+                  "..jena..",
+                  "..mcp..",
+                  "..app..",
+                  "java.net..",
+                  "javax.net.."))
+          .because(
+              "ADR 65: the harness replays one local log into one in-memory graph and sweeps it"
+                  + " once per setting, offline — it needs no second engine, no network and no"
+                  + " sibling tool but the recommender, whose sweep it exists to measure");
+
+  /**
+   * ADR 65 on issue #85's line: the harness reads the score and cannot read the note.
+   *
+   * <p>The same shape as {@link #theRecommenderReadsRatingsAndNeverNotes}, and it has to be: this
+   * tool reads more of the taste layer than any other except the listing tool — every score, twice
+   * over, to split it and to weight what is left. {@code AffinityRecord} unnameable, {@code find}
+   * and {@code readAll} unreachable, {@code readRatings} allowed.
+   */
+  @ArchTest
+  static final ArchRule theEvaluationHarnessReadsRatingsAndNeverNotes =
+      noClasses()
+          .that()
+          .resideInAPackage("..evaluate..")
+          .should(
+              ArchConditions.dependOnClassesThat(
+                      JavaClass.Predicates.equivalentTo(AffinityRecord.class))
+                  .or(
+                      ArchConditions.accessTargetWhere(
+                          callTo("find", AffinityStore.class)
+                              .or(callTo("readAll", AffinityStore.class)))))
+          .because(
+              "ADR 65 on issue #85's line: the harness splits and weights by the score and cannot"
+                  + " reach the note — readRatings returns a map of qid to rating, and the two"
+                  + " reads that carry free text stay out of this package");
+
+  /**
    * ADR 44: the retraction tool writes exactly one thing, and cannot write anything else.
    *
    * <p>A dev-side tool, and the first one that <b>writes</b> - which is why its fence is shaped
@@ -1573,6 +1657,43 @@ class ArchitectureTest {
           .should(ArchConditions.accessTargetWhere(A_PATH_TAKEN_OUT_OF_SUPPORT))
           .because(
               "ADR 63, on ADR 60's measurement: a fence that forbids a class name stops only the"
+                  + " lazy version — what has to be unavailable is any route from support to a"
+                  + " java.nio.file.Path");
+
+  /**
+   * ADR 65 on ADR 60's clause: the harness names its database on the command line.
+   *
+   * <p>A fourth rule rather than a wider one, for {@link #theCensusHasNoDefaultDatabase}'s reason:
+   * ADR 60's two are named for the claim tools, ADR 60 is immutable, and its consequences say a
+   * further tool joins by hand.
+   */
+  @ArchTest
+  static final ArchRule theEvaluationHarnessHasNoDefaultDatabase =
+      noClasses()
+          .that()
+          .resideInAPackage("..evaluate..")
+          .should()
+          .dependOnClassesThat(JavaClass.Predicates.equivalentTo(DefaultDatabase.class))
+          .because(
+              "ADR 65: the harness names its database on the command line — SEGUE_DB is inherited"
+                  + " by any shell started from the owner's profile, so it cannot stand in for a"
+                  + " flag typed per invocation");
+
+  /**
+   * The sibling of {@link #theEvaluationHarnessHasNoDefaultDatabase}, forbidding the capability
+   * where that one forbids the name — the gap ADR 60 measured and {@link
+   * #theCensusTakesItsDatabaseFromTheFlagAlone} repeats. {@code evaluate} depends on {@code
+   * support.RequiredDatabase} for the refusal sentence, and that class calls {@code
+   * DefaultDatabase} itself.
+   */
+  @ArchTest
+  static final ArchRule theEvaluationHarnessTakesItsDatabaseFromTheFlagAlone =
+      noClasses()
+          .that()
+          .resideInAPackage("..evaluate..")
+          .should(ArchConditions.accessTargetWhere(A_PATH_TAKEN_OUT_OF_SUPPORT))
+          .because(
+              "ADR 65, on ADR 60's measurement: a fence that forbids a class name stops only the"
                   + " lazy version — what has to be unavailable is any route from support to a"
                   + " java.nio.file.Path");
 

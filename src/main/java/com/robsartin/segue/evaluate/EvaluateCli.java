@@ -41,8 +41,9 @@ import org.slf4j.LoggerFactory;
  * line may not carry. Nor does it say which database it read.
  *
  * <p><b>It reads ratings and cannot read a note</b>, exactly as {@code RecommendCli} does and under
- * a fence of the same shape: {@code theEvaluationHarnessReadsRatingsAndNeverNotes}. This is the
- * only class in the package that touches the store.
+ * a fence of the same shape: {@code
+ * ArchitectureTest.theEvaluationHarnessReadsRatingsAndNeverNotes}. This is the only class in the
+ * package that touches the store.
  */
 public final class EvaluateCli {
 

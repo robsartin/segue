@@ -41,8 +41,9 @@ import java.util.function.ToDoubleFunction;
  * consequences record what a single recommendation run costs against the real graph; do not
  * re-project per setting.
  *
- * <p><b>It reads and cannot write.</b> A fence landing with a later task in this series forbids
- * this package the three world-fact writes, both taste-layer writes and {@code IngestService}.
+ * <p><b>It reads and cannot write.</b> {@code ArchitectureTest.theEvaluationHarnessOnlyReads}
+ * forbids this package the three world-fact writes, both taste-layer writes and {@code
+ * IngestService}.
  */
 public final class EvaluateRun {
 
