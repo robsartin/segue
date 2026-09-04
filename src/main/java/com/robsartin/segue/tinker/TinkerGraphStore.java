@@ -116,6 +116,19 @@ public final class TinkerGraphStore implements GraphStore {
         .tryNext();
   }
 
+  /**
+   * The last line of defence, and its message names TWO moments deliberately (#228).
+   *
+   * <p>"Upsert the node first" is right at the moment this throws on the live path: the edge is not
+   * written down yet, {@code IngestService.record} refused it before the append (#233), and
+   * claiming the node is what lets the caller try again. It is wrong for a log that already carries
+   * the row, which is the case that reaches here at BOOT: replay is positional, so a node claim
+   * appended after the edge still leaves the boot failing at the edge's own sequence number, and
+   * the repair is to retract the endpoint (ADR 44). Without the second half this string and {@code
+   * GraphProjector}'s boot diagnosis give an operator opposite advice about the same id, from the
+   * same codebase — #228's Task 6 review found exactly that. {@code GraphStoreContract} pins both
+   * halves, so the two engines cannot drift apart on it either.
+   */
   private Vertex requireVertex(String qid) {
     return g.V()
         .has(ENTITY, P_QID, qid)
@@ -123,7 +136,11 @@ public final class TinkerGraphStore implements GraphStore {
         .orElseThrow(
             () ->
                 new IllegalStateException(
-                    "assertion references unknown entity " + qid + " - upsert the node first"));
+                    "assertion references unknown entity "
+                        + qid
+                        + " - upsert the node first. If a log ALREADY carries this row,"
+                        + " that does not repair it: replay is positional, so retract the"
+                        + " endpoint instead (ADR 44, #228)"));
   }
 
   // ---- reads ------------------------------------------------------------

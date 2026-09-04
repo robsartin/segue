@@ -246,7 +246,15 @@ public abstract class GraphStoreContract {
             null,
             new Provenance("wikidata", "S-unknown", Instant.EPOCH, 1.0));
 
-    assertThatThrownBy(() -> store.record(toNowhere)).isInstanceOf(IllegalStateException.class);
+    assertThatThrownBy(() -> store.record(toNowhere))
+        .isInstanceOf(IllegalStateException.class)
+        .as("the advice that is right at THIS moment: the edge is not written down yet")
+        .hasMessageContaining("upsert the node first")
+        .as(
+            "and the advice that is right once a log already carries the row (#228) - without it"
+                + " this message contradicts GraphProjector's boot diagnosis, which says a node"
+                + " claim does NOT repair a positional replay")
+        .hasMessageContaining("retract the endpoint");
   }
 
   /**

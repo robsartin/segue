@@ -28,6 +28,7 @@ import static com.robsartin.segue.export.InventedGraph.retract;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.domain.EdgeRecord;
+import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.Retraction;
@@ -119,10 +120,10 @@ class BothFoldsAgreeTest {
    * separate owner edge naming {@code DETOUR} <em>directly</em> while it stood as the canonical id,
    * and only then corrected onto {@code REROUTED}. Unlike {@code MISHEARD}, {@code DETOUR}'s
    * stand-in must survive the correction in both folds, because {@code Equivalences.stands} widened
-   * from last-wins alone to last-wins OR a surviving edge naming the canonical id — dropping {@code
-   * DETOUR}'s node here would leave the {@code WREN → DETOUR} edge dangling in one fold or the
-   * other, or both. {@code TwiceMergedIdLeavesNoOrphanTest} pins this shape directly, against each
-   * fold on its own; this fixture is what asks whether the two folds still agree about it.
+   * from last-wins alone to last-wins OR an edge the fold keeps naming the canonical id — dropping
+   * {@code DETOUR}'s node here would leave the {@code WREN → DETOUR} edge dangling in one fold or
+   * the other, or both. {@code TwiceMergedIdLeavesNoOrphanTest} pins this shape directly, against
+   * each fold on its own; this fixture is what asks whether the two folds still agree about it.
    *
    * <p><b>{@code LAPSE} is the retracted merge (#224), and it is the case where one fold does not
    * disagree but <em>throws</em>.</b> It is minted, merged onto {@code FORFEIT}, given an owner
@@ -169,7 +170,13 @@ class BothFoldsAgreeTest {
             minted(LAPSE, NodeKind.WORK, "a working title he took back"),
             merged(LAPSE, FORFEIT),
             owned(WREN, FORFEIT, "INFLUENCED_BY"),
-            retract(LAPSE));
+            retract(LAPSE),
+            // #228: the merge re-declared onto the id the retraction already emptied, and an owner
+            // edge naming the retracted LOCAL id after it. The edge reaches FORFEIT through
+            // canonicalByLocal rather than by name, which is the case Equivalences
+            // .namesARetractedStandIn missed while it read a claim's raw endpoints.
+            merged(LAPSE, FORFEIT),
+            owned(WREN, LAPSE, "INFLUENCED_BY"));
   }
 
   /** Everything {@link #ownedLog} names, including both canonical ids a merge introduces. */
@@ -204,10 +211,10 @@ class BothFoldsAgreeTest {
     // Two folds that both held nothing would agree perfectly. This is what says they held the
     // thing the merge produces - a canonical node for an id no source ever claimed. DETOUR is the
     // amendment's case: a later merge corrected STRAY away from it, and its stand-in survives
-    // anyway because the WREN -> DETOUR edge still names it.
+    // anyway because the WREN -> DETOUR edge is one the fold keeps.
     assertThat(folded.nodes()).containsKeys(PRESSING, WATERMARK, DETOUR);
 
-    // The plain half of the same rule: a correction with no surviving edge on the first canonical
+    // The plain half of the same rule: a correction with no kept edge on the first canonical
     // leaves nothing there to disagree about, which is exactly what makes the half-fix control
     // below meaningful - it is this key, alone, that a fix to standIns without a fix to
     // IngestService gets wrong.
@@ -251,7 +258,7 @@ class BothFoldsAgreeTest {
         .contains(
             WATERMARK + " INFLUENCED_BY " + HOLLOW_TIDE, MARLOW + " INFLUENCED_BY " + WATERMARK);
 
-    // The amendment's surviving edge: claimed directly against DETOUR while it stood as STRAY's
+    // The amendment's kept edge: claimed directly against DETOUR while it stood as STRAY's
     // canonical id, and it names DETOUR either way - not a local id the fold would otherwise
     // resolve - so this is unchanged by the fold and both folds must still hold it.
     assertThat(folded).contains(WREN + " INFLUENCED_BY " + DETOUR);
@@ -291,8 +298,38 @@ class BothFoldsAgreeTest {
                   + " backwards along with everything else about it, the merge does not survive"
                   + " the retraction, the WREN -> FORFEIT edge is withdrawn because it names the"
                   + " stand-in the retraction emptied, and the retraction row itself is never"
-                  + " applied (#224). So it is every row in this log but those five")
-          .isEqualTo(29);
+                  + " applied (#224). The re-merge #228 added onto the same canonical id applies"
+                  + " nothing to the graph either - its local side does not survive the"
+                  + " retraction, so standIn() finds no node to copy - but a SameAs counts as"
+                  + " applied whether or not it builds one, so it still counts toward this total."
+                  + " The owner edge #228 added beside it does not: it names the retracted local"
+                  + " id, which folds onto the same emptied canonical id through that surviving"
+                  + " re-merge, so it is withdrawn for the same reason as WREN -> FORFEIT above."
+                  + " So it is every row in this log but those five and that one owner edge.")
+          .isEqualTo(30);
+    }
+  }
+
+  @Test
+  @DisplayName("the shared held-node question answers exactly the nodes both folds hold")
+  void shouldNameExactlyTheNodesTheFoldHoldsWhenAskedOfOneLog() {
+    FakeAssertionLog log = ownedLog();
+    Set<String> held = Equivalences.nodesTheFoldHolds(log.readAll());
+
+    assertThat(held)
+        .as(
+            "the producer guard and the boot refusal both read this rather than re-deriving which"
+                + " entities exist, so it has to be the fold's own answer (#228)")
+        .containsExactlyInAnyOrderElementsOf(LogProjection.of(log).nodes().keySet());
+
+    try (TinkerGraphStore replayed = new TinkerGraphStore()) {
+      GraphProjector.project(log, replayed, IdentityMerge.NONE);
+
+      for (String qid : OWNED_QIDS) {
+        assertThat(replayed.node(qid).isPresent())
+            .as("and the boot replay agrees about %s", qid)
+            .isEqualTo(held.contains(qid));
+      }
     }
   }
 

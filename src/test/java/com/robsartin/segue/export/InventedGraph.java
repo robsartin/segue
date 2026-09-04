@@ -95,6 +95,20 @@ final class InventedGraph {
   static final String FORFEIT = "Q10000900112";
 
   /**
+   * An eighth canonical id: the one {@link #SLIP} was merged onto before the owner retracted it, so
+   * an edge naming this id is withdrawn by the fold while every row of it still survives (#228).
+   * ADR 62's eleven-digit shape, for the reason {@link #KETTLES} takes it.
+   */
+  static final String SEVERED = "Q10000900113";
+
+  /**
+   * A ninth canonical id: the one a merge names when it is declared AFTER its local side was
+   * retracted, so the merge has no local side, builds no stand-in, and leaves an id nothing in the
+   * log describes (#228). ADR 62's eleven-digit shape, for the reason {@link #KETTLES} takes it.
+   */
+  static final String RESUMED = "Q10000900114";
+
+  /**
    * Two ids the owner minted. Two leading zeros, which Wikibase's item-id grammar can never
    * allocate (ADR 58, ADR 59) - so these are deliberately not from the {@code Q900xxx} family, and
    * issue #171 does not reach them.
@@ -152,6 +166,24 @@ final class InventedGraph {
    * for {@link #ALMANAC}'s reason.
    */
   static final String LAPSE = "Q008";
+
+  /**
+   * A ninth id the owner minted, and the one issue #228's third defect turns on: merged onto {@link
+   * #SEVERED} and then retracted, so that the edge naming {@code SEVERED} is WITHDRAWN rather than
+   * retracted - the distinction the surviving-edge widening could not see. Two leading zeros, for
+   * {@link #ALMANAC}'s reason.
+   */
+  static final String SLIP = "Q009";
+
+  /**
+   * A tenth local id, and the only one here nothing ever minted or claimed: it is merged onto
+   * {@link #MISHEARD} by a row a path bypassing {@code OwnCli} wrote, so the merge resolves an
+   * endpoint while contributing no stand-in of its own (#228). An owner edge from {@code MISHEARD}
+   * to this id therefore folds onto {@code MISHEARD} at both ends and is dropped as a collapsed
+   * self-loop - the fold's other reason for yielding nothing. Two leading zeros, for {@link
+   * #ALMANAC}'s reason; four digits because {@link #SLIP} took the last three-digit one.
+   */
+  static final String UNCLAIMED = "Q0010";
 
   private static final Instant WHEN = Instant.parse("2026-01-01T00:00:00Z");
 

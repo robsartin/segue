@@ -33,8 +33,9 @@ import java.util.Set;
  *     forbids one qid appearing on two of them, and a count that deduplicated would hide it
  * @param mergesStanding surviving merges that resolve their local id today
  * @param mergesSuperseded surviving merges a later merge of the same local id has corrected
- * @param mergesSupersededButEdgeReferenced the subset of those whose canonical id a surviving edge
- *     still names, so its stand-in stands anyway (#221). A subset, never a third bucket
+ * @param mergesSupersededButEdgeReferenced the subset of those whose canonical id an edge the fold
+ *     keeps still names, so its stand-in stands anyway (#221, narrowed by #228). A subset, never a
+ *     third bucket
  * @param standIns canonical ids a surviving merge names a node for
  * @param standInsWithNoEdge how many of those ended with degree zero — a node standing for an
  *     entity the fold knows nothing else about

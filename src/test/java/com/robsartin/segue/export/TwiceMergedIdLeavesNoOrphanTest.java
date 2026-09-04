@@ -2,6 +2,9 @@ package com.robsartin.segue.export;
 
 import static com.robsartin.segue.export.InventedGraph.CORRECTED;
 import static com.robsartin.segue.export.InventedGraph.MISHEARD;
+import static com.robsartin.segue.export.InventedGraph.SEVERED;
+import static com.robsartin.segue.export.InventedGraph.SLIP;
+import static com.robsartin.segue.export.InventedGraph.UNCLAIMED;
 import static com.robsartin.segue.export.InventedGraph.WATERMARK;
 import static com.robsartin.segue.export.InventedGraph.WREN;
 import static com.robsartin.segue.export.InventedGraph.edge;
@@ -27,8 +30,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Issue #221: a local id merged onto one canonical id and then onto another retires the first
- * canonical id's stand-in — <b>unless a surviving edge still names it</b> (fix round 1 widened the
- * original last-wins-only rule; see {@code Equivalences#stands}).
+ * canonical id's stand-in — <b>unless an edge the fold keeps still names it</b> (fix round 1
+ * widened the original last-wins-only rule; see {@code Equivalences#stands}).
  *
  * <p><b>Why this is not a case inside {@code BothFoldsAgreeTest}.</b> That test compares the two
  * folds with each other, and until #221 they agreed about the orphan — the exporter's fold built it
@@ -53,10 +56,10 @@ import org.junit.jupiter.api.Test;
  * <p><b>Fix round 1 added the surviving-edge case</b> — {@code
  * shouldReplayWithoutThrowingWhenASurvivingEdgeNamesACorrectedCanonicalId} and {@code
  * shouldKeepTheSupersededStandInInTheExportersFoldWhenASurvivingEdgeNamesItToo} — where a canonical
- * id a later merge corrected keeps its stand-in precisely because a surviving edge still names it,
- * so the absence above and the survival here are two faces of one rule rather than a contradiction.
- * {@code shouldKeepNoSupersededStandInAliveWhenTheOnlyNamingEdgeIsRetracted} closes the gap between
- * them: retracting that edge's own endpoint returns the case to the plain absence.
+ * id a later merge corrected keeps its stand-in precisely because an edge the fold keeps still
+ * names it, so the absence above and the survival here are two faces of one rule rather than a
+ * contradiction. {@code shouldKeepNoSupersededStandInAliveWhenTheOnlyNamingEdgeIsRetracted} closes
+ * the gap between them: retracting that edge's own endpoint returns the case to the plain absence.
  *
  * <p>Every entity here is invented (ADR 40, issue #37).
  */
@@ -136,7 +139,7 @@ class TwiceMergedIdLeavesNoOrphanTest {
 
   @Test
   @DisplayName(
-      "replay does not throw, and agrees with the exporter, when a surviving edge names a"
+      "replay does not throw, and agrees with the exporter, when an edge the fold keeps names a"
           + " canonical id a later merge corrected")
   void shouldReplayWithoutThrowingWhenASurvivingEdgeNamesACorrectedCanonicalId() {
     FakeAssertionLog log = correctedLogWithASurvivingEdgeOnTheFirstCanonical();
@@ -151,7 +154,7 @@ class TwiceMergedIdLeavesNoOrphanTest {
 
       assertThat(replayed.node(MISHEARD))
           .as(
-              "a surviving edge names MISHEARD directly, so its stand-in is not an orphan and"
+              "an edge the fold keeps names MISHEARD directly, so its stand-in is not an orphan and"
                   + " dropping it would leave the edge dangling")
           .hasValueSatisfying(
               node -> {
@@ -168,15 +171,15 @@ class TwiceMergedIdLeavesNoOrphanTest {
 
   @Test
   @DisplayName(
-      "a superseded canonical id's stand-in survives the exporter's fold too, where a surviving"
-          + " edge names it, and the two folds agree")
+      "a superseded canonical id's stand-in survives the exporter's fold too, where an edge the"
+          + " fold keeps names it, and the two folds agree")
   void shouldKeepTheSupersededStandInInTheExportersFoldWhenASurvivingEdgeNamesItToo() {
     FakeAssertionLog log = correctedLogWithASurvivingEdgeOnTheFirstCanonical();
 
     LogProjection folded = LogProjection.of(log);
     assertThat(folded.nodes())
         .as(
-            "the exporter's fold: a surviving edge names MISHEARD directly, so its stand-in is"
+            "the exporter's fold: an edge the fold keeps names MISHEARD directly, so its stand-in is"
                 + " not an orphan and dropping it would leave the edge dangling")
         .containsKey(MISHEARD);
     assertThat(folded.nodes().get(MISHEARD).kind()).isEqualTo(NodeKind.WORK);
@@ -216,7 +219,8 @@ class TwiceMergedIdLeavesNoOrphanTest {
                 correctedLogWithASourcedSurvivingEdge().readAll(), KindMapper::rederive))
         .as(
             "an edge a source claimed against MISHEARD keeps its stand-in exactly as one the owner"
-                + " claimed does - stands asks what still names the id, not who said so")
+                + " claimed does - stands asks what edge the fold keeps names the id, not who"
+                + " said so")
         .containsOnlyKeys(MISHEARD, WATERMARK);
   }
 
@@ -248,6 +252,159 @@ class TwiceMergedIdLeavesNoOrphanTest {
             "the WREN -> MISHEARD edge no longer survives, so nothing keeps MISHEARD's stand-in"
                 + " alive and the last-wins rule alone decides it")
         .containsOnlyKeys(WATERMARK);
+  }
+
+  /**
+   * The surviving-edge fixture again, with the naming edge WITHDRAWN rather than retracted (#228).
+   * {@code MISHEARD}'s stand-in is superseded by the correction onto {@code WATERMARK} and is kept
+   * alive only by the {@code MISHEARD -> SEVERED} edge; that edge names a canonical id a retraction
+   * emptied, so the fold withdraws it and holds it in neither projection. Every row of the edge
+   * still <em>survives</em> — neither of its endpoints is retracted — which is exactly why {@code
+   * referencedEndpoints}, built from the surviving rows, went on counting it.
+   *
+   * <p>Every row here is one the supported flow writes: a second merge is a correction {@code
+   * OwnCli} says rather than refuses, {@code ownClaim assert} offers both canonical ids the moment
+   * their stand-ins exist, and {@code retractEntity} retracts a local id.
+   */
+  private static FakeAssertionLog correctedLogWithAWithdrawnSurvivingEdge() {
+    return new FakeAssertionLog()
+        .with(
+            minted(CORRECTED, NodeKind.WORK, "A Self-Pressed Record"),
+            merged(CORRECTED, MISHEARD),
+            minted(SLIP, NodeKind.WORK, "a working title he took back"),
+            merged(SLIP, SEVERED),
+            owned(MISHEARD, SEVERED, "INFLUENCED_BY"),
+            merged(CORRECTED, WATERMARK),
+            retract(SLIP));
+  }
+
+  @Test
+  @DisplayName("a withdrawn edge keeps no superseded stand-in alive")
+  void shouldKeepNoSupersededStandInAliveWhenTheOnlyNamingEdgeIsWithdrawn() {
+    FakeAssertionLog log = correctedLogWithAWithdrawnSurvivingEdge();
+
+    assertThat(Equivalences.standIns(log.readAll(), KindMapper::rederive))
+        .as(
+            "the MISHEARD -> SEVERED edge survives every retraction and the fold withdraws it all"
+                + " the same, so it keeps nothing alive - it read [MISHEARD, WATERMARK] before"
+                + " this fix (#228)")
+        .containsOnlyKeys(WATERMARK);
+
+    LogProjection folded = LogProjection.of(log);
+    assertThat(folded.nodes())
+        .as("so a full export draws no node with no edges under the id he corrected away from")
+        .doesNotContainKey(MISHEARD);
+    assertThat(folded.edges()).isEmpty();
+    assertThat(folded.withdrawnEdges())
+        .as("the edge is still counted as withdrawn, which is what says it was ever there")
+        .isEqualTo(1);
+    assertThat(folded.danglingEdges()).isZero();
+
+    try (TinkerGraphStore replayed = new TinkerGraphStore()) {
+      GraphProjector.project(log, replayed, IdentityMerge.NONE);
+
+      assertThat(replayed.node(MISHEARD))
+          .as("and the boot replay agrees, which is the half a fold-only fix would not move")
+          .isEmpty();
+      assertThat(replayed.node(WATERMARK))
+          .as("the merge that stands today keeps its node, so this is not an empty graph agreeing")
+          .isPresent();
+    }
+  }
+
+  /**
+   * The surviving-edge fixture a third time, with the naming edge dropped as a COLLAPSED SELF-LOOP
+   * rather than withdrawn (#228, fix round 1). {@code MISHEARD}'s stand-in is superseded by the
+   * correction onto {@code WATERMARK} and is kept alive only by the {@code MISHEARD -> UNCLAIMED}
+   * edge; {@code UNCLAIMED} is merged onto {@code MISHEARD} too, so the fold sends both of that
+   * edge's ends to {@code MISHEARD} and yields nothing for it — {@code Equivalences.foldEndpoints}'
+   * second reason for dropping an edge, beside the withdrawal the sibling above covers. Every row
+   * still survives, and the edge's RAW endpoints still name {@code MISHEARD}, which is what let the
+   * withdrawal-only narrowing go on counting it.
+   *
+   * <p><b>{@code UNCLAIMED} is a merge naming a local id nothing minted</b> — spec ruling 2's
+   * bypass path, the shape the fold may not assume away. That is what keeps the collapse reachable:
+   * were the local side minted, its own merge would give {@code MISHEARD} a stand-in on its own
+   * account and there would be no orphan to find.
+   */
+  private static FakeAssertionLog correctedLogWithACollapsingSurvivingEdge() {
+    return new FakeAssertionLog()
+        .with(
+            minted(CORRECTED, NodeKind.WORK, "A Self-Pressed Record"),
+            merged(CORRECTED, MISHEARD),
+            merged(UNCLAIMED, MISHEARD),
+            owned(MISHEARD, UNCLAIMED, "INFLUENCED_BY"),
+            merged(CORRECTED, WATERMARK));
+  }
+
+  @Test
+  @DisplayName("an edge the fold collapses to a self-loop keeps no superseded stand-in alive")
+  void shouldKeepNoSupersededStandInAliveWhenTheOnlyNamingEdgeCollapses() {
+    FakeAssertionLog log = correctedLogWithACollapsingSurvivingEdge();
+
+    assertThat(Equivalences.standIns(log.readAll(), KindMapper::rederive))
+        .as(
+            "the MISHEARD -> UNCLAIMED edge survives every retraction and the fold drops it all the"
+                + " same, because both of its ends land on MISHEARD - so it keeps nothing alive,"
+                + " where it read [MISHEARD, WATERMARK] before this fix (#228)")
+        .containsOnlyKeys(WATERMARK);
+
+    LogProjection folded = LogProjection.of(log);
+    assertThat(folded.nodes())
+        .as("so a full export draws no node with no edges under the id he corrected away from")
+        .doesNotContainKey(MISHEARD);
+    assertThat(folded.edges())
+        .as("an equivalence says two names are one thing, and never that the thing cites itself")
+        .isEmpty();
+    assertThat(folded.withdrawnEdges())
+        .as("a collapse is not a withdrawal - no retraction emptied anything in this log")
+        .isZero();
+    assertThat(folded.danglingEdges()).isZero();
+
+    try (TinkerGraphStore replayed = new TinkerGraphStore()) {
+      GraphProjector.project(log, replayed, IdentityMerge.NONE);
+
+      assertThat(replayed.node(MISHEARD))
+          .as("and the boot replay agrees, which is the half a fold-only fix would not move")
+          .isEmpty();
+      assertThat(replayed.node(WATERMARK))
+          .as("the merge that stands today keeps its node, so this is not an empty graph agreeing")
+          .isPresent();
+    }
+  }
+
+  /**
+   * A GENUINE self-loop, as against the collapsed one two fixtures above: the owner claims an edge
+   * from {@link InventedGraph#MISHEARD} to itself while it still stands as the canonical id — its
+   * raw endpoints were already equal before any fold touched them, rather than becoming equal
+   * because two different raw ids resolved onto one (#228 fix round 1's {@code reference}'s {@code
+   * untouched} clause). {@code Equivalences#foldEndpoints} leaves such an edge exactly where it is
+   * — "a self-loop the fold did not create is a claim somebody really made" — and {@code reference}
+   * is meant to mirror that ordering: the {@code untouched} guard sits ABOVE the collapse check, so
+   * a raw self-loop is never treated as one {@code foldEndpoints} manufactured. Dropping that guard
+   * would fold this edge into the collapse arm too, and {@code MISHEARD}'s superseded stand-in
+   * would go missing with nothing distinguishing it from the collapsed case.
+   */
+  private static FakeAssertionLog correctedLogWithAGenuineSelfLoop() {
+    return new FakeAssertionLog()
+        .with(
+            minted(CORRECTED, NodeKind.WORK, "A Self-Pressed Record"),
+            merged(CORRECTED, MISHEARD),
+            owned(MISHEARD, MISHEARD, "INFLUENCED_BY"),
+            merged(CORRECTED, WATERMARK));
+  }
+
+  @Test
+  @DisplayName(
+      "a genuine self-loop keeps a superseded stand-in alive, unlike one the fold collapses")
+  void shouldKeepTheSupersededStandInAliveWhenAGenuineSelfLoopNamesItDirectly() {
+    assertThat(
+            Equivalences.standIns(
+                correctedLogWithAGenuineSelfLoop().readAll(), KindMapper::rederive))
+        .as(
+            "the MISHEARD -> MISHEARD edge names MISHEARD raw, before any fold moved it there, so"
+                + " it is a claim the owner really made and not one the collapse arm may drop")
+        .containsKey(MISHEARD);
   }
 
   @Test

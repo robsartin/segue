@@ -2362,18 +2362,29 @@ alone, where the copy used to leave one on each. **Ordinarily the first canonica
 ([#221](https://github.com/robsartin/segue/issues/221)): a second merge retires the stand-in the
 first named, so there is no labelled orphan under an id you corrected away from, and `listRatings`
 shows any rating still carried there as `(not in the graph)` — there is no un-rate (ADR 39), so an
-older build's carry stays even though nothing claims the id today. **The one exception is a
-surviving edge.** Claim an edge against the first canonical id before you correct the merge, and
+older build's carry stays even though nothing claims the id today. **The one exception is an
+edge the fold keeps.** Claim an edge against the first canonical id before you correct the merge, and
 that edge survives the correction (ADR 19 forbids deleting it); dropping its stand-in then would
 leave the edge with an endpoint nothing has ever seen, so the node survives instead, holding the
 merged entity's label and exactly that edge. `Equivalences.stands` is the one rule behind both
-halves — last-wins, OR a surviving edge names the merge's canonical id — and all four homes of the
-stand-in ask it, though not all of the same `Equivalences`: `IngestService.record` is handed
+halves — last-wins, OR an edge the fold keeps names the merge's canonical id — and all four homes of
+the stand-in ask it, though not all of the same `Equivalences`: `IngestService.record` is handed
 `Equivalences.NONE`, which holds no log, so on the live write path a superseded stand-in is still
 built and stays until the next boot re-folds the log. The rating carry does not follow the
 exception: it stays last-wins alone
 (`Equivalences.last`), because a node that survives on an edge's account is a fact about the graph,
 not your opinion about the thing you corrected yourself onto.
+
+**"Kept" is narrower than "surviving", and the difference is the whole of
+[#228](https://github.com/robsartin/segue/issues/228)'s third break.** An edge the fold *withdraws* —
+because it names a canonical id a retraction emptied (ADR 44) — survives every retraction and claims
+nothing in the projection all the same, and so does one the fold *collapses* onto a single id. So
+neither keeps a superseded stand-in alive. Before that was fixed, a correction plus an unrelated
+retraction left a labelled node with no edges under the id you had corrected away from, carrying your
+withdrawn working title, while the same fold reported the edge as withdrawn. Deciding it is circular
+— which edges are kept depends on which ids are emptied, which depends back on which stand-ins
+survive — so `Equivalences` computes the emptied set as a least fixed point; on a log with no
+retractions that is one round and the empty set.
 
 **So a merged local id draws as an isolated node.** It has a node and no edges, and a `full` or
 `subgraph` export draws it like any other orphan — nothing hides it, and
@@ -2417,7 +2428,25 @@ was claimed before the retraction or after it, because a node either exists in t
 it does not, and an edge naming one that does not stops the boot replay. The pair belongs together:
 what a retraction *removes* is positional, what it *empties* is not.
 [ADR 44](adr/0044-retraction-as-a-new-claim.md)'s 2026-09-03 amendment argues why the two reaches
-differ. The rest is [Taking something back out](#taking-something-back-out).
+differ, and its 2026-09-04 one records that the withdrawal now reads the endpoints the fold
+**resolves** rather than the ids the claim wrote — so an edge reaching an emptied id through a merge
+is withdrawn as well as one naming it directly.
+
+**A merge declared after its local side was retracted is refused before it is written.** The local
+id has no node in the projection, so the merge would stand in for nothing, and the first edge naming
+its canonical id would stop the boot replay on rows nothing can be deleted from. `ownClaim merge`
+has always refused it; since [#228](https://github.com/robsartin/segue/issues/228) so does
+`IngestService.claim`, the gate every owner claim passes, and so does an owner edge naming an
+endpoint the fold would hold no node for. If a log already carries one, the boot says so by name —
+every offending sequence number, the id no node stands for, and the repair — instead of the store's
+`assertion references unknown entity`. **The repair for a row already written is to retract the
+endpoint**, which withdraws the edge and deletes nothing: appending the missing node claim does
+*not* work, because replay is positional and a claim later than the row leaves the boot failing at
+that same sequence. A merge whose local side the projection does hold repairs it too, but only if
+you actually mean the equivalence — it says two ids are the same thing, and every rating and edge
+follows that. Going forward, mint a fresh local id and merge that one; ids are never recycled.
+
+The rest is [Taking something back out](#taking-something-back-out).
 
 ### Four things this is not allowed to do
 

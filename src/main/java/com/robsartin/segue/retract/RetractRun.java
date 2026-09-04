@@ -207,19 +207,19 @@ public final class RetractRun {
    * hand-rolled idea of what "names this canonical id" means.
    *
    * <p><b>One pass, and one edge key can go under two ids, fix round 2.</b> A local id merged onto
-   * one canonical id and later corrected onto another strands BOTH of them if a surviving edge
-   * names either directly (see {@link Equivalences#stands}'s widening) — and an edge whose two ends
-   * land on two ids this same retraction strands names both, honestly, so it belongs on both ids'
-   * lines. Scanning the log once per canonical id used to decide that per line in isolation;
-   * scanning it ONCE instead and bucketing each withdrawn edge key under every newly-emptied id it
-   * names is the same answer without the rescans, and it is what makes the closing total below
-   * possible to state honestly: the per-id lines can share an edge, so their sizes may sum to more
-   * than what actually stopped projecting. The distinct count across ALL of them — one {@link Set}
-   * of edge keys, added to regardless of which id a claim matched — is the number that agrees with
-   * {@code LogProjection.withdrawnEdges}, and a closing line states it whenever more than one id is
-   * newly emptied, so the owner sees the export's number rather than adding up lines that
-   * double-count. With exactly one newly-emptied id the per-id line already says the whole story
-   * and no closing line is added.
+   * one canonical id and later corrected onto another strands BOTH of them if an edge the fold
+   * keeps names either directly (see {@link Equivalences#stands}'s widening) — and an edge whose
+   * two ends land on two ids this same retraction strands names both, honestly, so it belongs on
+   * both ids' lines. Scanning the log once per canonical id used to decide that per line in
+   * isolation; scanning it ONCE instead and bucketing each withdrawn edge key under every
+   * newly-emptied id it names is the same answer without the rescans, and it is what makes the
+   * closing total below possible to state honestly: the per-id lines can share an edge, so their
+   * sizes may sum to more than what actually stopped projecting. The distinct count across ALL of
+   * them — one {@link Set} of edge keys, added to regardless of which id a claim matched — is the
+   * number that agrees with {@code LogProjection.withdrawnEdges}, and a closing line states it
+   * whenever more than one id is newly emptied, so the owner sees the export's number rather than
+   * adding up lines that double-count. With exactly one newly-emptied id the per-id line already
+   * says the whole story and no closing line is added.
    *
    * <p><b>An id that strands no edge gets no line, final review.</b> The line exists to name the
    * edges that stop projecting, so one saying "0 edge(s)" tells the operator nothing and misleads
@@ -271,13 +271,20 @@ public final class RetractRun {
       if (claim == null || !equivalences.namesARetractedStandIn(claim)) {
         continue;
       }
+      // Bucketed by the endpoints the fold RESOLVES, matching namesARetractedStandIn just above
+      // (#228). A claim naming a merged local id whose merge points at a newly-emptied canonical
+      // id passes that predicate on the resolved id; bucketing it by the raw claim.fromQid() /
+      // claim.toQid() instead asks the two questions of two different ids and the edge matches
+      // neither bucket, so it was silently missing from every line and from the distinct total.
+      String from = equivalences.canonical(claim.fromQid());
+      String to = equivalences.canonical(claim.toQid());
       boolean namesANewlyEmptiedId = false;
-      if (newlyEmptied.contains(claim.fromQid())) {
-        edgeKeysByCanonical.get(claim.fromQid()).add(claim.edgeKey());
+      if (newlyEmptied.contains(from)) {
+        edgeKeysByCanonical.get(from).add(claim.edgeKey());
         namesANewlyEmptiedId = true;
       }
-      if (newlyEmptied.contains(claim.toQid())) {
-        edgeKeysByCanonical.get(claim.toQid()).add(claim.edgeKey());
+      if (newlyEmptied.contains(to)) {
+        edgeKeysByCanonical.get(to).add(claim.edgeKey());
         namesANewlyEmptiedId = true;
       }
       if (namesANewlyEmptiedId) {

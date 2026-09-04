@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
  *
  * <p>Thirteen nodes, thirteen degrees. {@code WREN} is the busiest at 6 (five folded edges naming
  * it as {@code from}, plus the owner edge {@code CORRECTED --> WREN} naming it as {@code to});
- * {@code PRIZE} sits at 5, exactly ADR 57's floor. The three stand-ins a surviving edge names
+ * {@code PRIZE} sits at 5, exactly ADR 57's floor. The three stand-ins an edge the fold keeps names
  * directly ({@code CORRECTED}, {@code FIRST_CANONICAL}, {@code SETTLED}) are each 1. {@code
  * REROUTED} and the three minted local ids ({@code LEDGER}, {@code SKETCH}, {@code DOUBLE}) are
  * isolated at 0 — a merged local id loses its edges to its canonical id (ADR 59), and nothing folds

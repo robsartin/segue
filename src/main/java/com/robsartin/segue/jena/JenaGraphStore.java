@@ -155,12 +155,20 @@ public final class JenaGraphStore implements GraphStore {
    * upsertNode gives it; checked with {@code Model.contains(subject, predicate)} rather than a
    * SPARQL round trip, since this runs inside {@code record}'s own write transaction and Jena's
    * in-memory dataset does not support nesting one transaction inside another.
+   *
+   * <p>The message names two moments, for the reason {@code TinkerGraphStore.requireVertex}'s own
+   * javadoc gives (#228), and is identical to it word for word because {@code GraphStoreContract}
+   * pins it for both engines.
    */
   private static void requireKnown(Model def, String qid) {
     Resource subject = def.createResource(Vocab.entity(qid));
     if (!def.contains(subject, def.createProperty(Vocab.RDFS + "label"))) {
       throw new IllegalStateException(
-          "assertion references unknown entity " + qid + " - upsert the node first");
+          "assertion references unknown entity "
+              + qid
+              + " - upsert the node first. If a log ALREADY carries this row,"
+              + " that does not repair it: replay is positional, so retract the"
+              + " endpoint instead (ADR 44, #228)");
     }
   }
 

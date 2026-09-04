@@ -12,6 +12,7 @@ import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.OwnerEdge;
 import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.domain.Retraction;
+import com.robsartin.segue.domain.SameAs;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.GraphStore;
 import com.robsartin.segue.port.IdentityMerge;
@@ -278,5 +279,191 @@ class IngestServiceTest {
         .hasMessageContaining("retract");
 
     assertThat(log.readAll()).isEmpty();
+  }
+
+  private static final Instant CLAIMED_AT = Instant.parse("2026-08-31T20:00:00Z");
+
+  @Test
+  @DisplayName("should refuse a merge when the projection holds no node for its local side")
+  void shouldRefuseAMergeWhenTheProjectionHoldsNoNodeForItsLocalSide() {
+    // The bypass path #228 measures: OwnRun.declareMerge already refuses this - it reads what the
+    // projection has MINTED and still survives - so a log can only carry it if something appended
+    // through this method directly. The merge itself boots; what it leaves behind is a canonical id
+    // with no stand-in, and the first edge naming that id stops the boot replay on a row ADR 19
+    // forbids deleting.
+    LocalEntity minted =
+        LocalEntity.minted("Q00900042", NodeKind.WORK, "a working title he took back", CLAIMED_AT);
+    IngestService.claim(log, minted);
+    IngestService.retract(log, new Retraction("Q00900042", "the wrong thing", CLAIMED_AT));
+
+    assertThatThrownBy(
+            () ->
+                IngestService.claim(log, SameAs.declared("Q00900042", "Q10000900120", CLAIMED_AT)))
+        .isInstanceOf(UnknownEndpointException.class)
+        .hasMessageContaining("Q00900042")
+        .hasMessageContaining("Q10000900120")
+        .hasMessageContaining("holds no node");
+
+    assertThat(log.readAll())
+        .as("validated BEFORE the append, so the log never carries a row that cannot boot")
+        .hasSize(2);
+  }
+
+  @Test
+  @DisplayName("should append a merge when the projection does hold a node for its local side")
+  void shouldAppendAMergeWhenTheProjectionHoldsANodeForItsLocalSide() {
+    // Without this the refusal above would be satisfied by refusing every merge.
+    LocalEntity minted =
+        LocalEntity.minted("Q00900042", NodeKind.WORK, "a self-pressed record", CLAIMED_AT);
+    IngestService.claim(log, minted);
+    SameAs merge = SameAs.declared("Q00900042", "Q10000900120", CLAIMED_AT);
+
+    IngestService.claim(log, merge);
+
+    assertThat(log.readAll()).containsExactly(minted, merge);
+  }
+
+  @Test
+  @DisplayName(
+      "should refuse a second merge when the projection holds no node for the local side, the"
+          + " issue's literal shape")
+  void shouldRefuseASecondMergeWhenTheProjectionHoldsNoNodeForTheLocalSideTheIssuesLiteralShape() {
+    // Break 1's exact shape: minted(L), merged(L->A), retract(L), merged(L->B). Task 4 tested the
+    // mechanically equivalent mint/retract/merge; this is the sequence the issue actually names -
+    // a first merge that succeeds while L still holds a node, then a retraction of L, then a
+    // second merge that must not, because L's node no longer survives.
+    LocalEntity minted =
+        LocalEntity.minted("Q00900042", NodeKind.WORK, "a working title he took back", CLAIMED_AT);
+    IngestService.claim(log, minted);
+    IngestService.claim(log, SameAs.declared("Q00900042", "Q10000900120", CLAIMED_AT));
+    IngestService.retract(log, new Retraction("Q00900042", "the wrong thing", CLAIMED_AT));
+
+    assertThatThrownBy(
+            () ->
+                IngestService.claim(log, SameAs.declared("Q00900042", "Q10000900121", CLAIMED_AT)))
+        .isInstanceOf(UnknownEndpointException.class)
+        .hasMessageContaining("Q00900042")
+        .hasMessageContaining("Q10000900121")
+        .hasMessageContaining("holds no node");
+
+    assertThat(log.readAll())
+        .as("validated BEFORE the append, so the log never carries a row that cannot boot")
+        .hasSize(3);
+  }
+
+  @Test
+  @DisplayName("should refuse an owner edge when the fold would hold no node for an endpoint")
+  void shouldRefuseAnOwnerEdgeWhenTheFoldWouldHoldNoNodeForAnEndpoint() {
+    LocalEntity minted =
+        LocalEntity.minted("Q00900042", NodeKind.WORK, "a self-pressed record", CLAIMED_AT);
+    IngestService.claim(log, minted);
+
+    assertThatThrownBy(
+            () ->
+                IngestService.claim(
+                    log, OwnerEdge.claimed("Q00900042", "Q0900199", "INFLUENCED_BY", CLAIMED_AT)))
+        .isInstanceOf(UnknownEndpointException.class)
+        .hasMessageContaining("Q0900199")
+        .hasMessageContaining("holds no node");
+
+    assertThat(log.readAll()).hasSize(1);
+  }
+
+  @Test
+  @DisplayName("should append an owner edge naming a merged local id, which the fold resolves")
+  void shouldAppendAnOwnerEdgeNamingAMergedLocalIdWhichTheFoldResolves() {
+    // Spec ruling 2: "a later claim naming the local id, by a path that bypasses the tool, folds
+    // onto the canonical id like any other". OwnRun refuses this by name, as a courtesy; the gate
+    // must not, because the fold resolves it onto an id that HAS a stand-in and the log boots.
+    // A gate that asked about the raw endpoint would refuse a claim both folds can project.
+    ingest.record(new NodeAssertion("Q0900101", NodeKind.PERSON, "Ines Marlow", WIKIDATA));
+    IngestService.claim(
+        log, LocalEntity.minted("Q00900042", NodeKind.WORK, "a self-pressed record", CLAIMED_AT));
+    IngestService.claim(log, SameAs.declared("Q00900042", "Q10000900120", CLAIMED_AT));
+    OwnerEdge edge = OwnerEdge.claimed("Q0900101", "Q00900042", "INFLUENCED_BY", CLAIMED_AT);
+
+    IngestService.claim(log, edge);
+
+    assertThat(log.readAll()).hasSize(4).endsWith(edge);
+  }
+
+  @Test
+  @DisplayName(
+      "should append an owner edge whose folded endpoint is held only by a legacy bypass merge"
+          + " the gate never saw")
+  void shouldAppendAnOwnerEdgeWhoseFoldedEndpointIsHeldOnlyThroughALegacyBypassMerge() {
+    // Fix round 1, review finding 1 (#228). A plant that asks the RAW claimed endpoint instead of
+    // the folded one passes every other test in the suite, because in every other test the raw and
+    // folded ids happen to agree on whether the fold holds them. This shape forces them to
+    // disagree: Q00900042 (raw) is never held; Q10000900120 (folded) is, but only because a
+    // SEPARATE
+    // legitimate merge (Q00900043 -> Q10000900120) already gave the canonical id a stand-in before
+    // this bypass row was appended.
+    ingest.record(new NodeAssertion("Q0900101", NodeKind.PERSON, "Ines Marlow", WIKIDATA));
+    IngestService.claim(
+        log,
+        LocalEntity.minted("Q00900043", NodeKind.WORK, "a properly-claimed record", CLAIMED_AT));
+    IngestService.claim(log, SameAs.declared("Q00900043", "Q10000900120", CLAIMED_AT));
+    // Appended directly through the log, bypassing claim()'s own gate - the gate would refuse this
+    // merge outright, because Q00900042 was never claimed a node. A legacy log written before #228
+    // existed could hold exactly this row anyway.
+    log.append(SameAs.declared("Q00900042", "Q10000900120", CLAIMED_AT));
+    OwnerEdge edge = OwnerEdge.claimed("Q0900101", "Q00900042", "INFLUENCED_BY", CLAIMED_AT);
+
+    IngestService.claim(log, edge);
+
+    assertThat(log.readAll()).hasSize(5).endsWith(edge);
+  }
+
+  @Test
+  @DisplayName("should name every endpoint the fold holds no node for, not just the first")
+  void shouldNameEveryMissingEndpointWhenAnOwnerEdgeNamesTwo() {
+    OwnerEdge edge = OwnerEdge.claimed("Q0900301", "Q0900302", "INFLUENCED_BY", CLAIMED_AT);
+
+    assertThatThrownBy(() -> IngestService.claim(log, edge))
+        .isInstanceOf(UnknownEndpointException.class)
+        .hasMessageContaining("Q0900301")
+        .hasMessageContaining("Q0900302");
+
+    assertThat(log.readAll()).isEmpty();
+  }
+
+  @Test
+  @DisplayName(
+      "should advise merging onto a canonical-shaped endpoint rather than minting or seeding it")
+  void shouldAdviseMergingOntoACanonicalShapedEndpointRatherThanMintingOrSeedingIt() {
+    IngestService.claim(
+        log, LocalEntity.minted("Q00900050", NodeKind.PERSON, "someone claimed", CLAIMED_AT));
+    OwnerEdge edge = OwnerEdge.claimed("Q00900050", "Q10000900199", "INFLUENCED_BY", CLAIMED_AT);
+
+    assertThatThrownBy(() -> IngestService.claim(log, edge))
+        .isInstanceOf(UnknownEndpointException.class)
+        .hasMessageContaining("Q10000900199")
+        .hasMessageContaining("merged onto")
+        .hasMessageNotContaining("mint or seed");
+
+    assertThat(log.readAll()).hasSize(1);
+  }
+
+  @Test
+  @DisplayName("should name one endpoint once when an owner self-loop names one unheld entity")
+  void shouldNameOneEndpointOnceWhenAnOwnerSelfLoopNamesOneUnheldEntity() {
+    // Folded in from task 5's re-review (#228): describeIfMissing was called for fromQid and for
+    // toQid without asking whether they were the same entity, so a self-loop was reported twice
+    // and read as two ids to repair. #233's requireBothEndpoints guards the identical case on the
+    // sourced path.
+    OwnerEdge selfLoop = OwnerEdge.claimed("Q0900301", "Q0900301", "MEMBER_OF", CLAIMED_AT);
+
+    assertThatThrownBy(() -> IngestService.claim(log, selfLoop))
+        .isInstanceOf(UnknownEndpointException.class)
+        .hasMessageContaining("Q0900301")
+        .extracting(thrown -> occurrences(thrown.getMessage(), "mint or seed it first"))
+        .isEqualTo(1);
+
+    assertThat(log.readAll()).isEmpty();
+  }
+
+  private static int occurrences(String message, String needle) {
+    return message.split(java.util.regex.Pattern.quote(needle), -1).length - 1;
   }
 }

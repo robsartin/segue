@@ -17,6 +17,13 @@ class EquivalencesTest {
   private static final String OTHER_MINTED = "Q00900043";
 
   /**
+   * A third minted id, for the one fixture that needs three: the second-order chain below has one
+   * local retracted under each of the two canonical ids it empties, and a third standing in for the
+   * superseded merge between them. Two leading zeros, like its two siblings above (ADR 59).
+   */
+  private static final String THIRD_MINTED = "Q00900044";
+
+  /**
    * The two shapes this file needs, and they are not the same one. A merge's canonical side takes
    * ADR 62's eleven digits, which {@code SameAs} admits there and nowhere else; {@code NEIGHBOUR}
    * is only the far end of an edge, so it is an ordinary stand-in and takes ADR 58's single leading
@@ -25,6 +32,9 @@ class EquivalencesTest {
   private static final String CANONICAL = "Q10000000900";
 
   private static final String OTHER_CANONICAL = "Q10000000901";
+
+  /** A third canonical id, for the second-order chain below. ADR 62's eleven digits, as above. */
+  private static final String THIRD_CANONICAL = "Q10000000902";
 
   private static final String NEIGHBOUR = "Q0902";
   private static final Instant WHEN = Instant.parse("2026-08-31T09:00:00Z");
@@ -363,6 +373,42 @@ class EquivalencesTest {
   }
 
   @Test
+  @DisplayName(
+      "two local ids merged onto one canonical id, one of them later corrected away: the"
+          + " standing merge's label wins outright, not the superseded merge's")
+  void shouldTakeTheStandInsLabelFromTheMergeThatStandsWhenTheOtherWasCorrectedAway() {
+    // standIns' own "Two local ids merged onto ONE canonical id" paragraph names this exact
+    // case: FIRST and SECOND both merge onto SHARED_CANONICAL, and a later merge corrects FIRST
+    // away onto RETARGETED. No edge anywhere in this log, so no edge the fold keeps names
+    // SHARED_CANONICAL directly - the branch where FIRST's now-superseded merge must contribute
+    // NOTHING and SECOND's label wins outright, whatever the log order put first.
+    //
+    // Ids in the domain test's own style: two leading zeros for what the owner minted (ADR
+    // 58/59), eleven digits for a merge's canonical side (ADR 62) - the next free of each shape
+    // in this file, after MINTED/OTHER_MINTED/THIRD_MINTED and
+    // CANONICAL/OTHER_CANONICAL/THIRD_CANONICAL above.
+    String first = "Q00900046";
+    String second = "Q00900047";
+    String sharedCanonical = "Q10000000903";
+    String retargeted = "Q10000000904";
+    List<LoggedAssertion> log =
+        List.of(
+            LocalEntity.minted(first, NodeKind.WORK, "the superseded label", WHEN),
+            SameAs.declared(first, sharedCanonical, WHEN),
+            LocalEntity.minted(second, NodeKind.WORK, "the standing label", WHEN),
+            SameAs.declared(second, sharedCanonical, WHEN),
+            SameAs.declared(first, retargeted, WHEN));
+
+    assertThat(Equivalences.standIns(log, AS_CLAIMED).get(sharedCanonical).label())
+        .as(
+            "first's merge onto sharedCanonical no longer stands (it was corrected onto"
+                + " retargeted) and no edge keeps it alive either, so it must contribute nothing"
+                + " here - putIfAbsent's first-in-log-order tiebreak never gets to run, because"
+                + " only second's merge reaches the map at all")
+        .isEqualTo("the standing label");
+  }
+
+  @Test
   @DisplayName("a merge a later one corrected names no stand-in, so nothing is left under it")
   void shouldNameNoStandInWhenALaterMergeCorrectedTheCanonicalId() {
     List<LoggedAssertion> log =
@@ -531,6 +577,69 @@ class EquivalencesTest {
             new Retraction(MINTED, "the mint was a mistake", WHEN));
 
     assertThat(Equivalences.retractedStandIns(log)).isEmpty();
+  }
+
+  @Test
+  @DisplayName("emptying one canonical id empties a second whose only edge it withdrew")
+  void shouldEmptyASecondCanonicalIdWhenWithdrawingItsOnlyEdgeRetiredItsStandIn() {
+    // The second-order chain Equivalences.emptiedCanonicalIds loops for (#228), written out as a
+    // log: CANONICAL is emptied outright, which withdraws the only edge naming OTHER_CANONICAL,
+    // which retires the superseded stand-in that was the only node OTHER_CANONICAL had, which
+    // empties OTHER_CANONICAL in turn. One round of the step answers [CANONICAL] and stops; it
+    // takes the fixed point to reach the second id.
+    List<LoggedAssertion> log =
+        List.of(
+            LocalEntity.minted(MINTED, NodeKind.WORK, "The Salt Almanac", WHEN),
+            SameAs.declared(MINTED, CANONICAL, WHEN),
+            LocalEntity.minted(OTHER_MINTED, NodeKind.WORK, "the other one", WHEN),
+            SameAs.declared(OTHER_MINTED, OTHER_CANONICAL, WHEN),
+            OwnerEdge.claimed(CANONICAL, OTHER_CANONICAL, "INFLUENCED_BY", WHEN),
+            LocalEntity.minted(THIRD_MINTED, NodeKind.WORK, "the third", WHEN),
+            SameAs.declared(THIRD_MINTED, OTHER_CANONICAL, WHEN),
+            SameAs.declared(OTHER_MINTED, THIRD_CANONICAL, WHEN),
+            new Retraction(MINTED, "the mint was a mistake", WHEN),
+            new Retraction(THIRD_MINTED, "so was this one", WHEN));
+
+    assertThat(Equivalences.retractedStandIns(log))
+        .as(
+            "the chain has two links, and a set computed in one pass sees only the first - the"
+                + " edge that kept OTHER_CANONICAL's stand-in alive is one the fold withdraws")
+        .containsExactly(CANONICAL, OTHER_CANONICAL);
+  }
+
+  @Test
+  @DisplayName("the canonical ids a stand-in exists for are named the same way in both homes")
+  void shouldNameTheSameCanonicalIdsAsStandInsWhenGivenTheSameReferencedSet() {
+    // "Which canonical ids have a stand-in" has two homes since #228: Equivalences.standIns, which
+    // builds a node per id, and Equivalences.standInCanonicalIds, which answers the same question
+    // over a referenced set the caller supplies - the only way retractedStandIns can ask it while
+    // it is still working out what Equivalences.in answers. Two homes for one rule is this class's
+    // own standing objection, so the two are pinned here rather than asserted in prose.
+    //
+    // The log is the widest this question has in domain: a superseded merge kept alive by an edge
+    // the fold keeps (stands' second clause), the merge that supersedes it (its first clause), and
+    // a third merge a retraction of the local side empties. BothFoldsAgreeTest.ownedLog() is wider
+    // still and is deliberately not used - it is private to a test in export, and standInCanonical-
+    // Ids is package-private in domain, so reaching one from the other would mean widening the API
+    // of the class whose whole point is one home per question.
+    List<LoggedAssertion> log =
+        List.of(
+            LocalEntity.minted(MINTED, NodeKind.WORK, "The Salt Almanac", WHEN),
+            SameAs.declared(MINTED, CANONICAL, WHEN),
+            OwnerEdge.claimed(NEIGHBOUR, CANONICAL, "INFLUENCED_BY", WHEN),
+            SameAs.declared(MINTED, OTHER_CANONICAL, WHEN),
+            LocalEntity.minted(OTHER_MINTED, NodeKind.WORK, "the other one", WHEN),
+            SameAs.declared(OTHER_MINTED, THIRD_CANONICAL, WHEN),
+            new Retraction(OTHER_MINTED, "the mint was a mistake", WHEN));
+
+    assertThat(Equivalences.standInCanonicalIds(log, Equivalences.in(log).referencedEndpoints()))
+        .as(
+            "retractedStandIns' javadoc says this rule has one home; that is only true while the"
+                + " second computation of it answers what standIns' key set does")
+        .isEqualTo(Equivalences.standIns(log, AS_CLAIMED).keySet());
+    assertThat(Equivalences.standIns(log, AS_CLAIMED).keySet())
+        .as("and both name something, so the comparison above is not comparing two empty sets")
+        .containsExactly(CANONICAL, OTHER_CANONICAL);
   }
 
   @Test

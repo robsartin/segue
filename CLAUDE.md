@@ -576,12 +576,33 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   nodes. `Labels.forQids` (the ratings tool) deliberately does not apply the rule — see ADR 44's
   consequences.
 
+- **An owner claim is validated BEFORE the append, because the log is append-only and a row that
+  cannot boot cannot be removed.** `IngestService.claim` — not just `OwnRun` — refuses a merge whose
+  local side the projection holds no node for, and an owner edge whose *folded* endpoint the fold
+  would hold no node for, throwing #233's `UnknownEndpointException` in the fold's own words ("the
+  fold holds no node for", where `record` says "the graph"): one question, two projections, because
+  `claim` holds a log and no graph and `record` holds a graph and no log view. The gate asks the
+  fold's questions and the tool asks narrower ones; both homes are deliberate. Where a log already
+  carries such a row, `GraphProjector` refuses at boot with every offending sequence number and the
+  repair, rather than the store's `assertion references unknown entity`. **Not every broken shape
+  has a fold rule**: an edge naming a canonical id a retraction emptied is *withdrawn* (ADR 44, and
+  since #228 that reads the endpoints the fold **resolves**, and counts only the edges the fold
+  **keeps** — kept is narrower than surviving, so the emptied set is a least fixed point), but an id
+  nothing ever described cannot be repaired by a fold without either inventing a node out of
+  retracted rows or dropping a live claim. **The boot pre-flight is position-blind on purpose**, so
+  the one shape it does not catch is a legacy row whose endpoint is claimed LATER in the log; that
+  dies in the replay loop on the store's own message, and nothing in `src/main` can write one any
+  more. ADR 44 and ADR 59, both amended 2026-09-04.
+
 - **`IngestService.record` refuses before it appends, and the log-then-graph ordering is why.** The
   log is append-only and replay is fatal at the first failure, so a claim the graph refuses is a row
   every later boot refuses too — the live call fails once and the server never starts again. `record`
   therefore asks `GraphStore.node` for both of an edge's folded endpoints before `log.append` and
   throws `UnknownEndpointException`; `TinkerGraphStore.requireVertex` and `JenaGraphStore.requireKnown`
-  are unchanged and stay the last line of defence, pinned as one contract by `GraphStoreContract`.
+  still behave exactly as before and stay the last line of defence, pinned as one contract by
+  `GraphStoreContract` — #228 qualified their *message* so it names both moments (upsert while the
+  edge is unwritten; retract the endpoint once a log carries it), because until then the store and
+  the boot diagnosis gave an operator opposite advice about one id from the same codebase.
   **This gate is not the whole fix, and ADR 24's 2026-09-04 amendment says so.** It asks the RUNNING
   graph, which ADR 44 already leaves stale until the next boot — so an edge naming an entity that WAS
   a node and has since been retracted still passes `graph.node`, still gets appended, and still

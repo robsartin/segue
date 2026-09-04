@@ -7,6 +7,7 @@ import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.OwnerEdge;
+import com.robsartin.segue.domain.Qid;
 import com.robsartin.segue.domain.Retraction;
 import com.robsartin.segue.domain.SameAs;
 import com.robsartin.segue.port.AssertionLog;
@@ -16,6 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * The only thing in the system that writes.
@@ -148,7 +150,173 @@ public final class IngestService {
       case Retraction ignored ->
           throw new IllegalArgumentException("a retraction is appended by retract(), not claim()");
     }
+    refuseAClaimTheFoldCouldNotHold(log.readAll(), claim);
     log.append(claim);
+  }
+
+  /**
+   * Refuse an owner claim that would leave the log unbootable, before it is appended (#228).
+   *
+   * <p><b>Here rather than in {@code OwnRun}, and in addition to it.</b> That tool refuses both of
+   * these already, which is why the two logs issue #228 measures are reachable only by a caller
+   * that comes straight here. A guard in front of one caller is not a gate; this method is the one
+   * every owner claim passes, {@code OwnRun}'s included, so the log cannot carry a row no fold can
+   * project. The log is append-only (ADR 19), so a row rejected at replay instead would be rejected
+   * at every replay, forever.
+   *
+   * <p><b>Both refusals ask the fold's own question, {@link Equivalences#nodesTheFoldHolds}, and
+   * converge on it deliberately</b> (#228, folded in from Task 4's review). The merge arm used to
+   * call {@link Equivalences#localsOfMerges} directly instead - {@code nodesTheFoldHolds}'s own
+   * building block - so a second home for "does the fold hold a node for this id" existed here for
+   * exactly one caller, and {@code nodesTheFoldHolds}'s own javadoc naming this method as a reader
+   * was not yet true. Asking one method for both ids means the two arms cannot drift into
+   * disagreeing about what the fold holds.
+   *
+   * <p><b>Cost, stated rather than glossed</b> (#228 fix round 1). The earlier wording here -
+   * "costs one read of {@code would} rather than two" - overstated what either arm pays, and was
+   * never true of the {@code OwnerEdge} arm. A claim is exactly one of the three types the switch
+   * in {@link #claim} accepts, so the two arms below never both run for one call - a {@link
+   * LocalEntity} reads {@code held} zero times, and {@code held} is now computed inside the arm
+   * that reads it rather than once up front for every call. What each arm that DOES run actually
+   * pays: a {@link SameAs} pays one {@link Equivalences#nodesTheFoldHolds} walk - a handful of
+   * linear passes over {@code would} plus the merges' fixed point ({@link Equivalences#in}). An
+   * {@link OwnerEdge} pays that AND {@link Equivalences#folding}, which builds {@link
+   * Equivalences#in} - the same fixed point - a second time, independently, to fold the edge's own
+   * endpoints; an owner-edge claim reads {@code would} twice over, not once. Both totals are still
+   * paid once per own-tool command rather than per claim, because the only caller appends exactly
+   * one row per invocation - that half of the old claim holds.
+   *
+   * <p>{@code OwnRun.declareMerge} still asks its own narrower question - a merge's local side must
+   * be something the owner MINTED, because pointing a merge at a sourced entity is a different
+   * claim that tool does not make - and {@code OwnRun.assertEdge} still refuses an endpoint it does
+   * not OFFER, which includes a merged local id. Those stay narrower and friendlier for the
+   * interactive tool; this method is the one every owner claim passes regardless, {@code OwnRun}'s
+   * included, and asks only whether the fold would hold a node for the id it needs - because spec
+   * ruling 2 requires the fold to accept a local-shaped id a source named, and both folds resolve a
+   * merged endpoint onto its canonical id and boot.
+   *
+   * <p><b>It reads the whole log.</b> The only caller is a dev-side tool that has already read it
+   * once in the same run and appends exactly one row, so this is a second read per invocation
+   * rather than per claim.
+   *
+   * <p><b>Both refusals throw #233's {@link UnknownEndpointException}, not a second type</b> (#228
+   * reconciliation). This gate and {@link #requireEveryEndpointIsInTheGraph} ask one question —
+   * does the projection this claim is about hold a node for the id it needs — of two different
+   * projections, so they share the type and each writes its own sentence: this one says "the fold
+   * holds no node for", because it asked the log's fold; {@code record}'s says "the graph holds no
+   * node for", because it asked the running graph. Naming the wrong witness is the misdescription
+   * that constructor's javadoc exists to prevent. The refusal is not an {@code
+   * IllegalArgumentException} any more, which is a NARROWING: {@code UnknownEndpointException}
+   * extends {@code IllegalStateException}, so a caller that was catching the former must now catch
+   * this. Nothing in this repository was.
+   */
+  private static void refuseAClaimTheFoldCouldNotHold(
+      List<LoggedAssertion> logged, LoggedAssertion claim) {
+    List<LoggedAssertion> would = new ArrayList<>(logged);
+    would.add(claim);
+    if (claim instanceof SameAs merge) {
+      Set<String> held = Equivalences.nodesTheFoldHolds(would);
+      if (!held.contains(merge.localQid())) {
+        throw new UnknownEndpointException(
+            List.of(merge.localQid()),
+            "the fold holds no node for "
+                + merge.localQid()
+                + ", so this merge would build no stand-in for "
+                + merge.canonicalQid()
+                + " — the first edge naming that id would stop the boot replay, on rows ADR 19"
+                + " forbids deleting (#228). Claim a node for "
+                + merge.localQid()
+                + " first, or merge an id the projection does hold");
+      }
+    }
+    if (claim instanceof OwnerEdge owned) {
+      Set<String> held = Equivalences.nodesTheFoldHolds(would);
+      Equivalences.folding(would)
+          .foldEndpoints(owned.toAssertion())
+          .ifPresent(folded -> refuseEndpointsNothingHolds(owned, folded, held));
+    }
+  }
+
+  /**
+   * Refuse an owner edge whose fold holds no node for one or both endpoints (#228 fix round 1).
+   *
+   * <p><b>A self-loop names one entity, and is reported once.</b> {@code fromQid} and {@code toQid}
+   * can be the same id — {@link Equivalences#foldEndpoints} collapses a pair the fold brought
+   * together, but leaves a self-loop the claim itself wrote — and describing it twice would tell an
+   * operator to repair two things where there is one. How many entities an edge names is {@link
+   * AssertionRecord#endpoints()}, in {@code domain}, since #228's reconciliation: {@code
+   * requireBothEndpoints} on the sourced path and {@code GraphProjector}'s boot diagnosis read the
+   * same rule, where all three used to spell it for themselves. The FOLDED assertion is asked, not
+   * the claimed one, because it is the folded pair the graph would be handed.
+   *
+   * <p><b>Both endpoints are checked before anything is thrown.</b> The version this replaces threw
+   * on the first missing endpoint and never looked at the second, so an edge naming two ids the
+   * fold holds no node for was reported as if only one were wrong - and the message named no row,
+   * so an operator staring at two ids with no obvious relationship had nothing telling him they
+   * were even the same edge. Both are collected into one message here, which also names the edge
+   * itself, by {@link AssertionRecord#edgeKey()} of the FOLDED assertion.
+   *
+   * <p>Each endpoint is asked of its FOLDED id rather than the claimed one, and both are named when
+   * they differ, so that an operator reading the refusal can see whether the id he typed is the id
+   * the projection complained about. A folded pair the fold yields nothing for is never reached -
+   * the caller only enters this method once {@link Equivalences#foldEndpoints} has already yielded
+   * one; a withdrawn or collapsed edge applies nothing and the log boots, which is the only thing
+   * this guard is for.
+   */
+  private static void refuseEndpointsNothingHolds(
+      OwnerEdge owned, AssertionRecord folded, Set<String> held) {
+    List<String> unheld = new ArrayList<>();
+    List<String> missing = new ArrayList<>();
+    describeIfMissing(owned.fromQid(), folded.fromQid(), held, unheld, missing);
+    if (folded.endpoints().size() == 2) {
+      describeIfMissing(owned.toQid(), folded.toQid(), held, unheld, missing);
+    }
+    if (missing.isEmpty()) {
+      return;
+    }
+    throw new UnknownEndpointException(
+        unheld,
+        "the fold holds no node for "
+            + String.join("; ", missing)
+            + " — the owner edge "
+            + folded.edgeKey()
+            + " names it, which stops the boot replay, on a row ADR 19 forbids deleting (#228)");
+  }
+
+  /**
+   * Append a description of one owner-edge endpoint to {@code missing}, if the fold holds no node
+   * for it (#228 fix round 1).
+   *
+   * <p><b>The advice differs by shape.</b> An ordinary or leading-zero local-shaped id can still be
+   * minted or seeded, so it is told to be - that is still the right advice for most of what this
+   * guard refuses. A canonical-shaped id (ADR 62's reserved eleven-or-more digits, no leading zero)
+   * cannot: it is not a shape Wikidata could ever allocate, so it cannot be seeded, and {@link
+   * LocalEntity#minted} refuses that exact shape too (ADR 59 reserves the leading zero for a minted
+   * local id, not this one) - so the only way it ever gets a stand-in is a merge landing on it,
+   * which this guard cannot do on the caller's behalf. Telling an operator to "mint or seed it
+   * first" would be advice about an action nothing in the system can perform; {@code
+   * OwnRun.labelOrRefuse} already gives an operator equivalent news about a merged-away local id
+   * the same way - naming the id and telling him what to do about it rather than repeating advice
+   * that does not apply.
+   */
+  private static void describeIfMissing(
+      String claimed, String folded, Set<String> held, List<String> unheld, List<String> missing) {
+    if (held.contains(folded)) {
+      return;
+    }
+    // The bare id goes to UnknownEndpointException.endpoints(), which is what a caller reads
+    // programmatically; the sentence below goes to the message. Kept as two lists rather than one
+    // parsed apart, so nothing has to split prose back into ids.
+    unheld.add(folded);
+    String named = folded.equals(claimed) ? folded : folded + " (claimed against " + claimed + ")";
+    if (Qid.isCanonicalSide(folded) && !Qid.isAllocatable(folded)) {
+      missing.add(
+          named
+              + " - shaped like a merge's canonical id (ADR 62); it cannot be minted or seeded,"
+              + " only merged onto");
+    } else {
+      missing.add(named + " - mint or seed it first");
+    }
   }
 
   /** Record a batch in order; each claim is logged and applied before the next is considered. */
@@ -219,7 +387,8 @@ public final class IngestService {
       case SameAs merge -> {
         // The node half and the taste half now ask DIFFERENT questions of the same merge (#221,
         // fix round 1). Equivalences.stands() answers "does this merge still contribute a node" -
-        // last-wins, OR a surviving edge names its canonical id, because OwnRun can offer that id
+        // last-wins, OR an edge the fold keeps names its canonical id, because OwnRun can offer
+        // that id
         // as an endpoint the moment its stand-in exists and a claim made against it survives a
         // later correction (ADR 19). Equivalences.NONE - the live path, which sees one claim and
         // not a log - answers both questions true, so record() is unchanged.
@@ -334,12 +503,13 @@ public final class IngestService {
    *
    * <p><b>This is the store's own precondition, asked one step earlier.</b> {@code
    * TinkerGraphStore.requireVertex} and {@code JenaGraphStore.requireKnown} both throw {@code
-   * "assertion references unknown entity … - upsert the node first"} for exactly this case, and
+   * "assertion references unknown entity … - upsert the node first …"} for exactly this case, and
    * {@code GraphStoreContract} pins the pair as an agreed contract rather than one engine's habit.
-   * Neither is changed: a store must keep refusing whatever a producer does. What this adds is that
-   * the refusal now happens while it is still free. ADR 24's ordering — log first, then graph — is
-   * untouched and so is its argument; see that ADR's 2026-09-04 amendment for what the argument
-   * does NOT cover.
+   * Both still throw the same exception type: #228 qualified their message to also name the
+   * retraction repair once a log already carries the row, but a store must keep refusing whatever a
+   * producer does. What this adds is that the refusal now happens while it is still free. ADR 24's
+   * ordering — log first, then graph — is untouched and so is its argument; see that ADR's
+   * 2026-09-04 amendment for what the argument does NOT cover.
    *
    * <p><b>It asks {@link Equivalences#foldEndpoints}, the same call {@link #apply} is about to
    * make</b>, rather than reading {@code fromQid} and {@code toQid} off the claim. The two must not
@@ -384,15 +554,16 @@ public final class IngestService {
    * Both endpoints are checked before either is thrown for (#233 final review, minor 2), so an edge
    * naming two unknown entities is refused ONCE naming both — not once, on the first, leaving the
    * second undiscovered until a retry. {@code fromQid} and {@code toQid} can name the same entity
-   * (a self-loop); that is checked once, not reported twice.
+   * (a self-loop); that is checked once, not reported twice, and since #228 the rule for that is
+   * {@link AssertionRecord#endpoints()} in {@code domain} rather than a copy here — the same rule
+   * {@code claim}'s gate and {@code GraphProjector}'s boot diagnosis read.
    */
   private void requireBothEndpoints(AssertionRecord edge) {
     List<String> missing = new ArrayList<>(2);
-    if (graph.node(edge.fromQid()).isEmpty()) {
-      missing.add(edge.fromQid());
-    }
-    if (!edge.toQid().equals(edge.fromQid()) && graph.node(edge.toQid()).isEmpty()) {
-      missing.add(edge.toQid());
+    for (String endpoint : edge.endpoints()) {
+      if (graph.node(endpoint).isEmpty()) {
+        missing.add(endpoint);
+      }
     }
     if (!missing.isEmpty()) {
       throw new UnknownEndpointException(missing, edge);
