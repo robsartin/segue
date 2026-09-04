@@ -3,6 +3,8 @@ package com.robsartin.segue.export;
 import static com.robsartin.segue.export.InventedGraph.merged;
 import static com.robsartin.segue.export.InventedGraph.minted;
 import static com.robsartin.segue.export.InventedGraph.node;
+import static com.robsartin.segue.export.InventedGraph.owned;
+import static com.robsartin.segue.export.InventedGraph.retract;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.domain.Equivalences;
@@ -11,6 +13,7 @@ import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
+import com.robsartin.segue.domain.Retraction;
 import com.robsartin.segue.export.InventedGraph.FakeAssertionLog;
 import com.robsartin.segue.ingest.IngestService;
 import com.robsartin.segue.own.ProjectionLabelsProbe;
@@ -65,6 +68,16 @@ import org.junit.jupiter.api.Test;
  * log, so nothing there can know a later merge corrected this one. <b>The four homes ask one
  * predicate; they do not ask it of one {@code Equivalences}.</b>
  *
+ * <p><b>The retracted-merge row is split the same way, by a different cause.</b> {@code
+ * Q10000900207} is a canonical id a local entity was merged onto and then the local entity was
+ * retracted (issue #224). The retraction drops the merge, so the three homes that read the whole
+ * log hold nothing for it. The live one never sees the retraction at all: {@code
+ * IngestService.record} refuses one outright - it is log-then-graph and a retraction has no graph
+ * half (ADR 44) - so this replay hands a retraction to {@code IngestService.retract} instead, the
+ * way a live writer actually would, and the running graph keeps the stand-in until the next boot
+ * re-folds the log. That is ADR 24's stated lag, the same shape as the twice-merged row above, and
+ * a second, independent reason the live home answers a row the other three do not.
+ *
  * <p><b>Both splits are the same fact about the live path: it folds nothing.</b> {@code record}
  * applies a claim as it stands — no {@code KindMapper.rederive}, which is ADR 42's lag and the
  * bypass row above, and no equivalences read off a log, which is the twice-merged row. Neither is
@@ -87,6 +100,9 @@ class StandInAgreesInEveryHomeTest {
   private static final String CLAIMED_LOCAL = "Q0014";
   private static final String LATE_LOCAL = "Q0015";
   private static final String SPARE = "Q0016";
+  private static final String LAPSED = "Q0017";
+
+  private static final String STRANDED = "Q10000900207";
 
   private static final String TAPE = "Q10000900201";
   private static final String BEACON = "Q10000900202";
@@ -117,7 +133,10 @@ class StandInAgreesInEveryHomeTest {
   private static final NodeAssertion BYPASS_CLAIM =
       node(SIGNAL, NodeKind.WORK, "a signal a source named", List.of("Q5"));
 
-  /** The fixture: the spec's table, row for row. No edges and no retractions - see the spec. */
+  /**
+   * The fixture: the spec's table, row for row. One edge and one retraction, both of them issue
+   * #224's row and nothing else's - see that row's comment in {@link #PINNED}.
+   */
   private static FakeAssertionLog fourHomesLog() {
     return new FakeAssertionLog()
         .with(
@@ -135,7 +154,11 @@ class StandInAgreesInEveryHomeTest {
             merged(LATE_LOCAL, LATER),
             node(LATER, NodeKind.GROUP, "the name the source brought later"),
             minted(SPARE, NodeKind.WORK, "the second working title"),
-            merged(SPARE, TAPE));
+            merged(SPARE, TAPE),
+            minted(LAPSED, NodeKind.WORK, "the working title he took back"),
+            merged(LAPSED, STRANDED),
+            owned(KNOWN, STRANDED, "INFLUENCED_BY"),
+            retract(LAPSED));
   }
 
   /**
@@ -195,7 +218,7 @@ class StandInAgreesInEveryHomeTest {
               NodeKind.WORK,
               "a signal a source named",
               "a signal a source named"),
-          // The twice-merged row, and the only one the homes split by PRESENCE (#221). The
+          // The twice-merged row, one of the two rows the homes split by PRESENCE (#221). The
           // correction retired this stand-in, and the three homes that read the whole log say so;
           // the live one is handed Equivalences.NONE and still builds it. See the class javadoc.
           new Pinned(
@@ -226,9 +249,24 @@ class StandInAgreesInEveryHomeTest {
               NodeKind.GROUP,
               NodeKind.GROUP,
               "the name the source brought later",
-              "the name the source brought later"));
+              "the name the source brought later"),
+          // The retracted-merge row (#224), and the second one the homes split by PRESENCE. The
+          // retraction dropped the merge, so the three homes that read the whole log hold nothing
+          // under this id; the live one never sees the retraction at all - IngestService.record
+          // refuses one outright and IngestService.retract has no graph half - so it keeps the
+          // stand-in until the next boot re-folds the log. That is ADR 24's stated lag, the same
+          // shape as the twice-merged row above.
+          new Pinned(
+              STRANDED,
+              LAPSED,
+              null,
+              null,
+              null,
+              NodeKind.WORK,
+              null,
+              "the working title he took back"));
 
-  // Read once. Every home gets the same fifteen rows, which is the whole point, and building
+  // Read once. Every home gets the same nineteen rows, which is the whole point, and building
   // the live graph per assertion would open a TinkerGraph six times over.
   private static final FakeAssertionLog LOG = fourHomesLog();
   private static final Map<String, NodeRecord> IN_THE_FOLD = LogProjection.of(LOG).nodes();
@@ -316,13 +354,15 @@ class StandInAgreesInEveryHomeTest {
                 .filter(r -> (r.shownLabel() == null) != (r.shownInTheLiveGraphLabel() == null))
                 .toList())
         .as(
-            "the live home is split from the other three by PRESENCE on the twice-merged row and"
-                + " nowhere else - it is handed Equivalences.NONE, whose stands is unconditionally"
-                + " true, so it alone still builds a stand-in the correction retired (#221). A"
-                + " table splitting them anywhere else would be recording a drift as though it"
-                + " were that; one splitting them nowhere would have stopped recording it")
+            "the live home is split from the other three by PRESENCE on exactly two rows, and each"
+                + " has its own cause: the twice-merged row, where it is handed Equivalences.NONE"
+                + " and still builds a stand-in the correction retired (#221), and the"
+                + " retracted-merge row, where it never sees the retraction at all because a"
+                + " retraction has no graph half (#224). A table splitting them anywhere else"
+                + " would be recording a drift as though it were one of these; one splitting them"
+                + " nowhere would have stopped recording them")
         .extracting(Pinned::canonical)
-        .containsExactly(FIRST);
+        .containsExactly(FIRST, STRANDED);
   }
 
   @Test
@@ -555,9 +595,21 @@ class StandInAgreesInEveryHomeTest {
   private static Map<String, NodeRecord> liveGraphNodes() {
     Map<String, NodeRecord> nodes = new LinkedHashMap<>();
     List<LoggedAssertion> logged = LOG.readAll();
+    FakeAssertionLog liveLog = new FakeAssertionLog();
     try (TinkerGraphStore graph = new TinkerGraphStore()) {
-      IngestService ingest = new IngestService(new FakeAssertionLog(), graph, IdentityMerge.NONE);
-      logged.forEach(ingest::record);
+      IngestService ingest = new IngestService(liveLog, graph, IdentityMerge.NONE);
+      for (LoggedAssertion assertion : logged) {
+        if (assertion instanceof Retraction retraction) {
+          // record() refuses a retraction outright - it is log-then-graph and a retraction has no
+          // graph half (ADR 44) - so the live home is shown what a live writer actually does with
+          // one: IngestService.retract appends it, and the running graph is stale until the next
+          // boot rebuilds it (ADR 24). Skipping it silently would make this home's answer look
+          // like a choice rather than the lag it is.
+          IngestService.retract(liveLog, retraction);
+          continue;
+        }
+        ingest.record(assertion);
+      }
       // The local ids as well as the canonical ones: a stand-in is only checkable against the node
       // it copies if this home can be asked about both.
       for (String qid : canonicalIds()) {
