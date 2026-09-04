@@ -78,15 +78,20 @@ class IngestServiceTest {
   }
 
   @Test
-  @DisplayName("when the graph rejects a claim the log has already kept it")
-  void logLeadsTheGraph() {
-    // TinkerGraphStore.record calls requireVertex, which throws when an endpoint is unknown.
+  @DisplayName("record refuses an edge it cannot apply rather than appending one it must keep")
+  void recordRefusesAnEdgeItCannotApply() {
+    // #233. This method used to be logLeadsTheGraph and asserted the opposite: that the log had
+    // already kept a claim the caller was told had failed. The ORDERING that name described is
+    // unchanged and is still asserted by liveAndReplayAgree and retractAppendsAndTouchesNoGraph;
+    // what changed is that a claim which cannot survive the ordering never enters it.
     AssertionRecord dangling =
         new AssertionRecord("Q0404", "Q0405", "MEMBER_OF", null, null, WIKIDATA);
 
-    assertThatThrownBy(() -> ingest.record(dangling)).isInstanceOf(IllegalStateException.class);
+    assertThatThrownBy(() -> ingest.record(dangling))
+        .isInstanceOf(UnknownEndpointException.class)
+        .hasMessageContaining("Q0404");
 
-    assertThat(log.readAll()).containsExactly(dangling);
+    assertThat(log.readAll()).isEmpty();
   }
 
   @Test

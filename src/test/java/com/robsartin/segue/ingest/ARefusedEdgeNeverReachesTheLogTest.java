@@ -15,7 +15,6 @@ import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import java.nio.file.Path;
 import java.time.Instant;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -51,7 +50,6 @@ class ARefusedEdgeNeverReachesTheLogTest {
       new Provenance("wikidata", "S-1", Instant.parse("2026-09-04T09:00:00Z"), 0.80);
 
   @Test
-  @Disabled("#233: red until record() asks the graph before it appends")
   @DisplayName("should leave the log untouched when the graph holds no node for an endpoint")
   void shouldLeaveTheLogUntouchedWhenTheGraphHoldsNoNodeForAnEndpoint() {
     NodeAssertion seed = new NodeAssertion(WREN, NodeKind.PERSON, "Wren Alderman", WIKIDATA);
@@ -64,7 +62,7 @@ class ARefusedEdgeNeverReachesTheLogTest {
       ingest.record(seed);
 
       assertThatThrownBy(() -> ingest.record(edge))
-          .isInstanceOf(IllegalStateException.class)
+          .isInstanceOf(UnknownEndpointException.class)
           .hasMessageContaining(KETTLES);
 
       assertThat(log.readAll())
@@ -75,7 +73,6 @@ class ARefusedEdgeNeverReachesTheLogTest {
   }
 
   @Test
-  @Disabled("#233: red until record() asks the graph before it appends")
   @DisplayName("should leave a log that still boots when record refuses the edge")
   void shouldLeaveALogThatStillBootsWhenRecordRefusesTheEdge(@TempDir Path dir) {
     Path db = dir.resolve("segue.db");
@@ -86,7 +83,7 @@ class ARefusedEdgeNeverReachesTheLogTest {
         GraphStore graph = new TinkerGraphStore()) {
       IngestService ingest = new IngestService(log, graph, IdentityMerge.NONE);
       ingest.record(new NodeAssertion(WREN, NodeKind.PERSON, "Wren Alderman", WIKIDATA));
-      assertThatThrownBy(() -> ingest.record(edge)).isInstanceOf(IllegalStateException.class);
+      assertThatThrownBy(() -> ingest.record(edge)).isInstanceOf(UnknownEndpointException.class);
     }
 
     // The next boot, over the file that failed call left behind. A real file rather than

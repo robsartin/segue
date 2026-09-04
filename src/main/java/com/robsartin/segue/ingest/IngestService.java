@@ -48,6 +48,12 @@ public final class IngestService {
   /**
    * Append one claim to the log, then apply it to the graph.
    *
+   * <p><b>An edge whose endpoint the graph holds no node for is refused before the append</b>
+   * (#233), the same way a retraction is. The log is append-only (ADR 19) and replay is fatal on
+   * the first failure (ADR 24), so a row the graph refuses once is a row every later boot refuses
+   * too — the log's "correct failure direction" only holds for a claim that can eventually project.
+   * See {@link #requireEveryEndpointIsInTheGraph}.
+   *
    * <p><b>The equivalences are {@link Equivalences#NONE} here, and that is a stated limitation
    * rather than an oversight</b> (#178). {@link #apply} now folds an edge's endpoints through the
    * merges the log holds, and this path has no such view: it sees one claim, not the log, and
@@ -74,6 +80,7 @@ public final class IngestService {
       // retraction in the log that the caller had been told did not happen.
       throw new IllegalArgumentException("a retraction is appended by retract(), not record()");
     }
+    requireEveryEndpointIsInTheGraph(assertion);
     log.append(assertion);
     apply(graph, merges, Equivalences.NONE, assertion);
   }
@@ -314,6 +321,63 @@ public final class IngestService {
     if (graph.node(canonical).isEmpty()) {
       graph.upsertNode(
           new NodeRecord(canonical, minted.get().kind(), minted.get().label(), List.of()));
+    }
+  }
+
+  /**
+   * Refuse an edge the graph will not hold, before the log keeps it forever (#233).
+   *
+   * <p><b>This is the store's own precondition, asked one step earlier.</b> {@code
+   * TinkerGraphStore.requireVertex} and {@code JenaGraphStore.requireKnown} both throw {@code
+   * "assertion references unknown entity … - upsert the node first"} for exactly this case, and
+   * {@code GraphStoreContract} pins the pair as an agreed contract rather than one engine's habit.
+   * Neither is changed: a store must keep refusing whatever a producer does. What this adds is that
+   * the refusal now happens while it is still free. ADR 24's ordering — log first, then graph — is
+   * untouched and so is its argument; see that ADR's 2026-09-04 amendment for what the argument
+   * does NOT cover.
+   *
+   * <p><b>It asks {@link Equivalences#foldEndpoints}, the same call {@link #apply} is about to
+   * make</b>, rather than reading {@code fromQid} and {@code toQid} off the claim. The two must not
+   * be able to disagree about WHICH endpoints have to exist — that is #224's defect in miniature,
+   * where a rule read raw endpoints while the fold resolved them. On {@link Equivalences#NONE},
+   * which is all {@code record} ever holds, the fold is the identity and the second call costs an
+   * empty-set lookup and two map misses.
+   *
+   * <p>A fold that yields nothing needs no check: {@link #apply} returns false for it and reaches
+   * the graph with nothing at all.
+   */
+  private void requireEveryEndpointIsInTheGraph(LoggedAssertion assertion) {
+    Optional<LoggedAssertion> folded = Equivalences.NONE.foldEndpoints(assertion);
+    if (folded.isEmpty()) {
+      return;
+    }
+    Optional<AssertionRecord> edge =
+        switch (folded.get()) {
+          case AssertionRecord sourced -> Optional.of(sourced);
+          // record() accepts one today - nothing in production sends it, but MergeWiringTest's
+          // sibling path does - and apply() hands it to graph.record exactly as it hands a sourced
+          // edge, so it poisons a log identically. #228 gates the same shape on claim().
+          case OwnerEdge owned -> Optional.of(owned.toAssertion());
+          // The other four create a node or create nothing. upsertNode cannot refuse, a merge's
+          // graph half is standIn() which upserts, and a retraction never reaches here because
+          // record() refuses one above. The switch is exhaustive over the sealed interface so that
+          // a seventh claim type cannot be added without deciding whether it has an endpoint.
+          case NodeAssertion ignored -> Optional.empty();
+          case LocalEntity ignored -> Optional.empty();
+          case SameAs ignored -> Optional.empty();
+          case Retraction ignored -> Optional.empty();
+        };
+    edge.ifPresent(this::requireBothEndpoints);
+  }
+
+  private void requireBothEndpoints(AssertionRecord edge) {
+    requireEndpoint(edge, edge.fromQid());
+    requireEndpoint(edge, edge.toQid());
+  }
+
+  private void requireEndpoint(AssertionRecord edge, String qid) {
+    if (graph.node(qid).isEmpty()) {
+      throw new UnknownEndpointException(qid, edge);
     }
   }
 }
