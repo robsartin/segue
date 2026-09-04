@@ -12,6 +12,7 @@ import com.robsartin.segue.domain.SameAs;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.GraphStore;
 import com.robsartin.segue.port.IdentityMerge;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -379,14 +380,22 @@ public final class IngestService {
     edge.ifPresent(this::requireBothEndpoints);
   }
 
+  /**
+   * Both endpoints are checked before either is thrown for (#233 final review, minor 2), so an edge
+   * naming two unknown entities is refused ONCE naming both — not once, on the first, leaving the
+   * second undiscovered until a retry. {@code fromQid} and {@code toQid} can name the same entity
+   * (a self-loop); that is checked once, not reported twice.
+   */
   private void requireBothEndpoints(AssertionRecord edge) {
-    requireEndpoint(edge, edge.fromQid());
-    requireEndpoint(edge, edge.toQid());
-  }
-
-  private void requireEndpoint(AssertionRecord edge, String qid) {
-    if (graph.node(qid).isEmpty()) {
-      throw new UnknownEndpointException(qid, edge);
+    List<String> missing = new ArrayList<>(2);
+    if (graph.node(edge.fromQid()).isEmpty()) {
+      missing.add(edge.fromQid());
+    }
+    if (!edge.toQid().equals(edge.fromQid()) && graph.node(edge.toQid()).isEmpty()) {
+      missing.add(edge.toQid());
+    }
+    if (!missing.isEmpty()) {
+      throw new UnknownEndpointException(missing, edge);
     }
   }
 }

@@ -2,6 +2,7 @@ package com.robsartin.segue.ingest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.LocalEntity;
@@ -96,6 +97,24 @@ class IngestServiceTest {
         .isInstanceOf(UnknownEndpointException.class)
         .hasMessageContaining("Q0404");
 
+    assertThat(log.readAll()).isEmpty();
+  }
+
+  @Test
+  @DisplayName("should name both endpoints when a sourced edge names two unknown entities")
+  void shouldNameBothEndpointsWhenASourcedEdgeNamesTwoUnknownEntities() {
+    // #233 final review, minor 2. requireEndpoint used to throw on the FIRST missing endpoint it
+    // checked (fromQid), so an edge with two unknown endpoints named and counted only that one -
+    // SegueService.expandEntity's "N endpoint(s)" reason is built from exactly what this exception
+    // reports, so undercounting here undercounts there too.
+    AssertionRecord bothUnknown =
+        new AssertionRecord("Q0406", "Q0407", "MEMBER_OF", null, null, WIKIDATA);
+
+    UnknownEndpointException thrown =
+        catchThrowableOfType(UnknownEndpointException.class, () -> ingest.record(bothUnknown));
+
+    assertThat(thrown.getMessage()).contains("Q0406").contains("Q0407");
+    assertThat(thrown.endpoints()).containsExactly("Q0406", "Q0407");
     assertThat(log.readAll()).isEmpty();
   }
 

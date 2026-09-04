@@ -179,9 +179,13 @@ public final class SegueService {
    * naming the seed at neither end has its second endpoint resolved by nobody. Every adapter in
    * {@code src/main} puts the seed at an end, and nothing in {@link SourceAdapter} says it must, so
    * this is the report rather than the guard: the guard is at the append, where a refusal costs a
-   * message instead of a log that cannot boot. Counted by distinct endpoint, like {@link
-   * ExpansionSummary#skippedNeighbors()}, and named in {@code detail} rather than on the summary —
-   * ADR 56's reason for keeping attribution out of the wire shape.
+   * message instead of a log that cannot boot. Counted by distinct endpoint, the same unit {@link
+   * ExpansionSummary#skippedNeighbors()} uses — but unlike that field, a refused endpoint has no
+   * counterpart on {@link ExpansionSummary} at all: {@code skippedNeighbors()} IS an aggregate
+   * count on the wire, with only which neighbours kept to prose, where ADR 56 kept an aggregate
+   * flag on the wire and moved only attribution to {@code detail}. Here both the count and the
+   * names live in {@code detail} alone, which is a narrower choice than ADR 56 made, not the same
+   * one repeated.
    *
    * <p>What is reported as skipped is the count of <em>distinct</em> neighbours, not of the
    * assertions dropped along with them. Both are defensible numbers; only one matches the name
@@ -300,7 +304,7 @@ public final class SegueService {
     Set<String> unresolvableNeighbors = new HashSet<>();
     // Every neighbour whose identity this call has already recorded — see the note further down.
     Set<String> identityRecorded = new HashSet<>();
-    // Endpoints no claim describes, by endpoint rather than by assertion — the same unit
+    // Endpoints the graph holds no node for, by endpoint rather than by assertion — the same unit
     // skippedNeighbors uses, and for the same reason: two assertions naming one unknown entity are
     // one thing the caller can act on. Insertion-ordered so the reason string is stable.
     Set<String> refusedEndpoints = new LinkedHashSet<>();
@@ -375,7 +379,7 @@ public final class SegueService {
         // the same choice made for an unresolvable neighbour above. Letting it escape is what the
         // class's second invariant forbids and what ADR 27 turns into a readable result instead.
         log.warn("expandEntity({}) refused an edge: {}", qid, e.getMessage());
-        refusedEndpoints.add(e.endpoint());
+        refusedEndpoints.addAll(e.endpoints());
         continue;
       }
       edgesAdded++;
@@ -410,7 +414,7 @@ public final class SegueService {
     if (!refusedEndpoints.isEmpty()) {
       reasons.add(
           refusedEndpoints.size()
-              + " endpoint(s) no claim describes were refused: "
+              + " endpoint(s) the graph holds no node for were refused: "
               + String.join(", ", refusedEndpoints));
     }
     if (reasons.isEmpty()) {
