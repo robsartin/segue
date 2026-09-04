@@ -331,6 +331,7 @@ graph TD
   own --> support
   census --> support
   census --> domain
+  census --> wikidata
   census ==>|"one fold, not two"| export
 ```
 
