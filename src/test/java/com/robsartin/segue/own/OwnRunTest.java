@@ -235,7 +235,7 @@ class OwnRunTest {
 
   @Test
   @DisplayName(
-      "should still accept the canonical id of a corrected merge when a surviving edge names it")
+      "should still accept the canonical id of a corrected merge when an edge the fold keeps names it")
   void shouldStillAcceptTheCanonicalIdOfACorrectedMergeWhenASurvivingEdgeNamesIt() {
     // The counterpart to shouldRefuseTheCanonicalIdOfAMergeWhenALaterMergeCorrectedIt: there,
     // nothing ever claimed against CANONICAL before it was corrected away, so its stand-in has no

@@ -30,8 +30,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Issue #221: a local id merged onto one canonical id and then onto another retires the first
- * canonical id's stand-in — <b>unless a surviving edge still names it</b> (fix round 1 widened the
- * original last-wins-only rule; see {@code Equivalences#stands}).
+ * canonical id's stand-in — <b>unless an edge the fold keeps still names it</b> (fix round 1
+ * widened the original last-wins-only rule; see {@code Equivalences#stands}).
  *
  * <p><b>Why this is not a case inside {@code BothFoldsAgreeTest}.</b> That test compares the two
  * folds with each other, and until #221 they agreed about the orphan — the exporter's fold built it
@@ -56,10 +56,10 @@ import org.junit.jupiter.api.Test;
  * <p><b>Fix round 1 added the surviving-edge case</b> — {@code
  * shouldReplayWithoutThrowingWhenASurvivingEdgeNamesACorrectedCanonicalId} and {@code
  * shouldKeepTheSupersededStandInInTheExportersFoldWhenASurvivingEdgeNamesItToo} — where a canonical
- * id a later merge corrected keeps its stand-in precisely because a surviving edge still names it,
- * so the absence above and the survival here are two faces of one rule rather than a contradiction.
- * {@code shouldKeepNoSupersededStandInAliveWhenTheOnlyNamingEdgeIsRetracted} closes the gap between
- * them: retracting that edge's own endpoint returns the case to the plain absence.
+ * id a later merge corrected keeps its stand-in precisely because an edge the fold keeps still
+ * names it, so the absence above and the survival here are two faces of one rule rather than a
+ * contradiction. {@code shouldKeepNoSupersededStandInAliveWhenTheOnlyNamingEdgeIsRetracted} closes
+ * the gap between them: retracting that edge's own endpoint returns the case to the plain absence.
  *
  * <p>Every entity here is invented (ADR 40, issue #37).
  */
@@ -139,7 +139,7 @@ class TwiceMergedIdLeavesNoOrphanTest {
 
   @Test
   @DisplayName(
-      "replay does not throw, and agrees with the exporter, when a surviving edge names a"
+      "replay does not throw, and agrees with the exporter, when an edge the fold keeps names a"
           + " canonical id a later merge corrected")
   void shouldReplayWithoutThrowingWhenASurvivingEdgeNamesACorrectedCanonicalId() {
     FakeAssertionLog log = correctedLogWithASurvivingEdgeOnTheFirstCanonical();
@@ -154,7 +154,7 @@ class TwiceMergedIdLeavesNoOrphanTest {
 
       assertThat(replayed.node(MISHEARD))
           .as(
-              "a surviving edge names MISHEARD directly, so its stand-in is not an orphan and"
+              "an edge the fold keeps names MISHEARD directly, so its stand-in is not an orphan and"
                   + " dropping it would leave the edge dangling")
           .hasValueSatisfying(
               node -> {
@@ -171,15 +171,15 @@ class TwiceMergedIdLeavesNoOrphanTest {
 
   @Test
   @DisplayName(
-      "a superseded canonical id's stand-in survives the exporter's fold too, where a surviving"
-          + " edge names it, and the two folds agree")
+      "a superseded canonical id's stand-in survives the exporter's fold too, where an edge the"
+          + " fold keeps names it, and the two folds agree")
   void shouldKeepTheSupersededStandInInTheExportersFoldWhenASurvivingEdgeNamesItToo() {
     FakeAssertionLog log = correctedLogWithASurvivingEdgeOnTheFirstCanonical();
 
     LogProjection folded = LogProjection.of(log);
     assertThat(folded.nodes())
         .as(
-            "the exporter's fold: a surviving edge names MISHEARD directly, so its stand-in is"
+            "the exporter's fold: an edge the fold keeps names MISHEARD directly, so its stand-in is"
                 + " not an orphan and dropping it would leave the edge dangling")
         .containsKey(MISHEARD);
     assertThat(folded.nodes().get(MISHEARD).kind()).isEqualTo(NodeKind.WORK);
@@ -219,7 +219,8 @@ class TwiceMergedIdLeavesNoOrphanTest {
                 correctedLogWithASourcedSurvivingEdge().readAll(), KindMapper::rederive))
         .as(
             "an edge a source claimed against MISHEARD keeps its stand-in exactly as one the owner"
-                + " claimed does - stands asks what still names the id, not who said so")
+                + " claimed does - stands asks what edge the fold keeps names the id, not who"
+                + " said so")
         .containsOnlyKeys(MISHEARD, WATERMARK);
   }
 

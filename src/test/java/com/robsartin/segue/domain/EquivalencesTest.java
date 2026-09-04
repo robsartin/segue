@@ -379,7 +379,7 @@ class EquivalencesTest {
   void shouldTakeTheStandInsLabelFromTheMergeThatStandsWhenTheOtherWasCorrectedAway() {
     // standIns' own "Two local ids merged onto ONE canonical id" paragraph names this exact
     // case: FIRST and SECOND both merge onto SHARED_CANONICAL, and a later merge corrects FIRST
-    // away onto RETARGETED. No edge anywhere in this log, so no surviving edge names
+    // away onto RETARGETED. No edge anywhere in this log, so no edge the fold keeps names
     // SHARED_CANONICAL directly - the branch where FIRST's now-superseded merge must contribute
     // NOTHING and SECOND's label wins outright, whatever the log order put first.
     //

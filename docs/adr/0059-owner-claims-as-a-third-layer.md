@@ -518,10 +518,10 @@ keep, and an owner claim that would leave the log unbootable is now refused befo
 Nothing above is withdrawn and no sentence above is edited: it is the true account of the code
 between #221 and this issue, and it is what this amendment answers.
 
-**Three phrases in that ruling are now wrong, and this is where they are corrected.** It reads
-*"while any surviving `AssertionRecord` or `OwnerEdge` names its canonical id as an endpoint"*, and
-*"computed once in `Equivalences.in` from the same pass that builds `canonicalByLocal`, over
-surviving rows only"*. All three are superseded:
+**Three phrases across the two sentences below are now wrong, and this is where they are
+corrected.** It reads *"while any surviving `AssertionRecord` or `OwnerEdge` names its canonical id
+as an endpoint"*, and *"computed once in `Equivalences.in` from the same pass that builds
+`canonicalByLocal`, over surviving rows only"*. All three are superseded:
 
 - **"any surviving edge" is now "any edge the fold KEEPS."** Surviving and kept are different sets. An
   edge the fold *withdraws* — because it names a canonical id a retraction emptied
@@ -594,6 +594,19 @@ amendment closes for owner claims, asked of the projection that path can see. It
 guarantee: the running graph is stale after a retraction until the next boot, so an edge naming a
 retracted entity still passes it. That gap is [ADR 24](0024-sqlite-assertion-log.md)'s 2026-09-04
 amendment's residual and issue **#234**; the boot refusal above now names such a row.
+
+**A third residual, and it is not a defect: the gate is a bootability gate, not an effect gate.**
+`IngestService.claim`'s `OwnerEdge` arm reaches `refuseEndpointsNothingHolds` only through
+`.ifPresent(...)` on `Equivalences#foldEndpoints`, so an owner edge whose folded endpoints yield
+nothing — withdrawn, because it names a canonical id a retraction emptied, or collapsed, because
+both ends fold onto one canonical id — is accepted, appended, and applies nothing at every boot
+forever. That is what `refuseEndpointsNothingHolds` is *for*: a withdrawn or collapsed edge has
+already reached the graph with nothing, so there is nothing left to check. **Bypass-only**:
+`OwnRun` already refuses both shapes, by never offering a merged-away or emptied id as a claimable
+endpoint, so this gap is reachable only by a caller that comes straight to `claim`. **Refusing it
+outright is a separate decision for a separate issue** — `SameAs` and `OwnerEdge` are refused above
+because they would break a *later* boot, not because they do nothing now, and an edge that merely
+applies nothing breaks no boot. `AnAcceptedOwnerEdgeThatAppliesNothingTest` pins both shapes.
 
 **Every path in this amendment is fixture-only today**, on a graph issue #227's census measured on
 2026-09-04 — the numbers are its, not restated here. That is the argument for the cheapest correct

@@ -11,9 +11,9 @@ import org.junit.jupiter.api.Test;
  *
  * <p>One retraction, at row 30, reaching two rows: the node claim at row 4 and the edge at row 12
  * that names the retracted entity. Three minted entities. Five surviving merges: rows 25, 26 and 29
- * stand, rows 23 and 28 are superseded, and of those two only row 23's canonical id is named by a
- * surviving edge — the owner edge at row 24, claimed against it while it stood. So four canonical
- * ids get a stand-in, and one of the four ends with no edge at all.
+ * stand, rows 23 and 28 are superseded, and of those two only row 23's canonical id is named by an
+ * edge the fold keeps — the owner edge at row 24, claimed against it while it stood. So four
+ * canonical ids get a stand-in, and one of the four ends with no edge at all.
  */
 class ClaimCensusTest {
 
@@ -43,7 +43,8 @@ class ClaimCensusTest {
   }
 
   @Test
-  @DisplayName("a superseded merge whose canonical id an edge still names is counted apart")
+  @DisplayName(
+      "a superseded merge whose canonical id an edge the fold keeps names is counted apart")
   void shouldSplitTheMergesWhenOneCorrectionLeavesAnEdgeBehindAndOneDoesNot() {
     assertThat(CENSUS.mergesStanding()).isEqualTo(3);
     assertThat(CENSUS.mergesSuperseded()).isEqualTo(2);

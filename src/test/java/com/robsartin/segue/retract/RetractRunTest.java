@@ -246,7 +246,7 @@ class RetractRunTest {
   void shouldReportADistinctTotalWhenOneEdgeNamesTwoNewlyStrandedIds() {
     // WORKING_TITLE is merged onto CAUGHT_UP, then corrected onto SECOND_CANONICAL - two SameAs
     // rows off the same local id, so retracting it strands BOTH canonical ids (retractedStandIns
-    // does not pick only the last-wins merge). The surviving edge names both directly, so it
+    // does not pick only the last-wins merge). The kept edge names both directly, so it
     // truthfully belongs to each id's own line - but LogProjection.withdrawnEdges counts it once,
     // and the report's closing total has to agree with that, not with the sum of the per-id lines.
     log.append(LocalEntity.minted(WORKING_TITLE, NodeKind.WORK, "a working title", NOW));

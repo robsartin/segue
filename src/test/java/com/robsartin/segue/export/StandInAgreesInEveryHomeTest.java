@@ -59,14 +59,15 @@ import org.junit.jupiter.api.Test;
  *
  * <p><b>The twice-merged row is split the other way — by presence, not by kind — and that is the
  * code too.</b> {@code Q10000900203} is the first of two canonical ids one local id was merged
- * onto, and since issue #221 a superseded merge names no stand-in unless a surviving edge still
- * references its canonical id. This fixture has no edges at all, so the three homes that read the
- * whole log — the fold, {@code OwnRun.labelsInTheProjection} and {@code ratings/Labels.forQids} —
- * all ask {@code Equivalences.in(log).stands} and all answer "no node". The live home answers with
- * the local's kind and label instead, because {@code IngestService.record} is handed {@code
- * Equivalences.NONE}, whose {@code stands} is unconditionally true: it sees one claim rather than a
- * log, so nothing there can know a later merge corrected this one. <b>The four homes ask one
- * predicate; they do not ask it of one {@code Equivalences}.</b>
+ * onto, and since issue #221 a superseded merge names no stand-in unless an edge the fold keeps
+ * still references its canonical id (#228 narrowed "surviving" to "kept"). This fixture has no
+ * edges at all, so the three homes that read the whole log — the fold, {@code
+ * OwnRun.labelsInTheProjection} and {@code ratings/Labels.forQids} — all ask {@code
+ * Equivalences.in(log).stands} and all answer "no node". The live home answers with the local's
+ * kind and label instead, because {@code IngestService.record} is handed {@code Equivalences.NONE},
+ * whose {@code stands} is unconditionally true: it sees one claim rather than a log, so nothing
+ * there can know a later merge corrected this one. <b>The four homes ask one predicate; they do not
+ * ask it of one {@code Equivalences}.</b>
  *
  * <p><b>The retracted-merge row is split the same way, by a different cause.</b> {@code
  * Q10000900207} is a canonical id a local entity was merged onto and then the local entity was

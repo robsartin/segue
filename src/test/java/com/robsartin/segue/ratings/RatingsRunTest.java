@@ -144,7 +144,7 @@ class RatingsRunTest {
 
   @Test
   @DisplayName(
-      "should keep a canonical id's label when a surviving edge names it directly, though a"
+      "should keep a canonical id's label when an edge the fold keeps names it directly, though a"
           + " later merge corrected it")
   void shouldKeepACanonicalIdsLabelWhenASurvivingEdgeNamesItDirectlyThoughALaterMergeCorrectedIt()
       throws IOException {

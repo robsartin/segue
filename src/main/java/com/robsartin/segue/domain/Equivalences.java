@@ -566,7 +566,10 @@ public record Equivalences(
    * canonical ids. So the chain from the empty set only grows, and a log has finitely many ids.
    *
    * <p><b>One round for a log with no retractions</b> - every log the owner's real graph has held -
-   * because the first step returns the empty set it was given.
+   * because the first step returns the empty set it was given. That count is per
+   * <em>invocation</em> of this method, not per boot: {@code GraphProjector.project} invokes the
+   * fold - and so this loop - more than once while replaying a single log, so the rounds are paid
+   * again each time rather than once per boot.
    *
    * <p><b>What an extra round CANNOT do: add an id that an edge the fold still keeps names RAW.</b>
    * An id a round after the first adds was held in the round before, which means some merge onto it

@@ -368,7 +368,8 @@ class MergeCarriesEverythingTest {
   @Test
   @DisplayName(
       "should carry a rating only to the merge that stands, even where the superseded canonical"
-          + " id's stand-in survives because a surviving edge names it (#221 fix round 1)")
+          + " id's stand-in survives because an edge the fold keeps names it (#221 fix round 1,"
+          + " narrowed by #228)")
   void
       shouldCarryTheRatingOnlyToTheMergeThatStandsEvenWhenTheSupersededCanonicalIdsStandInSurvives() {
     // ingest.record applies with Equivalences.NONE, so a live carry would write the rating onto
