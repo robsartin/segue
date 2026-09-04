@@ -23,7 +23,14 @@ fixed point twice — once inside `Equivalences.in` and once beside it in `retra
 plus `localsOfMerges`. The pre-flight `refuseRowsNamingAnEntityNoNodeStandsFor` then asked
 `Equivalences.nodesTheFoldHolds(List)`, which derives its own stand-ins and so pays a fourth. That
 fixed point is a loop of whole-log walks, not a scan: ADR 44's 2026-09-04 amendment carries the
-figure that prices one of them at this log's scale.
+figure that prices a single pathological round of it at this log's scale.
+
+**The issue that filed this work read that multiple as "roughly a threefold multiple off the
+boot's whole-log work"**, from the #228 whole-branch review's instrumented counts on a small log —
+`Equivalences.in` three times per boot, the fixed point four times with no retractions and eight
+with one, `localsOfMerges` six and ten. Those are fold invocations, not wall-clock. The measurement
+below is what the multiple is worth in seconds, and it is not threefold: the boot's time is the
+replay loop's store writes, which this change does not touch.
 
 **The code already admitted it, in prose, in the one place best positioned to know.**
 `Equivalences.emptiedCanonicalIds`' javadoc said the round count is per invocation of that method
@@ -111,13 +118,19 @@ generated into a JUnit `@TempDir` by `FoldOnceBenchmark` at the scale
 [ADR 57](0057-the-floor-reports-itself.md) publishes for the owner's real log, replayed into a fresh
 `TinkerGraphStore`: **`GraphProjector.project` took a median 10,047 ms before and a median 9,825 ms
 after** — three runs a side, alternating nothing else, in one sitting on one machine. The individual
-runs were 10,305 / 10,047 / 10,028 ms before and 9,825 / 9,890 / 9,481 ms after.
+runs were 10,305 / 10,047 / 10,028 ms before and 9,825 / 9,890 / 9,481 ms after. Reproducing it means
+setting `SEGUE_BENCHMARK_ROWS` to that scale before running `FoldOnceBenchmark` — it defaults to a
+small fixture otherwise — and passing Gradle `--rerun`, because an environment variable is not a
+task input and a second run without it reports the task `UP-TO-DATE` and never re-logs the figure.
 
 **The ratio is the claim, not the absolute.** The machine was heavily loaded throughout — one-minute
 load averages between roughly 138 and 244 across the six runs — so no absolute figure here
 transfers to another box or another day. What does transfer is that the three before-runs and the
 three after-runs do not overlap: the slowest boot after the change is faster than the fastest boot
-before it, under load that moved far more than the difference between the two sides.
+before it, under load that moved far more than the difference between the two sides. The after side
+also ran on the busier half of the window — one-minute load at dispatch roughly 169–244 for the
+after-runs against roughly 138–168 for the before-runs — so the comparison is biased against the
+change, not for it.
 
 **What the figure does not cover, and it is most of it.** The timing is the whole of
 `GraphProjector.project`, which is dominated by the replay loop's per-row store writes — work this

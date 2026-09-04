@@ -616,10 +616,10 @@ sequence number: a log that will not project is corruption to surface at boot, n
 
 ### The boot folds the log once
 
-The boot used to read the log once and then derive the fold from that one row list four separate
+The boot used to read the log once and then derive the fold from that one row list several
 times — the retractions, the folding `Equivalences`, the stand-ins, and the held node set the
-pre-flight checks against — with the emptied-canonical-id fixed point paid inside more than one of
-them. `GraphProjector.project` now builds a single `Fold` (in `domain`, beside `Equivalences` and
+pre-flight checks against (ADR [64](adr/0064-fold-the-log-once-per-boot.md) has the count) — with
+the emptied-canonical-id fixed point paid inside more than one of them. `GraphProjector.project` now builds a single `Fold` (in `domain`, beside `Equivalences` and
 `Retractions`, a carrier that decides nothing) and hands it to the pre-flight, the stand-in seeding
 and the replay loop. Every fold rule stays where it was and every log-taking static keeps its
 signature, so the dev tools still fold per run and are deliberately out of scope.
