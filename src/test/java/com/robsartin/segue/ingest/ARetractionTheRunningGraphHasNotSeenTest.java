@@ -88,8 +88,14 @@ class ARetractionTheRunningGraphHasNotSeenTest {
 
     // Twice, deliberately: a row that stops one boot stops every later one, and ADR 19 forbids
     // removing it. That is what makes this a poison pill rather than a bad error message.
-    assertThatThrownBy(() -> boot(db)).hasMessageContaining("sequence 4");
-    assertThatThrownBy(() -> boot(db)).hasMessageContaining("sequence 4");
+    assertThatThrownBy(() -> boot(db))
+        .hasMessageContaining("sequence 4")
+        .hasMessageContaining(KETTLES)
+        .hasMessageContaining("retract the endpoint");
+    assertThatThrownBy(() -> boot(db))
+        .hasMessageContaining("sequence 4")
+        .hasMessageContaining(KETTLES)
+        .hasMessageContaining("retract the endpoint");
   }
 
   @Test

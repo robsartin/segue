@@ -88,7 +88,9 @@ class AnExpansionAfterARetractionTest {
 
     assertThatThrownBy(() -> boot(db))
         .as("the edge names an endpoint the fold holds no node for")
-        .hasMessageContaining("sequence 4");
+        .hasMessageContaining("sequence 4")
+        .hasMessageContaining(KETTLES)
+        .hasMessageContaining("retract the endpoint");
   }
 
   @Test
@@ -153,7 +155,9 @@ class AnExpansionAfterARetractionTest {
         .as(
             "KETTLES is the seed, never the far end neighborOf resolves for this edge, so its"
                 + " identity is never re-recorded")
-        .hasMessageContaining("sequence 4");
+        .hasMessageContaining("sequence 4")
+        .hasMessageContaining(KETTLES)
+        .hasMessageContaining("retract the endpoint");
 
     Path withSeedIdentity = withSeedIdentityDir.resolve("segue.db");
     expandTheRetractedSeedItself(
@@ -164,7 +168,9 @@ class AnExpansionAfterARetractionTest {
             "volunteering the seed's own identity changes nothing: neighborOf(assertion, KETTLES)"
                 + " never returns KETTLES for this edge, so the described map's entry for KETTLES is"
                 + " never looked up")
-        .hasMessageContaining("sequence 4");
+        .hasMessageContaining("sequence 4")
+        .hasMessageContaining(KETTLES)
+        .hasMessageContaining("retract the endpoint");
   }
 
   /**

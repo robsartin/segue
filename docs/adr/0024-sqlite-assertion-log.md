@@ -124,8 +124,10 @@ boot diagnosis and an instruction — not by a second gate. `record` goes on ask
 graph.**
 
 Reproduced first, on a temp-file log holding `node`, `node`, `retract`, then a sourced edge naming
-the retracted id: `record` accepted the edge, and two consecutive boots both threw `replay failed at
-sequence 4`, wrapping `assertion references unknown entity … - upsert the node first`.
+the retracted id — measured on `main` at `a79c6ca`, before #228's boot pre-flight existed: `record`
+accepted the edge, and two consecutive boots both threw `replay failed at sequence 4`, wrapping
+`assertion references unknown entity … - upsert the node first`. Post-#228, the same log is refused
+by the pre-flight instead, named below.
 
 **The witness that would see it is the log's fold, and it costs too much to ask per claim.**
 `AssertionLog` offers one read, `readAll`, and the fold rules are computed over the whole list.
@@ -146,13 +148,16 @@ the case the amendment above already closes.
 
 **What is done instead, and it is three things.** The tool that opens the window says how to close
 it: `RetractRun`'s closing note now tells the operator to restart before anything else is ingested,
-and names the consequence of not doing so. Issue #228's boot pre-flight names the row and the repair
-for a log that already carries one — confirmed on that branch against this exact log, which it
-refuses by sequence number without a change of its own, because the check is a property of the log
-rather than of the third layer. And the repair is one command: retracting the same id again reaches
-backwards past the edge, so the edge stops projecting, the boot succeeds and every row stays in the
-log. It is not refused as *"nothing to retract"* either — `RetractRun` counts what survives, and the
-edge appended after the first retraction does.
+and names the consequence of not doing so. Issue #228's boot pre-flight, merged to `main` at
+`fd88813`, names the row and the repair for a log that already carries one — confirmed against this
+exact log, which it refuses by sequence number without a change of its own, because the check is a
+property of the log rather than of the third layer. The boot now refuses the whole log before it
+applies anything, listing each offending row by sequence number, the id nothing stands for, and the
+repair — `retract the endpoint, which withdraws the edge under ADR 44 without deleting anything`.
+`ARetractionTheRunningGraphHasNotSeenTest` holds it to all three. And the repair is one command:
+retracting the same id again reaches backwards past the edge, so the edge stops projecting, the boot
+succeeds and every row stays in the log. It is not refused as *"nothing to retract"* either —
+`RetractRun` counts what survives, and the edge appended after the first retraction does.
 
 **Alternatives considered, and why each lost.**
 
