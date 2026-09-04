@@ -56,3 +56,28 @@ at startup, and small indexed reads for the taste layer. There is exactly one wr
   ordering would lose the claim permanently.
 - One writer is assumed. Concurrent writers would need revisiting, and SQLite would
   surface that as lock contention rather than corruption.
+
+**Amendment (2026-09-04, issue #233): the fifth consequence above is scoped, and the scope was not
+stated.** It reads *"Because the log is written first, a failure applying to the graph leaves the log
+ahead. That is the correct failure direction: a restart replays it right."* That is true of a claim
+that can eventually project, and only of one. `TinkerGraphStore.record` and `JenaGraphStore.record`
+both refuse an edge naming an entity nothing has claimed as a node, and the fourth decision bullet
+above makes replay fatal at the first such row — so for that claim the log being ahead is not
+recoverable in any sense: the row is permanent under ADR 19, and the restart that was supposed to
+"replay it right" fails at it instead, as does every restart after that. Measured for #233 on a
+temp-file log: the live call threw, the log held the row, and two consecutive replays both threw
+`replay failed at sequence 2`.
+
+**The ordering decision is unchanged, and so is its argument.** What changes is that
+`IngestService.record` now asks the store's own precondition — through `GraphStore.node`, on the port,
+so both engines answer alike — **before** the append, and refuses with a message naming the endpoint.
+The log therefore never gets ahead by a row that can never catch up, which is the only case the
+original sentence did not cover. Appending is still first; the two halves are still not atomic; a
+crash between them still leaves the recoverable direction, and now genuinely so.
+
+**Two things this does not do.** It does not widen `GraphStore` (the stores keep throwing; the gate
+is a second, earlier asking of the same question, and `GraphStoreContract` is what keeps the two
+answers identical), and it does not repair a log that already carries such a row. That repair is not
+"append the missing node claim" — replay is positional, so a claim appended after the edge still
+leaves the boot failing at the edge's sequence number. It is `./gradlew retractEntity` on the
+endpoint, which withdraws the edge under ADR 44 without deleting anything.

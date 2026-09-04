@@ -58,7 +58,9 @@ public class GraphTools {
           maxNewEdges bounds how many new assertions this call will consider; omit it to use the \
           server's configured default. The bound keeps the most-linked neighbours rather than an \
           arbitrary slice, so a small bound still returns the famous ones first. The result reports \
-          whether it had to stop early at that bound, or could not resolve some neighbours.
+          whether it had to stop early at that bound, could not resolve some neighbours, could not \
+          reach a source at all, or refused an edge whose other endpoint no claim describes — the \
+          graph holds no node for it, so recording the edge is deferred until one does.
 
           A CONCEPT seed — a subject, a topic, an award — is capped at a much smaller ceiling than \
           any maxNewEdges you pass, because expanding a broad subject is a flood rather than a \

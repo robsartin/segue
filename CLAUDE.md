@@ -576,6 +576,19 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   nodes. `Labels.forQids` (the ratings tool) deliberately does not apply the rule — see ADR 44's
   consequences.
 
+- **`IngestService.record` refuses before it appends, and the log-then-graph ordering is why.** The
+  log is append-only and replay is fatal at the first failure, so a claim the graph refuses is a row
+  every later boot refuses too — the live call fails once and the server never starts again. `record`
+  therefore asks `GraphStore.node` for both of an edge's folded endpoints before `log.append` and
+  throws `UnknownEndpointException`; `TinkerGraphStore.requireVertex` and `JenaGraphStore.requireKnown`
+  are unchanged and stay the last line of defence, pinned as one contract by `GraphStoreContract`.
+  **Do not "fix" this by applying to the graph first** — that loses a claim the graph accepted if the
+  process dies between the halves, which is ADR 19's whole failure mode. **Do not tolerate the
+  missing endpoint at boot** either; `LogProjection.danglingEdges` is the alarm for exactly this and
+  is supposed to stay 0. **And the obvious repair is wrong**: appending the missing node claim does
+  not rescue an already-poisoned log, because replay is positional; retracting the endpoint (ADR 44)
+  is the one repair that works. ADR 24's 2026-09-04 amendment, issue #233.
+
 - **ADR 44 is the migration ADR 42 promised.** `SqliteAssertionLog` adds a `reason` column with
   `ALTER TABLE ... ADD COLUMN`, guarded by `PRAGMA table_info` rather than a version table, and it
   was tested against a copy of the live 131,672-row database as well as from a hand-written old
