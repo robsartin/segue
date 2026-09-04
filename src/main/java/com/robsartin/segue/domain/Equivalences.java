@@ -142,7 +142,7 @@ public record Equivalences(
   }
 
   /**
-   * A caller that has the merges and the surviving edges but no fold to perform — {@link #in},
+   * A caller that has the merges and the fold's kept edges but no fold to perform — {@link #in},
    * whose readers ask about ratings, labels and known lists and never about an edge's endpoints. An
    * empty {@link #retractedStandIns} is exactly as accurate there as a computed one: {@link
    * #foldEndpoints} is the only method that reads it, and no caller of {@link #in} calls it.
@@ -152,7 +152,7 @@ public record Equivalences(
   }
 
   /**
-   * A caller that has only merges to hand, and none of the surviving edges that could keep a
+   * A caller that has only merges to hand, and none of the fold's kept edges that could keep a
    * superseded stand-in alive (#221 fix round 1) — safe for every caller, including {@link #NONE}
    * and {@link #stands}'s own live-path paragraph below.
    *
@@ -333,24 +333,25 @@ public record Equivalences(
    * only where none exists. The returned map keeps log order for {@link #canonicalByLocal}'s
    * reason.
    *
-   * <p><b>A merge a later merge corrected names nothing, unless a surviving edge still needs it</b>
-   * (#221; widened in a later round of the same issue — see {@link #stands}). Ordinarily the last
-   * merge of a local id wins, for the edges through {@link #foldEndpoints} and for the node as
+   * <p><b>A merge a later merge corrected names nothing, unless an edge the fold keeps still needs
+   * it</b> (#221; widened in a later round of the same issue — see {@link #stands}). Ordinarily the
+   * last merge of a local id wins, for the edges through {@link #foldEndpoints} and for the node as
    * well, so the first canonical id is not left holding a labelled node with no edges that nothing
-   * claimed. But a surviving edge CAN claim it directly, made while it still stood as the canonical
-   * id, and dropping its node then would leave that edge with an endpoint the store has never seen
-   * — so {@link #stands} answers true for exactly that case, and the stand-in survives holding the
-   * merged entity's label and the edge, nothing more.
+   * claimed. But an edge the fold keeps CAN claim it directly, made while it still stood as the
+   * canonical id, and dropping its node then would leave that edge with an endpoint the store has
+   * never seen — so {@link #stands} answers true for exactly that case, and the stand-in survives
+   * holding the merged entity's label and the edge, nothing more.
    *
    * <p><b>Two local ids merged onto ONE canonical id are not always untouched by the widening, and
    * the exact case is worth stating rather than waved at.</b> Say local A merged onto X and was
    * later corrected away from it, and local B also merged onto X and still stands there today.
-   * Where a surviving edge names X directly, A's now-superseded merge row contributes to this map
-   * again — {@link #stands} answers true for it too — exactly as B's does, and {@code
+   * Where an edge the fold keeps names X directly, A's now-superseded merge row contributes to this
+   * map again — {@link #stands} answers true for it too — exactly as B's does, and {@code
    * putIfAbsent}'s first-in-log-order rule decides between A's label and B's, restoring for that
    * one pairing the answer this method gave before #221 ever filtered by {@link #stands} at all.
-   * Where no surviving edge names X, A's merge contributes nothing and B's label wins outright,
-   * whatever the log order. Either way it is the one {@code putIfAbsent} below, not a third rule.
+   * Where no edge the fold keeps names X, A's merge contributes nothing and B's label wins
+   * outright, whatever the log order. Either way it is the one {@code putIfAbsent} below, not a
+   * third rule.
    *
    * <p><b>The stand-in rule has four homes, and they are named here so that the count is not
    * guessed at.</b> "The canonical id gains a node carrying the merged entity's label where nothing
@@ -580,10 +581,13 @@ public record Equivalences(
    * have been emptied.
    *
    * <p><b>The cost is O(rounds x log), and rounds are bounded only by the ids in the log.</b> Each
-   * round is a handful of whole-log walks, so a deliberately chained fixture measured at depth 100
-   * took roughly 8.6 s inside {@link #in} on a 318k-row log. Real logs run one or two rounds - a
-   * chain deeper than two needs the bypass-written merge above - so no cap is imposed here rather
-   * than one being imposed with nothing to say what it should be; the trade is the ADR's to carry.
+   * round is a handful of whole-log walks; the depth and the measured cost of a deliberately
+   * chained fixture are {@code docs/adr/0044-retraction-as-a-new-claim.md}'s forthcoming 2026-09-04
+   * amendment to carry, dated and attributed there, rather than restated here where a
+   * re-measurement could go stale independently of the number the ADR holds. Real logs run one or
+   * two rounds - a chain deeper than two needs the bypass-written merge above - so no cap is
+   * imposed here rather than one being imposed with nothing to say what it should be; the trade is
+   * the ADR's to carry.
    */
   private static Set<String> emptiedCanonicalIds(List<LoggedAssertion> log) {
     Set<String> emptied = Set.of();
@@ -892,8 +896,8 @@ public record Equivalences(
    * TinkerGraphStore.record} refuses it — the boot replay a controller reproduced: {@code replay
    * failed at sequence 4 … assertion references unknown entity … - upsert the node first}, on a row
    * nothing can be dropped from ADR 19 makes append-only. A superseded canonical id whose stand-in
-   * a surviving edge still needs is not an orphan — it has an edge, and the export shows exactly
-   * the claim the owner made while it stood.
+   * an edge the fold keeps still needs is not an orphan — it has an edge, and the export shows
+   * exactly the claim the owner made while it stood.
    *
    * <p><b>Two ways to rewrite the edge instead were rejected.</b> Re-pointing it onto the corrected
    * canonical would silently rewrite what the owner actually claimed — he named the <em>first</em>
@@ -939,12 +943,12 @@ public record Equivalences(
    *
    * <p><b>The rating carry's own predicate, and deliberately narrower than {@link #stands}.</b>
    * {@code IngestService.apply} keys {@code merges.follow} on this method, not on {@link #stands}:
-   * a superseded canonical id's stand-in may survive because a surviving edge names it, but the
-   * rating is not a claim about that node — it is the owner's opinion about the thing he corrected
-   * himself onto, and only the merge that resolves the local id TODAY is entitled to carry it.
-   * Every merge of one local id would otherwise ask to carry the rating on every replay, which is
-   * the exact defect a previous round of this issue fixed by keying the carry on this predicate to
-   * begin with.
+   * a superseded canonical id's stand-in may survive because an edge the fold keeps names it, but
+   * the rating is not a claim about that node — it is the owner's opinion about the thing he
+   * corrected himself onto, and only the merge that resolves the local id TODAY is entitled to
+   * carry it. Every merge of one local id would otherwise ask to carry the rating on every replay,
+   * which is the exact defect a previous round of this issue fixed by keying the carry on this
+   * predicate to begin with.
    */
   public boolean last(SameAs merge) {
     Objects.requireNonNull(merge, "merge");

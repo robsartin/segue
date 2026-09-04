@@ -219,7 +219,8 @@ public final class IngestService {
       case SameAs merge -> {
         // The node half and the taste half now ask DIFFERENT questions of the same merge (#221,
         // fix round 1). Equivalences.stands() answers "does this merge still contribute a node" -
-        // last-wins, OR a surviving edge names its canonical id, because OwnRun can offer that id
+        // last-wins, OR an edge the fold keeps names its canonical id, because OwnRun can offer
+        // that id
         // as an endpoint the moment its stand-in exists and a claim made against it survives a
         // later correction (ADR 19). Equivalences.NONE - the live path, which sees one claim and
         // not a log - answers both questions true, so record() is unchanged.

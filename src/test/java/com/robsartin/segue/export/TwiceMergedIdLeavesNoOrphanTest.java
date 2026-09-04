@@ -372,6 +372,40 @@ class TwiceMergedIdLeavesNoOrphanTest {
     }
   }
 
+  /**
+   * A GENUINE self-loop, as against the collapsed one two fixtures above: the owner claims an edge
+   * from {@link InventedGraph#MISHEARD} to itself while it still stands as the canonical id — its
+   * raw endpoints were already equal before any fold touched them, rather than becoming equal
+   * because two different raw ids resolved onto one (#228 fix round 1's {@code reference}'s {@code
+   * untouched} clause). {@code Equivalences#foldEndpoints} leaves such an edge exactly where it is
+   * — "a self-loop the fold did not create is a claim somebody really made" — and {@code reference}
+   * is meant to mirror that ordering: the {@code untouched} guard sits ABOVE the collapse check, so
+   * a raw self-loop is never treated as one {@code foldEndpoints} manufactured. Dropping that guard
+   * would fold this edge into the collapse arm too, and {@code MISHEARD}'s superseded stand-in
+   * would go missing with nothing distinguishing it from the collapsed case.
+   */
+  private static FakeAssertionLog correctedLogWithAGenuineSelfLoop() {
+    return new FakeAssertionLog()
+        .with(
+            minted(CORRECTED, NodeKind.WORK, "A Self-Pressed Record"),
+            merged(CORRECTED, MISHEARD),
+            owned(MISHEARD, MISHEARD, "INFLUENCED_BY"),
+            merged(CORRECTED, WATERMARK));
+  }
+
+  @Test
+  @DisplayName(
+      "a genuine self-loop keeps a superseded stand-in alive, unlike one the fold collapses")
+  void shouldKeepTheSupersededStandInAliveWhenAGenuineSelfLoopNamesItDirectly() {
+    assertThat(
+            Equivalences.standIns(
+                correctedLogWithAGenuineSelfLoop().readAll(), KindMapper::rederive))
+        .as(
+            "the MISHEARD -> MISHEARD edge names MISHEARD raw, before any fold moved it there, so"
+                + " it is a claim the owner really made and not one the collapse arm may drop")
+        .containsKey(MISHEARD);
+  }
+
   @Test
   @DisplayName("the corrected canonical id keeps the label and every edge when a merge is redone")
   void shouldKeepTheLabelAndTheEdgesOnTheCorrectedCanonicalIdWhenAMergeIsRedone() {

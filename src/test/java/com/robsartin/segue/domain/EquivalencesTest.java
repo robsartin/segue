@@ -373,6 +373,42 @@ class EquivalencesTest {
   }
 
   @Test
+  @DisplayName(
+      "two local ids merged onto one canonical id, one of them later corrected away: the"
+          + " standing merge's label wins outright, not the superseded merge's")
+  void shouldTakeTheStandInsLabelFromTheMergeThatStandsWhenTheOtherWasCorrectedAway() {
+    // standIns' own "Two local ids merged onto ONE canonical id" paragraph names this exact
+    // case: FIRST and SECOND both merge onto SHARED_CANONICAL, and a later merge corrects FIRST
+    // away onto RETARGETED. No edge anywhere in this log, so no surviving edge names
+    // SHARED_CANONICAL directly - the branch where FIRST's now-superseded merge must contribute
+    // NOTHING and SECOND's label wins outright, whatever the log order put first.
+    //
+    // Ids in the domain test's own style: two leading zeros for what the owner minted (ADR
+    // 58/59), eleven digits for a merge's canonical side (ADR 62) - the next free of each shape
+    // in this file, after MINTED/OTHER_MINTED/THIRD_MINTED and
+    // CANONICAL/OTHER_CANONICAL/THIRD_CANONICAL above.
+    String first = "Q00900046";
+    String second = "Q00900047";
+    String sharedCanonical = "Q10000000903";
+    String retargeted = "Q10000000904";
+    List<LoggedAssertion> log =
+        List.of(
+            LocalEntity.minted(first, NodeKind.WORK, "the superseded label", WHEN),
+            SameAs.declared(first, sharedCanonical, WHEN),
+            LocalEntity.minted(second, NodeKind.WORK, "the standing label", WHEN),
+            SameAs.declared(second, sharedCanonical, WHEN),
+            SameAs.declared(first, retargeted, WHEN));
+
+    assertThat(Equivalences.standIns(log, AS_CLAIMED).get(sharedCanonical).label())
+        .as(
+            "first's merge onto sharedCanonical no longer stands (it was corrected onto"
+                + " retargeted) and no edge keeps it alive either, so it must contribute nothing"
+                + " here - putIfAbsent's first-in-log-order tiebreak never gets to run, because"
+                + " only second's merge reaches the map at all")
+        .isEqualTo("the standing label");
+  }
+
+  @Test
   @DisplayName("a merge a later one corrected names no stand-in, so nothing is left under it")
   void shouldNameNoStandInWhenALaterMergeCorrectedTheCanonicalId() {
     List<LoggedAssertion> log =
