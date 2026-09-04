@@ -14,7 +14,10 @@ import java.util.OptionalDouble;
  * label is a literal in this file or a {@code Scorer} spelling.</b> That is what makes the whole
  * output safe to paste and what {@code EvaluationIsSafeToPasteTest} asserts — the same property
  * {@code CensusReport} has and ADR 63 argues for. No qid, label, note or rating value reaches this
- * method at all: {@link Reading} has nowhere to put one.
+ * method at all — and that is true of the whole signature, not just {@link Reading}'s shape: {@link
+ * #lines} takes two plain counts and a top instead of the {@code HeldOut} that produced them,
+ * deliberately narrower than the plan first drafted, because a type that carries a qid list and a
+ * qid-keyed map has somewhere to put one even when this method never reads it.
  *
  * <p><b>A mean over nothing is a dash rather than zero.</b> No hits and a mean rank of zero are
  * different facts, and a table that renders them the same is a table that misleads. One decimal
@@ -46,12 +49,14 @@ public final class EvaluationReport {
   /**
    * Render the whole block, header included.
    *
-   * @param split what was hidden, for the three counts the header states
+   * @param eligible how many entities could have been held out — the split's denominator, the only
+   *     fact about the split this method needs
+   * @param heldOutCount how many of those were actually held out
    * @param top how many candidates each setting was read over
    * @param readings one per setting, in the order they should be read
    */
-  public static List<String> lines(HeldOut split, int top, List<Reading> readings) {
-    Objects.requireNonNull(split, "split");
+  public static List<String> lines(
+      int eligible, int heldOutCount, int top, List<Reading> readings) {
     Objects.requireNonNull(readings, "readings");
 
     List<List<String>> rows = new ArrayList<>();
@@ -65,11 +70,11 @@ public final class EvaluationReport {
         "# held out every "
             + HeldOut.EVERY
             + " of "
-            + split.eligible()
+            + eligible
             + " eligible entity(ies): "
-            + split.heldOut().size()
+            + heldOutCount
             + " held out, "
-            + (split.eligible() - split.heldOut().size())
+            + (eligible - heldOutCount)
             + " left on the known-list.");
     rendered.add("# top " + top + " per setting, over " + readings.size() + " setting(s).");
     rows.forEach(row -> rendered.add(render(row, widths)));

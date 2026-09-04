@@ -1,10 +1,10 @@
 package com.robsartin.segue.evaluate;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.atIndex;
 
 import com.robsartin.segue.domain.Scorer;
 import java.util.List;
-import java.util.Map;
 import java.util.OptionalDouble;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.DisplayName;
@@ -15,13 +15,16 @@ class EvaluationReportTest {
   /** Anything qid-shaped at all, wherever it appears. */
   private static final Pattern A_QID = Pattern.compile("\\bQ\\d+\\b");
 
-  private static final HeldOut SPLIT =
-      new HeldOut(List.of("Q0900401", "Q0900406"), Map.of("Q0900402", 5), 10);
+  /** What the split reported: 10 eligible, 2 held out — the counts {@link #lines} now takes. */
+  private static final int ELIGIBLE = 10;
+
+  private static final int HELD_OUT_COUNT = 2;
 
   @Test
   @DisplayName("the header names the split and the top, and the table has one row per reading")
   void shouldStateTheSplitAndOneRowPerReadingWhenTheReportIsRendered() {
-    List<String> lines = EvaluationReport.lines(SPLIT, 25, List.of(reading(), sparse()));
+    List<String> lines =
+        EvaluationReport.lines(ELIGIBLE, HELD_OUT_COUNT, 25, List.of(reading(), sparse()));
 
     assertThat(lines.get(0)).isEqualTo(EvaluationReport.HEADER);
     assertThat(lines.get(1))
@@ -36,12 +39,17 @@ class EvaluationReportTest {
   @Test
   @DisplayName("a mean is one decimal, and a mean over nothing is a literal dash")
   void shouldRenderADashWhenAMeanHasNothingToAverage() {
-    List<String> lines = EvaluationReport.lines(SPLIT, 25, List.of(reading(), sparse()));
+    List<String> lines =
+        EvaluationReport.lines(ELIGIBLE, HELD_OUT_COUNT, 25, List.of(reading(), sparse()));
 
-    assertThat(lines.get(4)).contains("7.5").contains("4.0");
-    assertThat(lines.get(5))
+    // Complete cells, not substrings — "7.50" would satisfy .contains("7.5") but must not satisfy
+    // this. reading()'s columns are: scorer, floor, pool, held out, hits, mean rank, negatives,
+    // neg mean rank.
+    assertThat(cellsOf(lines.get(4))).contains("7.5", atIndex(5)).contains("4.0", atIndex(7));
+    assertThat(cellsOf(lines.get(5)))
         .as("no hits and no negatives — two dashes, never two zeroes")
-        .contains(EvaluationReport.NO_MEAN);
+        .contains(EvaluationReport.NO_MEAN, atIndex(5))
+        .contains(EvaluationReport.NO_MEAN, atIndex(7));
   }
 
   @Test
@@ -57,7 +65,8 @@ class EvaluationReportTest {
             0,
             OptionalDouble.empty());
 
-    List<String> lines = EvaluationReport.lines(SPLIT, 25, List.of(wide, sparse()));
+    List<String> lines =
+        EvaluationReport.lines(ELIGIBLE, HELD_OUT_COUNT, 25, List.of(wide, sparse()));
 
     assertThat(lines.get(3).length())
         .as("the heading row is padded to the same width as every body row")
@@ -68,8 +77,13 @@ class EvaluationReportTest {
   @Test
   @DisplayName("nothing qid-shaped reaches the report, whatever the split held")
   void shouldCarryNoIdentifierWhenTheSplitNamesEntities() {
-    assertThat(EvaluationReport.lines(SPLIT, 25, List.of(reading())))
+    assertThat(EvaluationReport.lines(ELIGIBLE, HELD_OUT_COUNT, 25, List.of(reading())))
         .noneMatch(line -> A_QID.matcher(line).find());
+  }
+
+  /** The rendered row's cells, in column order — split on the multi-space gap between them. */
+  private static List<String> cellsOf(String line) {
+    return List.of(line.trim().split("\\s{2,}"));
   }
 
   private static Reading reading() {
