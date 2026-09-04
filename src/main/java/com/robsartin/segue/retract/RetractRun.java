@@ -271,13 +271,20 @@ public final class RetractRun {
       if (claim == null || !equivalences.namesARetractedStandIn(claim)) {
         continue;
       }
+      // Bucketed by the endpoints the fold RESOLVES, matching namesARetractedStandIn just above
+      // (#228). A claim naming a merged local id whose merge points at a newly-emptied canonical
+      // id passes that predicate on the resolved id; bucketing it by the raw claim.fromQid() /
+      // claim.toQid() instead asks the two questions of two different ids and the edge matches
+      // neither bucket, so it was silently missing from every line and from the distinct total.
+      String from = equivalences.canonical(claim.fromQid());
+      String to = equivalences.canonical(claim.toQid());
       boolean namesANewlyEmptiedId = false;
-      if (newlyEmptied.contains(claim.fromQid())) {
-        edgeKeysByCanonical.get(claim.fromQid()).add(claim.edgeKey());
+      if (newlyEmptied.contains(from)) {
+        edgeKeysByCanonical.get(from).add(claim.edgeKey());
         namesANewlyEmptiedId = true;
       }
-      if (newlyEmptied.contains(claim.toQid())) {
-        edgeKeysByCanonical.get(claim.toQid()).add(claim.edgeKey());
+      if (newlyEmptied.contains(to)) {
+        edgeKeysByCanonical.get(to).add(claim.edgeKey());
         namesANewlyEmptiedId = true;
       }
       if (namesANewlyEmptiedId) {

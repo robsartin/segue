@@ -297,11 +297,14 @@ class BothFoldsAgreeTest {
                   + " backwards along with everything else about it, the merge does not survive"
                   + " the retraction, the WREN -> FORFEIT edge is withdrawn because it names the"
                   + " stand-in the retraction emptied, and the retraction row itself is never"
-                  + " applied (#224). So it is every row in this log but those five"
-                  + " The re-merge #228 added applies nothing to the graph either - its local side"
-                  + " does not survive the retraction, so standIn() finds no node to copy - but a"
-                  + " SameAs counts as applied whether or not it builds one, so the count moves by"
-                  + " one row and not by two: the owner edge beside it is withdrawn.")
+                  + " applied (#224). The re-merge #228 added onto the same canonical id applies"
+                  + " nothing to the graph either - its local side does not survive the"
+                  + " retraction, so standIn() finds no node to copy - but a SameAs counts as"
+                  + " applied whether or not it builds one, so it still counts toward this total."
+                  + " The owner edge #228 added beside it does not: it names the retracted local"
+                  + " id, which folds onto the same emptied canonical id through that surviving"
+                  + " re-merge, so it is withdrawn for the same reason as WREN -> FORFEIT above."
+                  + " So it is every row in this log but those five and that one owner edge.")
           .isEqualTo(30);
     }
   }

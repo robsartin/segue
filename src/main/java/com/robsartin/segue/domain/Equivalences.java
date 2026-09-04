@@ -738,8 +738,17 @@ public record Equivalences(
     return canonical == null || canonical.equals(merge.canonicalQid());
   }
 
-  /** What this id turned out to be, or the id itself where the owner has said nothing. */
-  private String canonical(String qid) {
+  /**
+   * What this id turned out to be, or the id itself where the owner has said nothing.
+   *
+   * <p><b>Public so a bucketing caller can ask the same question the fold answers</b> (#228).
+   * {@code RetractRun.strandedByThisRetraction} groups the edges a retraction newly strands by
+   * canonical id, and it has to group them by the id {@link #namesARetractedStandIn} actually
+   * matched against — this one — rather than by {@code claim.fromQid()}/{@code claim.toQid()} as
+   * the claim wrote them, or an edge naming a local id folds onto the right emptied id for the
+   * predicate and the wrong one for the bucket, and lands in no line at all.
+   */
+  public String canonical(String qid) {
     return canonicalByLocal.getOrDefault(qid, qid);
   }
 

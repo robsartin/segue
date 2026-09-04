@@ -44,6 +44,7 @@ class RetractRunTest {
   private static final String PAINTING = "Q0900102";
   private static final String OTHER = "Q0900103";
   private static final String WORKING_TITLE = "Q00900201";
+  private static final String SECOND_WORKING_TITLE = "Q00900202";
   private static final String CAUGHT_UP = "Q10000900301";
   private static final String SECOND_CANONICAL = "Q10000900302";
 
@@ -287,6 +288,42 @@ class RetractRunTest {
             "a stranding line exists to name edges that stop projecting; one that names none is"
                 + " telling the operator about a merge that went at an earlier retraction (#224)")
         .noneMatch(note -> note.contains("0 edge(s)"));
+  }
+
+  @Test
+  @DisplayName(
+      "an edge that reaches a newly-emptied canonical id only through a merge is reported, not"
+          + " silently dropped")
+  void shouldReportAStrandedEdgeThatReachesTheEmptiedCanonicalIdOnlyThroughAMerge() {
+    // #228: CAUGHT_UP's stand-in is given to it TWICE, by two different local ids in turn.
+    // WORKING_TITLE merges onto it first and is then retracted; a merge appended AFTER that
+    // retraction survives it (Retractions reaches backwards only), so SECOND_WORKING_TITLE's own
+    // merge onto CAUGHT_UP - and a second, later merge of WORKING_TITLE onto the same id - both
+    // stand. The owner edge below names WORKING_TITLE, the retracted LOCAL id, not CAUGHT_UP by
+    // name; it resolves to CAUGHT_UP only through canonicalByLocal. Retracting
+    // SECOND_WORKING_TITLE takes away the only surviving node claim that gave CAUGHT_UP a
+    // stand-in - WORKING_TITLE's own mint was retracted long before - so CAUGHT_UP is newly
+    // emptied, and the edge has to be reported under it even though it never once wrote that id's
+    // name.
+    log.append(new NodeAssertion(OTHER, NodeKind.PERSON, "Ines Marlow", SOURCE));
+    log.append(LocalEntity.minted(WORKING_TITLE, NodeKind.WORK, "a working title", NOW));
+    log.append(SameAs.declared(WORKING_TITLE, CAUGHT_UP, NOW));
+    log.append(new Retraction(WORKING_TITLE, "the mint was a mistake", NOW));
+    log.append(
+        LocalEntity.minted(SECOND_WORKING_TITLE, NodeKind.WORK, "another working title", NOW));
+    log.append(SameAs.declared(SECOND_WORKING_TITLE, CAUGHT_UP, NOW));
+    log.append(SameAs.declared(WORKING_TITLE, CAUGHT_UP, NOW));
+    log.append(OwnerEdge.claimed(OTHER, WORKING_TITLE, "INFLUENCED_BY", NOW));
+
+    run.run(options(SECOND_WORKING_TITLE, "this one was a mistake too", true), notes::add);
+
+    assertThat(notes)
+        .as(
+            "the edge names WORKING_TITLE, which folds onto CAUGHT_UP through the surviving"
+                + " re-merge - bucketing by the claim's raw endpoint instead of the one the fold"
+                + " resolves silently dropped it from every line and from the distinct total"
+                + " (#228)")
+        .anySatisfy(note -> assertThat(note).contains(CAUGHT_UP).contains("1 edge"));
   }
 
   @Test
