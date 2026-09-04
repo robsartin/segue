@@ -341,6 +341,16 @@ is not drift**: `claim` has a log and no graph, so it asks the log's fold
 graph. One question — *does the projection this claim is about hold a node for each folded endpoint*
 — two projections, both stated.
 
+**Note (2026-09-04, issue #233, Task 5): this landed first.** `git fetch` at reconciliation time found
+no #228 commits on `origin/main` and no `Equivalences.nodesTheFoldHolds`, so this work takes the
+second branch above: no boot diagnosis is added here. `UnknownEndpointException` in `ingest` is the
+type #228's `claim` gate should adopt for its own refusal, so the two issues share one refusal shape
+rather than minting a second. The stated residual holds until #228's boot diagnosis lands: a log
+written by an older build — or a row written into SQLite by hand — still dies at boot on
+`TinkerGraphStore`'s own message rather than a named one, and the repair it needs is
+`./gradlew retractEntity` on the endpoint, not appending the missing node claim (replay is
+positional; see ADR 24's 2026-09-04 amendment).
+
 ## Amendment
 
 **ADR 24 takes a dated amendment; ADR 19 takes none.** Nothing about append-only changes: no row is

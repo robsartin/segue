@@ -57,9 +57,10 @@ at startup, and small indexed reads for the taste layer. There is exactly one wr
 - One writer is assumed. Concurrent writers would need revisiting, and SQLite would
   surface that as lock contention rather than corruption.
 
-**Amendment (2026-09-04, issue #233): the fifth consequence above is scoped, and the scope was not
-stated.** It reads *"Because the log is written first, a failure applying to the graph leaves the log
-ahead. That is the correct failure direction: a restart replays it right."* That is true of a claim
+**Amendment (2026-09-04, issue #233): the consequence beginning "Because the log is written first" is
+scoped, and the scope was not stated.** It reads *"Because the log is written first, a failure
+applying to the graph leaves the log ahead. That is the correct failure direction: a restart replays
+it right."* That is true of a claim
 that can eventually project, and only of one. `TinkerGraphStore.record` and `JenaGraphStore.record`
 both refuse an edge naming an entity nothing has claimed as a node, and the fourth decision bullet
 above makes replay fatal at the first such row — so for that claim the log being ahead is not
@@ -74,6 +75,30 @@ so both engines answer alike — **before** the append, and refuses with a messa
 The log therefore never gets ahead by a row that can never catch up, which is the only case the
 original sentence did not cover. Appending is still first; the two halves are still not atomic; a
 crash between them still leaves the recoverable direction, and now genuinely so.
+
+**Alternatives considered, and why each lost.**
+
+- **Apply to the graph, then append to the log** — reverse ADR 24's ordering instead of gating.
+  Rejected: a crash between the two halves would leave the graph holding a claim the log never
+  recorded, and the next boot rebuilds the graph from the log alone, so that claim disappears with
+  nothing saying so — the graph acting as a second source of truth, which ADR 19 forbids.
+- **Tolerate the row at boot** — let `GraphProjector` skip a claim it cannot apply and continue.
+  Rejected for the third time (issues #221, #224, and this one): it drops a claim nobody retracted,
+  and it turns `LogProjection.danglingEdges` from an alarm expected to read zero into a count that
+  could rise unwatched.
+- **Widen `GraphStore` to return a refusal instead of throwing.** Rejected: it widens the port ADR 18
+  keeps narrow so the engine choice stays reversible — the same widening ADR 41 already refused for
+  the exporter — and it would not even help, since the row is already appended by the time
+  `GraphStore.record` runs.
+- **Guard only in `SegueService.expandEntity`, resolving both endpoints there.** Rejected as the
+  answer, even though it is the one path this defect is reachable through today: a check in front of
+  one caller is not a gate, and `retract`, a future dev tool, or a second facade would each need their
+  own copy. Issue #228 rejected the same shape in its own words.
+- **Drop the claim silently on refusal** — log a warning and discard it. Rejected: the producer-side
+  version of tolerating at boot, dropping a claim without telling whoever made it.
+- **A plain `IllegalStateException`, matching the store's own throw.** Rejected: the caller has to
+  tell this refusal apart from a genuine store failure or a programmer error, and catching
+  `IllegalStateException` broadly would swallow all three instead of only the one it is meant for.
 
 **Two things this does not do.** It does not widen `GraphStore` (the stores keep throwing; the gate
 is a second, earlier asking of the same question, and `GraphStoreContract` is what keeps the two
