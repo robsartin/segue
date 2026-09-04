@@ -393,8 +393,8 @@ class MergeCarriesEverythingTest {
         .isEqualTo(5);
     assertThat(affinity.find(CANONICAL))
         .as(
-            "CANONICAL's stand-in survives because the surviving NEIGHBOUR edge names it, but the"
-                + " rating still belongs to the merge that stands, not to every merge that once"
+            "CANONICAL's stand-in survives because the NEIGHBOUR edge the fold keeps names it, but"
+                + " the rating still belongs to the merge that stands, not to every merge that once"
                 + " touched this local id")
         .isEmpty();
   }
