@@ -607,7 +607,16 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   graph, which ADR 44 already leaves stale until the next boot — so an edge naming an entity that WAS
   a node and has since been retracted still passes `graph.node`, still gets appended, and still
   poisons every boot after. Measured: `record()` returned accepted against the running graph for
-  exactly that edge, and the next boot threw `replay failed`. Filed as issue #234, **not fixed here**.
+  exactly that edge, and the next boot threw `replay failed`. Filed as issue #234. **#234 is RULED,
+  not open**: `record`'s witness stays the running graph, deliberately — ADR 24's 2026-09-04
+  amendment has the measurement (asking the log's fold instead costs a full `readAll` plus fold per
+  claim) and the rejected alternatives; do NOT make `record` ask the log's fold per claim, that was
+  measured and rejected. Reaching the break also takes two writers on one database, which ADR 24
+  does not support — nothing inside the server can append a retraction. The window is closed by
+  three things instead: `RetractRun`'s closing note (restart the server before ingesting anything
+  else), the boot diagnosis (#228), and the repair — retracting the same id again, which is not
+  refused as "nothing to retract" either, because `RetractRun` counts what survives and the edge
+  appended after the first retraction does.
   **Do not "fix" this by applying to the graph first** — that loses a claim the graph accepted if the
   process dies between the halves, which is ADR 19's whole failure mode. **Do not tolerate the
   missing endpoint at boot** either; `LogProjection.danglingEdges` is the alarm for exactly this and

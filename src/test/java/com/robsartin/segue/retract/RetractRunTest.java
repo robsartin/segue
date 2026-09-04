@@ -180,6 +180,29 @@ class RetractRunTest {
   }
 
   @Test
+  @DisplayName("a repair retraction is not refused when only a post-retraction edge survives")
+  void shouldNotRefuseARepairRetractionWhenOnlyAPostRetractionEdgeSurvives() {
+    // ADR 24's 2026-09-04 amendment, issue #234: a claim naming an already-retracted entity can
+    // still slip past the ingest gate (it asks the running graph, not the log), landing an edge
+    // AFTER the retraction that named it. Retraction reaches backwards only, so that edge
+    // survives even though the node claim it depends on does not - and the repair is retracting
+    // the same id again. This has to work even though the repair reaches no surviving NODE claim
+    // at all, only the stray edge.
+    log.append(new NodeAssertion(WRONG, NodeKind.PERSON, "Wren", SOURCE));
+    log.append(new NodeAssertion(OTHER, NodeKind.WORK, "Kettles", SOURCE));
+    log.append(new Retraction(OTHER, "wrong entity", NOW));
+    log.append(new AssertionRecord(WRONG, OTHER, "INFLUENCED_BY", null, null, SOURCE));
+    List<LoggedAssertion> before = log.readAll();
+
+    RetractRun.Effect effect =
+        run.run(options(OTHER, "repairing the poisoned log", false), notes::add);
+
+    assertThat(effect.nodeClaims()).isZero();
+    assertThat(effect.edgeClaims()).isEqualTo(1);
+    assertThat(log.readAll()).hasSize(before.size() + 1);
+  }
+
+  @Test
   @DisplayName("retracting a merged local id reports the edges that go with its stand-in")
   void shouldReportTheStrandedEdgesWhenTheRetractedIdWasMerged() {
     log.append(new NodeAssertion(OTHER, NodeKind.PERSON, "Ines Marlow", SOURCE));
@@ -324,6 +347,21 @@ class RetractRunTest {
                 + " resolves silently dropped it from every line and from the distinct total"
                 + " (#228)")
         .anySatisfy(note -> assertThat(note).contains(CAUGHT_UP).contains("1 edge"));
+  }
+
+  @Test
+  @DisplayName("the closing note tells the operator to restart before anything else is ingested")
+  void shouldTellTheOperatorToRestartBeforeIngestingWhenARetractionIsAppended() {
+    seedAWronglyExpandedEntity();
+
+    run.run(options(WRONG, "resolved to the painters, not the band", false), notes::add);
+
+    assertThat(notes)
+        .as("a server still holding a node for the retracted id will accept a claim naming it")
+        .anyMatch(
+            note ->
+                note.contains("restart it before anything else is ingested")
+                    && note.contains(WRONG));
   }
 
   @Test

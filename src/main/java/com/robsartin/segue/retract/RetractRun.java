@@ -111,7 +111,11 @@ public final class RetractRun {
     IngestService.retract(log, new Retraction(options.qid(), options.reason(), clock.instant()));
     notes.accept(
         "appended. The running graph is rebuilt from the log at the next boot (ADR 24), so a"
-            + " server that is up still holds the old edges until it restarts");
+            + " server that is up still holds the old edges until it restarts — restart it before"
+            + " anything else is ingested: until then its graph still holds a node for "
+            + options.qid()
+            + ", so a claim naming that id passes the ingest gate, is appended, and the next boot"
+            + " will not get past that row (#234)");
     return effect;
   }
 

@@ -118,3 +118,81 @@ answers identical), and it does not repair a log that already carries such a row
 "append the missing node claim" — replay is positional, so a claim appended after the edge still
 leaves the boot failing at the edge's sequence number. It is `./gradlew retractEntity` on the
 endpoint, which withdraws the edge under ADR 44 without deleting anything.
+
+**Amendment (2026-09-04, issue #234): the second case named just above is closed by a decision, a
+boot diagnosis and an instruction — not by a second gate. `record` goes on asking the running
+graph.**
+
+Reproduced first, on a temp-file log holding `node`, `node`, `retract`, then a sourced edge naming
+the retracted id — measured on `main` at `a79c6ca`, before #228's boot pre-flight existed: `record`
+accepted the edge, and two consecutive boots both threw `replay failed at sequence 4`, wrapping
+`assertion references unknown entity … - upsert the node first`. Post-#228, the same log is refused
+by the pre-flight instead, named below.
+
+**The witness that would see it is the log's fold, and it costs too much to ask per claim.**
+`AssertionLog` offers one read, `readAll`, and the fold rules are computed over the whole list.
+Measured on a synthetic log of 131,000 rows in a temp file — about the size this log has reached —
+`readAll` took 407 ms and the fold's own passes 116 ms. `segue.expand.max-new-edges` defaulted to 200
+when this was measured, and an expansion records once per edge and once more per neighbour a source
+described, so a single `expand_entity` would pay that half-second up to four hundred times, and would
+go on paying more of it as the log grows. Issue #228 asks the same question of the same method on the
+owner path and can afford to, because its caller is a dev tool that appends one row per invocation.
+
+**And reaching this at all takes two writers on one database, which the consequence above already
+says is not supported.** Nothing inside the server can append a retraction — the MCP surface has no
+such tool by ADR 26 and ADR 44, and `IngestService.retract`'s only production caller is
+`./gradlew retractEntity`, which requires `--db` (ADR 60) and therefore runs in its own JVM. So the
+running graph can only be stale about a retraction another process wrote. Restart the server between
+retracting and ingesting again and the rebuilt graph holds no node for the retracted id, which is
+the case the amendment above already closes.
+
+**What is done instead, and it is three things.** The tool that opens the window says how to close
+it: `RetractRun`'s closing note now tells the operator to restart before anything else is ingested,
+and names the consequence of not doing so. Issue #228's boot pre-flight, merged to `main` at
+`fd88813`, names the row and the repair for a log that already carries one — confirmed against this
+exact log, which it refuses by sequence number without a change of its own, because the check is a
+property of the log rather than of the third layer. The boot now refuses the whole log before it
+applies anything, listing each offending row by sequence number, the id nothing stands for, and the
+repair — `retract the endpoint, which withdraws the edge under ADR 44 without deleting anything`.
+`ARetractionTheRunningGraphHasNotSeenTest` holds it to all three. And the repair is one command:
+retracting the same id again reaches backwards past the edge, so the edge stops projecting, the boot
+succeeds and every row stays in the log. It is not refused as *"nothing to retract"* either —
+`RetractRun` counts what survives, and the edge appended after the first retraction does.
+
+**Alternatives considered, and why each lost.**
+
+- **Ask the fold as well as the graph** — the correct witness, and the one #228 promotes. Lost on
+  the measurement above, and only on that. A cache does not rescue it: the server already knows
+  every row it appended itself, so the only row a cache would have to see is exactly the one another
+  process wrote.
+- **Have `retract` update the running graph, so the live witness is not stale.** ADR 44's reasons
+  are unchanged — `GraphStore` cannot remove anything, widening the port that keeps the engine
+  choice reversible (ADR 18) is what ADR 41 refused for a dev tool, and the retraction tool is
+  forbidden a `GraphStore` as a type so that satisfying a constructor could never become the reason
+  it held one. There is now a reason that decides it on its own: the tool is a different process, so
+  it would update a graph in the wrong JVM and leave the server's exactly as stale.
+- **Ask the graph, and also whether the log holds a retraction naming the endpoint** — the cheap
+  positional check, and it is wrong. A retraction reaches backwards only, so ADR 44's own way back
+  in is to add the entity again; measured on `node, node, retract, node, edge`, that log boots and
+  holds the edge. A gate keyed on "a retraction names this id" refuses a legal claim about a legally
+  re-added entity. The correct positional question — does the fold hold a node for this id *now* —
+  is the first alternative under another name, and it skips only the 116 ms half of the cost.
+- **Widen `AssertionLog` with a narrow indexed read**, so the question can be asked cheaply. Lost on
+  where the rule would then live: the answer would be computed in SQL, outside `domain`, giving
+  "does a node exist for this id" a second home that can disagree with the fold's — the shape ADR
+  42, ADR 44 and issue #228 have each spent an issue removing.
+- **Guard in `SegueService.expandEntity`, the one path this is reachable through.** Rejected here
+  for the reason the amendment above rejects it: a check in front of one caller is not a gate.
+
+**Consequences, taken deliberately.**
+
+- **A row of this shape is still writable.** The operator is told to close the window at the moment
+  it is opened, the boot names the row and the repair if the window is left open, and the repair
+  deletes nothing.
+- **The census has never seen one.** Measured 2026-09-04: the real log holds no retractions at all.
+- **`record`'s witness is still the running graph**, so `UnknownEndpointException`'s message — *"the
+  graph holds no node for"* — stays accurate, and its note about which projection each caller asks
+  stands unchanged.
+- **Two writers on one file remains an assumption rather than an enforcement.** Nothing detects
+  `retractEntity` running against a live server's database. Enforcing it would reach `own` and
+  `seed` too, and is not decided here.
