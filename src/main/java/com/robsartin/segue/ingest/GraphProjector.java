@@ -127,21 +127,24 @@ public final class GraphProjector {
    *
    * <p><b>What this replaces is not a silence, it is an unhelpful noise.</b> {@code
    * TinkerGraphStore.record} refuses such an edge with {@code assertion references unknown entity …
-   * - upsert the node first}, wrapped as {@code replay failed at sequence N}, which names the id
-   * and nothing about why the id has no node or what to do next. The two logs issue #228 measured
-   * both arrive that way, and both are permanent: ADR 19 forbids removing the row, so the message
-   * is what the operator has.
+   * - upsert the node first …}, wrapped as {@code replay failed at sequence N}, which names one id
+   * and nothing about why that id has no node, which row named it, or how many other rows are in
+   * the same state. The two logs issue #228 measured both arrive that way, and both are permanent:
+   * ADR 19 forbids removing the row, so the message is what the operator has.
    *
-   * <p><b>The repair it names is a retraction, and it is deliberately not the advice the store
-   * gives.</b> "Upsert the node first" is right while the edge is still unwritten — that is what
-   * {@code IngestService.claim}'s own gate says, in its own words, before the append. Once the edge
-   * is IN the log it is wrong: replay is positional, so a node claim appended after the edge leaves
-   * the boot failing at the edge's own sequence number — measured for #233 on the sourced path, and
-   * pinned here by the case in {@code MergeAfterARetractionTest} that appends a node claim after
-   * the edge and watches the boot fail at that same row. Retracting the endpoint withdraws the edge
-   * under ADR 44 and deletes nothing. A merge is the other repair that works, and works for a
-   * reason worth stating: its stand-in is built before the replay loop starts, so it reaches a row
-   * earlier in the log than the merge itself.
+   * <p><b>The repair is a retraction, and the store now says so too.</b> "Upsert the node first" is
+   * right while the edge is still unwritten — that is what {@code IngestService.claim}'s own gate
+   * says, in its own words, before the append. Once the edge is IN the log it is wrong: replay is
+   * positional, so a node claim appended after the edge leaves the boot failing at the edge's own
+   * sequence number — measured for #233 on the sourced path, and pinned here by the case in {@code
+   * MergeAfterARetractionTest} that appends a node claim after the edge and watches the boot fail
+   * at that same row. Retracting the endpoint withdraws the edge under ADR 44 and deletes nothing.
+   * The store's own string was qualified to name both moments (#228 reconciliation), because until
+   * it was, this diagnosis and the store gave an operator opposite advice about the same id from
+   * the same codebase; {@code GraphStoreContract} pins both halves for both engines. What this
+   * still adds over the store is the row, the count and the list. A merge is the other repair that
+   * works, and works for a reason worth stating: its stand-in is built before the replay loop
+   * starts, so it reaches a row earlier in the log than the merge itself.
    *
    * <p><b>Before anything is applied, and reporting every row rather than the first.</b> The store
    * is untouched when this throws, so a refused boot leaves no half-built graph; and an operator
