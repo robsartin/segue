@@ -1777,6 +1777,16 @@ A retraction changes the projection, and the projection is rebuilt at boot. A ru
 the old edges until it restarts — the tool's last line says so. That is ADR 24's contract reached
 from the other side, not an oversight.
 
+**Restart it before you ingest anything else.** The ingest gate asks the running graph
+(`GraphStore.node`, issue #233), so until the server restarts it will accept a claim naming the
+entity you just retracted — and the next boot cannot get past that row. Opening that window takes
+two writers on one database, which is not the single writer [ADR 24](adr/0024-sqlite-assertion-log.md)
+assumes: retracting is a dev tool in its own process
+([ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md)), so a server left running
+through a retraction is the only way there. If a log already carries such a row, retract the same id
+again — it reaches backwards past the edge, the edge stops projecting, and nothing is deleted. ADR
+24's 2026-09-04 amendment for issue #234 is the ruling, the measurement and the alternatives.
+
 ### The migration, and the one that is coming
 
 `SqliteAssertionLog` gained a `reason` column, added with `ALTER TABLE ... ADD COLUMN` and guarded
