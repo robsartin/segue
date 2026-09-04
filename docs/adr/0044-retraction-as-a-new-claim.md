@@ -382,3 +382,141 @@ Whether the ratings listing *should* honour retractions is a decision nobody has
   amendment neither introduced nor repaired them, and `OwnRun.declareMerge` refuses the merge that
   would produce either — it reads only what the projection has minted and still survives. They are
   filed as **issue #228** with both logs, rather than widened into this ruling on the way past.
+
+---
+
+**Amendment (2026-09-04, issue #228): both residuals above are closed, and the withdrawal rule now
+reads the endpoints the fold resolves. One of them had no fold rule available, and the reason a
+fold rule lost is recorded here rather than left to the code.**
+
+Nothing above is withdrawn and no sentence above is edited, the residual bullets included: they are
+the true account of the code between #224 and this issue, and they are what this amendment answers.
+
+**What the withdrawal rule missed, measured on `a7c3455`.** `Equivalences.namesARetractedStandIn`
+read `claim.fromQid()` and `claim.toQid()` as the claim wrote them, so an edge reaching an emptied
+canonical id *through a merge* rather than by name was not withdrawn. On the log
+`[node(WREN), minted(LAPSE), merged(LAPSE → FORFEIT), retract(LAPSE), merged(LAPSE → FORFEIT),
+owned(WREN → LAPSE)]` — invented ids throughout (ADR 40, ADR 51) — the fold already named `FORFEIT`
+in `retractedStandIns`, reported one dangling edge and no withdrawn one, and the boot replay threw
+`replay failed at sequence 6`, `assertion references unknown entity … - upsert the node first`.
+**Ruling:** the predicate resolves both endpoints through `canonicalByLocal` before asking. The edge
+is claimed against the same absent endpoint either way — the entity the owner retracted, under a
+name his own merge gave it — which is this ADR's own 2026-09-03 sentence applied to the case its
+implementation missed. A defect against a decision already made, not a new decision.
+
+**And the reference set now reads the fold's whole decision, not just the withdrawal half.** The
+first residual above — a withdrawn edge still counting as a reference — is closed by counting only
+the edges the fold KEEPS. `Equivalences.foldEndpoints` drops an edge for two reasons, not one: it
+withdraws an edge naming an emptied canonical id (this ADR's #224 rule), and it collapses an edge
+whose two ends a merge brought onto the same id, since an equivalence does not make a thing relate
+to itself ([ADR 59](0059-owner-claims-as-a-third-layer.md), #178). Both claim nothing in the
+projection, so neither keeps a superseded stand-in alive. Reading only the withdrawal arm left the
+same orphan reachable through a self-loop; the reference set asks `foldEndpoints` for its whole
+answer instead. The wording of the widening this narrows is
+[ADR 59](0059-owner-claims-as-a-third-layer.md)'s own, and its 2026-09-04 amendment corrects it
+there.
+
+**The two rules are circular, and the circle is real, so the emptied set is a least fixed point.**
+Which edges are withdrawn depends on which canonical ids a retraction emptied; which ids are emptied
+depends on which stand-ins survive; which stand-ins survive depends — since #221 — on which edges
+reference them. Dropping a dropped edge from that last set can retire a stand-in, empty a second
+canonical id and withdraw a second edge. `Equivalences` computes the emptied set from the empty set
+upwards until it stops growing. It terminates on monotonicity rather than on a depth bound: a larger
+emptied set withdraws at least as many edges, so it references at most as many ids, stands at most
+as many merges, holds at most as many nodes, and empties at least as many canonical ids — and a log
+has finitely many ids. A log with no retractions costs exactly one round.
+
+**What an extra round can and cannot do, stated accurately** — an earlier and looser version of this
+claim was caught in review and must not survive into this ADR. **It cannot** add an id that an edge
+the fold still keeps names RAW: an id a later round adds was held in the round before, so some merge
+onto it stood, and the only way that stops is for the id to leave the reference set — meaning no
+kept edge names it directly by then. That is why every single-merge shape settles in one round. **It
+is not** the stronger claim that extra rounds leave `Equivalences.in` alone; they do not. Emptying an
+id also drops every kept edge naming a LOCAL id whose merge points at it, and those edges name the
+emptied id nowhere in their own text, so a later round changes which edges are kept, which ids are
+referenced and therefore which nodes exist. The counterexample is a merge onto a canonical id by a
+local id nothing ever claimed — spec ruling 2's bypass path — because a minted local side would give
+the id a stand-in of its own and it would never have been emptied.
+
+**The cost, and the figure that bounds the worry.** Each round is a handful of whole-log walks, so
+the cost is O(rounds × log) and rounds are bounded only by the ids in the log. **Measured 2026-09-04
+by this issue's Task 3 reviewer, on a deliberately chained synthetic fixture: depth 100 took roughly
+8.6 s inside `Equivalences.in` on a 318k-row log.** That figure is carried here rather than
+re-measured, and it is the reason no round cap is imposed: real logs run one or two rounds — a chain
+deeper than two needs a merge nothing but the bypass path could write — so a cap would be a number
+with nothing to say for itself, sitting in front of a case the producer gate below already refuses.
+`Equivalences`' javadoc cites this paragraph rather than restating the figure, so a re-measurement
+cannot leave two numbers disagreeing.
+
+**The second residual's other half has no fold rule, and both candidates were considered and lost.**
+A local id retracted and then merged onto a *different* canonical id leaves that id with no stand-in
+and nothing in the log describing it.
+
+- **Build the stand-in anyway.** Rejected on this ADR's own ground: the local side's kind and label
+  are rows the retraction exists to stop the projection reading, which is the *"node assembled
+  entirely out of retracted rows"* argument this ADR already makes once.
+- **Withdraw the edge, the way the ruling above withdraws break 2's.** Rejected because nothing
+  retracted the second canonical id. It may be a real Wikidata item a source claims tomorrow, so
+  withdrawing would replay a live claim into nothing — the silent-data-loss shape #101 fixed once
+  already — and the generalisation *"withdraw any edge whose folded endpoint the fold holds no node
+  for"* is the tolerate-the-dangle option wearing a rule's clothes: it turns `danglingEdges`, the
+  alarm that is supposed to stay zero, into a number nobody would ever see rise.
+
+**So it is answered at the producer and at the boot, and deliberately at both.** The producer half is
+a gate on the owner's own write path and belongs to
+[ADR 59](0059-owner-claims-as-a-third-layer.md)'s 2026-09-04 amendment, which states the two
+questions it asks and why they are narrower than the tool's. The boot half is
+`GraphProjector.project`, which refuses a log that already carries such a row before it applies
+anything, naming every offending row rather than the first. Neither half is sufficient alone: a
+producer guard cannot reach a row already written, and a boot diagnosis alone lets the next one in
+and then explains it forever, because the log is append-only and each such row is permanent.
+
+**The boot's repair advice is the part this ADR owns.** The repair is to **retract the endpoint**,
+which withdraws the edge under the rule above and deletes nothing. **Appending the missing node
+claim does not repair it** — replay is positional, so a claim later in the log than the row leaves
+the boot failing at that same sequence; measured for #233 and pinned by test here. A merge whose
+local side the projection does hold repairs it too, because its stand-in is built before the replay
+loop begins — **but only if the equivalence is one you actually mean**, since a merge says two ids
+are the same thing and every rating and edge follows that claim. Offering it as a way to make a boot
+succeed without that caveat invites an operator to assert an identity he does not hold in order to
+start a server. The stores' own `assertion references unknown entity … - upsert the node first`
+string was qualified in the same issue to name both moments, because until it was, this codebase
+gave an operator opposite advice about one id from two places.
+
+**Two more alternatives were considered at the boot and rejected.**
+
+- **Tolerate the missing endpoint at boot, as `LogProjection` does.** Rejected, and the asymmetry is
+  accepted rather than regretted: the exporter has to produce a picture and counts the shortfall as
+  `danglingEdges`; the boot refuses to start. Tolerating it would take the loud failure away from
+  every other case that reaches the same line — a corrupt log, a future fold's bug, an adapter
+  emitting an edge before its node.
+- **Make the boot check POSITIONAL — that every edge's endpoints are claimed EARLIER in the log.**
+  Rejected as this issue's rule. The check that landed is position-blind: it asks whether the fold
+  holds a node for the endpoint at all, which is the property the two logs here violate. A row whose
+  endpoint is claimed only LATER passes it and then dies in the replay loop on the store's own
+  message. That shape is unreachable live since #233 — `IngestService.record` asks the running graph
+  before it appends — so what is left is a legacy row, written by an older build or by hand into
+  SQLite, and it is recorded as a residual below rather than answered by a second, positional pass
+  whose only customer is a log nobody has.
+
+**Consequence for `retractEntity`.** `RetractRun` buckets stranded edges by the id the fold
+resolves, so its report names an edge that reaches an emptied id through a merge as well as one that
+names it directly — which is what keeps that report, `LogProjection.withdrawnEdges` and a `full`
+export agreeing by construction rather than by three people counting alike.
+
+**Residuals, recorded rather than repaired.**
+
+- **A legacy positional row.** An edge whose endpoint is claimed later in the log passes the boot
+  pre-flight and fails in the replay loop, with the store's message rather than a named one. No path
+  in `src/main` can write it any more; a log that already holds one is repaired the same way as the
+  rows above.
+- **`IngestService.record`'s gate asks the RUNNING graph, which this ADR leaves stale.** An edge
+  naming an entity that WAS a node and has since been retracted passes `graph.node` and poisons the
+  next boot. That is [ADR 24](0024-sqlite-assertion-log.md)'s 2026-09-04 amendment's own residual,
+  filed as **issue #234**; the boot refusal above now names such a row, which is strictly better
+  than what it did before.
+- **Every path in this amendment is fixture-only today.** Issue #227's census measured the real
+  graph on 2026-09-04 and the numbers are its to hold, not this ADR's. That is the argument for the
+  cheapest correct answer at each ruling rather than the most general one; it is not an argument for
+  leaving any of them unfixed, since the log is append-only and the first instance of each is
+  permanent.

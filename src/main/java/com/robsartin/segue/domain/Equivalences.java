@@ -582,12 +582,11 @@ public record Equivalences(
    *
    * <p><b>The cost is O(rounds x log), and rounds are bounded only by the ids in the log.</b> Each
    * round is a handful of whole-log walks; the depth and the measured cost of a deliberately
-   * chained fixture are {@code docs/adr/0044-retraction-as-a-new-claim.md}'s forthcoming 2026-09-04
-   * amendment to carry, dated and attributed there, rather than restated here where a
-   * re-measurement could go stale independently of the number the ADR holds. Real logs run one or
-   * two rounds - a chain deeper than two needs the bypass-written merge above - so no cap is
-   * imposed here rather than one being imposed with nothing to say what it should be; the trade is
-   * the ADR's to carry.
+   * chained fixture are {@code docs/adr/0044-retraction-as-a-new-claim.md}'s 2026-09-04 amendment
+   * to carry, dated and attributed there, rather than restated here where a re-measurement could go
+   * stale independently of the number the ADR holds. Real logs run one or two rounds - a chain
+   * deeper than two needs the bypass-written merge above - so no cap is imposed here rather than
+   * one being imposed with nothing to say what it should be; the trade is the ADR's to carry.
    */
   private static Set<String> emptiedCanonicalIds(List<LoggedAssertion> log) {
     Set<String> emptied = Set.of();

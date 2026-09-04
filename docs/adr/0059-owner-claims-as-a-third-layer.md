@@ -509,3 +509,93 @@ made correct: `Equivalences.last` stayed narrower than `Equivalences.stands` on 
 reappearing on the node does not un-orphan a rating that only ever belonged to the merge that stands
 today. Whether segue should offer any way to disown such a row is a separate decision nobody has
 argued.
+
+---
+
+**Amendment (2026-09-04, issue #228): the 2026-09-03 ruling above counted an edge the fold does not
+keep, and an owner claim that would leave the log unbootable is now refused before the append.**
+
+Nothing above is withdrawn and no sentence above is edited: it is the true account of the code
+between #221 and this issue, and it is what this amendment answers.
+
+**Three phrases in that ruling are now wrong, and this is where they are corrected.** It reads
+*"while any surviving `AssertionRecord` or `OwnerEdge` names its canonical id as an endpoint"*, and
+*"computed once in `Equivalences.in` from the same pass that builds `canonicalByLocal`, over
+surviving rows only"*. All three are superseded:
+
+- **"any surviving edge" is now "any edge the fold KEEPS."** Surviving and kept are different sets. An
+  edge the fold *withdraws* — because it names a canonical id a retraction emptied
+  ([ADR 44](0044-retraction-as-a-new-claim.md)'s #224 rule) — survives every retraction and claims
+  nothing all the same, and so does one the fold *collapses* onto a single id (#178). Neither can
+  keep a superseded stand-in alive, because neither reaches the graph.
+- **"the same pass" is now a least fixed point.** Whether an edge is kept depends on which canonical
+  ids are emptied, which depends back on which stand-ins survive, which depends on this set. The
+  emptied set is therefore computed from the empty set upwards until it stops growing, before the
+  reference set can be built at all. The termination argument, the cost and a dated measurement are
+  [ADR 44](0044-retraction-as-a-new-claim.md)'s 2026-09-04 amendment's to carry.
+- **"over surviving rows only" is now over the rows the fold keeps**, which is narrower and holds
+  for the same reason the original clause gave: a retracted edge claims nothing and keeps nothing
+  alive, and neither does one withdrawn or collapsed.
+
+**What it looked like, measured on `a7c3455`.** On a log the supported flow itself produces — a
+correction, plus an unrelated retraction that empties the other end of the one edge naming the
+superseded id — the exported fold and the boot replay each held a labelled node with no edges under
+the id the owner had corrected himself away from, carrying his withdrawn working title, while the
+same fold reported that edge as withdrawn. The rating carry stays where the 2026-09-03 ruling put
+it: `Equivalences.last` is still narrower than `Equivalences.stands`, and this changes nothing about
+it.
+
+**Both folds and both label copies move together, which is the point.** Three of the stand-in rule's
+four homes read `Equivalences.in`, so `OwnRun` stops offering an endpoint whose node is an artefact
+and `ratings/Labels.forQids` reports a rating carried onto it as `(not in the graph)` — which is
+what that string was written for. The fourth, `IngestService.standIn` on the live path, is handed
+`Equivalences.NONE`: it holds no log, so it has no edge to withdraw, and it is unchanged. The count
+of homes is not reduced and the residual about it stands.
+
+**An owner claim is validated BEFORE the append, and this is the gate.** `IngestService.claim` — the
+one gate every owner claim passes, `OwnRun`'s included — now refuses a `SameAs` whose local side the
+projection holds no node for, and an `OwnerEdge` whose **folded** endpoint the fold would hold no
+node for. Both were already refused by `OwnRun`, which is why the logs issue #228 measured are
+reachable only by a caller that comes straight to `claim` or writes the row into SQLite by hand; a
+guard in front of one caller is not a gate, and the log is append-only, so a claim rejected only at
+replay is rejected at every replay for good.
+
+**The gate's questions are narrower than the tool's, deliberately, and both homes stay.**
+`OwnRun.declareMerge` requires a merge's local side to be something the owner *minted*, because
+pointing a merge at a sourced entity is a different claim that tool does not make, and
+`OwnRun.assertEdge` refuses an endpoint it does not *offer*. The gate asks the fold's own questions
+instead — any surviving node claim, and the endpoint the fold would resolve to — so it refuses only
+what cannot boot, and a claim naming a merged local id that the fold resolves onto a held canonical
+id is accepted rather than second-guessed. Two questions, two homes; the friendlier message stays
+the tool's. **Moving the refusal into `OwnRun` and deleting it here was rejected** for that reason,
+and **refusing in `OwnRun` only** was rejected because the whole issue is about the path that does
+not go through `OwnRun`.
+
+**Its refusal is #233's `UnknownEndpointException`, not a second type.** That gate and
+`IngestService.record`'s ask one question — does the projection this claim is about hold a node for
+the id it needs — of two different projections: `claim` has a log and no graph, so it asks the log's
+fold; `record` has a graph and no log view, so it asks the running graph. They share the type and
+each writes its own sentence, because a message saying *"the graph"* about a check that asked the
+log is the caller-facing misdescription [ADR 27](0027-mcp-protocol-conformance.md) exists to keep out.
+
+**And a log that already carries such a row is refused at boot, by name.** `GraphProjector.project`
+checks every edge the fold keeps against the nodes the fold holds before it applies anything, and
+throws one message listing each offending sequence number, the id no node stands for, and the
+repair. It reports every row rather than the first, departing from the replay loop's own rule,
+because this is a decidable property of the log and an operator repairing one wants the list rather
+than one row per restart. What the repair is, and why appending a node claim is not it, belongs to
+[ADR 44](0044-retraction-as-a-new-claim.md)'s 2026-09-04 amendment. `LogProjection` deliberately
+still tolerates the same edge as dangling: the exporter has to produce a picture, and that ADR
+argues why the boot's answer is the opposite one.
+
+**A residual, recorded rather than repaired.** `IngestService.record` — the sourced path — refuses an
+edge whose endpoints the RUNNING GRAPH holds no node for (#233), which is the same shape this
+amendment closes for owner claims, asked of the projection that path can see. It is not the same
+guarantee: the running graph is stale after a retraction until the next boot, so an edge naming a
+retracted entity still passes it. That gap is [ADR 24](0024-sqlite-assertion-log.md)'s 2026-09-04
+amendment's residual and issue **#234**; the boot refusal above now names such a row.
+
+**Every path in this amendment is fixture-only today**, on a graph issue #227's census measured on
+2026-09-04 — the numbers are its, not restated here. That is the argument for the cheapest correct
+answer at each ruling rather than the most general one; it is not an argument for leaving any of
+them unfixed, since the log is append-only and the first instance of each is permanent.
