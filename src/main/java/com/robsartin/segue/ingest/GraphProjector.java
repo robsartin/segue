@@ -68,7 +68,9 @@ public final class GraphProjector {
    *
    * @param merges what follows a merge outside the graph; {@link IdentityMerge#NONE} for a caller
    *     that must not write the taste layer
-   * @return how many assertions were applied
+   * @return how many assertions were applied. Not the number that survived the retractions: an edge
+   *     the fold yields nothing for reached the graph with nothing, and is not counted (#224 for a
+   *     withdrawn edge, #178 for a self-loop the fold collapsed)
    */
   public static long project(AssertionLog log, GraphStore store, IdentityMerge merges) {
     List<LoggedAssertion> assertions = log.readAll();
@@ -95,8 +97,9 @@ public final class GraphProjector {
         continue;
       }
       try {
-        IngestService.apply(store, merges, equivalences, rederived(assertion));
-        applied++;
+        if (IngestService.apply(store, merges, equivalences, rederived(assertion))) {
+          applied++;
+        }
       } catch (RuntimeException e) {
         // Sequence is 1-based, matching the log's own autoincrement.
         throw new IllegalStateException("replay failed at sequence " + (i + 1), e);

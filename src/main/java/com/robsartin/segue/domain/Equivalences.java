@@ -432,8 +432,8 @@ public record Equivalences(
    * quietly giving one of them the older, edge-blind answer is how the two would drift while
    * looking identical at the call site. {@code GraphProjector.project} and {@code LogProjection.of}
    * both build their equivalences here; every other caller of {@link #in} — {@code OwnRun}, {@code
-   * ratings/Labels}, {@code KnownList}, {@code RateRun} — asks about ratings, labels and known
-   * lists and folds no edge.
+   * RateCli}, {@code ratings/Labels} and {@code RecommendCli} — asks about ratings, labels, known
+   * lists and what to offer, and folds no edge.
    */
   public static Equivalences folding(List<LoggedAssertion> log) {
     Equivalences merges = Equivalences.in(log);
@@ -598,18 +598,21 @@ public record Equivalences(
    *
    * <p><b>Both arms of the general method delegate here</b>, so there is one rule and not two: a
    * sourced edge is folded by this method directly, and an owner edge lends it its two endpoints
-   * and is rebuilt from the answer. Unchanged, collapsed and resolved are decided in one place.
+   * and is rebuilt from the answer. All four outcomes - withdrawn, unchanged, collapsed and
+   * resolved - are decided in one place.
    */
   public Optional<AssertionRecord> foldEndpoints(AssertionRecord claim) {
     Objects.requireNonNull(claim, "claim");
-    String from = canonical(claim.fromQid());
-    String to = canonical(claim.toQid());
-    if (retractedStandIns.contains(claim.fromQid()) || retractedStandIns.contains(claim.toQid())) {
+    if (namesARetractedStandIn(claim)) {
       // A retraction took away the merge that gave this endpoint its only node (#224). Above the
       // shortcut below, deliberately: such an edge usually names no merged id at all, so the
-      // "most of a log names nothing merged" fast path would return it unchanged.
+      // "most of a log names nothing merged" fast path would return it unchanged. Above the
+      // resolution too, because the endpoint this edge names is going nowhere - there is nothing
+      // to resolve it to.
       return Optional.empty();
     }
+    String from = canonical(claim.fromQid());
+    String to = canonical(claim.toQid());
     if (from.equals(claim.fromQid()) && to.equals(claim.toQid())) {
       // Most of a log names no merged id at all, and a copy of every row would be waste.
       return Optional.of(claim);
@@ -623,6 +626,21 @@ public record Equivalences(
     return Optional.of(
         new AssertionRecord(
             from, to, claim.typeCode(), claim.validFrom(), claim.validTo(), claim.provenance()));
+  }
+
+  /**
+   * Whether this edge names a canonical id a retraction emptied, and is therefore withdrawn rather
+   * than folded (#224).
+   *
+   * <p><b>One home for the question, because two readers ask it.</b> {@link #foldEndpoints} asks it
+   * to decide what to yield, and {@code LogProjection} asks it to decide what to count — the export
+   * has to say how many edges it withdrew, and a withdrawn edge never reaches its missing-endpoint
+   * check because the fold yielded nothing for it. Reading {@link #retractedStandIns} twice would
+   * put "what withdrawal means" in two places, which is this class's own standing objection.
+   */
+  public boolean namesARetractedStandIn(AssertionRecord claim) {
+    Objects.requireNonNull(claim, "claim");
+    return retractedStandIns.contains(claim.fromQid()) || retractedStandIns.contains(claim.toQid());
   }
 
   /**

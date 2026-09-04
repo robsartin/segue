@@ -19,6 +19,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * The whole graph, folded out of the append-only log.
@@ -92,9 +93,17 @@ import java.util.Map;
  *     would fail replay at boot — and it is counted rather than ignored because the alternative is
  *     an output that silently loses edges, or a GraphML file with a dangling reference that no tool
  *     will open.
+ * @param withdrawnEdges edges dropped because they named a canonical id a retraction emptied (#224)
+ *     — {@code Equivalences.retractedStandIns}. <b>A sibling of {@code danglingEdges}, and
+ *     deliberately not folded into it:</b> that count is the alarm for a log that cannot boot and
+ *     has to stay zero, while this one is an ordinary, expected consequence of the owner retracting
+ *     something he had merged. A withdrawn edge never reaches the missing-endpoint check at all —
+ *     {@link Equivalences#foldEndpoints} yields nothing for it — so without this count the export
+ *     would simply come out smaller with nothing in the projection saying why. Issue #227's census
+ *     reads it rather than re-deriving the rule.
  */
 public record LogProjection(
-    Map<String, NodeRecord> nodes, List<EdgeRecord> edges, int danglingEdges) {
+    Map<String, NodeRecord> nodes, List<EdgeRecord> edges, int danglingEdges, int withdrawnEdges) {
 
   public LogProjection {
     // Not Map.copyOf: its iteration order is unspecified and salted per JVM, so two exports of one
@@ -123,6 +132,7 @@ public record LogProjection(
     // took away stops projecting (#224).
     Equivalences equivalences = Equivalences.folding(logged);
     Map<String, List<AssertionRecord>> byEdge = new LinkedHashMap<>();
+    int withdrawn = 0;
 
     for (int i = 0; i < logged.size(); i++) {
       LoggedAssertion assertion = logged.get(i);
@@ -131,8 +141,7 @@ public record LogProjection(
       }
       switch (assertion) {
         case NodeAssertion claim -> nodes.put(claim.qid(), KindMapper.rederive(claim).toNode());
-        case AssertionRecord claim ->
-            equivalences.foldEndpoints(claim).ifPresent(folded -> collect(byEdge, folded));
+        case AssertionRecord claim -> withdrawn += fold(equivalences, byEdge, claim);
         // Retractions never survive the rule above; they describe the fold rather than appear
         // in it. Reaching this arm would mean Retractions.survives had changed its mind.
         case Retraction retraction ->
@@ -143,10 +152,7 @@ public record LogProjection(
         // minted entity - re-derivation reads the P31 classes a source stated, and the owner
         // stated a kind directly and no classes at all, so there is nothing to re-derive from.
         case LocalEntity minted -> nodes.put(minted.qid(), minted.toNode());
-        case OwnerEdge owned ->
-            equivalences
-                .foldEndpoints(owned.toAssertion())
-                .ifPresent(folded -> collect(byEdge, folded));
+        case OwnerEdge owned -> withdrawn += fold(equivalences, byEdge, owned.toAssertion());
         // A merge is not drawn - it is a statement about identity, not a node or an edge, and an
         // edge for it would put a relationship in the export that find_paths cannot route along,
         // which this class's last paragraph forbids. Nothing happens at its own row any more
@@ -178,7 +184,27 @@ public record LogProjection(
               first.validTo(),
               sources));
     }
-    return new LogProjection(nodes, edges, dangling);
+    return new LogProjection(nodes, edges, dangling, withdrawn);
+  }
+
+  /**
+   * Fold one edge claim into {@code byEdge}, and say whether it was withdrawn (#224).
+   *
+   * <p>Both edge arms above go through this, so the sourced and the owner's edges are counted by
+   * one rule rather than two. The reason for the withdrawal is {@code
+   * Equivalences.namesARetractedStandIn}'s to give: the fold yields nothing for a self-loop as
+   * well, and only one of the two is this count's business.
+   *
+   * @return 1 if the claim was withdrawn because it named a retracted stand-in, otherwise 0
+   */
+  private static int fold(
+      Equivalences equivalences, Map<String, List<AssertionRecord>> byEdge, AssertionRecord claim) {
+    Optional<AssertionRecord> folded = equivalences.foldEndpoints(claim);
+    if (folded.isPresent()) {
+      collect(byEdge, folded.get());
+      return 0;
+    }
+    return equivalences.namesARetractedStandIn(claim) ? 1 : 0;
   }
 
   /** One folded edge claim, filed under the pair it now names. */

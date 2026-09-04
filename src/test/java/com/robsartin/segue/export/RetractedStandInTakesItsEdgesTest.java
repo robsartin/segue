@@ -189,6 +189,46 @@ class RetractedStandInTakesItsEdgesTest {
     assertThat(folded.danglingEdges()).isZero();
   }
 
+  @Test
+  @DisplayName("the export fold counts the edge it withdrew rather than quietly shrinking")
+  void shouldCountTheEdgeWithdrawnBecauseItNamedAnEmptiedCanonicalId() {
+    LogProjection folded = LogProjection.of(retractedAfterMergingLog());
+
+    assertThat(folded.withdrawnEdges())
+        .as("without this the export just comes out smaller and nothing says why (#224)")
+        .isEqualTo(1);
+    assertThat(folded.danglingEdges())
+        .as(
+            "and it is NOT counted as dangling - that count is the alarm for a log that cannot"
+                + " boot, and this edge was withdrawn on purpose")
+        .isZero();
+    assertThat(folded.edges())
+        .as("the owner's other edge is untouched, so this is not a count over an empty fold")
+        .hasSize(1);
+  }
+
+  @Test
+  @DisplayName("a fold that withdraws nothing counts nothing")
+  void shouldCountNoWithdrawnEdgeWhenNothingIsRetracted() {
+    assertThat(LogProjection.of(mergedAndNotRetractedLog()).withdrawnEdges())
+        .as("so the count above is reporting the withdrawal and not merely a non-zero constant")
+        .isZero();
+  }
+
+  @Test
+  @DisplayName("the replay does not count a withdrawn edge among the assertions it applied")
+  void shouldNotCountAWithdrawnEdgeAmongTheAppliedAssertions() {
+    try (TinkerGraphStore replayed = new TinkerGraphStore()) {
+      long applied =
+          GraphProjector.project(retractedAfterMergingLog(), replayed, IdentityMerge.NONE);
+
+      assertThat(applied)
+          .as("four rows survive the retraction and one of them applies nothing to the graph")
+          .isEqualTo(3);
+      assertThat(replayed.edgeCount()).as("which is the one edge the graph actually holds").isOne();
+    }
+  }
+
   /**
    * The edge appended <b>after</b> the retraction, naming the emptied canonical id. The rule is
    * position-blind and withdraws it too — see {@code Equivalences.retractedStandIns}, and the
