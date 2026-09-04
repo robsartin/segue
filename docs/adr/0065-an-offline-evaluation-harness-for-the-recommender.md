@@ -85,7 +85,7 @@ The harness computes the resolved ratings map **with the held-out entries remove
 hands that one map to the known-list composition, to the regard function and to the suppressed set —
 exactly as `RecommendCli` hands one map to `regardFor` and `KnownList.promoted`. A held-out entity
 is therefore absent from the known-list, absent from what is not offered, and weightless: the graph
-the sweep walks is the graph it would have walked before that rating was written. It is not
+the sweep walks is the graph it would have walked before those ratings were written. It is not
 separately subtracted from anything, because it was never added; that is a property of the
 eligibility rule above, and a test pins it rather than a comment.
 
@@ -162,11 +162,11 @@ deliberate for the reason both of those were: the harness must measure *the ship
 harness with a walk of its own would answer a question about itself. `theRecommenderOpensNothingElse`
 keeps the trip one-way from the moment `evaluate` joins `DEV_TOOL_PACKAGES`.
 
-Four fences are written for the new package — read-only, opens nothing else, reads ratings and never
-notes, and the two halves of the `--db` rule — each with a planted control, and each with its row in
-the developer guide's table. They are new rules rather than widenings of `census`'s, for ADR 63's
-own reason: a rule named for one tool and quoted in an immutable ADR does not get quietly stretched
-to cover a second.
+The fences `ArchitectureTest` declares for the package are written — read-only, opens nothing else,
+reads ratings and never notes, and the two halves of the `--db` rule — each with a planted control,
+and each with its row in the developer guide's table. They are new rules rather than widenings of
+`census`'s, for ADR 63's own reason: a rule named for one tool and quoted in an immutable ADR does
+not get quietly stretched to cover a second.
 
 One existing rule *is* widened rather than copied: `onlyTheRecommenderReadsEveryRating` names
 `evaluate` as a fourth reader of `AffinityStore.readRatings`, and this paragraph is that decision —
@@ -179,8 +179,8 @@ because it is the shape of every coupled change here: `PackageListsTest` holds
 `DEV_TOOL_PACKAGES` against the source tree in both directions, so the package cannot exist without
 the constant naming it; and the moment `EvaluateCli` calls `readRatings`, the un-widened rule reds.
 Landing either half alone puts the build through a red it cannot be argued out of, which is what
-[ADR 4](0004-mikado-method-for-changes.md) asks a coupled change to avoid. The four fences of the
-harness's own followed in their own commit, after it.
+[ADR 4](0004-mikado-method-for-changes.md) asks a coupled change to avoid. The fences
+`ArchitectureTest` declares for the harness's own package followed in their own commit, after it.
 
 ## Alternatives considered
 
@@ -246,9 +246,9 @@ harness's own followed in their own commit, after it.
 
 - **"Safe to paste" is a claim about the report, and a failed run is not the report.** ADR 63's
   limit, restated here rather than left for a reader to find in another ADR: a refusal names the
-  database path it was given, and an exception out of the log decoder can put a malformed row's own
-  text on screen — `CensusIsSafeToPasteTest`'s sibling captures Logback events, and a thrown
-  exception is not one.
+  path it was given — the database's or the known-list's — and an exception out of the log decoder
+  can put a malformed row's own text on screen — `CensusIsSafeToPasteTest`'s sibling captures
+  Logback events, and a thrown exception is not one.
 
 - **The guard's scope is narrower still, and the narrowing is honest rather than an oversight.**
   `EvaluationIsSafeToPasteTest` asserts the absence of a label, a note and anything qid-shaped; it

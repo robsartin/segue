@@ -2155,7 +2155,10 @@ restates for this tool. No qid, label, note or rating value reaches the report, 
 entity presented as yours may not — is satisfied by construction rather than by care.
 `EvaluationIsSafeToPasteTest` holds it exactly as `CensusIsSafeToPasteTest` holds the census: a
 fixture carrying a label, a note, a `Q` id inside that note and a rating, every log line captured at
-TRACE, all four asserted absent.
+TRACE, and the label, the note and anything qid-shaped asserted absent. The rating has no clause of
+its own: a leaked rating is a bare digit, indistinguishable from a floor or a pool size the table
+prints legitimately. What keeps a rating out is upstream — `EvaluationReport.lines` takes counts —
+and ADR 65's consequences record the limit.
 
 That guarantee is about the report itself, not about everything a run can put on your terminal: a
 refusal names the path it was given, and a run that fails prints a stack trace like any other

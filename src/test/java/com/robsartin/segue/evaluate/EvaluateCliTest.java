@@ -107,8 +107,8 @@ class EvaluateCliTest {
   }
 
   @Test
-  @DisplayName("the whole tool runs against a real database and prints the whole table")
-  void shouldPrintTheWholeTableWhenTheToolIsRunEndToEnd() throws IOException {
+  @DisplayName("the whole tool runs against a real database end to end, without throwing")
+  void shouldRunEndToEndWithoutThrowingWhenTheToolIsRunAgainstARealDatabase() throws IOException {
     Path db = graphOnDisk();
     Path known = dir.resolve("known.csv");
     Files.writeString(

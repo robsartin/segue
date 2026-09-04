@@ -43,7 +43,7 @@ class EvaluationReportTest {
         EvaluationReport.lines(ELIGIBLE, HELD_OUT_COUNT, 25, List.of(reading(), sparse()));
 
     // Complete cells, not substrings — "7.50" would satisfy .contains("7.5") but must not satisfy
-    // this. reading()'s columns are: scorer, floor, pool, held out, hits, mean rank, negatives,
+    // this. reading()'s columns are: scorer, floor, pool, in pool, hits, mean rank, negatives,
     // neg mean rank.
     assertThat(cellsOf(lines.get(4))).contains("7.5", atIndex(5)).contains("4.0", atIndex(7));
     assertThat(cellsOf(lines.get(5)))

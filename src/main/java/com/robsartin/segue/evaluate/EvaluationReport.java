@@ -40,7 +40,7 @@ public final class EvaluationReport {
 
   private static final List<String> COLUMNS =
       List.of(
-          "scorer", "floor", "pool", "held out", "hits", "mean rank", "negatives", "neg mean rank");
+          "scorer", "floor", "pool", "in pool", "hits", "mean rank", "negatives", "neg mean rank");
 
   private static final String GAP = "  ";
 

@@ -7,7 +7,6 @@ import com.robsartin.segue.port.GraphStore;
 import com.robsartin.segue.recommend.CandidateSweep;
 import com.robsartin.segue.recommend.Sweep;
 import com.robsartin.segue.support.QidList;
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -76,7 +75,7 @@ public final class EvaluateRun {
    * @return the readings that were printed, so a caller can assert on the numbers without parsing
    *     the text back
    */
-  public List<Reading> run(Path known, int top, Consumer<String> lines) throws IOException {
+  public List<Reading> run(Path known, int top, Consumer<String> lines) {
     Objects.requireNonNull(known, "known");
     Objects.requireNonNull(lines, "lines");
 

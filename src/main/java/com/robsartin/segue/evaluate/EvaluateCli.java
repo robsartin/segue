@@ -9,8 +9,6 @@ import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import com.robsartin.segue.support.RequiredDatabase;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import com.robsartin.segue.wikidata.RecognitionInstitutions;
-import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
@@ -163,8 +161,6 @@ public final class EvaluateCli {
 
       new EvaluateRun(graph, RecognitionInstitutions::isRecognitionInstitution, ratings, merges)
           .run(options.known(), options.top(), log::info);
-    } catch (IOException e) {
-      throw new UncheckedIOException("could not read " + options.known(), e);
     }
   }
 }

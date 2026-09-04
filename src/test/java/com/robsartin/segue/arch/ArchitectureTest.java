@@ -157,10 +157,10 @@ class ArchitectureTest {
    * alsoFenced} unchanged.
    *
    * <p>{@code permitted} always contains the tool's own package, and contains a second entry only
-   * where a decision allows one sibling — today {@code rate → recommend} (ADR 46) and {@code census
-   * → export} (ADR 63). Written as an allowlist rather than a denylist so that the exception is the
-   * thing a reader has to justify, and so a new tool is fenced from every one of its siblings the
-   * moment it joins {@link #DEV_TOOL_PACKAGES}.
+   * where a decision allows one sibling — today {@code rate → recommend} (ADR 46), {@code census →
+   * export} (ADR 63) and {@code evaluate → recommend} (ADR 65). Written as an allowlist rather than
+   * a denylist so that the exception is the thing a reader has to justify, and so a new tool is
+   * fenced from every one of its siblings the moment it joins {@link #DEV_TOOL_PACKAGES}.
    *
    * @throws IllegalArgumentException if {@code permitted} names something that is not a dev tool —
    *     a typo would otherwise silently widen or invert the fence it was meant to describe
