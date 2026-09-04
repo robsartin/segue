@@ -582,6 +582,11 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   therefore asks `GraphStore.node` for both of an edge's folded endpoints before `log.append` and
   throws `UnknownEndpointException`; `TinkerGraphStore.requireVertex` and `JenaGraphStore.requireKnown`
   are unchanged and stay the last line of defence, pinned as one contract by `GraphStoreContract`.
+  **This gate is not the whole fix, and ADR 24's 2026-09-04 amendment says so.** It asks the RUNNING
+  graph, which ADR 44 already leaves stale until the next boot — so an edge naming an entity that WAS
+  a node and has since been retracted still passes `graph.node`, still gets appended, and still
+  poisons every boot after. Measured: `record()` returned accepted against the running graph for
+  exactly that edge, and the next boot threw `replay failed`. Filed as issue #234, **not fixed here**.
   **Do not "fix" this by applying to the graph first** — that loses a claim the graph accepted if the
   process dies between the halves, which is ADR 19's whole failure mode. **Do not tolerate the
   missing endpoint at boot** either; `LogProjection.danglingEdges` is the alarm for exactly this and

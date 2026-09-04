@@ -316,6 +316,16 @@ lands. That is stated, not hidden: see the reconciliation below.
 SQLite by hand, which is why #228's boot diagnosis exists at all. A gate at the producer bounds the
 mistake; it does not make the shape unrepresentable.
 
+**The gate asks the running graph, and ADR 44 leaves the running graph stale after a retraction until
+the next boot — so an edge naming a retracted endpoint passes the gate and still poisons the boot.**
+`requireEveryEndpointIsInTheGraph` checks `graph.node`, which still answers present for an entity
+this process retracted a moment ago (`GraphStore` has no remove; a retraction is honoured by the
+fold, not applied to a store). Measured: `record()` accepted such an edge and the next boot threw
+`replay failed at sequence 4`. This is the second case ADR 24's amendment does not cover — filed as
+issue #234, **not fixed by this branch**. The fix is not "check the graph harder": it needs the
+gate to ask what the log's fold currently holds (whether the retraction has been applied yet), the
+same question `claim`'s gate already has to ask because it has no running graph to consult at all.
+
 ## Reconciling with #228
 
 #228 (branch `228-ready`) is adding a producer gate at `IngestService.claim` for the owner's paths
@@ -351,6 +361,19 @@ written by an older build — or a row written into SQLite by hand — still die
 `./gradlew retractEntity` on the endpoint, not appending the missing node claim (replay is
 positional; see ADR 24's 2026-09-04 amendment).
 
+**"Adopts this type" is not "reuses this constructor unmodified."** `UnknownEndpointException`'s
+message is hardcoded to *"the graph holds no node for"* plus `edgeKey()`, because it is
+`record`'s own witness — `graph.node`. `claim`'s question is a different projection, the log's fold,
+so a message built by that constructor would say "the graph" about a check that asked the log, which
+is exactly the kind of caller-facing misdescription ADR 27 exists to keep out. Sharing the type
+therefore needs either a second package-private constructor taking the log-side phrasing, or one
+constructor parameterised on the witness phrase (`"the graph holds no node for"` /
+`"the log holds no claim for"`) — not a second exception type, and not the first constructor with its
+one hardcoded phrase pressed into service for a check it was not written to describe. Whichever
+shape, `ARefusedEdgeNeverReachesTheLogTest` is the test file #228's own refusal test should extend,
+the way this issue's tests extend it rather than duplicating `IngestServiceTest`'s ordering
+assertions in a second file.
+
 ## Amendment
 
 **ADR 24 takes a dated amendment; ADR 19 takes none.** Nothing about append-only changes: no row is
@@ -362,5 +385,7 @@ correct failure direction: a restart replays it right"* is true only of a claim 
 project. For a claim the graph refuses on a precondition replay will apply identically, the log being
 ahead is not recoverable — the row is permanent under ADR 19 and every boot fails at it. The ordering
 decision is unchanged and the argument for it is unchanged; what is added is that `record` asks the
-store's own precondition **before** the append, so the log never gets ahead by a row that can never
-catch up. The originals are untouched.
+store's own precondition **before** the append, so the log never gets ahead by a row that names an
+entity that has never existed. **That is one of two rows the running graph cannot warn about, not
+both** — see "What this does not settle" below for the second, which this branch files rather than
+fixes. The originals are untouched.

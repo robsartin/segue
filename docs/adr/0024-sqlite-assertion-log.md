@@ -72,9 +72,21 @@ temp-file log: the live call threw, the log held the row, and two consecutive re
 **The ordering decision is unchanged, and so is its argument.** What changes is that
 `IngestService.record` now asks the store's own precondition — through `GraphStore.node`, on the port,
 so both engines answer alike — **before** the append, and refuses with a message naming the endpoint.
-The log therefore never gets ahead by a row that can never catch up, which is the only case the
-original sentence did not cover. Appending is still first; the two halves are still not atomic; a
-crash between them still leaves the recoverable direction, and now genuinely so.
+The log therefore never gets ahead by a row that can never catch up, when the row names an entity
+that has never existed. Appending is still first; the two halves are still not atomic; a crash
+between them still leaves the recoverable direction, and now genuinely so.
+
+**That closes one of two cases the original sentence did not cover, not both.** The gate above asks
+the RUNNING graph, through `GraphStore.node` — and ADR 44 already leaves the running graph stale
+until the next boot, because `GraphStore` has no remove and a retraction is honoured by the fold, not
+applied to a store. So an edge naming an entity that WAS a node and has since been retracted still
+finds `graph.node` answering present, still passes the gate, still gets appended, and still leaves
+the log unable to replay past it — exactly as permanent as the case this amendment closes, for the
+same reason. Measured for #233: `record()` returned `ACCEPTED` against the running graph for an edge
+naming a just-retracted endpoint, and the next boot threw `replay failed at sequence 4`. Filed as
+issue #234 and **not fixed by this amendment** — the gate would need to ask what the log's fold
+currently holds, not what the running graph currently holds, to see a retraction that has not yet
+been replayed.
 
 **Alternatives considered, and why each lost.**
 
