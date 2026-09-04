@@ -30,8 +30,9 @@ import java.util.function.UnaryOperator;
  *
  * <p>The architecture rule that keeps the boot replaying through exactly this type, rather than
  * through the log-taking statics it wraps, is {@code ArchitectureTest.theBootFoldsOnce}. The
- * measured saving is a dated figure that belongs in its own ADR rather than restated here; the
- * figures live in ADR 64.
+ * measured saving is a dated figure that belongs in its own ADR rather than restated here: ADR 64,
+ * {@code docs/adr/0064-fold-the-log-once-per-boot.md}, holds the before and after taken 2026-09-04,
+ * what they do and do not cover, and the alternatives this decision rejected.
  *
  * @param retractions {@link Retractions#in}'s own answer for this log
  * @param equivalences {@link Equivalences#folding(List)}'s own answer for this log, built here from

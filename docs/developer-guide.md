@@ -614,6 +614,20 @@ dispatch would be free to drift, and a rebuilt graph that silently differs from 
 defeats the point of keeping a log. Replay is fatal on the first failure and names the 1-based
 sequence number: a log that will not project is corruption to surface at boot, not to limp past.
 
+### The boot folds the log once
+
+The boot used to read the log once and then derive the fold from that one row list four separate
+times — the retractions, the folding `Equivalences`, the stand-ins, and the held node set the
+pre-flight checks against — with the emptied-canonical-id fixed point paid inside more than one of
+them. `GraphProjector.project` now builds a single `Fold` (in `domain`, beside `Equivalences` and
+`Retractions`, a carrier that decides nothing) and hands it to the pre-flight, the stand-in seeding
+and the replay loop. Every fold rule stays where it was and every log-taking static keeps its
+signature, so the dev tools still fold per run and are deliberately out of scope.
+`ArchitectureTest.theBootFoldsOnce` is what stops a second fold arriving: it forbids
+`GraphProjector` from calling the log-taking statics at all, so the boot's fold comes through
+`Fold.of` or not at all. ADR [64](adr/0064-fold-the-log-once-per-boot.md) has the decision, the
+rejected alternatives and the dated before/after measurement.
+
 ### Nodes are claims too
 
 `LoggedAssertion` is a sealed interface permitting `NodeAssertion`, `AssertionRecord` and
