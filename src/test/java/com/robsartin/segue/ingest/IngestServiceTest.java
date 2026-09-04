@@ -119,6 +119,32 @@ class IngestServiceTest {
   }
 
   @Test
+  @DisplayName("should name one endpoint once when a sourced self-loop names one unknown entity")
+  void shouldNameOneEndpointOnceWhenASourcedSelfLoopNamesOneUnknownEntity() {
+    // requireBothEndpoints guards the self-loop case (fromQid equals toQid) so it is checked
+    // once, not reported twice - the javadoc on that method says so and nothing tested it (#233).
+    AssertionRecord selfLoop =
+        new AssertionRecord("Q0900301", "Q0900301", "MEMBER_OF", null, null, WIKIDATA);
+
+    UnknownEndpointException thrown =
+        catchThrowableOfType(UnknownEndpointException.class, () -> ingest.record(selfLoop));
+
+    assertThat(thrown.endpoints()).containsExactly("Q0900301");
+    assertThat(log.readAll()).isEmpty();
+  }
+
+  @Test
+  @DisplayName("should record a self-loop edge when both endpoints name a known entity")
+  void shouldRecordASelfLoopEdgeWhenBothEndpointsNameAKnownEntity() {
+    ingest.record(new NodeAssertion("Q0900302", NodeKind.PERSON, "Idris Vance", WIKIDATA));
+
+    ingest.record(
+        new AssertionRecord("Q0900302", "Q0900302", "INFLUENCED_BY", null, null, WIKIDATA));
+
+    assertThat(graph.edgeCount()).isEqualTo(1);
+  }
+
+  @Test
   @DisplayName("should refuse an owner edge it cannot apply when record is called")
   void shouldRefuseAnOwnerEdgeItCannotApplyWhenRecordIsCalled() {
     // #233 review. requireEveryEndpointIsInTheGraph's OwnerEdge arm (record() accepts one today -
