@@ -14,8 +14,12 @@ Three decisions this project has taken end in a number nobody has.
 
 [ADR 59](0059-owner-claims-as-a-third-layer.md)'s residual says it outright: *how many merges the
 owner's real graph holds is unmeasured.* [ADR 57](0057-the-floor-reports-itself.md) chose a degree
-floor by running two floors on the graph of the day and reading the two lists, and said in as many
-words that the graph changes under it and nothing re-opens the question.
+floor by running two floors on the graph of the day and reading the two lists, and then made the
+re-run trigger a procedure rather than somebody's memory: `FloorReading` emits the figures on every
+recommendation run, and that ADR names the thresholds at which the two-floor comparison is taken
+again. **Those figures are readings of one run's candidate pool** — the candidates that cleared the
+floor, plus two counts of what the sweep discarded on degree — so what nobody has is where the floor
+sits against the *graph*: the whole degree distribution, including every node no sweep considers.
 [ADR 55](0055-what-the-musicbrainz-adapter-refuses.md) and issue #167 left open whether the bridge's
 undescribed residual matters at the owner's scale.
 
@@ -153,8 +157,8 @@ entity, so no row can attribute a rating to one.
   down, exactly as `RatingsCli` does.
 
 - **Print with `System.out`, which is what "prints" ordinarily means.** Rejected because
-  `ArchitectureTest.nothingWritesToStandardOut` bans it project-wide (ADR 28,
-  [ADR 30](0030-structured-logging.md)) with one named exception that is not a dev tool, and a rule
+  `ArchitectureTest.nothingWritesToStandardOut` bans it project-wide
+  ([ADR 28](0028-mcp-transports.md), [ADR 30](0030-structured-logging.md)) with one named exception that is not a dev tool, and a rule
   that admits a second exception for convenience stops being a rule. The lines go through SLF4J at
   `info`, one call per line, the route `ExportCli` and `RatingsCli` already use.
 
@@ -213,10 +217,11 @@ entity, so no row can attribute a rating to one.
 - **The lines carry Logback's default prefix, and that is a limit rather than a feature.**
   `logback-spring.xml` is loaded by Spring Boot and this tool has no Spring context, so under the
   `JavaExec` task Logback falls back to its built-in console appender: every line reaches **stdout**
-  with a timestamp, the thread and the logger's fully qualified name in front of it. The *content* is
-  still aggregates alone, which is what `CensusIsSafeToPasteTest` asserts, and the prefix is
-  constant-width here because every line comes from one logger at one level on one thread — so the
-  aligned column survives being pasted, prefix and all. Stripping it would mean a logging
+  carrying Logback's default layout — a timestamp, the level, the thread and the logger among them —
+  in front of the census's own text. Logback owns that layout and this ADR does not restate it. The
+  *content* is still aggregates alone, which is what `CensusIsSafeToPasteTest` asserts, and the
+  prefix is the same on every line in practice, because every line comes from one logger at one
+  level on one thread — so the aligned column survives being pasted, prefix and all. Stripping it would mean a logging
   configuration of this tool's own, which is a change to how the whole project logs (ADR 30) for a
   cosmetic gain.
 

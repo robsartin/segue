@@ -1172,8 +1172,8 @@ class ArchitectureTest {
   /**
    * ADR 46: the deck needs a log, an engine, the recommender's sweep and nothing else.
    *
-   * <p>The sixth tool's half of the fence every dev tool carries — {@link #seedNeverOpensAStore},
-   * {@link #theRatingsToolOpensNothingElse}, {@link #theRecommenderOpensNothingElse}, {@link
+   * <p>The deck's half of the fence every dev tool carries — {@link #seedNeverOpensAStore}, {@link
+   * #theRatingsToolOpensNothingElse}, {@link #theRecommenderOpensNothingElse}, {@link
    * #theRetractionToolOpensNothingElse} — and for the same reason: a dependency on a sibling lets
    * this tool inherit that sibling's fence instead of its own. It writes a rating and nothing else,
    * so reaching {@code retract} (which appends a world-fact claim) or {@code ratings} (which reads

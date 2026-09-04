@@ -1629,8 +1629,10 @@ over the one database nobody but you may open:
 
 - how many merges the real graph holds, which [ADR 59](adr/0059-owner-claims-as-a-third-layer.md)'s
   residual says is unmeasured;
-- where the degree distribution sits relative to `Recommendations.MIN_CANDIDATE_DEGREE`, which
-  [ADR 57](adr/0057-the-floor-reports-itself.md) measured once on a graph that has grown since;
+- where the whole graph's degree distribution sits relative to
+  `Recommendations.MIN_CANDIDATE_DEGREE`, which [ADR 57](adr/0057-the-floor-reports-itself.md)
+  re-opens on figures `FloorReading` takes over one recommender run's candidate pool — nothing
+  reports the nodes that pool never considers;
 - how much of what MusicBrainz reached the graph can describe, which
   [ADR 55](adr/0055-what-the-musicbrainz-adapter-refuses.md) and issue #167 left open.
 
@@ -1642,38 +1644,42 @@ a six-figure count moves the column rather than jutting out of it.
 
 ### Why the output is safe to paste
 
-Every value is an integer and every label is a literal in the source. No qid, label or note reaches
-the output, so [ADR 51](adr/0051-what-an-adr-may-quote.md)'s line — an aggregate over your data may
-be published, an entity presented as yours may not — is satisfied by construction rather than by
-care. `CensusIsSafeToPasteTest` holds it: it feeds a graph containing a label, a note and a `Q` id
-inside that note, captures every log line at TRACE, and asserts that none of the three appears
-anywhere. ADR 51 says its rule cannot be tested in general and explains why; this is the one artefact
-where it can be, and [ADR 63](adr/0063-a-read-only-census-of-the-graph.md) records why.
+Every value is an integer, and every label is a literal in `CensusReport` but for two it reads off
+the log — the edge type codes and the source ids, in `of type …` and `backed by …`. Those are
+vocabulary rather than entities, and the test's "nothing `Q`-shaped anywhere" clause covers them;
+what the remaining labels interpolate is a score or a corroboration count, which are numbers. No
+qid, label or note reaches the output, so [ADR 51](adr/0051-what-an-adr-may-quote.md)'s line — an
+aggregate over your data may be published, an entity presented as yours may not — is satisfied by
+construction rather than by care. `CensusIsSafeToPasteTest` holds it: it feeds a graph containing a
+label, a note and a `Q` id inside that note, captures every log line at TRACE, and asserts that none
+of the three appears anywhere. ADR 51 says its rule cannot be tested in general and explains why;
+this is the one artefact where it can be, and
+[ADR 63](adr/0063-a-read-only-census-of-the-graph.md) records why.
 
 One thing to expect when you do paste it: the lines arrive through SLF4J, and this tool has no
-Spring context, so `logback-spring.xml` is never loaded and Logback's own default configuration puts
-a timestamp, the thread and the logger name in front of every line and sends it to stdout. The
-prefix is the same width on every line, so the column still lines up — ADR 63 records it as a limit
-rather than a feature.
+Spring context, so `logback-spring.xml` is never loaded and Logback's own default layout goes in
+front of every line, on stdout. The prefix is the same on every line, so the aligned column survives
+— ADR 63 records it as a limit rather than a feature.
 
 ### It counts the export's fold, not a second one
 
-Four of the six sections count nothing but `export.LogProjection` — the same fold `exportGraph`
-draws and, through `Equivalences` and `Retractions`, the same rules `GraphProjector` replays at
-boot — and the two that also read the raw log rows read that fold beside them. A census with a fold
-of its own could disagree with the picture about how many nodes there are, which is the drift
-`BothFoldsAgreeTest` exists to catch. That is why `census` depends on `export`, the second of the two
-dependencies between dev tools.
+`Census` names its sections, and the ones whose `of` takes a `LogProjection` and nothing else count
+that fold alone — the same fold `exportGraph` draws and, through `Equivalences` and `Retractions`,
+the same rules `GraphProjector` replays at boot. The rest read the raw log rows beside it. A census
+with a fold of its own could disagree with the picture about how many nodes there are, which is the
+drift `BothFoldsAgreeTest` exists to catch. That is why `census` depends on `export`, the second of
+the two dependencies between dev tools.
 
 ### Three things this is not allowed to do
 
-- **Write.** `theCensusOnlyReads` forbids the three world-fact writes, both taste-layer writes and
-  `IngestService`.
+- **Write, or reach a sibling other than `export`.** `theCensusOnlyReads` forbids the three
+  world-fact writes, both taste-layer writes, `IngestService` — and every dev tool but `export`,
+  which is the one clause that had to be argued for.
 - **Name anything.** There is no per-entity output and no `--out`; the counts go to the terminal
   through SLF4J, because `nothingWritesToStandardOut` bans `System.out` project-wide and there is
   nothing here a log line may not carry.
-- **Reach the network, an engine or a sibling other than `export`.** `theCensusOpensNothingElse`,
-  which names `REACHES_A_NETWORK` rather than any HTTP client.
+- **Reach the network or an engine.** `theCensusOpensNothingElse` bans `tinker`, `jena`, `ingest`,
+  `mcp`, `app` and `musicbrainz`, and names `REACHES_A_NETWORK` rather than any HTTP client.
 
 ## Taking something back out
 

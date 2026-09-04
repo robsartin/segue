@@ -3,12 +3,14 @@ package com.robsartin.segue.support;
 import java.nio.file.Path;
 
 /**
- * The refusal the two claim tools give when {@code --db} was not typed (#179).
+ * The refusal a tool with no default database gives when {@code --db} was not typed (#179).
  *
  * <p><b>A sentence, not a path.</b> {@code RetractCli} and {@code OwnCli} have no default database
- * and must not acquire one, so this class hands back a {@link String} and never a {@link Path}:
- * there is nothing here either tool could use as a database even by mistake, which is what keeps
- * that boundary meaningful rather than merely literal.
+ * and must not acquire one, and neither may {@code CensusCli}, the third caller — it requires the
+ * flag on ADR 60's central clause rather than its consequence, and carries two fences of its own
+ * (ADR 63). So this class hands back a {@link String} and never a {@link Path}: there is nothing
+ * here any of them could use as a database even by mistake, which is what keeps that boundary
+ * meaningful rather than merely literal.
  *
  * <p><b>That is enforced, not merely stated.</b> {@code
  * ArchitectureTest.theClaimToolsTakeTheirDatabaseFromTheFlagAlone} fails the build if {@code
@@ -32,9 +34,9 @@ import java.nio.file.Path;
  * first.</b> A {@link Path} is refused by the build. A {@link String} is not, and that is a known
  * limit rather than an opening: the fence can only see the type, and this class necessarily returns
  * the path as text inside its sentence, so no predicate can tell a sentence from a path spelled
- * out. A {@code String}-returning {@code defaultPath()} used from {@code retract} or {@code own}
- * restores exactly the default #179 removed, with every architecture test green. What stands
- * between that and the codebase is this paragraph and a reviewer, so put it in {@code
+ * out. A {@code String}-returning {@code defaultPath()} used from {@code retract}, {@code own} or
+ * {@code census} restores exactly the default #179 removed, with every architecture test green.
+ * What stands between that and the codebase is this paragraph and a reviewer, so put it in {@code
  * DefaultDatabase} and let the four tools that keep a default use it there.
  *
  * <p><b>Pure</b>, like its neighbour: no {@code System.getenv} and no {@code System.getProperty}
