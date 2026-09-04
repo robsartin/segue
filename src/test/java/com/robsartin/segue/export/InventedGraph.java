@@ -102,6 +102,13 @@ final class InventedGraph {
   static final String SEVERED = "Q10000900113";
 
   /**
+   * A ninth canonical id: the one a merge names when it is declared AFTER its local side was
+   * retracted, so the merge has no local side, builds no stand-in, and leaves an id nothing in the
+   * log describes (#228). ADR 62's eleven-digit shape, for the reason {@link #KETTLES} takes it.
+   */
+  static final String RESUMED = "Q10000900114";
+
+  /**
    * Two ids the owner minted. Two leading zeros, which Wikibase's item-id grammar can never
    * allocate (ADR 58, ADR 59) - so these are deliberately not from the {@code Q900xxx} family, and
    * issue #171 does not reach them.

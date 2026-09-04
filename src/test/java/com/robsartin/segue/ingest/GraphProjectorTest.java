@@ -246,4 +246,28 @@ class GraphProjectorTest {
           .hasMessageContaining("Q0900101");
     }
   }
+
+  @Test
+  @DisplayName("should name one entity once when the refused row is a self-loop")
+  void shouldNameOneEntityOnceWhenTheRefusedRowIsASelfLoop() {
+    // A self-loop names one entity twice, and the boot diagnosis must not read as two things to
+    // repair (#228, folded in from task 5's re-review; #233 guards the same case at the append).
+    // The fold leaves a self-loop it did not create exactly where it is, so this row reaches the
+    // pre-flight rather than being collapsed.
+    try (AssertionLog log = SqliteAssertionLog.inMemory();
+        TinkerGraphStore store = new TinkerGraphStore()) {
+      log.append(new AssertionRecord("Q0900301", "Q0900301", "MEMBER_OF", null, null, WIKIDATA));
+
+      assertThatThrownBy(() -> GraphProjector.project(log, store, IdentityMerge.NONE))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("Q0900301")
+          .hasMessageContaining("1 row(s)")
+          .extracting(thrown -> lines(thrown, "which no node stands for"))
+          .isEqualTo(1L);
+    }
+  }
+
+  private static long lines(Throwable thrown, String containing) {
+    return thrown.getMessage().lines().filter(line -> line.contains(containing)).count();
+  }
 }

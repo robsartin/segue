@@ -2,6 +2,8 @@ package com.robsartin.segue.export;
 
 import static com.robsartin.segue.export.InventedGraph.FORFEIT;
 import static com.robsartin.segue.export.InventedGraph.LAPSE;
+import static com.robsartin.segue.export.InventedGraph.RESUMED;
+import static com.robsartin.segue.export.InventedGraph.SLIP;
 import static com.robsartin.segue.export.InventedGraph.WREN;
 import static com.robsartin.segue.export.InventedGraph.merged;
 import static com.robsartin.segue.export.InventedGraph.minted;
@@ -9,6 +11,7 @@ import static com.robsartin.segue.export.InventedGraph.node;
 import static com.robsartin.segue.export.InventedGraph.owned;
 import static com.robsartin.segue.export.InventedGraph.retract;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.robsartin.segue.domain.EdgeRecord;
 import com.robsartin.segue.domain.NodeKind;
@@ -123,6 +126,136 @@ class MergeAfterARetractionTest {
     assertThat(folded.withdrawnEdges())
         .as("so the count above reports the withdrawal and is not a non-zero constant")
         .isZero();
+  }
+
+  /**
+   * Minted, merged, retracted, then merged onto a <b>different</b> canonical id, with an owner edge
+   * naming that id. Nothing retracted {@code RESUMED}; the merge simply has no local side, so no
+   * stand-in is built and the log holds nothing that says what {@code RESUMED} is. There is no fold
+   * rule here: building the node would assemble it out of retracted rows, and withdrawing the edge
+   * would replay a live claim into nothing. See the spec's "alternatives" section.
+   *
+   * <p>The spec measured this shape on {@code a7c3455} under a different canonical id; measured
+   * again on {@code e16f0da} under this one, {@code GraphProjector.project} threw {@code replay
+   * failed at sequence 6} caused by {@code assertion references unknown entity Q10000900114 -
+   * upsert the node first} — the id and no cause, which is what the diagnosis below replaces.
+   */
+  private static FakeAssertionLog remergedElsewhereLog() {
+    return new FakeAssertionLog()
+        .with(
+            node(WREN, NodeKind.PERSON, "Wren Alderman"),
+            minted(LAPSE, NodeKind.WORK, "a working title he took back"),
+            merged(LAPSE, FORFEIT),
+            retract(LAPSE),
+            merged(LAPSE, RESUMED),
+            owned(WREN, RESUMED, "INFLUENCED_BY"));
+  }
+
+  @Test
+  @DisplayName("the boot names the row, the id and the repair when a re-merge left no stand-in")
+  void shouldNameTheRowAndTheRepairWhenAReMergeLeftItsCanonicalIdWithNoNode() {
+    try (TinkerGraphStore replayed = new TinkerGraphStore()) {
+      assertThatThrownBy(
+              () -> GraphProjector.project(remergedElsewhereLog(), replayed, IdentityMerge.NONE))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("sequence 6")
+          .hasMessageContaining(RESUMED)
+          .hasMessageContaining("no node stands for")
+          .hasMessageContaining("retract the endpoint");
+    }
+  }
+
+  @Test
+  @DisplayName("the same log boots once the endpoint the diagnosis names is retracted")
+  void shouldBootWhenTheEndpointTheDiagnosisNamesIsRetracted() {
+    // The repair the message names, carried out. A retraction reaches backwards by position, so it
+    // takes the edge with it (ADR 44) and deletes no row. A diagnosis naming a repair that does
+    // not repair would be worse than no diagnosis, so the repair is exercised rather than asserted.
+    FakeAssertionLog repaired = remergedElsewhereLog().with(retract(RESUMED));
+
+    try (TinkerGraphStore replayed = new TinkerGraphStore()) {
+      GraphProjector.project(repaired, replayed, IdentityMerge.NONE);
+
+      assertThat(replayed.node(RESUMED)).isEmpty();
+      assertThat(replayed.edgeCount())
+          .as("the edge lies before the retraction, so it is retracted rather than applied")
+          .isZero();
+      assertThat(replayed.node(WREN))
+          .as("and the rest of the log still projects, so this is not an empty graph agreeing")
+          .isPresent();
+    }
+  }
+
+  @Test
+  @DisplayName("the same log boots once a local id the projection holds is merged onto that id")
+  void shouldBootWhenALocalIdTheProjectionHoldsIsMergedOntoTheSameCanonicalId() {
+    // The second repair the message names. A NEW local id, because an id is never recycled
+    // (OwnRun.anIdNothingHasNamed reads every row the log has ever held), minted and merged. It
+    // works where a bare node claim does not because a stand-in is built BEFORE the replay loop
+    // starts, so it reaches a row earlier in the log than the merge that produced it.
+    FakeAssertionLog repaired =
+        remergedElsewhereLog()
+            .with(
+                minted(SLIP, NodeKind.WORK, "the working title, minted again"),
+                merged(SLIP, RESUMED));
+
+    try (TinkerGraphStore replayed = new TinkerGraphStore()) {
+      GraphProjector.project(repaired, replayed, IdentityMerge.NONE);
+
+      assertThat(replayed.node(RESUMED))
+          .as("the second merge has a local side, so the stand-in exists and the edge lands")
+          .isPresent();
+      assertThat(replayed.edgeCount()).isEqualTo(1);
+    }
+  }
+
+  @Test
+  @DisplayName("appending a node claim after the edge leaves the boot failing at the same row")
+  void shouldStillFailAtTheSameSequenceWhenANodeClaimIsAppendedAfterTheEdge() {
+    // The repair the message deliberately does NOT name, and the reason it says so out loud.
+    // nodesTheFoldHolds is not positional, so the pre-flight is satisfied and says nothing; replay
+    // IS positional, so the store still refuses the edge at sequence 6 with the message that names
+    // the id and no cause. #233 measured the same thing on the sourced path. The operator ends up
+    // with a log one row longer, still unbootable, and now without the diagnosis.
+    FakeAssertionLog stillBroken =
+        remergedElsewhereLog().with(node(RESUMED, NodeKind.WORK, "named too late to help"));
+
+    try (TinkerGraphStore replayed = new TinkerGraphStore()) {
+      assertThatThrownBy(() -> GraphProjector.project(stillBroken, replayed, IdentityMerge.NONE))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("sequence 6")
+          .hasMessageNotContaining("no node stands for")
+          .rootCause()
+          .hasMessageContaining("unknown entity");
+    }
+  }
+
+  @Test
+  @DisplayName("the exporter still counts the edge as dangling where the boot refuses the log")
+  void shouldStillCountTheEdgeAsDanglingWhereTheBootRefusesTheLog() {
+    // Pinned, not fixed. The two folds disagree here on purpose: the exporter has to produce a
+    // picture and reports the shortfall in the count whose javadoc says it should always be zero,
+    // and the boot refuses to start. ADR 44 argues why tolerating the missing endpoint in the boot
+    // instead would take the loud failure away from every other cause of one.
+    LogProjection folded = LogProjection.of(remergedElsewhereLog());
+
+    assertThat(folded.nodes()).doesNotContainKey(RESUMED);
+    assertThat(folded.danglingEdges()).isEqualTo(1);
+    assertThat(folded.withdrawnEdges())
+        .as("nothing retracted RESUMED, so this is not a withdrawal and must not be counted as one")
+        .isZero();
+  }
+
+  @Test
+  @DisplayName("the boot refuses nothing when every edge names an endpoint the fold holds")
+  void shouldRefuseNothingWhenEveryEdgeNamesAnEndpointTheFoldHolds() {
+    try (TinkerGraphStore replayed = new TinkerGraphStore()) {
+      GraphProjector.project(mergedAndNotRetractedLog(), replayed, IdentityMerge.NONE);
+
+      assertThat(replayed.edgeCount())
+          .as("without this the refusal above would be satisfied by refusing every log")
+          .isEqualTo(1);
+    }
   }
 
   private static String key(EdgeRecord edge) {
