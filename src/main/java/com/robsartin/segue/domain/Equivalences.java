@@ -215,9 +215,9 @@ public record Equivalences(
    *
    * <p><b>Trusts the caller.</b> {@code emptied} is taken as given rather than checked against the
    * log; handing it any set other than {@code retractedStandIns(log)} for this exact log answers a
-   * different question. It exists for the boot fold's own construction method — the single per-boot
-   * fold that computes {@code retractedStandIns} once and hands it to every reader that would
-   * otherwise recompute it — and is fenced to that one caller.
+   * different question. It exists for {@code Fold.of} — the single per-boot fold that computes
+   * {@code retractedStandIns} once and hands it to every reader that would otherwise recompute it —
+   * and is fenced to that one caller.
    *
    * <p>{@code EquivalencesTest.shouldGiveTheSameMergesWhenHandedTheEmptiedSetInWouldCompute} pins
    * the two forms to one answer.
@@ -425,9 +425,9 @@ public record Equivalences(
    *
    * <p><b>Trusts the caller.</b> {@code merges} is taken as given rather than checked against the
    * log; handing it anything but the value {@link #in(List)} derives from this exact log answers a
-   * different question. It exists for the boot fold's own construction method — the single per-boot
-   * fold that computes {@link #in(List)}'s answer once and hands it to every reader that would
-   * otherwise recompute it — and is fenced to that one caller.
+   * different question. It exists for {@code Fold.of} — the single per-boot fold that computes
+   * {@link #in(List)}'s answer once and hands it to every reader that would otherwise recompute it
+   * — and is fenced to that one caller.
    *
    * <p>{@code EquivalencesTest.shouldGiveTheSameStandInsWhenHandedTheMergesStandInsWouldCompute}
    * pins the two forms to one answer.
@@ -500,6 +500,12 @@ public record Equivalences(
    * what pins it. {@code
    * EquivalencesTest.shouldNameTheSameNodesWhenHandedTheStandInIdsItWouldCompute} pins this
    * overload to the log-taking form's own answer.
+   *
+   * <p><b>Trusts the caller</b>, {@link #in(List, Set)}'s reason again: {@code standInIds} answers
+   * a different question unless it is this exact log's own stand-in key set. It exists for {@code
+   * Fold.of} — the single per-boot fold that already holds {@link #standIns(List, UnaryOperator,
+   * Equivalences)}'s answer and does not want to walk it a second time — and is fenced to that one
+   * caller.
    *
    * @param standInIds the stand-in id set this fold holds — {@link #standIns(List, UnaryOperator,
    *     Equivalences)}'s key set for this log, under whichever re-derivation the calling fold uses
@@ -739,10 +745,9 @@ public record Equivalences(
    *
    * <p><b>Trusts the caller.</b> Both {@code merges} and {@code retractedStandIns} are taken as
    * given rather than checked against a log; handing either one anything but the value {@link
-   * #folding(List)} derives from this exact log answers a different question. It exists for the
-   * boot fold's own construction method — the single per-boot fold that computes {@link
-   * #retractedStandIns} once and hands it to every reader that would otherwise recompute it — and
-   * is fenced to that one caller.
+   * #folding(List)} derives from this exact log answers a different question. It exists for {@code
+   * Fold.of} — the single per-boot fold that computes {@link #retractedStandIns} once and hands it
+   * to every reader that would otherwise recompute it — and is fenced to that one caller.
    *
    * <p>This stays the one construction site for a fold's {@code Equivalences}, for {@link
    * #folding(List)}'s own reason: an overload that quietly gives a fold the edge-blind answer —
