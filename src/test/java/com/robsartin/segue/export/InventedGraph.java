@@ -168,6 +168,16 @@ final class InventedGraph {
    */
   static final String SLIP = "Q009";
 
+  /**
+   * A tenth local id, and the only one here nothing ever minted or claimed: it is merged onto
+   * {@link #MISHEARD} by a row a path bypassing {@code OwnCli} wrote, so the merge resolves an
+   * endpoint while contributing no stand-in of its own (#228). An owner edge from {@code MISHEARD}
+   * to this id therefore folds onto {@code MISHEARD} at both ends and is dropped as a collapsed
+   * self-loop - the fold's other reason for yielding nothing. Two leading zeros, for {@link
+   * #ALMANAC}'s reason; four digits because {@link #SLIP} took the last three-digit one.
+   */
+  static final String UNCLAIMED = "Q0010";
+
   private static final Instant WHEN = Instant.parse("2026-01-01T00:00:00Z");
 
   private InventedGraph() {}

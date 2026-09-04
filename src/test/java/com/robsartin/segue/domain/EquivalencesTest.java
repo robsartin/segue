@@ -544,7 +544,7 @@ class EquivalencesTest {
   }
 
   @Test
-  @DisplayName("emptying one canonical id empties a second whose only edge that withdrew")
+  @DisplayName("emptying one canonical id empties a second whose only edge it withdrew")
   void shouldEmptyASecondCanonicalIdWhenWithdrawingItsOnlyEdgeRetiredItsStandIn() {
     // The second-order chain Equivalences.emptiedCanonicalIds loops for (#228), written out as a
     // log: CANONICAL is emptied outright, which withdraws the only edge naming OTHER_CANONICAL,
@@ -568,6 +568,41 @@ class EquivalencesTest {
         .as(
             "the chain has two links, and a set computed in one pass sees only the first - the"
                 + " edge that kept OTHER_CANONICAL's stand-in alive is one the fold withdraws")
+        .containsExactly(CANONICAL, OTHER_CANONICAL);
+  }
+
+  @Test
+  @DisplayName("the canonical ids a stand-in exists for are named the same way in both homes")
+  void shouldNameTheSameCanonicalIdsAsStandInsWhenGivenTheSameReferencedSet() {
+    // "Which canonical ids have a stand-in" has two homes since #228: Equivalences.standIns, which
+    // builds a node per id, and Equivalences.standInCanonicalIds, which answers the same question
+    // over a referenced set the caller supplies - the only way retractedStandIns can ask it while
+    // it is still working out what Equivalences.in answers. Two homes for one rule is this class's
+    // own standing objection, so the two are pinned here rather than asserted in prose.
+    //
+    // The log is the widest this question has in domain: a superseded merge kept alive by an edge
+    // the fold keeps (stands' second clause), the merge that supersedes it (its first clause), and
+    // a third merge a retraction of the local side empties. BothFoldsAgreeTest.ownedLog() is wider
+    // still and is deliberately not used - it is private to a test in export, and standInCanonical-
+    // Ids is package-private in domain, so reaching one from the other would mean widening the API
+    // of the class whose whole point is one home per question.
+    List<LoggedAssertion> log =
+        List.of(
+            LocalEntity.minted(MINTED, NodeKind.WORK, "The Salt Almanac", WHEN),
+            SameAs.declared(MINTED, CANONICAL, WHEN),
+            OwnerEdge.claimed(NEIGHBOUR, CANONICAL, "INFLUENCED_BY", WHEN),
+            SameAs.declared(MINTED, OTHER_CANONICAL, WHEN),
+            LocalEntity.minted(OTHER_MINTED, NodeKind.WORK, "the other one", WHEN),
+            SameAs.declared(OTHER_MINTED, THIRD_CANONICAL, WHEN),
+            new Retraction(OTHER_MINTED, "the mint was a mistake", WHEN));
+
+    assertThat(Equivalences.standInCanonicalIds(log, Equivalences.in(log).referencedEndpoints()))
+        .as(
+            "retractedStandIns' javadoc says this rule has one home; that is only true while the"
+                + " second computation of it answers what standIns' key set does")
+        .isEqualTo(Equivalences.standIns(log, AS_CLAIMED).keySet());
+    assertThat(Equivalences.standIns(log, AS_CLAIMED).keySet())
+        .as("and both name something, so the comparison above is not comparing two empty sets")
         .containsExactly(CANONICAL, OTHER_CANONICAL);
   }
 

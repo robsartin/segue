@@ -4,6 +4,7 @@ import static com.robsartin.segue.export.InventedGraph.CORRECTED;
 import static com.robsartin.segue.export.InventedGraph.MISHEARD;
 import static com.robsartin.segue.export.InventedGraph.SEVERED;
 import static com.robsartin.segue.export.InventedGraph.SLIP;
+import static com.robsartin.segue.export.InventedGraph.UNCLAIMED;
 import static com.robsartin.segue.export.InventedGraph.WATERMARK;
 import static com.robsartin.segue.export.InventedGraph.WREN;
 import static com.robsartin.segue.export.InventedGraph.edge;
@@ -296,6 +297,67 @@ class TwiceMergedIdLeavesNoOrphanTest {
     assertThat(folded.withdrawnEdges())
         .as("the edge is still counted as withdrawn, which is what says it was ever there")
         .isEqualTo(1);
+    assertThat(folded.danglingEdges()).isZero();
+
+    try (TinkerGraphStore replayed = new TinkerGraphStore()) {
+      GraphProjector.project(log, replayed, IdentityMerge.NONE);
+
+      assertThat(replayed.node(MISHEARD))
+          .as("and the boot replay agrees, which is the half a fold-only fix would not move")
+          .isEmpty();
+      assertThat(replayed.node(WATERMARK))
+          .as("the merge that stands today keeps its node, so this is not an empty graph agreeing")
+          .isPresent();
+    }
+  }
+
+  /**
+   * The surviving-edge fixture a third time, with the naming edge dropped as a COLLAPSED SELF-LOOP
+   * rather than withdrawn (#228, fix round 1). {@code MISHEARD}'s stand-in is superseded by the
+   * correction onto {@code WATERMARK} and is kept alive only by the {@code MISHEARD -> UNCLAIMED}
+   * edge; {@code UNCLAIMED} is merged onto {@code MISHEARD} too, so the fold sends both of that
+   * edge's ends to {@code MISHEARD} and yields nothing for it — {@code Equivalences.foldEndpoints}'
+   * second reason for dropping an edge, beside the withdrawal the sibling above covers. Every row
+   * still survives, and the edge's RAW endpoints still name {@code MISHEARD}, which is what let the
+   * withdrawal-only narrowing go on counting it.
+   *
+   * <p><b>{@code UNCLAIMED} is a merge naming a local id nothing minted</b> — spec ruling 2's
+   * bypass path, the shape the fold may not assume away. That is what keeps the collapse reachable:
+   * were the local side minted, its own merge would give {@code MISHEARD} a stand-in on its own
+   * account and there would be no orphan to find.
+   */
+  private static FakeAssertionLog correctedLogWithACollapsingSurvivingEdge() {
+    return new FakeAssertionLog()
+        .with(
+            minted(CORRECTED, NodeKind.WORK, "A Self-Pressed Record"),
+            merged(CORRECTED, MISHEARD),
+            merged(UNCLAIMED, MISHEARD),
+            owned(MISHEARD, UNCLAIMED, "INFLUENCED_BY"),
+            merged(CORRECTED, WATERMARK));
+  }
+
+  @Test
+  @DisplayName("an edge the fold collapses to a self-loop keeps no superseded stand-in alive")
+  void shouldKeepNoSupersededStandInAliveWhenTheOnlyNamingEdgeCollapses() {
+    FakeAssertionLog log = correctedLogWithACollapsingSurvivingEdge();
+
+    assertThat(Equivalences.standIns(log.readAll(), KindMapper::rederive))
+        .as(
+            "the MISHEARD -> UNCLAIMED edge survives every retraction and the fold drops it all the"
+                + " same, because both of its ends land on MISHEARD - so it keeps nothing alive,"
+                + " where it read [MISHEARD, WATERMARK] before this fix (#228)")
+        .containsOnlyKeys(WATERMARK);
+
+    LogProjection folded = LogProjection.of(log);
+    assertThat(folded.nodes())
+        .as("so a full export draws no node with no edges under the id he corrected away from")
+        .doesNotContainKey(MISHEARD);
+    assertThat(folded.edges())
+        .as("an equivalence says two names are one thing, and never that the thing cites itself")
+        .isEmpty();
+    assertThat(folded.withdrawnEdges())
+        .as("a collapse is not a withdrawal - no retraction emptied anything in this log")
+        .isZero();
     assertThat(folded.danglingEdges()).isZero();
 
     try (TinkerGraphStore replayed = new TinkerGraphStore()) {
