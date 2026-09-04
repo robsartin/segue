@@ -65,6 +65,9 @@ class FoldOnceBenchmark {
       int rows = benchmarkRows();
       generate(log, rows);
 
+      assertThat(log.readAll())
+          .as("a timing at the real log's scale is only that if the generator wrote every row")
+          .hasSize(rows);
       try (TinkerGraphStore store = new TinkerGraphStore()) {
         long start = System.nanoTime();
         long applied = GraphProjector.project(log, store, IdentityMerge.NONE);
@@ -74,7 +77,9 @@ class FoldOnceBenchmark {
             .as("a replay that applied nothing would be timing an empty list")
             .isPositive();
         LOG.info(
-            "fold-once benchmark: applied {} of {} generated rows (the retraction withdraws the rest) in {} ms",
+            "fold-once benchmark: applied {} of {} generated rows - a retraction is skipped, a"
+                + " merge applies nothing to the graph, and an edge the retraction withdraws"
+                + " reaches it with nothing - in {} ms",
             applied,
             rows,
             millis);

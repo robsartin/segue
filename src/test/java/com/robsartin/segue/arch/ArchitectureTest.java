@@ -1693,13 +1693,21 @@ class ArchitectureTest {
 
   /**
    * Issue #238: the boot derives the assertion-log fold once, through {@link Fold#of}, and every
-   * reader takes what it holds — a second log-taking call in {@link GraphProjector} is a second
-   * fold.
+   * reader takes what it holds — a second log-taking call anywhere in {@code ingest} but {@link
+   * IngestService} is a second fold.
    *
-   * <p><b>One class, not the {@code ingest} package.</b> {@code IngestService.claim} calls {@link
-   * Equivalences#nodesTheFoldHolds} and {@link Equivalences#folding(List)} on the live path, where
-   * there is no boot and no fold to reuse ({@code IngestService.java:218}, {@code :233}, {@code
-   * :234}) — a package fence would forbid the gate #233 added.
+   * <p><b>The package, minus one class.</b> {@link IngestService} is the one exception: {@code
+   * IngestService.claim}'s pre-append gate calls {@link Equivalences#nodesTheFoldHolds} and {@link
+   * Equivalences#folding(List)} on the live path — in {@code refuseAClaimTheFoldCouldNotHold}, its
+   * merge arm and its owner-edge arm — where there is no boot and no fold to reuse, so naming the
+   * package alone would forbid the gate #233 added. Method names rather than line numbers: a line
+   * number in a rule's own reasoning goes stale on the next edit to a file this test does not read.
+   *
+   * <p><b>The package rather than {@link GraphProjector} alone</b>, because a fence naming one
+   * class cannot see a helper. A package-private {@code ingest} class with a static method calling
+   * {@link Equivalences#folding(List)}, called from {@code GraphProjector.project}, is a second
+   * whole-log fold at boot and left the one-class form of this rule green — measured, on this
+   * branch, with exactly that plant.
    *
    * <p><b>{@link Retractions#in} is in the list although the issue names only the six {@link
    * Equivalences} members.</b> {@link Fold} carries the retractions too, so after the migration the
@@ -1714,7 +1722,9 @@ class ArchitectureTest {
   static final ArchRule theBootFoldsOnce =
       noClasses()
           .that()
-          .belongToAnyOf(GraphProjector.class)
+          .resideInAPackage("com.robsartin.segue.ingest..")
+          .and()
+          .doNotBelongToAnyOf(IngestService.class)
           .should()
           .accessTargetWhere(
               callTo("in", Equivalences.class)
@@ -1726,5 +1736,7 @@ class ArchitectureTest {
                   .or(callTo("in", Retractions.class)))
           .because(
               "issue #238: the boot derives the fold once, through Fold.of, and every reader"
-                  + " takes what it holds — a second log-taking call here is a second fold");
+                  + " takes what it holds — a second log-taking call in any ingest class but"
+                  + " IngestService, whose live path has no boot fold to reuse, is a second"
+                  + " fold");
 }

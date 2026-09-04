@@ -1,5 +1,8 @@
 package com.robsartin.segue.domain;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -29,16 +32,20 @@ import java.util.function.UnaryOperator;
  * corresponding log-taking rule answers on this log; {@code FoldTest} pins that equivalence.
  *
  * <p>The architecture rule that keeps the boot replaying through exactly this type, rather than
- * through the log-taking statics it wraps, is {@code ArchitectureTest.theBootFoldsOnce}. The
- * measured saving is a dated figure that belongs in its own ADR rather than restated here: ADR 64,
- * {@code docs/adr/0064-fold-the-log-once-per-boot.md}, holds the before and after taken 2026-09-04,
- * what they do and do not cover, and the alternatives this decision rejected.
+ * through the log-taking statics it wraps, is {@code ArchitectureTest.theBootFoldsOnce}. It fences
+ * the whole {@code ingest} package rather than {@code GraphProjector} alone - a package-private
+ * helper that folds and is called from the replay is a second boot fold a one-class rule cannot see
+ * - and exempts {@code IngestService}, whose live path has no boot fold to reuse. The measured
+ * saving is a dated figure that belongs in its own ADR rather than restated here: ADR 64, {@code
+ * docs/adr/0064-fold-the-log-once-per-boot.md}, holds the before and after taken 2026-09-04, what
+ * they do and do not cover, and the alternatives this decision rejected.
  *
  * @param retractions {@link Retractions#in}'s own answer for this log
  * @param equivalences {@link Equivalences#folding(List)}'s own answer for this log, built here from
  *     the same merges and emptied set the other three accessors share rather than recomputed
  * @param standIns {@link Equivalences#standIns(List, UnaryOperator)}'s own answer for this log,
- *     under this fold's {@code rederive}
+ *     under this fold's {@code rederive} - in that method's own log order, which the copy this
+ *     record takes preserves
  * @param nodesHeld {@link Equivalences#nodesTheFoldHolds(List)}'s own answer for this log
  */
 public record Fold(
@@ -50,8 +57,17 @@ public record Fold(
   public Fold {
     Objects.requireNonNull(retractions, "retractions");
     Objects.requireNonNull(equivalences, "equivalences");
-    standIns = Map.copyOf(Objects.requireNonNull(standIns, "standIns"));
-    nodesHeld = Set.copyOf(Objects.requireNonNull(nodesHeld, "nodesHeld"));
+    // LinkedHashMap and LinkedHashSet rather than Map.copyOf and Set.copyOf, and that is the whole
+    // of the difference: the immutable factories randomise iteration order per JVM, so a defensive
+    // copy taken with them would hand GraphProjector its stand-ins in a different order on every
+    // boot and make the "in log order" this record promises below false. Equivalences copies its
+    // own fields exactly this way, for exactly this reason.
+    standIns =
+        Collections.unmodifiableMap(
+            new LinkedHashMap<>(Objects.requireNonNull(standIns, "standIns")));
+    nodesHeld =
+        Collections.unmodifiableSet(
+            new LinkedHashSet<>(Objects.requireNonNull(nodesHeld, "nodesHeld")));
   }
 
   /**

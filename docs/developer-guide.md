@@ -529,7 +529,7 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `affinityNeverTouchesTheWorldFactLayer` | a taste-layer type depending on the log, the graph, `IngestService` or the claim records | [ADR 33](adr/0033-taste-layer-separation.md) |
 | `theWorldFactLayerNeverTouchesAffinity` | `ingest` or any graph/source adapter depending on a taste-layer type | [ADR 33](adr/0033-taste-layer-separation.md) |
 | `onlyJackson3` | Jackson 2's `core`/`databind`/`datatype` packages | [ADR 35](adr/0035-jackson-3-single-json-library.md) |
-| `theBootFoldsOnce` | `GraphProjector` calling `Equivalences.in`, `folding`, `standIns`, `nodesTheFoldHolds`, `retractedStandIns` or `localsOfMerges`, or `Retractions.in` — the boot builds one `Fold` and every reader takes what it holds. One class rather than the `ingest` package: `IngestService.claim` folds on the live path, where there is no boot fold to reuse | issue [#238](https://github.com/robsartin/segue/issues/238) |
+| `theBootFoldsOnce` | any ingest class but `IngestService` calling `Equivalences.in`, `folding`, `standIns`, `nodesTheFoldHolds`, `retractedStandIns` or `localsOfMerges`, or `Retractions.in` — the boot builds one `Fold` and every reader takes what it holds. The package rather than `GraphProjector` alone, because a fence naming one class cannot see a package-private helper that folds and is called from the replay. `IngestService` is the single exception: `claim`'s pre-append gate folds on the live path, where there is no boot fold to reuse | [ADR 64](adr/0064-fold-the-log-once-per-boot.md) |
 
 ### Which rules are only convention
 
@@ -623,9 +623,11 @@ the emptied-canonical-id fixed point paid inside more than one of them. `GraphPr
 `Retractions`, a carrier that decides nothing) and hands it to the pre-flight, the stand-in seeding
 and the replay loop. Every fold rule stays where it was and every log-taking static keeps its
 signature, so the dev tools still fold per run and are deliberately out of scope.
-`ArchitectureTest.theBootFoldsOnce` is what stops a second fold arriving: it forbids
-`GraphProjector` from calling the log-taking statics at all, so the boot's fold comes through
-`Fold.of` or not at all. ADR [64](adr/0064-fold-the-log-once-per-boot.md) has the decision, the
+`ArchitectureTest.theBootFoldsOnce` is what stops a second fold arriving: it forbids every class in
+`ingest` but `IngestService` — whose live path has no boot fold to reuse — from calling the
+log-taking statics at all, so the boot's fold comes through `Fold.of` or not at all. The package
+rather than `GraphProjector` alone, because a helper class that folds and is called from the replay
+is a second boot fold a one-class fence cannot see. ADR [64](adr/0064-fold-the-log-once-per-boot.md) has the decision, the
 rejected alternatives and the dated before/after measurement.
 
 ### Nodes are claims too
