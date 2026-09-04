@@ -28,6 +28,7 @@ Everything here was checked against the source in `src/main/java/com/robsartin/s
 - [Looking at the shape of your graph](#looking-at-the-shape-of-your-graph)
 - [Taking something back out](#taking-something-back-out)
 - [What to explore next](#what-to-explore-next)
+- [Calibrating the recommender](#calibrating-the-recommender)
 - [Rating one card at a time](#rating-one-card-at-a-time)
 - [Claiming something no source has](#claiming-something-no-source-has)
 - [How to read an ADR against the code](#how-to-read-an-adr-against-the-code)
@@ -2088,6 +2089,97 @@ What has not moved is the first half — the file is still required, still lives
 repository, and is still not something a model may be handed. ADR 45 records a re-open condition rather than
 shutting the door: a *bounded* version — "given these five things I have rated, what next?" — is an
 argument on its own terms, and it amends ADR 26 rather than arriving as a field on an existing tool.
+
+## Calibrating the recommender
+
+```bash
+./gradlew evaluate --args="--db $HOME/.segue/segue.db --known $HOME/known.csv"
+```
+
+It prints one block of aggregates and writes nothing. **`--db` is required and `SEGUE_DB` does not
+satisfy it**, for the reason [ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md)
+gives about the two claim tools, arriving at a read from the same direction as `graphCensus`: an
+agent's shell inherits the variable, and this output is a reading of your whole taste layer. Write
+`$HOME`, not `~`.
+
+### What it is for
+
+The issue that asked for this tool said to hold out a slice of rated *works* — but the recommender
+cannot recommend a work, so a held-out set of works would measure nothing. What is actually held
+out, and why, is the protocol below. `recommend`'s dials — `Recommendations.MIN_CANDIDATE_DEGREE`,
+its scorer, [ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)'s promotion threshold,
+[ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md)'s suppression boundary — have each been
+argued from a measurement, but never against a held-out set anybody agreed on beforehand. This is
+that set, read once per grid point so the settings can be compared against each other rather than
+against nothing.
+
+### The protocol
+
+**Only a promotion can be held out.** `KnownList.promoted` composes the known-list as the `--known`
+file *plus* everything rated highly that the file does not already name. Hold out an entity the file
+names and the file puts it straight back — the sweep was never blind to it, and a hit against it
+would measure nothing. The eligible population is therefore rated highly, absent from the file, and
+offerable as a candidate at all.
+
+**The split is deterministic by qid, so two runs diff.** No seed, no clock, no randomness: the same
+database produces the same held-out entities every time, which is what lets a run taken today be
+diffed row by row against one taken after a later change, rather than against noise.
+
+**One sweep per setting, with suppression withheld.** Each setting's candidate pool is swept once
+with nothing suppressed, so the entities you rated down are in it and can be ranked — that ranking
+is the negative reading. The same sweep's result, with the suppressed candidates filtered back out,
+is the positive reading: excluding a candidate from a pool is purely subtractive and changes no
+surviving candidate's score or order, so filtering after the sweep reproduces the shipped ranking
+exactly, without paying for a second sweep.
+
+**The grid is fixed, and no flag moves it.** `Setting.GRID` is the authority on what is swept and in
+what order. There is no `--scorer` and no `--min-degree` here — the value of this tool is one block
+of comparable rows, and a flag would produce a stack of runs nobody could line up beside each other.
+
+**`--db` is required and `SEGUE_DB` does not satisfy it** — see above. **`--known` is required**,
+for the reason `recommend` requires it: a held-out run needs the list it is holding out of.
+
+**No constant moves.** This tool changes nothing that `recommend` ships with; it exists so a later
+change to one of those numbers can be argued from a measurement rather than a judgement.
+
+`HeldOut` is the authority on the split and `EvaluationReport` on the columns it prints; neither is
+restated here.
+
+### Why the output is safe to paste
+
+Every value `EvaluationReport` renders is an integer, a fixed one-decimal, or the literal `-`, and
+every label is a literal in that class or a scorer's own name — the same property
+[ADR 63](adr/0063-a-read-only-census-of-the-graph.md) established for `graphCensus`, and ADR 65
+restates for this tool. No qid, label, note or rating value reaches the report, so
+[ADR 51](adr/0051-what-an-adr-may-quote.md)'s line — an aggregate over your data may be published, an
+entity presented as yours may not — is satisfied by construction rather than by care.
+`EvaluationIsSafeToPasteTest` holds it exactly as `CensusIsSafeToPasteTest` holds the census: a
+fixture carrying a label, a note, a `Q` id inside that note and a rating, every log line captured at
+TRACE, all four asserted absent.
+
+That guarantee is about the report itself, not about everything a run can put on your terminal: a
+refusal names the path it was given, and a run that fails prints a stack trace like any other
+tool's.
+
+### What it is not allowed to do
+
+- **Write anything.** `theEvaluationHarnessOnlyReads` forbids the three world-fact writes, both
+  taste-layer writes, and depending on `IngestService` at all — a tool that could write could change
+  what it is reporting on.
+- **See a note.** `theEvaluationHarnessReadsRatingsAndNeverNotes` bans `AffinityRecord` as a type
+  and `find`/`readAll` as calls; it may read every score through `readRatings` and nothing more.
+- **Reach a network, an engine, or a sibling tool but one.** `theEvaluationHarnessOpensNothingElse`
+  bans every dev tool but `recommend` — the harness measures the shipped sweep rather than a second
+  copy of it, so that one dependency is deliberate, the third between dev tools after
+  `rate → recommend` and `census → export`.
+- **Default its database, or take one from anywhere but the flag.**
+  `theEvaluationHarnessHasNoDefaultDatabase` and
+  `theEvaluationHarnessTakesItsDatabaseFromTheFlagAlone` hold the same line
+  [ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md) draws for the two claim tools
+  and `graphCensus`.
+
+ADR 65 records the decision in full — the split, the one-sweep argument and the test that pins it,
+the grid, and the alternatives it turned down.
 
 ## Rating one card at a time
 
