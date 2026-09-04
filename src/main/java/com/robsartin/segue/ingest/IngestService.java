@@ -162,8 +162,10 @@ public final class IngestService {
    *
    * @param equivalences the merges the log holds. {@link Equivalences#NONE} from {@link #record},
    *     which sees a claim rather than a log - see that method for the limitation that states
+   * @return whether anything reached the graph; false for an edge the fold yielded nothing for, so
+   *     that {@code GraphProjector} does not count an assertion it did not apply (#224)
    */
-  static void apply(
+  static boolean apply(
       GraphStore graph,
       IdentityMerge merges,
       Equivalences equivalences,
@@ -171,9 +173,14 @@ public final class IngestService {
     Objects.requireNonNull(equivalences, "equivalences");
     Optional<LoggedAssertion> folded = equivalences.foldEndpoints(assertion);
     if (folded.isEmpty()) {
-      // The fold collapsed both endpoints onto one id, so there is no edge left to apply. See
-      // Equivalences.foldEndpoints: an equivalence does not make a thing relate to itself.
-      return;
+      // Two reasons, and the caller is told about neither because it needs only the answer.
+      // Either the fold collapsed both endpoints onto one id, so there is no edge left to apply -
+      // see Equivalences.foldEndpoints: an equivalence does not make a thing relate to itself -
+      // or the edge named a canonical id a retraction emptied (#224), which
+      // Equivalences.retractedStandIns withdraws because the stand-in that gave that endpoint its
+      // only node went with the merge. Nothing reached the graph either way, which is what false
+      // says: GraphProjector counts applied assertions and must not count this one.
+      return false;
     }
     switch (folded.get()) {
       case NodeAssertion node -> graph.upsertNode(node.toNode());
@@ -219,6 +226,7 @@ public final class IngestService {
         }
       }
     }
+    return true;
   }
 
   /**

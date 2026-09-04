@@ -490,6 +490,95 @@ class EquivalencesTest {
             Map.entry(2, new NodeRecord(MINTED, NodeKind.WORK, "The Salt Almanac", List.of())));
   }
 
+  @Test
+  @DisplayName("a canonical id whose merge a retraction of the local side dropped is emptied")
+  void shouldEmptyACanonicalIdWhenARetractionReachedItsMergesLocalSide() {
+    List<LoggedAssertion> log =
+        List.of(
+            LocalEntity.minted(MINTED, NodeKind.WORK, "The Salt Almanac", WHEN),
+            SameAs.declared(MINTED, CANONICAL, WHEN),
+            new Retraction(MINTED, "the mint was a mistake", WHEN));
+
+    assertThat(Equivalences.retractedStandIns(log)).containsExactly(CANONICAL);
+  }
+
+  @Test
+  @DisplayName("a canonical id a source claimed as a node of its own is not emptied")
+  void shouldEmptyNoCanonicalIdWhenASourceHasClaimedItAsANode() {
+    List<LoggedAssertion> log =
+        List.of(
+            LocalEntity.minted(MINTED, NodeKind.WORK, "The Salt Almanac", WHEN),
+            new NodeAssertion(
+                CANONICAL,
+                NodeKind.GROUP,
+                "the source's own name",
+                new Provenance("invented", "invented:1", WHEN, 1.0)),
+            SameAs.declared(MINTED, CANONICAL, WHEN),
+            new Retraction(MINTED, "the mint was a mistake", WHEN));
+
+    assertThat(Equivalences.retractedStandIns(log)).isEmpty();
+  }
+
+  @Test
+  @DisplayName("a canonical id a surviving merge still stands in for is not emptied")
+  void shouldEmptyNoCanonicalIdWhenASurvivingMergeStillNamesIt() {
+    List<LoggedAssertion> log =
+        List.of(
+            LocalEntity.minted(MINTED, NodeKind.WORK, "The Salt Almanac", WHEN),
+            LocalEntity.minted(OTHER_MINTED, NodeKind.WORK, "the other one", WHEN),
+            SameAs.declared(MINTED, CANONICAL, WHEN),
+            SameAs.declared(OTHER_MINTED, CANONICAL, WHEN),
+            new Retraction(MINTED, "the mint was a mistake", WHEN));
+
+    assertThat(Equivalences.retractedStandIns(log)).isEmpty();
+  }
+
+  @Test
+  @DisplayName("a merge a retraction of the CANONICAL side dropped empties nothing")
+  void shouldEmptyNoCanonicalIdWhenTheRetractionReachedTheCanonicalSide() {
+    List<LoggedAssertion> log =
+        List.of(
+            LocalEntity.minted(MINTED, NodeKind.WORK, "The Salt Almanac", WHEN),
+            SameAs.declared(MINTED, CANONICAL, WHEN),
+            new Retraction(CANONICAL, "the merge named the wrong item", WHEN));
+
+    assertThat(Equivalences.retractedStandIns(log))
+        .as(
+            "that id is retracted outright, so Retractions.survives has already dropped every edge"
+                + " naming it - emptying it here as well would be a second rule saying the same"
+                + " thing, and a different one the moment either changed")
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("the canonical ids a stand-in exists for do not depend on the derived kind")
+  void shouldNameTheSameCanonicalIdsWhateverKindTheFoldDerives() {
+    // A NodeAssertion, not a LocalEntity: localsOfMerges applies the re-derivation to a source's
+    // node claim alone - LocalEntity.toNode() carries the owner's stated kind, and no operator
+    // touches it - so a minted local side would make the two derivations agree by construction
+    // and the control below could never fire.
+    List<LoggedAssertion> log =
+        List.of(
+            new NodeAssertion(
+                MINTED,
+                NodeKind.WORK,
+                "a local-shaped id a source named",
+                new Provenance("invented", "invented:1", WHEN, 1.0)),
+            SameAs.declared(MINTED, CANONICAL, WHEN));
+
+    assertThat(Equivalences.standIns(log, AS_CLAIMED).keySet())
+        .as(
+            "retractedStandIns reads this key set under UnaryOperator.identity() and says the"
+                + " re-derivation cannot change it; this is that claim, made falsifiable")
+        .isEqualTo(Equivalences.standIns(log, claim -> claim.withKind(NodeKind.PERSON)).keySet());
+    assertThat(Equivalences.standIns(log, AS_CLAIMED).get(CANONICAL).kind())
+        .as("and the values DO differ, so the comparison above is not comparing nothing")
+        .isNotEqualTo(
+            Equivalences.standIns(log, claim -> claim.withKind(NodeKind.PERSON))
+                .get(CANONICAL)
+                .kind());
+  }
+
   private static AssertionRecord edge(String from, String to) {
     return new AssertionRecord(
         from, to, "INFLUENCED_BY", null, null, new Provenance("invented", "invented:1", WHEN, 1.0));

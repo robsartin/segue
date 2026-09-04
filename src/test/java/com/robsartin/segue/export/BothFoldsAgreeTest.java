@@ -5,8 +5,10 @@ import static com.robsartin.segue.export.InventedGraph.BYPASS;
 import static com.robsartin.segue.export.InventedGraph.CORRECTED;
 import static com.robsartin.segue.export.InventedGraph.DEMO;
 import static com.robsartin.segue.export.InventedGraph.DETOUR;
+import static com.robsartin.segue.export.InventedGraph.FORFEIT;
 import static com.robsartin.segue.export.InventedGraph.HOLLOW_TIDE;
 import static com.robsartin.segue.export.InventedGraph.KETTLES;
+import static com.robsartin.segue.export.InventedGraph.LAPSE;
 import static com.robsartin.segue.export.InventedGraph.LEDGER;
 import static com.robsartin.segue.export.InventedGraph.MARLOW;
 import static com.robsartin.segue.export.InventedGraph.MISHEARD;
@@ -22,6 +24,7 @@ import static com.robsartin.segue.export.InventedGraph.merged;
 import static com.robsartin.segue.export.InventedGraph.minted;
 import static com.robsartin.segue.export.InventedGraph.node;
 import static com.robsartin.segue.export.InventedGraph.owned;
+import static com.robsartin.segue.export.InventedGraph.retract;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.domain.EdgeRecord;
@@ -120,6 +123,15 @@ class BothFoldsAgreeTest {
    * DETOUR}'s node here would leave the {@code WREN → DETOUR} edge dangling in one fold or the
    * other, or both. {@code TwiceMergedIdLeavesNoOrphanTest} pins this shape directly, against each
    * fold on its own; this fixture is what asks whether the two folds still agree about it.
+   *
+   * <p><b>{@code LAPSE} is the retracted merge (#224), and it is the case where one fold does not
+   * disagree but <em>throws</em>.</b> It is minted, merged onto {@code FORFEIT}, given an owner
+   * edge naming {@code FORFEIT} directly — which {@code OwnRun} offers the moment the stand-in
+   * exists — and then retracted. The merge stops projecting and takes the only node {@code FORFEIT}
+   * ever had with it, so before the fix {@code GraphProjector.project} died inside this fixture at
+   * the edge's own row and the comparison below never ran at all. Both folds must now hold no node
+   * under {@code FORFEIT} and no edge naming it. {@code RetractedStandInTakesItsEdgesTest} pins the
+   * shape against each fold on its own; this fixture is what asks whether the two still agree.
    */
   private static FakeAssertionLog ownedLog() {
     return new FakeAssertionLog()
@@ -153,7 +165,11 @@ class BothFoldsAgreeTest {
             minted(STRAY, NodeKind.WORK, "a stray liner note"),
             merged(STRAY, DETOUR),
             owned(WREN, DETOUR, "INFLUENCED_BY"),
-            merged(STRAY, REROUTED));
+            merged(STRAY, REROUTED),
+            minted(LAPSE, NodeKind.WORK, "a working title he took back"),
+            merged(LAPSE, FORFEIT),
+            owned(WREN, FORFEIT, "INFLUENCED_BY"),
+            retract(LAPSE));
   }
 
   /** Everything {@link #ownedLog} names, including both canonical ids a merge introduces. */
@@ -175,7 +191,9 @@ class BothFoldsAgreeTest {
           MISHEARD,
           STRAY,
           DETOUR,
-          REROUTED);
+          REROUTED,
+          LAPSE,
+          FORFEIT);
 
   @Test
   @DisplayName("both folds hold the same nodes when the owner has minted and merged an entity")
@@ -194,6 +212,11 @@ class BothFoldsAgreeTest {
     // below meaningful - it is this key, alone, that a fix to standIns without a fix to
     // IngestService gets wrong.
     assertThat(folded.nodes()).doesNotContainKey(MISHEARD);
+
+    // #224: the retraction took the merge, and the merge was the only thing holding a node under
+    // FORFEIT. The local id goes too - its own claim is what the retraction names.
+    assertThat(folded.nodes()).doesNotContainKey(FORFEIT);
+    assertThat(folded.nodes()).doesNotContainKey(LAPSE);
 
     try (TinkerGraphStore replayed = new TinkerGraphStore()) {
       GraphProjector.project(log, replayed, IdentityMerge.NONE);
@@ -243,8 +266,14 @@ class BothFoldsAgreeTest {
                 + " to itself, and Scorer's degree and find_paths would both read the self edge")
         .doesNotContain(PRESSING + " INFLUENCED_BY " + PRESSING);
 
+    assertThat(folded)
+        .as(
+            "the owner claimed this against a stand-in a retraction has since taken away, so it"
+                + " goes with it rather than replaying into nothing (#224)")
+        .doesNotContain(WREN + " INFLUENCED_BY " + FORFEIT);
+
     try (TinkerGraphStore replayed = new TinkerGraphStore()) {
-      GraphProjector.project(log, replayed, IdentityMerge.NONE);
+      long applied = GraphProjector.project(log, replayed, IdentityMerge.NONE);
 
       Set<String> inGraph =
           OWNED_QIDS.stream()
@@ -254,6 +283,16 @@ class BothFoldsAgreeTest {
 
       assertThat(inGraph).isEqualTo(folded);
       assertThat(replayed.edgeCount()).isEqualTo(folded.size());
+      assertThat(applied)
+          .as(
+              "the count is what reached the graph, not what survived the retractions - the"
+                  + " self-loop the fold collapsed still applies nothing (#178), and none of"
+                  + " LAPSE's four new rows land either: its own minted claim is retracted"
+                  + " backwards along with everything else about it, the merge does not survive"
+                  + " the retraction, the WREN -> FORFEIT edge is withdrawn because it names the"
+                  + " stand-in the retraction emptied, and the retraction row itself is never"
+                  + " applied (#224). So it is every row in this log but those five")
+          .isEqualTo(29);
     }
   }
 

@@ -1,10 +1,16 @@
 package com.robsartin.segue.export;
 
+import static com.robsartin.segue.export.InventedGraph.FORFEIT;
 import static com.robsartin.segue.export.InventedGraph.KETTLES;
+import static com.robsartin.segue.export.InventedGraph.LAPSE;
 import static com.robsartin.segue.export.InventedGraph.MARLOW;
 import static com.robsartin.segue.export.InventedGraph.WREN;
 import static com.robsartin.segue.export.InventedGraph.edge;
+import static com.robsartin.segue.export.InventedGraph.merged;
+import static com.robsartin.segue.export.InventedGraph.minted;
 import static com.robsartin.segue.export.InventedGraph.node;
+import static com.robsartin.segue.export.InventedGraph.owned;
+import static com.robsartin.segue.export.InventedGraph.retract;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.domain.AffinityRecord;
@@ -113,6 +119,39 @@ class ExportRunTest {
     assertThat(fileExistedWhenNoted.get(counts))
         .as("the output file did not exist yet when the counts were reported")
         .isFalse();
+  }
+
+  @Test
+  @DisplayName("a full export says how many edges a retraction withdrew, beside the dangling count")
+  void reportsWithdrawnEdgesBesideDanglingOnes() throws IOException {
+    // The owner minted something, merged it onto a canonical id no source has claimed, claimed an
+    // edge against that id, and then retracted the local id. The edge is withdrawn by the fold
+    // rather than counted as dangling (#224) - so with only the dangling count reported, the
+    // export is quietly smaller and the tool says nothing about why.
+    FakeAssertionLog log =
+        new FakeAssertionLog()
+            .with(
+                node(WREN, NodeKind.PERSON, "Wren Alderman"),
+                minted(LAPSE, NodeKind.GROUP, "a working title"),
+                merged(LAPSE, FORFEIT),
+                owned(WREN, FORFEIT, "INFLUENCED_BY"),
+                retract(LAPSE));
+    graph.close();
+    graph = new TinkerGraphStore();
+    GraphProjector.project(log, graph, IdentityMerge.NONE);
+    selector = new ViewSelector(graph, log);
+
+    run(fullTo(out("all.graphml"), false), null);
+
+    assertThat(notes)
+        .as(
+            "one line, both counts: the operator running exportGraph on a log with a retracted"
+                + " merge otherwise gets a smaller export with nothing saying why (#224)")
+        .anySatisfy(
+            note ->
+                assertThat(note)
+                    .contains("0 edge(s) in the log name an entity that was never claimed")
+                    .contains("1 named a canonical id a retraction emptied"));
   }
 
   @Test

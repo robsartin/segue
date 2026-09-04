@@ -4,11 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.robsartin.segue.domain.AssertionRecord;
+import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.domain.OwnerEdge;
 import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.domain.Retraction;
+import com.robsartin.segue.domain.SameAs;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import java.nio.file.Path;
@@ -40,6 +43,9 @@ class RetractRunTest {
   private static final String WRONG = "Q0900101";
   private static final String PAINTING = "Q0900102";
   private static final String OTHER = "Q0900103";
+  private static final String WORKING_TITLE = "Q00900201";
+  private static final String CAUGHT_UP = "Q10000900301";
+  private static final String SECOND_CANONICAL = "Q10000900302";
 
   private AssertionLog log;
   private RetractRun run;
@@ -170,5 +176,133 @@ class RetractRunTest {
     assertThat(effect.label()).isEqualTo("The Right Ones");
     assertThat(effect.nodeClaims()).isEqualTo(1);
     assertThat(effect.edgeClaims()).isZero();
+  }
+
+  @Test
+  @DisplayName("retracting a merged local id reports the edges that go with its stand-in")
+  void shouldReportTheStrandedEdgesWhenTheRetractedIdWasMerged() {
+    log.append(new NodeAssertion(OTHER, NodeKind.PERSON, "Ines Marlow", SOURCE));
+    log.append(LocalEntity.minted(WORKING_TITLE, NodeKind.WORK, "a working title", NOW));
+    log.append(SameAs.declared(WORKING_TITLE, CAUGHT_UP, NOW));
+    log.append(OwnerEdge.claimed(OTHER, CAUGHT_UP, "INFLUENCED_BY", NOW));
+
+    run.run(options(WORKING_TITLE, "the mint was a mistake", true), notes::add);
+
+    assertThat(notes)
+        .as(
+            "the merge goes with the local id, and it was the only thing holding a node under the"
+                + " canonical id - so the edge claimed against that id stops projecting too, and"
+                + " the operator has to be told before the row is written (#224)")
+        .anySatisfy(note -> assertThat(note).contains(CAUGHT_UP).contains("1 edge"));
+  }
+
+  @Test
+  @DisplayName(
+      "a later, unrelated retraction does not re-report an earlier retraction's stranded edges")
+  void shouldNotReReportAnEarlierRetractionsStrandedEdgesWhenRetractingSomethingElse() {
+    log.append(new NodeAssertion(OTHER, NodeKind.PERSON, "Ines Marlow", SOURCE));
+    log.append(LocalEntity.minted(WORKING_TITLE, NodeKind.WORK, "a working title", NOW));
+    log.append(SameAs.declared(WORKING_TITLE, CAUGHT_UP, NOW));
+    log.append(OwnerEdge.claimed(OTHER, CAUGHT_UP, "INFLUENCED_BY", NOW));
+    log.append(new NodeAssertion(PAINTING, NodeKind.WORK, "A Landscape", SOURCE));
+
+    run.run(options(WORKING_TITLE, "the mint was a mistake", false), notes::add);
+    notes.clear();
+    run.run(options(PAINTING, "unrelated retraction", false), notes::add);
+
+    assertThat(notes)
+        .as(
+            "CAUGHT_UP was stranded by the FIRST retraction and already reported then; a second,"
+                + " unrelated retraction must not name it again (#224)")
+        .noneMatch(note -> note.contains(CAUGHT_UP));
+  }
+
+  @Test
+  @DisplayName("two sources corroborating one stranded edge count as one edge, not two")
+  void shouldCountAStrandedEdgeOnceWhenTwoSourcesCorroborateIt() {
+    Provenance secondSource =
+        new Provenance("invented2", "invented:2", Instant.parse("2026-01-02T00:00:00Z"), 1.0);
+    log.append(new NodeAssertion(OTHER, NodeKind.PERSON, "Ines Marlow", SOURCE));
+    log.append(LocalEntity.minted(WORKING_TITLE, NodeKind.WORK, "a working title", NOW));
+    log.append(SameAs.declared(WORKING_TITLE, CAUGHT_UP, NOW));
+    log.append(new AssertionRecord(OTHER, CAUGHT_UP, "INFLUENCED_BY", null, null, SOURCE));
+    log.append(new AssertionRecord(OTHER, CAUGHT_UP, "INFLUENCED_BY", null, null, secondSource));
+
+    run.run(options(WORKING_TITLE, "the mint was a mistake", true), notes::add);
+
+    assertThat(notes)
+        .as(
+            "LogProjection.withdrawnEdges counts by edge key so two sources naming one"
+                + " relationship are one withdrawn edge, not two - this report has to agree"
+                + " (#224)")
+        .anySatisfy(note -> assertThat(note).contains(CAUGHT_UP).contains("1 edge"));
+  }
+
+  @Test
+  @DisplayName(
+      "an edge naming two ids this retraction newly strands is reported under both, and the"
+          + " distinct total across all lines matches the export's count")
+  void shouldReportADistinctTotalWhenOneEdgeNamesTwoNewlyStrandedIds() {
+    // WORKING_TITLE is merged onto CAUGHT_UP, then corrected onto SECOND_CANONICAL - two SameAs
+    // rows off the same local id, so retracting it strands BOTH canonical ids (retractedStandIns
+    // does not pick only the last-wins merge). The surviving edge names both directly, so it
+    // truthfully belongs to each id's own line - but LogProjection.withdrawnEdges counts it once,
+    // and the report's closing total has to agree with that, not with the sum of the per-id lines.
+    log.append(LocalEntity.minted(WORKING_TITLE, NodeKind.WORK, "a working title", NOW));
+    log.append(SameAs.declared(WORKING_TITLE, CAUGHT_UP, NOW));
+    log.append(SameAs.declared(WORKING_TITLE, SECOND_CANONICAL, NOW));
+    log.append(OwnerEdge.claimed(CAUGHT_UP, SECOND_CANONICAL, "INFLUENCED_BY", NOW));
+
+    run.run(options(WORKING_TITLE, "corrected twice, then retracted", true), notes::add);
+
+    assertThat(notes)
+        .as(
+            "each id's own line is true - the edge does name it - but the closing line has to"
+                + " give the DISTINCT total across all of them, matching the export (#224)")
+        .anySatisfy(note -> assertThat(note).contains(CAUGHT_UP).contains("1 edge"))
+        .anySatisfy(note -> assertThat(note).contains(SECOND_CANONICAL).contains("1 edge"))
+        .anySatisfy(note -> assertThat(note).contains("1 distinct edge"));
+  }
+
+  @Test
+  @DisplayName("retracting a canonical id whose merge is already gone strands no edges and says so")
+  void shouldReportNoStrandingLineWhenTheRetractedCanonicalIdStrandsNothing() {
+    // A source claimed the canonical id, the owner merged something onto it, and the local side
+    // was retracted first - so the merge is already gone and the id is still held by the source's
+    // own node claim. Retracting the canonical id NOW takes that node claim away too, which is
+    // what puts the id into retractedStandIns for the first time. But every edge naming it was
+    // dropped by its own retraction (Retractions.survives, either endpoint), so there is nothing
+    // for a stranding line to report: the merge went at the EARLIER retraction, the id named
+    // would be the one the operator just typed, and the count would be zero (#224).
+    log.append(new NodeAssertion(CAUGHT_UP, NodeKind.GROUP, "The Caught Up", SOURCE));
+    log.append(LocalEntity.minted(WORKING_TITLE, NodeKind.WORK, "a working title", NOW));
+    log.append(SameAs.declared(WORKING_TITLE, CAUGHT_UP, NOW));
+
+    run.run(options(WORKING_TITLE, "the mint was a mistake", false), notes::add);
+    notes.clear();
+    run.run(options(CAUGHT_UP, "and the entity itself was wrong", true), notes::add);
+
+    assertThat(notes)
+        .as(
+            "a stranding line exists to name edges that stop projecting; one that names none is"
+                + " telling the operator about a merge that went at an earlier retraction (#224)")
+        .noneMatch(note -> note.contains("0 edge(s)"));
+  }
+
+  @Test
+  @DisplayName("a single newly-stranded id gets no closing distinct-total line")
+  void shouldNotAddAClosingLineWhenOnlyOneCanonicalIdIsNewlyStranded() {
+    log.append(new NodeAssertion(OTHER, NodeKind.PERSON, "Ines Marlow", SOURCE));
+    log.append(LocalEntity.minted(WORKING_TITLE, NodeKind.WORK, "a working title", NOW));
+    log.append(SameAs.declared(WORKING_TITLE, CAUGHT_UP, NOW));
+    log.append(OwnerEdge.claimed(OTHER, CAUGHT_UP, "INFLUENCED_BY", NOW));
+
+    run.run(options(WORKING_TITLE, "the mint was a mistake", true), notes::add);
+
+    assertThat(notes)
+        .as(
+            "only one id is newly stranded, so its own line already says the whole story and a"
+                + " closing total would just repeat it (#224)")
+        .noneMatch(note -> note.contains("distinct edge"));
   }
 }
