@@ -720,6 +720,18 @@ class EquivalencesTest {
         .containsExactly(CANONICAL);
   }
 
+  @Test
+  @DisplayName("stand-ins built from prebuilt merges are the ones standIns() builds itself")
+  void shouldGiveTheSameStandInsWhenHandedTheMergesStandInsWouldCompute() {
+    List<LoggedAssertion> log = foldedLog();
+
+    assertThat(Equivalences.standIns(log, AS_CLAIMED, Equivalences.in(log)))
+        .as(
+            "standIns opens with Equivalences.in(log); handing it the same merges must not"
+                + " change which canonical ids get a node or what those nodes say")
+        .isEqualTo(Equivalences.standIns(log, AS_CLAIMED));
+  }
+
   private static AssertionRecord edge(String from, String to) {
     return new AssertionRecord(
         from, to, "INFLUENCED_BY", null, null, new Provenance("invented", "invented:1", WHEN, 1.0));
@@ -731,6 +743,12 @@ class EquivalencesTest {
    * edge naming the local id — which folds onto the emptied canonical id and is withdrawn (#224,
    * #228). An overload handed the wrong emptied set answers differently here, which is what makes
    * the comparisons below able to fail.
+   *
+   * <p>A second, untouched merge — {@code OTHER_MINTED} onto {@code OTHER_CANONICAL}, never
+   * retracted — is there so {@code standIns(log, AS_CLAIMED)} actually builds a stand-in: the
+   * retraction above reaches {@code MINTED}'s own node claim as well as its merge (retraction is
+   * per-entity, not per-claim), so without this second pair the log-taking form answers an empty
+   * map on every fixture above and the comparisons that use it would be vacuous.
    */
   private static List<LoggedAssertion> foldedLog() {
     return List.of(
@@ -743,6 +761,8 @@ class EquivalencesTest {
         SameAs.declared(MINTED, CANONICAL, WHEN),
         new Retraction(MINTED, "the local side was wrong", WHEN),
         SameAs.declared(MINTED, CANONICAL, WHEN),
+        LocalEntity.minted(OTHER_MINTED, NodeKind.WORK, "an invented other local work", WHEN),
+        SameAs.declared(OTHER_MINTED, OTHER_CANONICAL, WHEN),
         edge(NEIGHBOUR, MINTED));
   }
 }

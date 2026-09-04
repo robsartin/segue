@@ -415,7 +415,22 @@ public record Equivalences(
    */
   public static Map<String, NodeRecord> standIns(
       List<LoggedAssertion> log, UnaryOperator<NodeAssertion> rederive) {
-    Equivalences merges = Equivalences.in(log);
+    return standIns(log, rederive, Equivalences.in(log));
+  }
+
+  /**
+   * {@link #standIns(List, UnaryOperator)}'s own answer, for a caller that already holds the merges
+   * it would open by asking {@link #in(List)} for — {@link #in(List, Set)}'s reason again, one
+   * fixed point paid once rather than twice.
+   *
+   * @param merges the merges this fold reads — {@link #in(List)}'s own answer for this log, or the
+   *     answer {@link #in(List, Set)} gives a caller that has already computed the emptied set
+   */
+  public static Map<String, NodeRecord> standIns(
+      List<LoggedAssertion> log, UnaryOperator<NodeAssertion> rederive, Equivalences merges) {
+    Objects.requireNonNull(log, "log");
+    Objects.requireNonNull(rederive, "rederive");
+    Objects.requireNonNull(merges, "merges");
     Map<String, NodeRecord> standIns = new LinkedHashMap<>();
     for (Map.Entry<Integer, NodeRecord> at : localsOfMerges(log, rederive).entrySet()) {
       if (log.get(at.getKey()) instanceof SameAs merge && merges.stands(merge)) {
