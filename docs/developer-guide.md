@@ -28,6 +28,7 @@ Everything here was checked against the source in `src/main/java/com/robsartin/s
 - [Looking at the shape of your graph](#looking-at-the-shape-of-your-graph)
 - [Taking something back out](#taking-something-back-out)
 - [What to explore next](#what-to-explore-next)
+- [Calibrating the recommender](#calibrating-the-recommender)
 - [Rating one card at a time](#rating-one-card-at-a-time)
 - [Claiming something no source has](#claiming-something-no-source-has)
 - [How to read an ADR against the code](#how-to-read-an-adr-against-the-code)
@@ -263,6 +264,7 @@ graph TD
   rate["rate<br/>RateCli, RateRun, Deck, RateServer, Card"]
   own["own<br/>OwnCli, OwnRun"]
   census["census<br/>CensusCli, CensusRun, Census, CensusReport"]
+  evaluate["evaluate<br/>EvaluateCli, HeldOut, Scoring, EvaluationReport"]
 
   app --> mcp
   app --> ingest
@@ -336,6 +338,14 @@ graph TD
   census --> sqlite
   census --> wikidata
   census ==>|"one fold, not two"| export
+  evaluate --> domain
+  evaluate --> recommend
+  evaluate --> port
+  evaluate --> support
+  evaluate --> ingest
+  evaluate --> sqlite
+  evaluate --> tinker
+  evaluate --> wikidata
 ```
 
 **What the diagram shows.** Dependencies point downward and never back up. `domain` sits at the
@@ -366,7 +376,7 @@ that `app` imports nothing from `domain`; that stopped being true in ADR 54**, b
 `WikidataMusicBrainzIdentity` validates a seed QID with `Qid.looksLikeAQid` before putting it in a
 SPARQL query, so the bridge in `app` holds one `domain` type.
 
-`seed`, `export`, `ratings`, `retract`, `recommend`, `rate`, `own` and `census` are the eight dev-side tools. None is
+`seed`, `export`, `ratings`, `retract`, `recommend`, `rate`, `own`, `census` and `evaluate` are the nine dev-side tools. None is
 reachable from the application — nothing imports any of them, and each is entered through its own
 `main` behind a Gradle `JavaExec` task — and their arrows are the interesting part, because each
 has a different relationship with the data and a different fence to match.
@@ -402,6 +412,12 @@ has a different relationship with the data and a different fence to match.
   it again — a third fold of one log is the drift `BothFoldsAgreeTest` exists to catch — and counts
   what comes out. It writes nothing, and `--db` is required
   ([ADR 63](adr/0063-a-read-only-census-of-the-graph.md)).
+- **`evaluate` reaches `sqlite`, `tinker`, `ingest`, `wikidata`, `support` and `recommend`, and is
+  the only dev-side tool that measures another one.** It replays the log once, hides a deterministic
+  fifth of what you rated highly, and runs `recommend`'s own `CandidateSweep` from what is left,
+  once per setting on a fixed grid — the third dependency between dev tools, after `rate → recommend`
+  and `census → export`, and deliberate for the same reason: a harness with a sweep of its own would
+  answer a question about itself. It writes nothing, and `--db` is required ([ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md)).
 
 Tools with opposite relationships to the store cannot share a package and keep any fence
 meaningful, which is why ADR 41 made the first two siblings, ADR 43 added a third rather than a
@@ -481,6 +497,7 @@ line is drawn there.
 | `own` | The owner-claim tool (issue [#92](https://github.com/robsartin/segue/issues/92)): mints a local entity Wikidata does not model, asserts an edge between two ids, or merges a local id into the QID it turned out to be — one operation per run, as `./gradlew ownClaim`. Plain Java, offline, and the second dev tool that writes a world-fact claim; it appends through `IngestService.claim` and holds no graph, so the projection catches up at the next boot. Deliberately not an MCP tool: an owner claim is exempt from the corroboration count, so a model must not be able to make one. Since #179 it has no default database: `--db` is required, `SEGUE_DB` does not satisfy it, and `./gradlew own` still resolves to `:ownClaim` — it refuses rather than reporting an unknown task ([ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md)). | `port`, `domain`, `ingest`, `sqlite`, `support` |
 | `rate` | The rating deck ([ADR 46](adr/0046-the-rating-deck.md)): a loopback page on 127.0.0.1:8090 dealing one unrated entity per keystroke, run as `./gradlew rate`. Plain Java, offline, and the only dev tool that writes a rating. Composes its known list through the same `KnownList.promoted` `recommend` does ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)), passes the same `KnownList.suppressed` to its sweep, and deals revisions over `KnownList.revisitable` ([ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md)). | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `recommend`, `support` |
 | `census` | The graph census: nodes by kind, edges by type, source and corroboration, the claim rows and what retraction and merge did to them, the taste layer by score, degree quantiles against `Recommendations.MIN_CANDIDATE_DEGREE`, and what MusicBrainz reached. Run as `./gradlew graphCensus`. Plain Java, read-only, offline, and the whole output is aggregates — no label, no id, no note — so it is safe to paste. `--db` is required, and `SEGUE_DB` does not satisfy it. | `port`, `domain`, `sqlite`, `support`, `export`, `wikidata` |
+| `evaluate` | The recommender's evaluation harness ([ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md)): holds out a deterministic slice of the entities you rated highly, runs the shipped candidate sweep from what is left over a fixed grid of scorers and degree floors, and reports where the held-out entities and the ones you rated down land. Run as `./gradlew evaluate`. Plain Java, read-only, offline, and the whole output is aggregates — no label, no id, no note, no rating — so it is safe to paste. `--db` is required, and `SEGUE_DB` does not satisfy it. | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `recommend`, `support` |
 
 ### Which rules a machine enforces
 
@@ -511,7 +528,7 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `theRecommenderOnlyReads` | `recommend` calling the three world-fact writes or either taste-layer write (`AffinityStore.put`, `updateRating`), or depending on `IngestService` at all | [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
 | `theRecommenderReadsRatingsAndNeverNotes` | `recommend` depending on `AffinityRecord` **as a type**, or calling `AffinityStore.find` or `readAll` — it may hold the store and call the note-free `readRatings`, and nothing that carries free text | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 39](adr/0039-affinity-capture-and-read.md), [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
 | `onlyTheRatingsToolReadsANote` | calling `AffinityRecord.note()` from outside `ratings` and `sqlite` — the score is ordinary data, the note is the owner's and is read on their own machine | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 43](adr/0043-listing-your-own-ratings.md) |
-| `onlyTheRecommenderReadsEveryRating` | calling `AffinityStore.readRatings` from outside `recommend`, `rate` **and `census`** — the note-free bulk read belongs to the three dev-side tools that weight, deal or count by it, and ADR 26 still pins the surface at six tools | [ADR 26](adr/0026-mcp-tool-surface.md), [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md), [ADR 63](adr/0063-a-read-only-census-of-the-graph.md) |
+| `onlyTheRecommenderReadsEveryRating` | calling `AffinityStore.readRatings` from outside `recommend`, `rate`, `census` **and `evaluate`** — the note-free bulk read belongs to the four dev-side tools that weight, deal, count or evaluate by it, and ADR 26 still pins the surface at six tools | [ADR 26](adr/0026-mcp-tool-surface.md), [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md), [ADR 63](adr/0063-a-read-only-census-of-the-graph.md), [ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md) |
 | `theRecommenderOpensNothingElse` | `recommend` depending on `jena`, `mcp`, `app`, `java.net`, `javax.net` or every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`, so a new tool joins every fence at once) — `rate` depends on `recommend` by design, and this is what keeps that trip one-way | [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
 | `theRatingDeckWritesOnlyAffinity` | `rate` calling the three world-fact writes, or depending on `IngestService` **as a type** — the deck records what the owner thinks, never what the world says, and cannot route a claim through the one class allowed to write one | [ADR 46](adr/0046-the-rating-deck.md) |
 | `theRatingDeckNeverReadsANote` | `rate` calling `AffinityRecord.note()` — it writes the score and must not be able to display the note | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 46](adr/0046-the-rating-deck.md) |
@@ -522,6 +539,11 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `theClaimToolsTakeTheirDatabaseFromTheFlagAlone` | `retract` or `own` calling any `support` method that returns a `java.nio.file.Path`, or reading any `support` field of that type. The sibling rule forbids a *name*; this forbids the *capability*, and the gap between them was measured — a `Path`-returning method added to `support.RequiredDatabase` (which both tools already use for the refusal sentence) and wired in restores the default while leaving `theClaimToolsHaveNoDefaultDatabase` green. `Path` is the line because a `String` has to be parsed back by a line a reviewer can see, which is why `RequiredDatabase.refusal` returns one | issue [#179](https://github.com/robsartin/segue/issues/179) |
 | `theCensusHasNoDefaultDatabase` | `census` depending on `support.DefaultDatabase` at all. A third rule rather than a wider one: ADR 60's two are named for claim tools, ADR 60 names both and is immutable, and its consequences say a third tool joins by hand | [ADR 63](adr/0063-a-read-only-census-of-the-graph.md), [ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md) |
 | `theCensusTakesItsDatabaseFromTheFlagAlone` | `census` calling any `support` method that returns a `java.nio.file.Path`, or reading any `support` field of that type — the capability, where the rule above forbids the name | [ADR 63](adr/0063-a-read-only-census-of-the-graph.md), [ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md) |
+| `theEvaluationHarnessOnlyReads` | `evaluate` calling the three world-fact writes or either taste-layer write (`AffinityStore.put`, `updateRating`), or depending on `IngestService` at all — a tool that could write could change what it is reporting on | [ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md) |
+| `theEvaluationHarnessOpensNothingElse` | `evaluate` depending on `jena`, `mcp`, `app`, `java.net`, `javax.net` or every other dev tool bar one. `recommend` is deliberately allowed — the harness measures the shipped sweep rather than a second copy of it, which is the third dependency between dev tools after `rate → recommend` and `census → export` — and `theRecommenderOpensNothingElse` keeps that trip one-way | [ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md), [ADR 46](adr/0046-the-rating-deck.md), [ADR 63](adr/0063-a-read-only-census-of-the-graph.md) |
+| `theEvaluationHarnessReadsRatingsAndNeverNotes` | `evaluate` depending on `AffinityRecord` **as a type**, or calling `AffinityStore.find` or `readAll` — it may hold the store and call the note-free `readRatings`, and nothing that carries free text | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md) |
+| `theEvaluationHarnessHasNoDefaultDatabase` | `evaluate` depending on `support.DefaultDatabase` at all. A fourth rule rather than a wider one, for the census rule's reason: ADR 60 names the two claim tools and is immutable | [ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md), [ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md) |
+| `theEvaluationHarnessTakesItsDatabaseFromTheFlagAlone` | `evaluate` calling any `support` method that returns a `java.nio.file.Path`, or reading any `support` field of that type — the capability, where the rule above forbids the name | [ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md), [ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md) |
 | `ownerClaimsAreMadeThroughTheirFactories` | calling — or referencing — the constructor of `LocalEntity`, `OwnerEdge` or `SameAs` from outside `domain` and `sqlite`. Those constructors enforce only what Wikidata's grammar fixes, so that an append-only row stays decodable after a convention moves; the conventions themselves (two leading zeros, the controlled relation vocabulary) live in `minted()`, `claimed()` and `declared()`. This rule is what makes every *maker* of a claim go through them, with no second copy of a rule to fall out of date. `sqlite` is exempt because `readRow` reconstructs rather than claims | [ADR 22](adr/0022-wikidata-identity-and-vocabulary.md), [ADR 19](adr/0019-assertion-log-source-of-truth.md), [ADR 58](adr/0058-stand-in-identifiers-cannot-be-allocatable.md) |
 | `bridgedIdentitiesAreBuiltThroughTheirFactory` | calling — or referencing — the constructor of `BridgedIdentity` from anywhere but the record itself. `BridgedIdentity.describing` *drops* a row whose class id is not a QID, answering `undescribed`; the constructor *throws*. The two are not interchangeable in a bridge: `MusicBrainzSourceAdapter` catches only `MusicBrainzIdentityUnavailableException` and `SegueService.expandEntity` wraps `adapter.expand` in no `try`, so an `IllegalArgumentException` from a producer aborts a whole expansion across every adapter — and `NodeRecord` refuses the same value only from inside `IngestService.apply`, after the claim has been appended. Rules run over `src/main` only, so the test doubles that build rows directly are outside the import rather than exempted | [ADR 19](adr/0019-assertion-log-source-of-truth.md), [ADR 58](adr/0058-stand-in-identifiers-cannot-be-allocatable.md), issue [#163](https://github.com/robsartin/segue/issues/163) |
 | `nothingWritesToStandardOut` | reading `System.out` anywhere except the one named exception, `SegueApplication` | [ADR 28](adr/0028-mcp-transports.md) |
@@ -2067,6 +2089,100 @@ What has not moved is the first half — the file is still required, still lives
 repository, and is still not something a model may be handed. ADR 45 records a re-open condition rather than
 shutting the door: a *bounded* version — "given these five things I have rated, what next?" — is an
 argument on its own terms, and it amends ADR 26 rather than arriving as a field on an existing tool.
+
+## Calibrating the recommender
+
+```bash
+./gradlew evaluate --args="--db $HOME/.segue/segue.db --known $HOME/known.csv"
+```
+
+It prints one block of aggregates and writes nothing. **`--db` is required and `SEGUE_DB` does not
+satisfy it**, for the reason [ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md)
+gives about the two claim tools, arriving at a read from the same direction as `graphCensus`: an
+agent's shell inherits the variable, and this output is a reading of your whole taste layer. Write
+`$HOME`, not `~`.
+
+### What it is for
+
+The issue that asked for this tool said to hold out a slice of rated *works* — but the recommender
+cannot recommend a work, so a held-out set of works would measure nothing. What is actually held
+out, and why, is the protocol below. `recommend`'s dials — `Recommendations.MIN_CANDIDATE_DEGREE`,
+its scorer, [ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)'s promotion threshold,
+[ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md)'s suppression boundary — have each been
+argued from a measurement, but never against a held-out set anybody agreed on beforehand. This is
+that set, read once per grid point so the settings can be compared against each other rather than
+against nothing.
+
+### The protocol
+
+**Only a promotion can be held out.** `KnownList.promoted` composes the known-list as the `--known`
+file *plus* everything rated highly that the file does not already name. Hold out an entity the file
+names and the file puts it straight back — the sweep was never blind to it, and a hit against it
+would measure nothing. The eligible population is therefore rated highly, absent from the file, and
+offerable as a candidate at all.
+
+**The split is deterministic by qid, so two runs diff.** No seed, no clock, no randomness: the same
+database produces the same held-out entities every time, which is what lets a run taken today be
+diffed row by row against one taken after a later change, rather than against noise.
+
+**One sweep per setting, with suppression withheld.** Each setting's candidate pool is swept once
+with nothing suppressed, so the entities you rated down are in it and can be ranked — that ranking
+is the negative reading. The same sweep's result, with the suppressed candidates filtered back out,
+is the positive reading: excluding a candidate from a pool is purely subtractive and changes no
+surviving candidate's score or order, so filtering after the sweep reproduces the shipped ranking
+exactly, without paying for a second sweep.
+
+**The grid is fixed, and no flag moves it.** `Setting.GRID` is the authority on what is swept and in
+what order. There is no `--scorer` and no `--min-degree` here — the value of this tool is one block
+of comparable rows, and a flag would produce a stack of runs nobody could line up beside each other.
+
+**`--db` is required and `SEGUE_DB` does not satisfy it** — see above. **`--known` is required**,
+for the reason `recommend` requires it: a held-out run needs the list it is holding out of.
+
+**No constant moves.** This tool changes nothing that `recommend` ships with; it exists so a later
+change to one of those numbers can be argued from a measurement rather than a judgement.
+
+`HeldOut` is the authority on the split and `EvaluationReport` on the columns it prints; neither is
+restated here.
+
+### Why the output is safe to paste
+
+Every value `EvaluationReport` renders is an integer, a fixed one-decimal, or the literal `-`, and
+every label is a literal in that class or a scorer's own name — the same property
+[ADR 63](adr/0063-a-read-only-census-of-the-graph.md) established for `graphCensus`, and [ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md)
+restates for this tool. No qid, label, note or rating value reaches the report, so
+[ADR 51](adr/0051-what-an-adr-may-quote.md)'s line — an aggregate over your data may be published, an
+entity presented as yours may not — is satisfied by construction rather than by care.
+`EvaluationIsSafeToPasteTest` holds it exactly as `CensusIsSafeToPasteTest` holds the census: a
+fixture carrying a label, a note, a `Q` id inside that note and a rating, every log line captured at
+TRACE, and the label, the note and anything qid-shaped asserted absent. The rating has no clause of
+its own: a leaked rating is a bare digit, indistinguishable from a floor or a pool size the table
+prints legitimately. What keeps a rating out is upstream — `EvaluationReport.lines` takes counts —
+and ADR 65's consequences record the limit.
+
+That guarantee is about the report itself, not about everything a run can put on your terminal: a
+refusal names the path it was given, and a run that fails prints a stack trace like any other
+tool's.
+
+### What it is not allowed to do
+
+- **Write anything.** `theEvaluationHarnessOnlyReads` forbids the three world-fact writes, both
+  taste-layer writes, and depending on `IngestService` at all — a tool that could write could change
+  what it is reporting on.
+- **See a note.** `theEvaluationHarnessReadsRatingsAndNeverNotes` bans `AffinityRecord` as a type
+  and `find`/`readAll` as calls; it may read every score through `readRatings` and nothing more.
+- **Reach a network, an engine, or a sibling tool but one.** `theEvaluationHarnessOpensNothingElse`
+  bans every dev tool but `recommend` — the harness measures the shipped sweep rather than a second
+  copy of it, so that one dependency is deliberate, the third between dev tools after
+  `rate → recommend` and `census → export`.
+- **Default its database, or take one from anywhere but the flag.**
+  `theEvaluationHarnessHasNoDefaultDatabase` and
+  `theEvaluationHarnessTakesItsDatabaseFromTheFlagAlone` hold the same line
+  [ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md) draws for the two claim tools
+  and `graphCensus`.
+
+[ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md) records the decision in full — the split, the one-sweep argument and the test that pins it,
+the grid, and the alternatives it turned down.
 
 ## Rating one card at a time
 

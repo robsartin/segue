@@ -261,8 +261,13 @@ public final class CandidateSweep {
    * distinguishable — {@code Sweep.heldOutByFloor} counts only the second. The floor is the one
    * filter whose number has been re-decided twice (ADR 45 and its 2026-08-29 amendment), and a
    * count that mixed in records and learned societies would not be a reading of it.
+   *
+   * <p><b>Public since issue #239, and for the reason {@code PathRanking.isHub} is.</b> The
+   * evaluation harness holds out entities it must be able to offer back, so its eligibility rule
+   * and this one have to be the same sentence. One implementation, two readings — a second copy
+   * would agree until the day somebody changed one of them.
    */
-  private boolean couldBeExplored(String qid) {
+  public boolean couldBeExplored(String qid) {
     Optional<NodeRecord> node = graph.node(qid);
     if (node.isEmpty()) {
       return false;
