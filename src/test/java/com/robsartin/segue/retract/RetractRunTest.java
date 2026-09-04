@@ -192,6 +192,48 @@ class RetractRunTest {
             "the merge goes with the local id, and it was the only thing holding a node under the"
                 + " canonical id - so the edge claimed against that id stops projecting too, and"
                 + " the operator has to be told before the row is written (#224)")
-        .anySatisfy(note -> assertThat(note).contains(CAUGHT_UP).contains("1 edge claim"));
+        .anySatisfy(note -> assertThat(note).contains(CAUGHT_UP).contains("1 edge"));
+  }
+
+  @Test
+  @DisplayName(
+      "a later, unrelated retraction does not re-report an earlier retraction's stranded edges")
+  void shouldNotReReportAnEarlierRetractionsStrandedEdgesWhenRetractingSomethingElse() {
+    log.append(new NodeAssertion(OTHER, NodeKind.PERSON, "Ines Marlow", SOURCE));
+    log.append(LocalEntity.minted(WORKING_TITLE, NodeKind.WORK, "a working title", NOW));
+    log.append(SameAs.declared(WORKING_TITLE, CAUGHT_UP, NOW));
+    log.append(OwnerEdge.claimed(OTHER, CAUGHT_UP, "INFLUENCED_BY", NOW));
+    log.append(new NodeAssertion(PAINTING, NodeKind.WORK, "A Landscape", SOURCE));
+
+    run.run(options(WORKING_TITLE, "the mint was a mistake", false), notes::add);
+    notes.clear();
+    run.run(options(PAINTING, "unrelated retraction", false), notes::add);
+
+    assertThat(notes)
+        .as(
+            "CAUGHT_UP was stranded by the FIRST retraction and already reported then; a second,"
+                + " unrelated retraction must not name it again (#224)")
+        .noneMatch(note -> note.contains(CAUGHT_UP));
+  }
+
+  @Test
+  @DisplayName("two sources corroborating one stranded edge count as one edge, not two")
+  void shouldCountAStrandedEdgeOnceWhenTwoSourcesCorroborateIt() {
+    Provenance secondSource =
+        new Provenance("invented2", "invented:2", Instant.parse("2026-01-02T00:00:00Z"), 1.0);
+    log.append(new NodeAssertion(OTHER, NodeKind.PERSON, "Ines Marlow", SOURCE));
+    log.append(LocalEntity.minted(WORKING_TITLE, NodeKind.WORK, "a working title", NOW));
+    log.append(SameAs.declared(WORKING_TITLE, CAUGHT_UP, NOW));
+    log.append(new AssertionRecord(OTHER, CAUGHT_UP, "INFLUENCED_BY", null, null, SOURCE));
+    log.append(new AssertionRecord(OTHER, CAUGHT_UP, "INFLUENCED_BY", null, null, secondSource));
+
+    run.run(options(WORKING_TITLE, "the mint was a mistake", true), notes::add);
+
+    assertThat(notes)
+        .as(
+            "LogProjection.withdrawnEdges counts by edge key so two sources naming one"
+                + " relationship are one withdrawn edge, not two - this report has to agree"
+                + " (#224)")
+        .anySatisfy(note -> assertThat(note).contains(CAUGHT_UP).contains("1 edge"));
   }
 }

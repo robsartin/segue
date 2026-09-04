@@ -14,6 +14,7 @@ import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.retract.RetractCli.Options;
 import java.time.Clock;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -179,8 +180,8 @@ public final class RetractRun {
   }
 
   /**
-   * What ELSE stops projecting: the canonical ids this retraction empties, and the edge claims that
-   * go with them (#224).
+   * What ELSE stops projecting: the canonical ids THIS retraction newly empties, and the distinct
+   * edges that go with them (#224).
    *
    * <p>Retracting a local id the owner had merged drops the merge — {@link Retractions#survives}
    * drops a {@link com.robsartin.segue.domain.SameAs} when either of its ids is retracted — and
@@ -189,41 +190,64 @@ public final class RetractRun {
    * being retracted, and these name a different id. They are reported rather than added to those
    * counts for that reason, and because the counts decide whether "nothing to retract" is refused.
    *
+   * <p><b>Only what THIS retraction newly strands, fix round 1.</b> {@link
+   * Equivalences#retractedStandIns} answers "which canonical ids has the log, as given, emptied" -
+   * asked of the log this retraction would produce, that includes every canonical id an earlier
+   * retraction already emptied and already reported. The set difference against the log as it
+   * stands is what is actually new here; without it, an unrelated later retraction repeated every
+   * earlier one's stranded-edge notes forever.
+   *
+   * <p><b>Counted by edge key, matching {@code LogProjection.withdrawnEdges}, fix round 1.</b> That
+   * count runs over the grouped claims, so two sources corroborating one withdrawn relationship are
+   * one withdrawal there - and this report has to agree, or the same retraction would read as two
+   * different sizes in two places. {@link Equivalences#namesARetractedStandIn} is the shared
+   * predicate both readers ask, over {@link Equivalences#folding}, rather than a second,
+   * hand-rolled idea of what "names this canonical id" means.
+   *
    * <p><b>Asked of the log this retraction would produce</b>, not of the log as it stands: the rule
    * is about what a retraction reaches, and there is no retraction in the log yet. Nothing is
    * appended — the row is built in memory, and {@link #run} may still be a dry run.
    */
   private List<String> strandedByThisRetraction(Options options) {
-    List<LoggedAssertion> after = new ArrayList<>(log.readAll());
+    List<LoggedAssertion> before = log.readAll();
+    List<LoggedAssertion> after = new ArrayList<>(before);
     after.add(new Retraction(options.qid(), options.reason(), clock.instant()));
-    Set<String> emptied = Equivalences.retractedStandIns(after);
-    if (emptied.isEmpty()) {
+
+    Set<String> newlyEmptied = new LinkedHashSet<>(Equivalences.retractedStandIns(after));
+    newlyEmptied.removeAll(Equivalences.retractedStandIns(before));
+    if (newlyEmptied.isEmpty()) {
       return List.of();
     }
+
     Retractions retractions = Retractions.in(after);
+    Equivalences equivalences = Equivalences.folding(after);
     List<String> notes = new ArrayList<>();
-    for (String canonical : emptied) {
-      int edges = 0;
+    for (String canonical : newlyEmptied) {
+      Set<String> edgeKeys = new LinkedHashSet<>();
       for (int i = 0; i < after.size(); i++) {
         LoggedAssertion assertion = after.get(i);
         if (!retractions.survives(i, assertion)) {
           continue;
         }
-        if (assertion instanceof AssertionRecord edge
-            && (edge.fromQid().equals(canonical) || edge.toQid().equals(canonical))) {
-          edges++;
+        AssertionRecord claim =
+            switch (assertion) {
+              case AssertionRecord sourced -> sourced;
+              case OwnerEdge owned -> owned.toAssertion();
+              default -> null;
+            };
+        if (claim == null || !equivalences.namesARetractedStandIn(claim)) {
+          continue;
         }
-        if (assertion instanceof OwnerEdge owned
-            && (owned.fromQid().equals(canonical) || owned.toQid().equals(canonical))) {
-          edges++;
+        if (claim.fromQid().equals(canonical) || claim.toQid().equals(canonical)) {
+          edgeKeys.add(claim.edgeKey());
         }
       }
       notes.add(
           "the merge onto "
               + canonical
               + " goes too, and nothing else holds a node for that id, so "
-              + edges
-              + " edge claim(s) naming it stop projecting with it (#224)");
+              + edgeKeys.size()
+              + " edge(s) naming it stop projecting with it (#224)");
     }
     return notes;
   }
