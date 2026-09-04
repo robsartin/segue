@@ -327,6 +327,21 @@ class RetractRunTest {
   }
 
   @Test
+  @DisplayName("the closing note tells the operator to restart before anything else is ingested")
+  void shouldTellTheOperatorToRestartBeforeIngestingWhenARetractionIsAppended() {
+    seedAWronglyExpandedEntity();
+
+    run.run(options(WRONG, "resolved to the painters, not the band", false), notes::add);
+
+    assertThat(notes)
+        .as("a server still holding a node for the retracted id will accept a claim naming it")
+        .anyMatch(
+            note ->
+                note.contains("restart it before anything else is ingested")
+                    && note.contains(WRONG));
+  }
+
+  @Test
   @DisplayName("a single newly-stranded id gets no closing distinct-total line")
   void shouldNotAddAClosingLineWhenOnlyOneCanonicalIdIsNewlyStranded() {
     log.append(new NodeAssertion(OTHER, NodeKind.PERSON, "Ines Marlow", SOURCE));
