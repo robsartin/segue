@@ -40,6 +40,10 @@ class FoldOnceBenchmark {
     "MEMBER_OF", "INFLUENCED_BY", "PERFORMED", "AUTHORED"
   };
 
+  private static final String[] CANONICAL_QIDS = {
+    "Q10000000000", "Q10000000001", "Q10000000002", "Q10000000003", "Q10000000004"
+  };
+
   @TempDir Path tmp;
 
   @Test
@@ -70,7 +74,10 @@ class FoldOnceBenchmark {
             .as("a replay that applied nothing would be timing an empty list")
             .isPositive();
         LOG.info(
-            "fold-once benchmark: replayed {} rows ({} requested) in {} ms", applied, rows, millis);
+            "fold-once benchmark: applied {} of {} generated rows (the retraction withdraws the rest) in {} ms",
+            applied,
+            rows,
+            millis);
       }
     }
   }
@@ -118,12 +125,9 @@ class FoldOnceBenchmark {
     }
 
     for (int m = 0; m < mergeCount; m++) {
+      assert m < CANONICAL_QIDS.length : "mergeCount must not exceed CANONICAL_QIDS.length";
       String localQid = "Q00" + (2_000_000 + m);
-      // The eleven-digit canonical shape (ADR 62), built without ever writing an allocatable
-      // "Q" + digits literal in source - see StandInQidsDenoteNothingTest's javadoc on why a
-      // literal has to be split like this: 10_000_000_000L is a numeric literal, invisible to a
-      // scan that reads only string literals, so no allocatable-form id sits in this file's text.
-      String canonicalQid = "Q" + (10_000_000_000L + m);
+      String canonicalQid = CANONICAL_QIDS[m];
       log.append(
           LocalEntity.minted(localQid, KINDS[m % KINDS.length], "Bench Local " + m, Instant.EPOCH));
       log.append(SameAs.declared(localQid, canonicalQid, Instant.EPOCH));
