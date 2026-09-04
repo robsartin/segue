@@ -336,61 +336,6 @@ public record Equivalences(
   }
 
   /**
-   * The canonical ids a retraction emptied — a merge gave each of them its only node, a retraction
-   * of that merge's local side took the merge away, and nothing else holds a node for the id
-   * (#224).
-   *
-   * <p><b>Why an edge naming one does not project, and why that is ADR 44 rather than a delete.</b>
-   * {@code OwnRun} offers a merge's canonical id as a claimable endpoint the moment its stand-in
-   * exists, so the owner can claim an edge against it. Retracting the local id afterwards drops the
-   * merge — {@link Retractions#survives} drops a {@link SameAs} on the edge rule, either side — and
-   * with it the only node that id ever had. The edge survives on its own terms, names an endpoint
-   * no fold holds, and {@code TinkerGraphStore.record} refuses it: {@code replay failed at sequence
-   * … assertion references unknown entity … - upsert the node first}, at every boot, on rows ADR 19
-   * forbids deleting. The claim was one the owner made about the entity he has just retracted,
-   * written under the name his own merge gave it, so it goes with it. Nothing is deleted: the log
-   * keeps every row, and this changes only what the fold makes of them.
-   *
-   * <p><b>Position-blind, and that is the one place this rule does NOT follow ADR 44.</b> A
-   * retraction reaches backwards only, by position in the log — {@link Retractions#survives} is
-   * asked about a row's index for exactly that reason — but this set is whole-log and {@link
-   * #foldEndpoints} takes no index, so an edge claimed <em>after</em> the retraction that names an
-   * emptied canonical id is withdrawn just the same. That is deliberate. A backwards-only rule
-   * would leave the log {@code [node, minted, merge, retract, edge-naming-the-canonical-id]} naming
-   * an endpoint no fold holds, and {@code TinkerGraphStore.record} would refuse it at every boot —
-   * the very break this rule exists to close, re-created by the ordering rather than fixed. What is
-   * emptied is emptied for the whole projection, because a node either exists in the folded graph
-   * or it does not, and no edge may name one that does not. {@code
-   * RetractedStandInTakesItsEdgesTest} pins both folds on that log; the design spec's 2026-09-03
-   * amendment records the finding and the ruling.
-   *
-   * <p><b>Only the local side counts</b>, which is why {@link Retractions#reaches} exists. A merge
-   * dropped because its CANONICAL side was retracted leaves nothing to repair here: that id is
-   * retracted outright, and {@link Retractions#survives} has already dropped every edge naming it.
-   *
-   * <p><b>A canonical id the projection holds on its own account is not emptied.</b> A source may
-   * have claimed it as a node — the developer guide's promise that "what a source claimed about the
-   * canonical id is untouched" — and then the merge was never the only thing holding it up. Without
-   * this, retracting one thing the owner minted would strip the edges off a real Wikidata entity's
-   * whole expansion.
-   *
-   * <p><b>Nor is one a surviving merge still stands in for.</b> Two local ids merged onto one
-   * canonical id and only one of them retracted leaves the other merge's stand-in exactly where it
-   * was, so the id has a node and the edges naming it have an endpoint. {@link #standIns} is the
-   * one place that answers "which canonical ids have a stand-in", and this reads it rather than
-   * deciding it again.
-   *
-   * <p><b>No re-derivation parameter, unlike {@link #standIns} and {@link #localsOfMerges}.</b>
-   * This reads which canonical ids have a stand-in, never what kind that node is, and the key set
-   * of {@link #standIns} cannot depend on the re-derivation: {@link #localsOfMerges} decides which
-   * merges have a local side by survival alone and {@link #stands} reads no kind, so the operator
-   * only ever sets a value this method discards. It is checked rather than asserted — {@code
-   * EquivalencesTest.shouldNameTheSameCanonicalIdsWhateverKindTheFoldDerives} compares the key sets
-   * under two re-derivations that disagree about every kind. The parameter is left off so that
-   * {@code retract} — which needs this set for its report and must not learn Wikidata's vocabulary
-   * (ADR 44: "a retraction is nobody's vocabulary") — can call it.
-   */
-  /**
    * Every id the fold will hold a node for: the stand-ins it builds, plus every id a surviving node
    * claim or minted entity names (#228).
    *
@@ -436,6 +381,11 @@ public record Equivalences(
       }
       switch (assertion) {
         case NodeAssertion claim -> held.add(claim.qid());
+        // Unreachable from retractedStandIns' own question: a minted id is always the two-leading-
+        // zero local shape (ADR 59) and a merge's canonicalQid() is always the eleven-digit
+        // canonical shape (ADR 62), so this arm can never be what keeps retractedStandIns' held set
+        // containing a canonical id. Kept for nodesTheFoldHolds' broader question - does an
+        // ordinary, never-merged, minted entity have a node - which BothFoldsAgreeTest pins.
         case LocalEntity minted -> held.add(minted.qid());
         // An edge, a merge and a retraction all claim no node. Named explicitly rather than
         // through a default, matching Retractions.survives and Equivalences.in: a default arm
@@ -450,6 +400,61 @@ public record Equivalences(
     return held;
   }
 
+  /**
+   * The canonical ids a retraction emptied — a merge gave each of them its only node, a retraction
+   * of that merge's local side took the merge away, and nothing else holds a node for the id
+   * (#224).
+   *
+   * <p><b>Why an edge naming one does not project, and why that is ADR 44 rather than a delete.</b>
+   * {@code OwnRun} offers a merge's canonical id as a claimable endpoint the moment its stand-in
+   * exists, so the owner can claim an edge against it. Retracting the local id afterwards drops the
+   * merge — {@link Retractions#survives} drops a {@link SameAs} on the edge rule, either side — and
+   * with it the only node that id ever had. The edge survives on its own terms, names an endpoint
+   * no fold holds, and {@code TinkerGraphStore.record} refuses it: {@code replay failed at sequence
+   * … assertion references unknown entity … - upsert the node first}, at every boot, on rows ADR 19
+   * forbids deleting. The claim was one the owner made about the entity he has just retracted,
+   * written under the name his own merge gave it, so it goes with it. Nothing is deleted: the log
+   * keeps every row, and this changes only what the fold makes of them.
+   *
+   * <p><b>Position-blind, and that is the one place this rule does NOT follow ADR 44.</b> A
+   * retraction reaches backwards only, by position in the log — {@link Retractions#survives} is
+   * asked about a row's index for exactly that reason — but this set is whole-log and {@link
+   * #foldEndpoints} takes no index, so an edge claimed <em>after</em> the retraction that names an
+   * emptied canonical id is withdrawn just the same. That is deliberate. A backwards-only rule
+   * would leave the log {@code [node, minted, merge, retract, edge-naming-the-canonical-id]} naming
+   * an endpoint no fold holds, and {@code TinkerGraphStore.record} would refuse it at every boot —
+   * the very break this rule exists to close, re-created by the ordering rather than fixed. What is
+   * emptied is emptied for the whole projection, because a node either exists in the folded graph
+   * or it does not, and no edge may name one that does not. {@code
+   * RetractedStandInTakesItsEdgesTest} pins both folds on that log; the design spec's 2026-09-03
+   * amendment records the finding and the ruling.
+   *
+   * <p><b>Only the local side counts</b>, which is why {@link Retractions#reaches} exists. A merge
+   * dropped because its CANONICAL side was retracted leaves nothing to repair here: that id is
+   * retracted outright, and {@link Retractions#survives} has already dropped every edge naming it.
+   *
+   * <p><b>A canonical id {@link #nodesTheFoldHolds} already holds on its own account is not
+   * emptied.</b> The developer guide's promise that "what a source claimed about the canonical id
+   * is untouched" is exactly {@link #nodesTheFoldHolds}'s node-claim arm, and the merge was never
+   * the only thing holding such an id up. Without this, retracting one thing the owner minted would
+   * strip the edges off a real Wikidata entity's whole expansion.
+   *
+   * <p><b>Nor is one a surviving merge still stands in for.</b> Two local ids merged onto one
+   * canonical id and only one of them retracted leaves the other merge's stand-in exactly where it
+   * was, so the id has a node and the edges naming it have an endpoint. {@link #standIns} is the
+   * one place that answers "which canonical ids have a stand-in", and this reads it rather than
+   * deciding it again.
+   *
+   * <p><b>No re-derivation parameter, unlike {@link #standIns} and {@link #localsOfMerges}.</b>
+   * This reads which canonical ids have a stand-in, never what kind that node is, and the key set
+   * of {@link #standIns} cannot depend on the re-derivation: {@link #localsOfMerges} decides which
+   * merges have a local side by survival alone and {@link #stands} reads no kind, so the operator
+   * only ever sets a value this method discards. It is checked rather than asserted — {@code
+   * EquivalencesTest.shouldNameTheSameCanonicalIdsWhateverKindTheFoldDerives} compares the key sets
+   * under two re-derivations that disagree about every kind. The parameter is left off so that
+   * {@code retract} — which needs this set for its report and must not learn Wikidata's vocabulary
+   * (ADR 44: "a retraction is nobody's vocabulary") — can call it.
+   */
   public static Set<String> retractedStandIns(List<LoggedAssertion> log) {
     Objects.requireNonNull(log, "log");
     Retractions retractions = Retractions.in(log);
