@@ -81,6 +81,7 @@ public final class CensusReport {
     body.add(section("edges"));
     body.add(count("total", census.edges().total()));
     body.add(count("dangling", census.edges().dangling()));
+    body.add(count("withdrawn", census.edges().withdrawn()));
     census.edges().bySource().forEach((source, n) -> body.add(count("backed by " + source, n)));
     census.edges().byType().forEach((type, n) -> body.add(count("of type " + type, n)));
     census

@@ -28,13 +28,20 @@ import java.util.TreeMap;
  * type codes off the log, and a corroboration count — so ascending is the only order available and
  * it is a real one. What the report shows is pinned by {@code containsExactly} in {@code
  * EdgeCensusTest}, not by {@code CensusReport}, which walks these maps and adds nothing.
+ *
+ * <p><b>{@code withdrawn} is read off {@link LogProjection#withdrawnEdges()}, not recomputed.</b>
+ * {@code LogProjection} already counts, while it folds, the edges a retraction withdrew by naming a
+ * canonical id it emptied (#224) — a sibling of {@code dangling}, and this class asks it the same
+ * way it asks for {@code dangling}, rather than re-deriving "what withdrawal means" a second time
+ * over {@code Equivalences}.
  */
 public record EdgeCensus(
     Map<String, Integer> byType,
     Map<String, Integer> bySource,
     Map<Integer, Integer> byCorroboration,
     int total,
-    int dangling) {
+    int dangling,
+    int withdrawn) {
 
   public EdgeCensus {
     byType = Collections.unmodifiableMap(new TreeMap<>(Objects.requireNonNull(byType, "byType")));
@@ -59,6 +66,11 @@ public record EdgeCensus(
       byCorroboration.merge(edge.corroboration(), 1, Integer::sum);
     }
     return new EdgeCensus(
-        byType, bySource, byCorroboration, projection.edges().size(), projection.danglingEdges());
+        byType,
+        bySource,
+        byCorroboration,
+        projection.edges().size(),
+        projection.danglingEdges(),
+        projection.withdrawnEdges());
   }
 }

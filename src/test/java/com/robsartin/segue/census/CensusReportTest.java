@@ -68,6 +68,7 @@ class CensusReportTest {
             edges
               total                                  11
               dangling                                1
+              withdrawn                               0
               backed by also-invented                 1
               backed by invented                      6
               backed by llm:invented                  1
