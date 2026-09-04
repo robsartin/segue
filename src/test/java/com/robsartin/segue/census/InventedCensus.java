@@ -99,7 +99,6 @@ final class InventedCensus {
 
   static final String WREN_LABEL = "Wren Alderman";
   static final String LEDGER_LABEL = "A Ledger Nobody Printed";
-  static final String NEIGHBOUR_NOTE = "an invented note naming Q0900205, unlike anything real";
 
   private static final Instant WHEN = Instant.parse("2026-01-01T00:00:00Z");
 
@@ -156,6 +155,8 @@ final class InventedCensus {
   /**
    * The fixture log, thirty rows in this exact order. Row numbers are cited by every hand-counted
    * expectation in this package, so an insertion renumbers them all.
+   *
+   * <p>Rows are 1-indexed from the first {@code node(} line below — the busiest node is row 1.
    */
   static List<LoggedAssertion> log() {
     return List.of(

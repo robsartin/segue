@@ -10,8 +10,8 @@ import org.junit.jupiter.api.Test;
 /**
  * Counted by hand off {@code InventedCensus.log()}.
  *
- * <p>Eleven folded edges. Rows 7 and 8 are one claim from two sources and collapse into one edge
- * with two provenances; row 11 does not survive the retraction at row 29; row 17 names an endpoint
+ * <p>Eleven folded edges. Rows 8 and 9 are one claim from two sources and collapse into one edge
+ * with two provenances; row 12 does not survive the retraction at row 30; row 18 names an endpoint
  * nothing claims and is the fixture's one dangling edge; the three owner edges fold onto the
  * canonical ids their local sides were merged onto, except the one claimed against a canonical id
  * directly.

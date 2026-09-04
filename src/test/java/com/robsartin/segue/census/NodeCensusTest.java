@@ -11,9 +11,9 @@ import org.junit.jupiter.api.Test;
 /**
  * Counted by hand off {@code InventedCensus.log()}.
  *
- * <p>The fold holds thirteen nodes: seven the sources claimed, minus the one row 29 retracts, plus
+ * <p>The fold holds thirteen nodes: seven the sources claimed, minus the one row 30 retracts, plus
  * the three the owner minted, plus a stand-in for each of the four merges that stand — the merge at
- * row 27 is superseded with nothing naming its canonical id, so it names no stand-in at all.
+ * row 28 is superseded with nothing naming its canonical id, so it names no stand-in at all.
  *
  * <p>{@code NEIGHBOUR} is claimed {@code PERSON} and states a class no whitelist knows, so both
  * folds re-derive it to {@code CONCEPT} (ADR 42). That is the one kind in this fixture that is not

@@ -10,7 +10,7 @@ import java.util.Objects;
 /**
  * How many folded edges name each node — one home, because two sections read it.
  *
- * <p>{@link DegreeCensus} reports the quantiles and {@link ClaimCensus} asks which stand-ins ended
+ * <p>{@code DegreeCensus} reports the quantiles and {@code ClaimCensus} asks which stand-ins ended
  * with no edge, and a second incidence count would be free to disagree with the first about what a
  * degree is.
  *
