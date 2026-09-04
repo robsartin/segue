@@ -34,6 +34,8 @@ import org.slf4j.LoggerFactory;
  * {@code RatingsCli} already use for their notes. {@code RatingsCli} writes a file because ADR 33
  * keeps affinity out of every log line and its output is the whole taste layer; this output is
  * counts alone, so there is nothing a log line may not carry and nothing left on disk afterwards.
+ * <b>Nor does it say which database it counted</b> — the line that named the path went when the run
+ * was wired in, so nothing this tool emits locates the owner's file.
  */
 public final class CensusCli {
 

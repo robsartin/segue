@@ -5,15 +5,27 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.ToIntFunction;
 
 /**
  * A census in, one aligned block of text out. A pure function, and the only class here that decides
  * what a person sees.
  *
- * <p><b>It orders as well as renders</b>, on {@code RatingsTable}'s reason: a writer that announced
- * an ordering somebody else applied could be made to lie by one refactor. Kinds come out in
- * declaration order, scores 1 to 5 always, types and source ids sorted, corroboration ascending —
- * so two runs over one unchanged log produce byte-identical text, which is ADR 43's contract.
+ * <p><b>It renders and does not order.</b> The order is the sections' own, and each section pins it
+ * with {@code containsExactly} in its own test: kinds come out in {@code NodeKind} declaration
+ * order because {@link NodeCensus} counts into an {@code EnumMap} ({@code NodeCensusTest}), and
+ * edge types, source ids, corroboration counts and rating scores come out ascending because {@link
+ * EdgeCensus} and {@link TasteCensus} count into {@code TreeMap}s ({@code EdgeCensusTest}, {@code
+ * TasteCensusTest}). This method walks those maps in iteration order and adds nothing of its own,
+ * so two runs over one unchanged log produce byte-identical text — ADR 43's contract, held where
+ * the counting happens rather than announced a second time here.
+ *
+ * <p><b>The column is derived from the census, twice over.</b> Labels are padded to the widest
+ * counted label, then a two-space gap, then the count right-aligned in the width of the widest
+ * count — so a six-figure {@code log rows} moves the whole column rather than jutting out of it,
+ * and no number is ever a copy of a constant somebody has to keep. {@code CensusReportTest} applies
+ * this same rule by hand to the invented fixture, which is what makes its pinned block an
+ * expectation rather than a transcript.
  *
  * <p><b>Every label is a literal in this file.</b> Nothing here interpolates a value read from the
  * data except an integer, which is the property that makes the whole output safe to paste and the
@@ -36,12 +48,8 @@ public final class CensusReport {
   public static List<String> lines(Census census) {
     Objects.requireNonNull(census, "census");
     List<Line> body = body(census);
-    int width =
-        body.stream()
-            .filter(line -> line.count() != null)
-            .mapToInt(line -> line.label().length())
-            .max()
-            .orElse(0);
+    int labelWidth = widest(body, line -> line.label().length());
+    int countWidth = widest(body, line -> String.valueOf(line.count()).length());
     List<String> rendered = new ArrayList<>();
     rendered.add(HEADER);
     for (Line line : body) {
@@ -49,7 +57,13 @@ public final class CensusReport {
         rendered.add("");
         rendered.add(line.label());
       } else {
-        rendered.add(line.label() + " ".repeat(width - line.label().length()) + GAP + line.count());
+        String value = String.valueOf(line.count());
+        rendered.add(
+            line.label()
+                + " ".repeat(labelWidth - line.label().length())
+                + GAP
+                + " ".repeat(countWidth - value.length())
+                + value);
       }
     }
     return List.copyOf(rendered);
@@ -110,6 +124,11 @@ public final class CensusReport {
     body.add(count("of those, carrying classes", census.bridge().entitiesReachedWithClasses()));
 
     return body;
+  }
+
+  /** The widest of one measurement over the counted lines; section headings are not padded. */
+  private static int widest(List<Line> body, ToIntFunction<Line> measure) {
+    return body.stream().filter(line -> line.count() != null).mapToInt(measure).max().orElse(0);
   }
 
   private static Line section(String name) {

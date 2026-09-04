@@ -13,9 +13,10 @@ import org.junit.jupiter.api.Test;
  * the labels, the order and the alignment — the part a person reads, and the part no per-number
  * test can see.
  *
- * <p><b>The column is arithmetic, not a copy of the output.</b> The widest counted label is {@code
- * " merges superseded but edge-referenced"} — 37 characters and the two-space indent, 39 — so every
- * value starts at column 42: the label padded to 39, then the two-space gap.
+ * <p><b>The column is arithmetic, not a copy of the output.</b> It is {@link CensusReport}'s own
+ * rule — stated there, and not restated here — applied by hand to this fixture's widest label and
+ * widest count. If a run disagrees on the padding then the padding is the finding; if it disagrees
+ * on a number then the number is, and the six section tests say which.
  *
  * <p><b>The three taste lines below the scores are not a partition.</b> A local id, a stand-in and
  * a retracted id are independent properties of the rated entity — nothing here proves them
@@ -57,60 +58,60 @@ class CensusReportTest {
 
             nodes
               total                                  13
-              PERSON                                 3
-              GROUP                                  1
-              WORK                                   8
-              PLACE                                  0
-              EVENT                                  0
-              CONCEPT                                1
+              PERSON                                  3
+              GROUP                                   1
+              WORK                                    8
+              PLACE                                   0
+              EVENT                                   0
+              CONCEPT                                 1
 
             edges
               total                                  11
-              dangling                               1
-              backed by also-invented                1
-              backed by invented                     6
-              backed by llm:invented                 1
-              backed by musicbrainz                  1
-              backed by owner                        3
-              of type INFLUENCED_BY                  6
-              of type MEMBER_OF                      5
-              corroborated by 0                      3
-              corroborated by 1                      7
-              corroborated by 2                      1
+              dangling                                1
+              backed by also-invented                 1
+              backed by invented                      6
+              backed by llm:invented                  1
+              backed by musicbrainz                   1
+              backed by owner                         3
+              of type INFLUENCED_BY                   6
+              of type MEMBER_OF                       5
+              corroborated by 0                       3
+              corroborated by 1                       7
+              corroborated by 2                       1
 
             claims
               log rows                               30
-              retractions                            1
-              rows they removed                      2
-              entities they name                     1
-              local entities minted                  3
-              merges standing                        3
-              merges superseded                      2
-              merges superseded but edge-referenced  1
-              stand-ins                              4
-              stand-ins with no edge                 1
+              retractions                             1
+              rows they removed                       2
+              entities they name                      1
+              local entities minted                   3
+              merges standing                         3
+              merges superseded                       2
+              merges superseded but edge-referenced   1
+              stand-ins                               4
+              stand-ins with no edge                  1
 
             taste
-              ratings                                8
-              rated 1                                1
-              rated 2                                2
-              rated 3                                1
-              rated 4                                2
-              rated 5                                2
-              on a local id                          2
-              on a stand-in                          1
-              on a retracted id                      1
+              ratings                                 8
+              rated 1                                 1
+              rated 2                                 2
+              rated 3                                 1
+              rated 4                                 2
+              rated 5                                 2
+              on a local id                           2
+              on a stand-in                           1
+              on a retracted id                       1
 
             degree
-              floor                                  5
-              p50                                    1
-              p90                                    5
-              p99                                    6
-              max                                    6
+              floor                                   5
+              p50                                     1
+              p90                                     5
+              p99                                     6
+              max                                     6
               at or below the floor                  12
 
             bridge
-              entities MusicBrainz reached           2
-              of those, carrying classes             1""");
+              entities MusicBrainz reached            2
+              of those, carrying classes              1""");
   }
 }

@@ -63,6 +63,9 @@ class CensusRunTest {
       assertThat(census.nodes().total())
           .as("the fixture's thirteen nodes, read back off the database rather than a fake")
           .isEqualTo(13);
+      assertThat(census.taste().total())
+          .as("the eight invented ratings, read back off the affinity table rather than a fake")
+          .isEqualTo(8);
       assertThat(emitted).isEqualTo(CensusReport.lines(census));
     }
   }

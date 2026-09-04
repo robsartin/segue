@@ -37,7 +37,7 @@ public record Census(
     Objects.requireNonNull(bridge, "bridge");
   }
 
-  /** Fold the log once, count it six ways. */
+  /** Fold once, read twice, count six ways. */
   public static Census of(AssertionLog log, AffinityStore ratings) {
     Objects.requireNonNull(log, "log");
     Objects.requireNonNull(ratings, "ratings");
