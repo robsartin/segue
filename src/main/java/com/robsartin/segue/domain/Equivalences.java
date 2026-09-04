@@ -184,11 +184,43 @@ public record Equivalences(
    * equivalences being computed would answer a different question — "does an edge exist against
    * whatever it resolves to today", which is {@link #canonicalByLocal}'s own question, not this
    * one.
+   *
+   * <p><b>Only the edges the fold KEEPS count, which is what makes this a fixed point</b> (#228).
+   * An edge the fold withdraws claims nothing in the projection, so it cannot be what keeps a
+   * superseded merge's stand-in alive - before this, a log holding a correction and an unrelated
+   * retraction drew a node with no edges, under the id the owner had corrected himself away from,
+   * carrying his withdrawn working title. Withdrawal depends on which canonical ids are emptied and
+   * that depends back on this set, so the two are computed together: see {@link
+   * #emptiedCanonicalIds} for why the loop terminates.
    */
   public static Equivalences in(List<LoggedAssertion> log) {
     Objects.requireNonNull(log, "log");
+    return new Equivalences(mergesIn(log), referencedEndpoints(log, emptiedCanonicalIds(log)));
+  }
+
+  /** Each merged local id and the id it turned out to be, last surviving claim wins. */
+  private static Map<String, String> mergesIn(List<LoggedAssertion> log) {
     Retractions retractions = Retractions.in(log);
     Map<String, String> byLocal = new LinkedHashMap<>();
+    for (int i = 0; i < log.size(); i++) {
+      LoggedAssertion assertion = log.get(i);
+      if (retractions.survives(i, assertion) && assertion instanceof SameAs merge) {
+        byLocal.put(merge.localQid(), merge.canonicalQid());
+      }
+    }
+    return byLocal;
+  }
+
+  /**
+   * Every id an edge the fold KEEPS names, read raw off the log (#221, narrowed by #228).
+   *
+   * @param emptied the canonical ids a retraction emptied, which is what decides whether an edge is
+   *     withdrawn. Passed in rather than read, because this method is one step of the fixed point
+   *     {@link #emptiedCanonicalIds} computes and cannot ask for the finished answer
+   */
+  private static Set<String> referencedEndpoints(List<LoggedAssertion> log, Set<String> emptied) {
+    Retractions retractions = Retractions.in(log);
+    Map<String, String> byLocal = mergesIn(log);
     Set<String> referenced = new LinkedHashSet<>();
     for (int i = 0; i < log.size(); i++) {
       LoggedAssertion assertion = log.get(i);
@@ -196,26 +228,39 @@ public record Equivalences(
         continue;
       }
       switch (assertion) {
-        case SameAs merge -> byLocal.put(merge.localQid(), merge.canonicalQid());
-        case AssertionRecord edge -> {
-          referenced.add(edge.fromQid());
-          referenced.add(edge.toQid());
-        }
-        case OwnerEdge edge -> {
-          referenced.add(edge.fromQid());
-          referenced.add(edge.toQid());
-        }
-        // A node claim or a retraction names no relationship, and this set is only ever asked
-        // about a canonical id's edges. Named explicitly, matching Retractions.survives and
-        // IngestService.apply, rather than through a default: a default arm would let a
-        // seventh LoggedAssertion that DOES carry endpoints compile silently into "names
-        // nothing" and reproduce the fix-round-1 defect this method exists to close.
+        case AssertionRecord edge ->
+            reference(referenced, byLocal, emptied, edge.fromQid(), edge.toQid());
+        case OwnerEdge edge ->
+            reference(referenced, byLocal, emptied, edge.fromQid(), edge.toQid());
+        // A node claim, a merge or a retraction names no relationship, and this set is only ever
+        // asked about a canonical id's edges. Named explicitly, matching Retractions.survives and
+        // IngestService.apply, rather than through a default: a default arm would let a seventh
+        // LoggedAssertion that DOES carry endpoints compile silently into "names nothing" and
+        // reproduce the fix-round-1 defect this set exists to close.
         case NodeAssertion ignored -> {}
         case LocalEntity ignored -> {}
+        case SameAs ignored -> {}
         case Retraction ignored -> {}
       }
     }
-    return new Equivalences(byLocal, referenced);
+    return referenced;
+  }
+
+  /**
+   * One edge's two endpoints, unless the fold withdraws the edge and it therefore names nothing.
+   */
+  private static void reference(
+      Set<String> referenced,
+      Map<String, String> byLocal,
+      Set<String> emptied,
+      String from,
+      String to) {
+    if (emptied.contains(byLocal.getOrDefault(from, from))
+        || emptied.contains(byLocal.getOrDefault(to, to))) {
+      return;
+    }
+    referenced.add(from);
+    referenced.add(to);
   }
 
   /**
@@ -445,6 +490,10 @@ public record Equivalences(
    * one place that answers "which canonical ids have a stand-in", and this reads it rather than
    * deciding it again.
    *
+   * <p><b>A stand-in kept alive only by an edge THIS set withdraws does not count as holding
+   * one</b> (#228). That is the circularity {@link #emptiedCanonicalIds} resolves, and it is the
+   * reason this method delegates rather than computing the answer in one pass as it used to.
+   *
    * <p><b>No re-derivation parameter, unlike {@link #standIns} and {@link #localsOfMerges}.</b>
    * This reads which canonical ids have a stand-in, never what kind that node is, and the key set
    * of {@link #standIns} cannot depend on the re-derivation: {@link #localsOfMerges} decides which
@@ -457,17 +506,67 @@ public record Equivalences(
    */
   public static Set<String> retractedStandIns(List<LoggedAssertion> log) {
     Objects.requireNonNull(log, "log");
+    return emptiedCanonicalIds(log);
+  }
+
+  /**
+   * The emptied set as a least fixed point, because the rule is circular and the circle is real
+   * (#228).
+   *
+   * <p>Which edges the fold withdraws depends on which canonical ids are emptied; which are emptied
+   * depends on which stand-ins survive; which survive depends - since #221 - on which edges name
+   * them. Dropping a withdrawn edge can therefore retire a stand-in, which can empty a second
+   * canonical id, which can withdraw a second edge.
+   *
+   * <p><b>It terminates, and the argument is monotonicity rather than a bound on the depth.</b> A
+   * larger emptied set withdraws at least as many edges, so it references at most as many ids,
+   * stands at most as many merges, holds at most as many nodes and empties at least as many
+   * canonical ids. So the chain from the empty set only grows, and a log has finitely many ids.
+   *
+   * <p><b>One round for a log with no retractions</b> - every log the owner's real graph has held -
+   * because the first step returns the empty set it was given.
+   */
+  private static Set<String> emptiedCanonicalIds(List<LoggedAssertion> log) {
+    Set<String> emptied = Set.of();
+    while (true) {
+      Set<String> next = emptiedGiven(log, emptied);
+      if (next.equals(emptied)) {
+        return Collections.unmodifiableSet(next);
+      }
+      emptied = next;
+    }
+  }
+
+  /** One step of {@link #emptiedCanonicalIds}: what is emptied if {@code emptied} already is. */
+  private static Set<String> emptiedGiven(List<LoggedAssertion> log, Set<String> emptied) {
     Retractions retractions = Retractions.in(log);
-    Set<String> held = nodesHeld(log, standIns(log, UnaryOperator.identity()).keySet());
-    Set<String> emptied = new LinkedHashSet<>();
+    Set<String> held = nodesHeld(log, standInCanonicalIds(log, referencedEndpoints(log, emptied)));
+    Set<String> next = new LinkedHashSet<>();
     for (int i = 0; i < log.size(); i++) {
       if (log.get(i) instanceof SameAs merge
           && retractions.reaches(i, merge.localQid())
           && !held.contains(merge.canonicalQid())) {
-        emptied.add(merge.canonicalQid());
+        next.add(merge.canonicalQid());
       }
     }
-    return Collections.unmodifiableSet(emptied);
+    return next;
+  }
+
+  /**
+   * {@link #standIns}' key set, over a referenced set the caller has decided - the same {@link
+   * #stands} question, asked without building a node, so that {@link #emptiedCanonicalIds} can ask
+   * it before {@link #in} has an answer to give.
+   */
+  private static Set<String> standInCanonicalIds(
+      List<LoggedAssertion> log, Set<String> referenced) {
+    Equivalences merges = new Equivalences(mergesIn(log), referenced);
+    Set<String> ids = new LinkedHashSet<>();
+    for (Integer at : localsOfMerges(log, UnaryOperator.identity()).keySet()) {
+      if (log.get(at) instanceof SameAs merge && merges.stands(merge)) {
+        ids.add(merge.canonicalQid());
+      }
+    }
+    return ids;
   }
 
   /**

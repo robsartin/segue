@@ -95,6 +95,13 @@ final class InventedGraph {
   static final String FORFEIT = "Q10000900112";
 
   /**
+   * An eighth canonical id: the one {@link #SLIP} was merged onto before the owner retracted it, so
+   * an edge naming this id is withdrawn by the fold while every row of it still survives (#228).
+   * ADR 62's eleven-digit shape, for the reason {@link #KETTLES} takes it.
+   */
+  static final String SEVERED = "Q10000900113";
+
+  /**
    * Two ids the owner minted. Two leading zeros, which Wikibase's item-id grammar can never
    * allocate (ADR 58, ADR 59) - so these are deliberately not from the {@code Q900xxx} family, and
    * issue #171 does not reach them.
@@ -152,6 +159,14 @@ final class InventedGraph {
    * for {@link #ALMANAC}'s reason.
    */
   static final String LAPSE = "Q008";
+
+  /**
+   * A ninth id the owner minted, and the one issue #228's third defect turns on: merged onto {@link
+   * #SEVERED} and then retracted, so that the edge naming {@code SEVERED} is WITHDRAWN rather than
+   * retracted - the distinction the surviving-edge widening could not see. Two leading zeros, for
+   * {@link #ALMANAC}'s reason.
+   */
+  static final String SLIP = "Q009";
 
   private static final Instant WHEN = Instant.parse("2026-01-01T00:00:00Z");
 

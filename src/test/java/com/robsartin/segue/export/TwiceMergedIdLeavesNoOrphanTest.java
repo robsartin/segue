@@ -2,6 +2,8 @@ package com.robsartin.segue.export;
 
 import static com.robsartin.segue.export.InventedGraph.CORRECTED;
 import static com.robsartin.segue.export.InventedGraph.MISHEARD;
+import static com.robsartin.segue.export.InventedGraph.SEVERED;
+import static com.robsartin.segue.export.InventedGraph.SLIP;
 import static com.robsartin.segue.export.InventedGraph.WATERMARK;
 import static com.robsartin.segue.export.InventedGraph.WREN;
 import static com.robsartin.segue.export.InventedGraph.edge;
@@ -248,6 +250,64 @@ class TwiceMergedIdLeavesNoOrphanTest {
             "the WREN -> MISHEARD edge no longer survives, so nothing keeps MISHEARD's stand-in"
                 + " alive and the last-wins rule alone decides it")
         .containsOnlyKeys(WATERMARK);
+  }
+
+  /**
+   * The surviving-edge fixture again, with the naming edge WITHDRAWN rather than retracted (#228).
+   * {@code MISHEARD}'s stand-in is superseded by the correction onto {@code WATERMARK} and is kept
+   * alive only by the {@code MISHEARD -> SEVERED} edge; that edge names a canonical id a retraction
+   * emptied, so the fold withdraws it and holds it in neither projection. Every row of the edge
+   * still <em>survives</em> — neither of its endpoints is retracted — which is exactly why {@code
+   * referencedEndpoints}, built from the surviving rows, went on counting it.
+   *
+   * <p>Every row here is one the supported flow writes: a second merge is a correction {@code
+   * OwnCli} says rather than refuses, {@code ownClaim assert} offers both canonical ids the moment
+   * their stand-ins exist, and {@code retractEntity} retracts a local id.
+   */
+  private static FakeAssertionLog correctedLogWithAWithdrawnSurvivingEdge() {
+    return new FakeAssertionLog()
+        .with(
+            minted(CORRECTED, NodeKind.WORK, "A Self-Pressed Record"),
+            merged(CORRECTED, MISHEARD),
+            minted(SLIP, NodeKind.WORK, "a working title he took back"),
+            merged(SLIP, SEVERED),
+            owned(MISHEARD, SEVERED, "INFLUENCED_BY"),
+            merged(CORRECTED, WATERMARK),
+            retract(SLIP));
+  }
+
+  @Test
+  @DisplayName("a withdrawn edge keeps no superseded stand-in alive")
+  void shouldKeepNoSupersededStandInAliveWhenTheOnlyNamingEdgeIsWithdrawn() {
+    FakeAssertionLog log = correctedLogWithAWithdrawnSurvivingEdge();
+
+    assertThat(Equivalences.standIns(log.readAll(), KindMapper::rederive))
+        .as(
+            "the MISHEARD -> SEVERED edge survives every retraction and the fold withdraws it all"
+                + " the same, so it keeps nothing alive - it read [MISHEARD, WATERMARK] before"
+                + " this fix (#228)")
+        .containsOnlyKeys(WATERMARK);
+
+    LogProjection folded = LogProjection.of(log);
+    assertThat(folded.nodes())
+        .as("so a full export draws no node with no edges under the id he corrected away from")
+        .doesNotContainKey(MISHEARD);
+    assertThat(folded.edges()).isEmpty();
+    assertThat(folded.withdrawnEdges())
+        .as("the edge is still counted as withdrawn, which is what says it was ever there")
+        .isEqualTo(1);
+    assertThat(folded.danglingEdges()).isZero();
+
+    try (TinkerGraphStore replayed = new TinkerGraphStore()) {
+      GraphProjector.project(log, replayed, IdentityMerge.NONE);
+
+      assertThat(replayed.node(MISHEARD))
+          .as("and the boot replay agrees, which is the half a fold-only fix would not move")
+          .isEmpty();
+      assertThat(replayed.node(WATERMARK))
+          .as("the merge that stands today keeps its node, so this is not an empty graph agreeing")
+          .isPresent();
+    }
   }
 
   @Test

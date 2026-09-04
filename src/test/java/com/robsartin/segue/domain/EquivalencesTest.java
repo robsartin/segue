@@ -17,6 +17,13 @@ class EquivalencesTest {
   private static final String OTHER_MINTED = "Q00900043";
 
   /**
+   * A third minted id, for the one fixture that needs three: the second-order chain below has one
+   * local retracted under each of the two canonical ids it empties, and a third standing in for the
+   * superseded merge between them. Two leading zeros, like its two siblings above (ADR 59).
+   */
+  private static final String THIRD_MINTED = "Q00900044";
+
+  /**
    * The two shapes this file needs, and they are not the same one. A merge's canonical side takes
    * ADR 62's eleven digits, which {@code SameAs} admits there and nowhere else; {@code NEIGHBOUR}
    * is only the far end of an edge, so it is an ordinary stand-in and takes ADR 58's single leading
@@ -25,6 +32,9 @@ class EquivalencesTest {
   private static final String CANONICAL = "Q10000000900";
 
   private static final String OTHER_CANONICAL = "Q10000000901";
+
+  /** A third canonical id, for the second-order chain below. ADR 62's eleven digits, as above. */
+  private static final String THIRD_CANONICAL = "Q10000000902";
 
   private static final String NEIGHBOUR = "Q0902";
   private static final Instant WHEN = Instant.parse("2026-08-31T09:00:00Z");
@@ -531,6 +541,34 @@ class EquivalencesTest {
             new Retraction(MINTED, "the mint was a mistake", WHEN));
 
     assertThat(Equivalences.retractedStandIns(log)).isEmpty();
+  }
+
+  @Test
+  @DisplayName("emptying one canonical id empties a second whose only edge that withdrew")
+  void shouldEmptyASecondCanonicalIdWhenWithdrawingItsOnlyEdgeRetiredItsStandIn() {
+    // The second-order chain Equivalences.emptiedCanonicalIds loops for (#228), written out as a
+    // log: CANONICAL is emptied outright, which withdraws the only edge naming OTHER_CANONICAL,
+    // which retires the superseded stand-in that was the only node OTHER_CANONICAL had, which
+    // empties OTHER_CANONICAL in turn. One round of the step answers [CANONICAL] and stops; it
+    // takes the fixed point to reach the second id.
+    List<LoggedAssertion> log =
+        List.of(
+            LocalEntity.minted(MINTED, NodeKind.WORK, "The Salt Almanac", WHEN),
+            SameAs.declared(MINTED, CANONICAL, WHEN),
+            LocalEntity.minted(OTHER_MINTED, NodeKind.WORK, "the other one", WHEN),
+            SameAs.declared(OTHER_MINTED, OTHER_CANONICAL, WHEN),
+            OwnerEdge.claimed(CANONICAL, OTHER_CANONICAL, "INFLUENCED_BY", WHEN),
+            LocalEntity.minted(THIRD_MINTED, NodeKind.WORK, "the third", WHEN),
+            SameAs.declared(THIRD_MINTED, OTHER_CANONICAL, WHEN),
+            SameAs.declared(OTHER_MINTED, THIRD_CANONICAL, WHEN),
+            new Retraction(MINTED, "the mint was a mistake", WHEN),
+            new Retraction(THIRD_MINTED, "so was this one", WHEN));
+
+    assertThat(Equivalences.retractedStandIns(log))
+        .as(
+            "the chain has two links, and a set computed in one pass sees only the first - the"
+                + " edge that kept OTHER_CANONICAL's stand-in alive is one the fold withdraws")
+        .containsExactly(CANONICAL, OTHER_CANONICAL);
   }
 
   @Test
