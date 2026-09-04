@@ -338,6 +338,7 @@ graph TD
   census --> wikidata
   census ==>|"one fold, not two"| export
   evaluate --> domain
+  evaluate --> recommend
 ```
 
 **What the diagram shows.** Dependencies point downward and never back up. `domain` sits at the
