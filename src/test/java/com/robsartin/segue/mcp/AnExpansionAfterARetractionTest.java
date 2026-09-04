@@ -60,12 +60,24 @@ class AnExpansionAfterARetractionTest {
   /** The neighbour that is retracted while the running graph goes on holding its node. */
   private static final String KETTLES = "Q0900102";
 
+  /** A third, invented far-end id — only reachable through {@link #SEED_EDGE}, never a seed. */
+  private static final String SPARROW = "Q0900103";
+
   private static final Instant NOW = Instant.parse("2026-09-04T09:00:00Z");
   private static final Provenance WIKIDATA = new Provenance("wikidata", "S-1", NOW, 0.80);
   private static final AssertionRecord EDGE =
       new AssertionRecord(WREN, KETTLES, "INFLUENCED_BY", null, null, WIKIDATA);
   private static final NodeAssertion KETTLES_CLAIM =
       new NodeAssertion(KETTLES, NodeKind.PERSON, "Kettles Nye", WIKIDATA);
+
+  /**
+   * An edge naming the retracted {@link #KETTLES} at its own end, {@link #SPARROW} at the other.
+   */
+  private static final AssertionRecord SEED_EDGE =
+      new AssertionRecord(KETTLES, SPARROW, "INFLUENCED_BY", null, null, WIKIDATA);
+
+  private static final NodeAssertion SPARROW_CLAIM =
+      new NodeAssertion(SPARROW, NodeKind.PERSON, "Sparrow Vane", WIKIDATA);
 
   @Test
   @DisplayName(
@@ -94,6 +106,95 @@ class AnExpansionAfterARetractionTest {
           .doesNotThrowAnyException();
       assertThat(rebuilt.node(KETTLES)).isPresent();
       assertThat(rebuilt.edgeCount()).isOne();
+    }
+  }
+
+  /**
+   * The third reachability shape, and a DISTINCT path from the two above — those both expand {@link
+   * #WREN}, a seed that was never retracted, and vary only what the source says about {@link
+   * #KETTLES} as its <em>neighbour</em>. Here the call is {@code service.expandEntity(KETTLES,
+   * 10)}: the seed itself is the retracted entity.
+   *
+   * <p>{@code SegueService.expandEntity}'s seed check is {@code graph.node(qid)}, the same stale,
+   * unretracted graph the two tests above already rely on being stale — so it still finds a node
+   * for {@code KETTLES} and the call proceeds. {@link #SEED_EDGE} then names {@code KETTLES} at one
+   * end and the invented {@link #SPARROW} at the other, and {@code
+   * SegueService.neighborOf(assertion, KETTLES)} resolves the FAR end — {@code SPARROW} — for every
+   * edge this adapter can return, by construction: it returns {@code null} only when BOTH ends
+   * equal the seed, and otherwise always the end that is not the seed. {@code KETTLES} can
+   * therefore never be the {@code neighbor} variable {@code expandEntity}'s loop re-records
+   * identity for.
+   *
+   * <p><b>No {@link ExpandResult} shape repairs this, unlike the neighbour-expansion shape
+   * above.</b> There, volunteering the retracted id's own identity through {@code neighbors()} lets
+   * issue #55's unconditional re-record fire for it, because that id WAS the resolved {@code
+   * neighbor}. Here it cannot: whether or not {@code neighbors()} also carries a {@link
+   * NodeAssertion} for {@code KETTLES} itself, {@code described.get(neighbor)} looks it up keyed on
+   * {@code SPARROW}, never on {@code KETTLES} — the entry for {@code KETTLES} sits in the map
+   * unread. Both variants below are asserted to poison identically, which is the finding: the
+   * repair the neighbour case has is structurally unavailable to the seed case, not merely unused
+   * by this particular adapter.
+   *
+   * <p><b>Positive control (removed after use):</b> with the {@code IngestService.retract} call in
+   * {@link #expandTheRetractedSeedItself} skipped, {@code boot} succeeded for both variants —
+   * {@code assertThatThrownBy(() -> boot(db))} failed with {@code java.lang.AssertionError:
+   * Expecting code to raise a throwable.} — so the assertion below is not vacuous.
+   */
+  @Test
+  @DisplayName(
+      "an expansion of the retracted seed itself poisons the log whether or not the source"
+          + " volunteers the seed's own identity")
+  void shouldPoisonTheLogWhenTheExpandedSeedItselfWasRetracted(
+      @TempDir Path noSeedIdentityDir, @TempDir Path withSeedIdentityDir) {
+    Path noSeedIdentity = noSeedIdentityDir.resolve("segue.db");
+    expandTheRetractedSeedItself(
+        noSeedIdentity, new ExpandResult(List.of(SEED_EDGE), List.of(SPARROW_CLAIM), false, false));
+    assertThatThrownBy(() -> boot(noSeedIdentity))
+        .as(
+            "KETTLES is the seed, never the far end neighborOf resolves for this edge, so its"
+                + " identity is never re-recorded")
+        .hasMessageContaining("sequence 4");
+
+    Path withSeedIdentity = withSeedIdentityDir.resolve("segue.db");
+    expandTheRetractedSeedItself(
+        withSeedIdentity,
+        new ExpandResult(List.of(SEED_EDGE), List.of(SPARROW_CLAIM, KETTLES_CLAIM), false, false));
+    assertThatThrownBy(() -> boot(withSeedIdentity))
+        .as(
+            "volunteering the seed's own identity changes nothing: neighborOf(assertion, KETTLES)"
+                + " never returns KETTLES for this edge, so the described map's entry for KETTLES is"
+                + " never looked up")
+        .hasMessageContaining("sequence 4");
+  }
+
+  /**
+   * Retract {@link #KETTLES} exactly as {@link #expandAfterRetracting} does, then expand {@code
+   * KETTLES} ITSELF — the seed under expansion is the retracted entity, not a neighbour of it.
+   */
+  private static void expandTheRetractedSeedItself(Path db, ExpandResult result) {
+    try (AssertionLog log = new SqliteAssertionLog(db);
+        GraphStore graph = new TinkerGraphStore();
+        AffinityStore affinity = SqliteAffinityStore.inMemory()) {
+      IngestService ingest = new IngestService(log, graph, IdentityMerge.NONE);
+      ingest.record(KETTLES_CLAIM);
+      IngestService.retract(
+          log, new Retraction(KETTLES, "resolved to the wrong entity", NOW.plusSeconds(60)));
+
+      SegueService service =
+          new SegueService(
+              new NothingResolver(),
+              graph,
+              ingest,
+              new SourceAdapters(List.of(new FixedAdapter(result))),
+              affinity,
+              Clock.fixed(NOW, ZoneOffset.UTC));
+
+      ToolResult<SegueService.ExpansionSummary> expansion = service.expandEntity(KETTLES, 10);
+
+      assertThat(expansion.outcome()).isEqualTo(ToolResult.Outcome.OK);
+      assertThat(expansion.payload().edgesAdded())
+          .as("the edge was accepted, so the expansion reports nothing unusual")
+          .isOne();
     }
   }
 
