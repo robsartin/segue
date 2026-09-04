@@ -16,6 +16,17 @@ import java.util.Set;
  * given the merges alone — so the entities the owner rated down are in the pool and can be ranked.
  * That is the only way to answer "where would the ranking have offered them", which is a question
  * about a ranking ADR 50 makes it impossible to see.
+ *
+ * <p><b>Two rankings out of one sweep, and the second is a claim with a test behind it.</b> The
+ * rated-down entities are ranked over the whole pool — the ranking the owner would have been shown
+ * had ADR 50 never been written. The held-out entities are ranked over the pool with those removed,
+ * which reproduces the shipped ranking exactly, because excluding a candidate from the pool is
+ * purely subtractive: {@code CandidateSweep.over} skips an excluded qid before it accumulates any
+ * evidence, and no other candidate's evidence is built from it, so no survivor's score or relative
+ * order moves. That is what ADR 50 measured on the real graph, and {@code
+ * SuppressionIsPurelySubtractiveTest} pins it here against a real second sweep — without which this
+ * paragraph would be reasoning rather than a guarantee, and sixteen sweeps would have to be
+ * thirty-two.
  */
 public final class Scoring {
 
@@ -36,14 +47,17 @@ public final class Scoring {
     Objects.requireNonNull(heldOut, "heldOut");
     Objects.requireNonNull(negatives, "negatives");
 
-    List<Recommendation> ranked = Recommendations.rank(sweep.candidates(), top);
-    List<Integer> hitRanks = ranksOf(ranked, heldOut);
-    List<Integer> negativeRanks = ranksOf(ranked, negatives);
+    List<Recommendation> shipped =
+        sweep.candidates().stream().filter(in(negatives).negate()).toList();
+    List<Recommendation> shippedTop = Recommendations.rank(shipped, top);
+    List<Recommendation> withheldTop = Recommendations.rank(sweep.candidates(), top);
+    List<Integer> hitRanks = ranksOf(shippedTop, heldOut);
+    List<Integer> negativeRanks = ranksOf(withheldTop, negatives);
 
     return new Reading(
         setting,
-        sweep.candidates().size(),
-        (int) sweep.candidates().stream().filter(in(heldOut)).count(),
+        shipped.size(),
+        (int) shipped.stream().filter(in(heldOut)).count(),
         hitRanks.size(),
         mean(hitRanks),
         negativeRanks.size(),
