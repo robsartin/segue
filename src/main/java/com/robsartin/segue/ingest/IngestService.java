@@ -228,6 +228,13 @@ public final class IngestService {
   /**
    * Refuse an owner edge whose fold holds no node for one or both endpoints (#228 fix round 1).
    *
+   * <p><b>A self-loop names one entity, and is reported once.</b> {@code fromQid} and {@code toQid}
+   * can be the same id — {@link Equivalences#foldEndpoints} collapses a pair the fold brought
+   * together, but leaves a self-loop the claim itself wrote — and describing it twice would tell an
+   * operator to repair two things where there is one. #233's {@code requireBothEndpoints} guards
+   * the identical case on the sourced path, and {@code GraphProjector}'s boot diagnosis guards it
+   * on a row already written.
+   *
    * <p><b>Both endpoints are checked before anything is thrown.</b> The version this replaces threw
    * on the first missing endpoint and never looked at the second, so an edge naming two ids the
    * fold holds no node for was reported as if only one were wrong - and the message named no row,
@@ -246,7 +253,9 @@ public final class IngestService {
       OwnerEdge owned, AssertionRecord folded, Set<String> held) {
     List<String> missing = new ArrayList<>();
     describeIfMissing(owned.fromQid(), folded.fromQid(), held, missing);
-    describeIfMissing(owned.toQid(), folded.toQid(), held, missing);
+    if (!folded.toQid().equals(folded.fromQid())) {
+      describeIfMissing(owned.toQid(), folded.toQid(), held, missing);
+    }
     if (missing.isEmpty()) {
       return;
     }

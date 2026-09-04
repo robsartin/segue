@@ -444,4 +444,26 @@ class IngestServiceTest {
 
     assertThat(log.readAll()).hasSize(1);
   }
+
+  @Test
+  @DisplayName("should name one endpoint once when an owner self-loop names one unheld entity")
+  void shouldNameOneEndpointOnceWhenAnOwnerSelfLoopNamesOneUnheldEntity() {
+    // Folded in from task 5's re-review (#228): describeIfMissing was called for fromQid and for
+    // toQid without asking whether they were the same entity, so a self-loop was reported twice
+    // and read as two ids to repair. #233's requireBothEndpoints guards the identical case on the
+    // sourced path.
+    OwnerEdge selfLoop = OwnerEdge.claimed("Q0900301", "Q0900301", "MEMBER_OF", CLAIMED_AT);
+
+    assertThatThrownBy(() -> IngestService.claim(log, selfLoop))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("Q0900301")
+        .extracting(thrown -> occurrences(thrown.getMessage(), "mint or seed it first"))
+        .isEqualTo(1);
+
+    assertThat(log.readAll()).isEmpty();
+  }
+
+  private static int occurrences(String message, String needle) {
+    return message.split(java.util.regex.Pattern.quote(needle), -1).length - 1;
+  }
 }
