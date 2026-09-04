@@ -16,7 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.function.UnaryOperator;
+import java.util.Set;
 
 /**
  * The only thing in the system that writes.
@@ -163,15 +163,25 @@ public final class IngestService {
    * project. The log is append-only (ADR 19), so a row rejected at replay instead would be rejected
    * at every replay, forever.
    *
-   * <p><b>The two refusals ask narrower questions than {@code OwnRun} does, deliberately.</b>
-   * {@code OwnRun.declareMerge} requires a merge's local side to be something the owner MINTED,
-   * because pointing a merge at a sourced entity is a different claim that tool does not make; this
-   * asks the fold's own question - {@link Equivalences#localsOfMerges}, any surviving node claim -
-   * because spec ruling 2 requires the fold to accept a local-shaped id a source named. And {@code
-   * OwnRun.assertEdge} refuses an endpoint it does not OFFER, which includes a merged local id;
-   * this asks only whether the FOLDED endpoint has a node, because both folds resolve such an edge
-   * onto the canonical id and it boots. Two questions, two homes, and the friendlier message is the
-   * tool's.
+   * <p><b>Both refusals ask the fold's own question, {@link Equivalences#nodesTheFoldHolds}, and
+   * converge on it deliberately</b> (#228, folded in from Task 4's review). The merge arm used to
+   * call {@link Equivalences#localsOfMerges} directly instead - {@code nodesTheFoldHolds}'s own
+   * building block - so a second home for "does the fold hold a node for this id" existed here for
+   * exactly one caller, and {@code nodesTheFoldHolds}'s own javadoc naming this method as a reader
+   * was not yet true. Asking one method for both ids means the two arms cannot drift into
+   * disagreeing about what the fold holds, and it costs one read of {@code would} rather than two -
+   * {@code nodesTheFoldHolds} is a handful of linear passes over the log plus the merges' fixed
+   * point ({@link Equivalences#in}), and the only caller appends exactly one row per invocation, so
+   * that cost is paid once per own-tool command, not per claim.
+   *
+   * <p>{@code OwnRun.declareMerge} still asks its own narrower question - a merge's local side must
+   * be something the owner MINTED, because pointing a merge at a sourced entity is a different
+   * claim that tool does not make - and {@code OwnRun.assertEdge} still refuses an endpoint it does
+   * not OFFER, which includes a merged local id. Those stay narrower and friendlier for the
+   * interactive tool; this method is the one every owner claim passes regardless, {@code OwnRun}'s
+   * included, and asks only whether the fold would hold a node for the id it needs - because spec
+   * ruling 2 requires the fold to accept a local-shaped id a source named, and both folds resolve a
+   * merged endpoint onto its canonical id and boot.
    *
    * <p><b>It reads the whole log.</b> The only caller is a dev-side tool that has already read it
    * once in the same run and appends exactly one row, so this is a second read per invocation
@@ -181,9 +191,8 @@ public final class IngestService {
       List<LoggedAssertion> logged, LoggedAssertion claim) {
     List<LoggedAssertion> would = new ArrayList<>(logged);
     would.add(claim);
-    if (claim instanceof SameAs merge
-        && !Equivalences.localsOfMerges(would, UnaryOperator.identity())
-            .containsKey(would.size() - 1)) {
+    Set<String> held = Equivalences.nodesTheFoldHolds(would);
+    if (claim instanceof SameAs merge && !held.contains(merge.localQid())) {
       throw new IllegalArgumentException(
           "the projection holds no node for "
               + merge.localQid()
@@ -194,6 +203,38 @@ public final class IngestService {
               + merge.localQid()
               + " first, or merge an id the projection does hold");
     }
+    if (claim instanceof OwnerEdge owned) {
+      Equivalences.folding(would)
+          .foldEndpoints(owned.toAssertion())
+          .ifPresent(
+              folded -> {
+                refuseAnEndpointNothingHolds(owned.fromQid(), folded.fromQid(), held);
+                refuseAnEndpointNothingHolds(owned.toQid(), folded.toQid(), held);
+              });
+    }
+  }
+
+  /**
+   * Refuse one endpoint of an owner edge the fold would hold no node for (#228).
+   *
+   * <p>Asked of the FOLDED id rather than the claimed one, and both are named when they differ, so
+   * that an operator reading the refusal can see whether the id he typed is the id the projection
+   * complained about. A folded pair the fold yields nothing for is not asked at all - a withdrawn
+   * or collapsed edge applies nothing and the log boots, which is the only thing this guard is for.
+   */
+  private static void refuseAnEndpointNothingHolds(
+      String claimed, String folded, Set<String> held) {
+    if (held.contains(folded)) {
+      return;
+    }
+    throw new IllegalArgumentException(
+        "the projection holds no node for "
+            + folded
+            + (folded.equals(claimed)
+                ? ""
+                : " (claimed against " + claimed + ", which folds onto " + folded + ")")
+            + " — an owner edge naming an endpoint the fold holds no node for stops the boot"
+            + " replay, on a row ADR 19 forbids deleting (#228). Mint or seed it first");
   }
 
   /** Record a batch in order; each claim is logged and applied before the next is considered. */

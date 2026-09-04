@@ -322,4 +322,68 @@ class IngestServiceTest {
 
     assertThat(log.readAll()).containsExactly(minted, merge);
   }
+
+  @Test
+  @DisplayName(
+      "should refuse a second merge when the projection holds no node for the local side, the"
+          + " issue's literal shape")
+  void shouldRefuseASecondMergeWhenTheProjectionHoldsNoNodeForTheLocalSideTheIssuesLiteralShape() {
+    // Break 1's exact shape: minted(L), merged(L->A), retract(L), merged(L->B). Task 4 tested the
+    // mechanically equivalent mint/retract/merge; this is the sequence the issue actually names -
+    // a first merge that succeeds while L still holds a node, then a retraction of L, then a
+    // second merge that must not, because L's node no longer survives.
+    LocalEntity minted =
+        LocalEntity.minted("Q00900042", NodeKind.WORK, "a working title he took back", CLAIMED_AT);
+    IngestService.claim(log, minted);
+    IngestService.claim(log, SameAs.declared("Q00900042", "Q10000900120", CLAIMED_AT));
+    IngestService.retract(log, new Retraction("Q00900042", "the wrong thing", CLAIMED_AT));
+
+    assertThatThrownBy(
+            () ->
+                IngestService.claim(log, SameAs.declared("Q00900042", "Q10000900121", CLAIMED_AT)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("Q00900042")
+        .hasMessageContaining("Q10000900121")
+        .hasMessageContaining("holds no node");
+
+    assertThat(log.readAll())
+        .as("validated BEFORE the append, so the log never carries a row that cannot boot")
+        .hasSize(3);
+  }
+
+  @Test
+  @DisplayName("should refuse an owner edge when the fold would hold no node for an endpoint")
+  void shouldRefuseAnOwnerEdgeWhenTheFoldWouldHoldNoNodeForAnEndpoint() {
+    LocalEntity minted =
+        LocalEntity.minted("Q00900042", NodeKind.WORK, "a self-pressed record", CLAIMED_AT);
+    IngestService.claim(log, minted);
+
+    assertThatThrownBy(
+            () ->
+                IngestService.claim(
+                    log, OwnerEdge.claimed("Q00900042", "Q0900199", "INFLUENCED_BY", CLAIMED_AT)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("Q0900199")
+        .hasMessageContaining("holds no node");
+
+    assertThat(log.readAll()).hasSize(1);
+  }
+
+  @Test
+  @DisplayName("should append an owner edge naming a merged local id, which the fold resolves")
+  void shouldAppendAnOwnerEdgeNamingAMergedLocalIdWhichTheFoldResolves() {
+    // Spec ruling 2: "a later claim naming the local id, by a path that bypasses the tool, folds
+    // onto the canonical id like any other". OwnRun refuses this by name, as a courtesy; the gate
+    // must not, because the fold resolves it onto an id that HAS a stand-in and the log boots.
+    // A gate that asked about the raw endpoint would refuse a claim both folds can project.
+    ingest.record(new NodeAssertion("Q0900101", NodeKind.PERSON, "Ines Marlow", WIKIDATA));
+    IngestService.claim(
+        log, LocalEntity.minted("Q00900042", NodeKind.WORK, "a self-pressed record", CLAIMED_AT));
+    IngestService.claim(log, SameAs.declared("Q00900042", "Q10000900120", CLAIMED_AT));
+    OwnerEdge edge = OwnerEdge.claimed("Q0900101", "Q00900042", "INFLUENCED_BY", CLAIMED_AT);
+
+    IngestService.claim(log, edge);
+
+    assertThat(log.readAll()).hasSize(4).endsWith(edge);
+  }
 }
