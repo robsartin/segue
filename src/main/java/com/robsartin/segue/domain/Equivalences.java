@@ -598,8 +598,8 @@ public record Equivalences(
    *
    * <p><b>Both arms of the general method delegate here</b>, so there is one rule and not two: a
    * sourced edge is folded by this method directly, and an owner edge lends it its two endpoints
-   * and is rebuilt from the answer. All four outcomes - withdrawn, unchanged, collapsed and
-   * resolved - are decided in one place.
+   * and is rebuilt from the answer. All four outcomes — withdrawn, unchanged, collapsed and
+   * resolved — are decided in one place.
    */
   public Optional<AssertionRecord> foldEndpoints(AssertionRecord claim) {
     Objects.requireNonNull(claim, "claim");

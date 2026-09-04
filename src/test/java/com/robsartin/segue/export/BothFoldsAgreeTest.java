@@ -244,7 +244,7 @@ class BothFoldsAgreeTest {
         .doesNotContain(PRESSING + " INFLUENCED_BY " + PRESSING);
 
     try (TinkerGraphStore replayed = new TinkerGraphStore()) {
-      GraphProjector.project(log, replayed, IdentityMerge.NONE);
+      long applied = GraphProjector.project(log, replayed, IdentityMerge.NONE);
 
       Set<String> inGraph =
           OWNED_QIDS.stream()
@@ -254,6 +254,13 @@ class BothFoldsAgreeTest {
 
       assertThat(inGraph).isEqualTo(folded);
       assertThat(replayed.edgeCount()).isEqualTo(folded.size());
+      assertThat(applied)
+          .as(
+              "the count is what reached the graph, not what survived the retractions - nothing is"
+                  + " retracted here, and the one self-loop the fold collapsed above applied"
+                  + " nothing, so it is 30 rows less that one (#178 for the collapse, #224 for the"
+                  + " count that stopped including it)")
+          .isEqualTo(29);
     }
   }
 

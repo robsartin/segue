@@ -5,11 +5,13 @@ import static com.robsartin.segue.export.InventedGraph.FORFEIT;
 import static com.robsartin.segue.export.InventedGraph.HOLLOW_TIDE;
 import static com.robsartin.segue.export.InventedGraph.LAPSE;
 import static com.robsartin.segue.export.InventedGraph.WREN;
+import static com.robsartin.segue.export.InventedGraph.edge;
 import static com.robsartin.segue.export.InventedGraph.merged;
 import static com.robsartin.segue.export.InventedGraph.minted;
 import static com.robsartin.segue.export.InventedGraph.node;
 import static com.robsartin.segue.export.InventedGraph.owned;
 import static com.robsartin.segue.export.InventedGraph.retract;
+import static com.robsartin.segue.export.InventedGraph.secondSource;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.domain.EdgeRecord;
@@ -205,6 +207,34 @@ class RetractedStandInTakesItsEdgesTest {
     assertThat(folded.edges())
         .as("the owner's other edge is untouched, so this is not a count over an empty fold")
         .hasSize(1);
+  }
+
+  /**
+   * Two sources asserting the SAME relationship against the emptied canonical id. The export groups
+   * corroborating claims by {@code edgeKey} before it counts anything, so this is one withdrawn
+   * edge with two witnesses rather than two withdrawn edges.
+   */
+  private static FakeAssertionLog twoSourcesOnOneWithdrawnEdgeLog() {
+    return new FakeAssertionLog()
+        .with(
+            node(WREN, NodeKind.PERSON, "Wren Alderman"),
+            minted(LAPSE, NodeKind.WORK, "a working title he took back"),
+            merged(LAPSE, FORFEIT),
+            edge(WREN, FORFEIT, "INFLUENCED_BY"),
+            edge(WREN, FORFEIT, "INFLUENCED_BY", secondSource()),
+            retract(LAPSE));
+  }
+
+  @Test
+  @DisplayName("two sources corroborating one withdrawn edge count as one withdrawal")
+  void shouldCountOneWithdrawalWhenTwoSourcesAssertedTheSameWithdrawnEdge() {
+    LogProjection folded = LogProjection.of(twoSourcesOnOneWithdrawnEdgeLog());
+
+    assertThat(folded.withdrawnEdges())
+        .as(
+            "danglingEdges counts edge keys after corroborating claims are grouped, and this is"
+                + " its sibling - so it has to be an edge-shaped number, not a row-shaped one")
+        .isEqualTo(1);
   }
 
   @Test
