@@ -397,8 +397,8 @@ has a different relationship with the data and a different fence to match.
   the way it does after a retraction ([ADR 24](adr/0024-sqlite-assertion-log.md)). Its sibling
   fence is `theOwnerClaimToolOpensNothingElse`, and the decision is recorded in
   [ADR 59](adr/0059-owner-claims-as-a-third-layer.md).
-- **`census` reaches `sqlite`, `support`, `export` and `wikidata`, and is the second tool whose
-  whole output is aggregates.** It folds the log through `export.LogProjection` rather than folding
+- **`census` reaches `sqlite`, `support`, `export` and `wikidata`, and is the only dev-side tool
+  whose whole output is aggregates.** It folds the log through `export.LogProjection` rather than folding
   it again — a third fold of one log is the drift `BothFoldsAgreeTest` exists to catch — and counts
   what comes out. It writes nothing, and `--db` is required
   ([ADR 63](adr/0063-a-read-only-census-of-the-graph.md)).

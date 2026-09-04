@@ -152,10 +152,10 @@ class ArchitectureTest {
    * alsoFenced} unchanged.
    *
    * <p>{@code permitted} always contains the tool's own package, and contains a second entry only
-   * where a decision allows one sibling — today only {@code rate → recommend} (ADR 46). Written as
-   * an allowlist rather than a denylist so that the exception is the thing a reader has to justify,
-   * and so a new tool is fenced from every one of its siblings the moment it joins {@link
-   * #DEV_TOOL_PACKAGES}.
+   * where a decision allows one sibling — today {@code rate → recommend} (ADR 46) and {@code census
+   * → export} (ADR 63). Written as an allowlist rather than a denylist so that the exception is the
+   * thing a reader has to justify, and so a new tool is fenced from every one of its siblings the
+   * moment it joins {@link #DEV_TOOL_PACKAGES}.
    *
    * @throws IllegalArgumentException if {@code permitted} names something that is not a dev tool —
    *     a typo would otherwise silently widen or invert the fence it was meant to describe
@@ -744,7 +744,7 @@ class ArchitectureTest {
   /**
    * ADR 63: the census reads, and it cannot write either layer.
    *
-   * <p>The sixth dev-side tool, and its fence is the exporter's with one clause moved: {@code
+   * <p>A dev-side tool, and its fence is the exporter's with one clause moved: {@code
    * AffinityStore.put} and {@code updateRating} are named here, as they are for {@code ratings} and
    * {@code recommend}, because this tool holds the whole score map and affinity is the one part of
    * segue that cannot be regenerated from a source.
