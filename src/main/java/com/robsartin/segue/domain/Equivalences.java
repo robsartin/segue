@@ -206,7 +206,26 @@ public record Equivalences(
    */
   public static Equivalences in(List<LoggedAssertion> log) {
     Objects.requireNonNull(log, "log");
-    return new Equivalences(mergesIn(log), referencedEndpoints(log, emptiedCanonicalIds(log)));
+    return in(log, emptiedCanonicalIds(log));
+  }
+
+  /**
+   * {@link #in(List)}'s own answer, for a caller that has already computed {@link
+   * #retractedStandIns} for <b>this</b> log and does not want to pay for the fixed point twice.
+   *
+   * <p><b>Trusts the caller.</b> {@code emptied} is taken as given rather than checked against the
+   * log; handing it any set other than {@code retractedStandIns(log)} for this exact log answers a
+   * different question. It exists for the boot fold's own construction method — the single per-boot
+   * fold that computes {@code retractedStandIns} once and hands it to every reader that would
+   * otherwise recompute it — and is fenced to that one caller.
+   *
+   * <p>{@code EquivalencesTest.shouldGiveTheSameMergesWhenHandedTheEmptiedSetInWouldCompute} pins
+   * the two forms to one answer.
+   */
+  public static Equivalences in(List<LoggedAssertion> log, Set<String> emptied) {
+    Objects.requireNonNull(log, "log");
+    Objects.requireNonNull(emptied, "emptied");
+    return new Equivalences(mergesIn(log), referencedEndpoints(log, emptied));
   }
 
   /** Each merged local id and the id it turned out to be, last surviving claim wins. */

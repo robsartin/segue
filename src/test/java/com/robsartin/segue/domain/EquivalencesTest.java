@@ -688,8 +688,44 @@ class EquivalencesTest {
                 .kind());
   }
 
+  @Test
+  @DisplayName("the merges built from a prebuilt emptied set are the ones in() builds itself")
+  void shouldGiveTheSameMergesWhenHandedTheEmptiedSetInWouldCompute() {
+    List<LoggedAssertion> log = foldedLog();
+
+    assertThat(Equivalences.in(log, Equivalences.retractedStandIns(log)))
+        .as(
+            "in(log, emptied) exists so a caller that already paid for the fixed point does not"
+                + " pay for it again; it is the same answer or it is a second fold")
+        .isEqualTo(Equivalences.in(log));
+    assertThat(Equivalences.retractedStandIns(log))
+        .as("and the emptied set is not empty, so the comparison above is not vacuous")
+        .containsExactly(CANONICAL);
+  }
+
   private static AssertionRecord edge(String from, String to) {
     return new AssertionRecord(
         from, to, "INFLUENCED_BY", null, null, new Provenance("invented", "invented:1", WHEN, 1.0));
+  }
+
+  /**
+   * A log the fixed point actually runs on: a minted local side, a merge onto it, a retraction of
+   * that local side (which empties the canonical id), a re-merge onto the same canonical id, and an
+   * edge naming the local id — which folds onto the emptied canonical id and is withdrawn (#224,
+   * #228). An overload handed the wrong emptied set answers differently here, which is what makes
+   * the comparisons below able to fail.
+   */
+  private static List<LoggedAssertion> foldedLog() {
+    return List.of(
+        new NodeAssertion(
+            NEIGHBOUR,
+            NodeKind.PERSON,
+            "an invented neighbour",
+            new Provenance("invented", "invented:1", WHEN, 1.0)),
+        LocalEntity.minted(MINTED, NodeKind.WORK, "an invented local work", WHEN),
+        SameAs.declared(MINTED, CANONICAL, WHEN),
+        new Retraction(MINTED, "the local side was wrong", WHEN),
+        SameAs.declared(MINTED, CANONICAL, WHEN),
+        edge(NEIGHBOUR, MINTED));
   }
 }
