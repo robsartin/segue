@@ -29,9 +29,9 @@ import java.util.function.UnaryOperator;
  * corresponding log-taking rule answers on this log; {@code FoldTest} pins that equivalence.
  *
  * <p>The architecture rule that keeps the boot replaying through exactly this type, rather than
- * through the log-taking statics it wraps, is a later addition to {@code ArchitectureTest} — an
- * ArchUnit rule, theBootFoldsOnce, lands with this issue. The measured saving is a dated figure
- * that belongs in its own ADR rather than restated here; the figures live in ADR 64.
+ * through the log-taking statics it wraps, is {@code ArchitectureTest.theBootFoldsOnce}. The
+ * measured saving is a dated figure that belongs in its own ADR rather than restated here; the
+ * figures live in ADR 64.
  *
  * @param retractions {@link Retractions#in}'s own answer for this log
  * @param equivalences {@link Equivalences#folding(List)}'s own answer for this log, built here from

@@ -529,6 +529,7 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `affinityNeverTouchesTheWorldFactLayer` | a taste-layer type depending on the log, the graph, `IngestService` or the claim records | [ADR 33](adr/0033-taste-layer-separation.md) |
 | `theWorldFactLayerNeverTouchesAffinity` | `ingest` or any graph/source adapter depending on a taste-layer type | [ADR 33](adr/0033-taste-layer-separation.md) |
 | `onlyJackson3` | Jackson 2's `core`/`databind`/`datatype` packages | [ADR 35](adr/0035-jackson-3-single-json-library.md) |
+| `theBootFoldsOnce` | `GraphProjector` calling `Equivalences.in`, `folding`, `standIns`, `nodesTheFoldHolds`, `retractedStandIns` or `localsOfMerges`, or `Retractions.in` — the boot builds one `Fold` and every reader takes what it holds. One class rather than the `ingest` package: `IngestService.claim` folds on the live path, where there is no boot fold to reuse | issue [#238](https://github.com/robsartin/segue/issues/238) |
 
 ### Which rules are only convention
 

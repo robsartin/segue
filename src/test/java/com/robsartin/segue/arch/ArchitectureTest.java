@@ -7,12 +7,16 @@ import com.robsartin.segue.app.SegueApplication;
 import com.robsartin.segue.domain.AffinityRecord;
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.EdgeRecord;
+import com.robsartin.segue.domain.Equivalences;
+import com.robsartin.segue.domain.Fold;
 import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.OwnerEdge;
 import com.robsartin.segue.domain.Provenance;
+import com.robsartin.segue.domain.Retractions;
 import com.robsartin.segue.domain.SameAs;
+import com.robsartin.segue.ingest.GraphProjector;
 import com.robsartin.segue.ingest.IngestService;
 import com.robsartin.segue.musicbrainz.BridgedIdentity;
 import com.robsartin.segue.port.AffinityStore;
@@ -1686,4 +1690,41 @@ class ArchitectureTest {
               "ADR 35: Jackson 3 is the one JSON library — the MCP SDK already speaks it and"
                   + " it handles java.time natively, so a second major on the classpath buys"
                   + " nothing and costs a serialisation bug (issue #18)");
+
+  /**
+   * Issue #238: the boot derives the assertion-log fold once, through {@link Fold#of}, and every
+   * reader takes what it holds — a second log-taking call in {@link GraphProjector} is a second
+   * fold.
+   *
+   * <p><b>One class, not the {@code ingest} package.</b> {@code IngestService.claim} calls {@link
+   * Equivalences#nodesTheFoldHolds} and {@link Equivalences#folding(List)} on the live path, where
+   * there is no boot and no fold to reuse ({@code IngestService.java:218}, {@code :233}, {@code
+   * :234}) — a package fence would forbid the gate #233 added.
+   *
+   * <p><b>{@link Retractions#in} is in the list although the issue names only the six {@link
+   * Equivalences} members.</b> {@link Fold} carries the retractions too, so after the migration the
+   * boot does not call {@code Retractions.in} either — leaving it out would let one whole-log walk
+   * come back with this fence green.
+   *
+   * <p><b>A fence rather than an invocation counter</b>, for the reason the spec gives: what
+   * matters is that {@code GraphProjector} never re-derives the fold from the raw log, not how many
+   * times a particular method happened to run.
+   */
+  @ArchTest
+  static final ArchRule theBootFoldsOnce =
+      noClasses()
+          .that()
+          .belongToAnyOf(GraphProjector.class)
+          .should()
+          .accessTargetWhere(
+              callTo("in", Equivalences.class)
+                  .or(callTo("folding", Equivalences.class))
+                  .or(callTo("standIns", Equivalences.class))
+                  .or(callTo("nodesTheFoldHolds", Equivalences.class))
+                  .or(callTo("retractedStandIns", Equivalences.class))
+                  .or(callTo("localsOfMerges", Equivalences.class))
+                  .or(callTo("in", Retractions.class)))
+          .because(
+              "issue #238: the boot derives the fold once, through Fold.of, and every reader"
+                  + " takes what it holds — a second log-taking call here is a second fold");
 }
