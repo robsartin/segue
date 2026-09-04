@@ -12,6 +12,7 @@ import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.OwnerEdge;
 import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.domain.Retraction;
+import com.robsartin.segue.domain.SameAs;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.GraphStore;
 import com.robsartin.segue.port.IdentityMerge;
@@ -278,5 +279,47 @@ class IngestServiceTest {
         .hasMessageContaining("retract");
 
     assertThat(log.readAll()).isEmpty();
+  }
+
+  private static final Instant CLAIMED_AT = Instant.parse("2026-08-31T20:00:00Z");
+
+  @Test
+  @DisplayName("should refuse a merge when the projection holds no node for its local side")
+  void shouldRefuseAMergeWhenTheProjectionHoldsNoNodeForItsLocalSide() {
+    // The bypass path #228 measures: OwnRun.declareMerge already refuses this - it reads what the
+    // projection has MINTED and still survives - so a log can only carry it if something appended
+    // through this method directly. The merge itself boots; what it leaves behind is a canonical id
+    // with no stand-in, and the first edge naming that id stops the boot replay on a row ADR 19
+    // forbids deleting.
+    LocalEntity minted =
+        LocalEntity.minted("Q00900042", NodeKind.WORK, "a working title he took back", CLAIMED_AT);
+    IngestService.claim(log, minted);
+    IngestService.retract(log, new Retraction("Q00900042", "the wrong thing", CLAIMED_AT));
+
+    assertThatThrownBy(
+            () ->
+                IngestService.claim(log, SameAs.declared("Q00900042", "Q10000900120", CLAIMED_AT)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("Q00900042")
+        .hasMessageContaining("Q10000900120")
+        .hasMessageContaining("holds no node");
+
+    assertThat(log.readAll())
+        .as("validated BEFORE the append, so the log never carries a row that cannot boot")
+        .hasSize(2);
+  }
+
+  @Test
+  @DisplayName("should append a merge when the projection does hold a node for its local side")
+  void shouldAppendAMergeWhenTheProjectionHoldsANodeForItsLocalSide() {
+    // Without this the refusal above would be satisfied by refusing every merge.
+    LocalEntity minted =
+        LocalEntity.minted("Q00900042", NodeKind.WORK, "a self-pressed record", CLAIMED_AT);
+    IngestService.claim(log, minted);
+    SameAs merge = SameAs.declared("Q00900042", "Q10000900120", CLAIMED_AT);
+
+    IngestService.claim(log, merge);
+
+    assertThat(log.readAll()).containsExactly(minted, merge);
   }
 }

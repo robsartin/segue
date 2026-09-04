@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.UnaryOperator;
 
 /**
  * The only thing in the system that writes.
@@ -148,7 +149,51 @@ public final class IngestService {
       case Retraction ignored ->
           throw new IllegalArgumentException("a retraction is appended by retract(), not claim()");
     }
+    refuseAClaimTheFoldCouldNotHold(log.readAll(), claim);
     log.append(claim);
+  }
+
+  /**
+   * Refuse an owner claim that would leave the log unbootable, before it is appended (#228).
+   *
+   * <p><b>Here rather than in {@code OwnRun}, and in addition to it.</b> That tool refuses both of
+   * these already, which is why the two logs issue #228 measures are reachable only by a caller
+   * that comes straight here. A guard in front of one caller is not a gate; this method is the one
+   * every owner claim passes, {@code OwnRun}'s included, so the log cannot carry a row no fold can
+   * project. The log is append-only (ADR 19), so a row rejected at replay instead would be rejected
+   * at every replay, forever.
+   *
+   * <p><b>The two refusals ask narrower questions than {@code OwnRun} does, deliberately.</b>
+   * {@code OwnRun.declareMerge} requires a merge's local side to be something the owner MINTED,
+   * because pointing a merge at a sourced entity is a different claim that tool does not make; this
+   * asks the fold's own question - {@link Equivalences#localsOfMerges}, any surviving node claim -
+   * because spec ruling 2 requires the fold to accept a local-shaped id a source named. And {@code
+   * OwnRun.assertEdge} refuses an endpoint it does not OFFER, which includes a merged local id;
+   * this asks only whether the FOLDED endpoint has a node, because both folds resolve such an edge
+   * onto the canonical id and it boots. Two questions, two homes, and the friendlier message is the
+   * tool's.
+   *
+   * <p><b>It reads the whole log.</b> The only caller is a dev-side tool that has already read it
+   * once in the same run and appends exactly one row, so this is a second read per invocation
+   * rather than per claim.
+   */
+  private static void refuseAClaimTheFoldCouldNotHold(
+      List<LoggedAssertion> logged, LoggedAssertion claim) {
+    List<LoggedAssertion> would = new ArrayList<>(logged);
+    would.add(claim);
+    if (claim instanceof SameAs merge
+        && !Equivalences.localsOfMerges(would, UnaryOperator.identity())
+            .containsKey(would.size() - 1)) {
+      throw new IllegalArgumentException(
+          "the projection holds no node for "
+              + merge.localQid()
+              + ", so this merge would build no stand-in for "
+              + merge.canonicalQid()
+              + " — the first edge naming that id would stop the boot replay, on rows ADR 19"
+              + " forbids deleting (#228). Claim a node for "
+              + merge.localQid()
+              + " first, or merge an id the projection does hold");
+    }
   }
 
   /** Record a batch in order; each claim is logged and applied before the next is considered. */
