@@ -13,6 +13,7 @@ import com.robsartin.segue.domain.PathRanking;
 import com.robsartin.segue.domain.PathResult;
 import com.robsartin.segue.domain.RatingScale;
 import com.robsartin.segue.ingest.IngestService;
+import com.robsartin.segue.ingest.UnknownEndpointException;
 import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.EntityResolver;
 import com.robsartin.segue.port.ExpandContext;
@@ -26,6 +27,7 @@ import java.time.Clock;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -172,6 +174,19 @@ public final class SegueService {
    * neighbour is skipped and the call continues, rather than aborting a 30-round-trip expansion
    * after some assertions are already committed.
    *
+   * <p><b>An edge {@code IngestService} refuses is skipped and named, not thrown</b> (#233). {@link
+   * #neighborOf} resolves ONE endpoint — the far end from the seed's point of view — so an edge
+   * naming the seed at neither end has its second endpoint resolved by nobody. Every adapter in
+   * {@code src/main} puts the seed at an end, and nothing in {@link SourceAdapter} says it must, so
+   * this is the report rather than the guard: the guard is at the append, where a refusal costs a
+   * message instead of a log that cannot boot. Counted by distinct endpoint, the same unit {@link
+   * ExpansionSummary#skippedNeighbors()} uses — but unlike that field, a refused endpoint has no
+   * counterpart on {@link ExpansionSummary} at all: {@code skippedNeighbors()} IS an aggregate
+   * count on the wire, with only which neighbours kept to prose, where ADR 56 kept an aggregate
+   * flag on the wire and moved only attribution to {@code detail}. Here both the count and the
+   * names live in {@code detail} alone, which is a narrower choice than ADR 56 made, not the same
+   * one repeated.
+   *
    * <p>What is reported as skipped is the count of <em>distinct</em> neighbours, not of the
    * assertions dropped along with them. Both are defensible numbers; only one matches the name
    * {@link ExpansionSummary#skippedNeighbors()} and the sentence it is rendered into, and this
@@ -289,6 +304,10 @@ public final class SegueService {
     Set<String> unresolvableNeighbors = new HashSet<>();
     // Every neighbour whose identity this call has already recorded — see the note further down.
     Set<String> identityRecorded = new HashSet<>();
+    // Endpoints the graph holds no node for, by endpoint rather than by assertion — the same unit
+    // skippedNeighbors uses, and for the same reason: two assertions naming one unknown entity are
+    // one thing the caller can act on. Insertion-ordered so the reason string is stable.
+    Set<String> refusedEndpoints = new LinkedHashSet<>();
     for (AssertionRecord assertion : bounded) {
       String neighbor = neighborOf(assertion, qid);
       if (neighbor != null) {
@@ -352,7 +371,17 @@ public final class SegueService {
           }
         }
       }
-      ingest.record(assertion);
+      try {
+        ingest.record(assertion);
+      } catch (UnknownEndpointException e) {
+        // #233. The gate refused this edge BEFORE the append, so nothing is half-written and the
+        // expansion carries on rather than aborting a thirty-round-trip call over one bad row —
+        // the same choice made for an unresolvable neighbour above. Letting it escape is what the
+        // class's second invariant forbids and what ADR 27 turns into a readable result instead.
+        log.warn("expandEntity({}) refused an edge: {}", qid, e.getMessage());
+        refusedEndpoints.addAll(e.endpoints());
+        continue;
+      }
       edgesAdded++;
     }
 
@@ -381,6 +410,12 @@ public final class SegueService {
     }
     if (skippedNeighbors > 0) {
       reasons.add(skippedNeighbors + " neighbour(s) could not be resolved and were skipped");
+    }
+    if (!refusedEndpoints.isEmpty()) {
+      reasons.add(
+          refusedEndpoints.size()
+              + " endpoint(s) the graph holds no node for were refused: "
+              + String.join(", ", refusedEndpoints));
     }
     if (reasons.isEmpty()) {
       return ToolResult.ok(

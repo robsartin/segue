@@ -1,6 +1,7 @@
 package com.robsartin.segue.mcp;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 import com.robsartin.segue.domain.AffinityRecord;
 import com.robsartin.segue.domain.AssertionRecord;
@@ -15,6 +16,7 @@ import com.robsartin.segue.domain.PathRanking;
 import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.fixture.Fixture;
 import com.robsartin.segue.fixture.FixtureSourceAdapter;
+import com.robsartin.segue.ingest.GraphProjector;
 import com.robsartin.segue.ingest.IngestService;
 import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
@@ -93,6 +95,15 @@ class SegueServiceTest {
   private static final String MINTED = "Q00900042";
 
   private static final Instant MINTED_AT = Instant.parse("2026-08-31T10:00:00Z");
+
+  /** Invented, ADR 58's leading zero. The seed, which the graph holds before the call. */
+  private static final String WREN = "Q0900101";
+
+  /** A neighbour the stub resolver can identify. */
+  private static final String KETTLES = "Q0900102";
+
+  /** The far endpoint of a third-party edge, which nothing describes and nothing can fetch. */
+  private static final String MARRAM = "Q0900103";
 
   private AssertionLog log;
   private GraphStore graph;
@@ -716,6 +727,34 @@ class SegueServiceTest {
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
     assertThat(resolver.fetchCallCount()).isZero();
     assertThat(result.payload().nodesAdded()).isZero();
+  }
+
+  @Test
+  @DisplayName("should report a refused edge as partial when no source describes its far endpoint")
+  void shouldReportARefusedEdgeAsPartialWhenNoSourceDescribesItsFarEndpoint() {
+    // #233. neighborOf resolves ONE endpoint - the other end of the assertion from the seed's point
+    // of view - so an edge naming the seed at NEITHER end has its far endpoint resolved by nobody.
+    // No shipped adapter emits one (all three put the seed at an end) and nothing says they must,
+    // which is why the gate is at IngestService and the report is here.
+    ingest.record(new NodeAssertion(WREN, NodeKind.PERSON, "Wren Alderman", WIKIDATA));
+    resolver.withEntity(new NodeAssertion(KETTLES, NodeKind.GROUP, "Kettles Anonymous", WIKIDATA));
+    AssertionRecord thirdParty =
+        new AssertionRecord(KETTLES, MARRAM, "INFLUENCED_BY", null, null, WIKIDATA);
+
+    ToolResult<SegueService.ExpansionSummary> result =
+        service(
+                new StubSourceAdapter(
+                    "stub", new ExpandResult(List.of(thirdParty), List.of(), false, false)))
+            .expandEntity(WREN, 10);
+
+    assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.PARTIAL);
+    assertThat(result.detail()).contains(MARRAM);
+    assertThat(result.payload().edgesAdded()).isZero();
+    try (GraphStore rebuilt = new TinkerGraphStore()) {
+      assertThatCode(() -> GraphProjector.project(log, rebuilt, IdentityMerge.NONE))
+          .as("what the call left in the log must still boot")
+          .doesNotThrowAnyException();
+    }
   }
 
   // ---- getEntity ----------------------------------------------------------

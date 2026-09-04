@@ -12,6 +12,7 @@ import com.robsartin.segue.domain.SameAs;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.GraphStore;
 import com.robsartin.segue.port.IdentityMerge;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -26,7 +27,8 @@ import java.util.Optional;
  * <p><b>Order matters and is not an accident.</b> The log is appended first, then the graph is
  * updated, and the two are deliberately not atomic. If the graph update fails, the log is ahead —
  * the recoverable direction, because a restart replays it. The reverse ordering would lose the
- * claim permanently and leave the log authoritative in name only.
+ * claim permanently and leave the log authoritative in name only. That argument assumes the graph
+ * update can eventually succeed; see {@link #record}'s caveat (#233) for the row where it cannot.
  */
 public final class IngestService {
 
@@ -47,6 +49,12 @@ public final class IngestService {
 
   /**
    * Append one claim to the log, then apply it to the graph.
+   *
+   * <p><b>An edge whose endpoint the graph holds no node for is refused before the append</b>
+   * (#233), the same way a retraction is. The log is append-only (ADR 19) and replay is fatal on
+   * the first failure (ADR 24), so a row the graph refuses once is a row every later boot refuses
+   * too — the log's "correct failure direction" only holds for a claim that can eventually project.
+   * See {@link #requireEveryEndpointIsInTheGraph}.
    *
    * <p><b>The equivalences are {@link Equivalences#NONE} here, and that is a stated limitation
    * rather than an oversight</b> (#178). {@link #apply} now folds an edge's endpoints through the
@@ -74,8 +82,12 @@ public final class IngestService {
       // retraction in the log that the caller had been told did not happen.
       throw new IllegalArgumentException("a retraction is appended by retract(), not record()");
     }
+    // Hoisted to one local (#233 review) so the gate and the apply below cannot spell this two
+    // ways that drift: both must ask the SAME equivalences the same question about this claim.
+    Equivalences equivalences = Equivalences.NONE;
+    requireEveryEndpointIsInTheGraph(assertion, equivalences);
     log.append(assertion);
-    apply(graph, merges, Equivalences.NONE, assertion);
+    apply(graph, merges, equivalences, assertion);
   }
 
   /**
@@ -314,6 +326,76 @@ public final class IngestService {
     if (graph.node(canonical).isEmpty()) {
       graph.upsertNode(
           new NodeRecord(canonical, minted.get().kind(), minted.get().label(), List.of()));
+    }
+  }
+
+  /**
+   * Refuse an edge the graph will not hold, before the log keeps it forever (#233).
+   *
+   * <p><b>This is the store's own precondition, asked one step earlier.</b> {@code
+   * TinkerGraphStore.requireVertex} and {@code JenaGraphStore.requireKnown} both throw {@code
+   * "assertion references unknown entity … - upsert the node first"} for exactly this case, and
+   * {@code GraphStoreContract} pins the pair as an agreed contract rather than one engine's habit.
+   * Neither is changed: a store must keep refusing whatever a producer does. What this adds is that
+   * the refusal now happens while it is still free. ADR 24's ordering — log first, then graph — is
+   * untouched and so is its argument; see that ADR's 2026-09-04 amendment for what the argument
+   * does NOT cover.
+   *
+   * <p><b>It asks {@link Equivalences#foldEndpoints}, the same call {@link #apply} is about to
+   * make</b>, rather than reading {@code fromQid} and {@code toQid} off the claim. The two must not
+   * be able to disagree about WHICH endpoints have to exist — that is #224's defect in miniature,
+   * where a rule read raw endpoints while the fold resolved them. On {@link Equivalences#NONE},
+   * which is all {@code record} ever holds, the fold is the identity and the second call costs an
+   * empty-set lookup and two map misses.
+   *
+   * <p>A fold that yields nothing needs no check: {@link #apply} returns false for it and reaches
+   * the graph with nothing at all.
+   *
+   * @param equivalences the same value {@link #record} is about to hand {@link #apply} — hoisted to
+   *     one local at the call site (#233 review) so the two calls cannot ask a different question
+   *     about which endpoints have to exist.
+   */
+  private void requireEveryEndpointIsInTheGraph(
+      LoggedAssertion assertion, Equivalences equivalences) {
+    Optional<LoggedAssertion> folded = equivalences.foldEndpoints(assertion);
+    if (folded.isEmpty()) {
+      return;
+    }
+    Optional<AssertionRecord> edge =
+        switch (folded.get()) {
+          case AssertionRecord sourced -> Optional.of(sourced);
+          // record() accepts one today - nothing in production sends it, but MergeWiringTest's
+          // sibling path does - and apply() hands it to graph.record exactly as it hands a sourced
+          // edge, so it poisons a log identically. #228 gates the same shape on claim().
+          case OwnerEdge owned -> Optional.of(owned.toAssertion());
+          // The other four create a node or create nothing. upsertNode cannot refuse, a merge's
+          // graph half is standIn() which upserts, and a retraction never reaches here because
+          // record() refuses one above. The switch is exhaustive over the sealed interface so that
+          // a seventh claim type cannot be added without deciding whether it has an endpoint.
+          case NodeAssertion ignored -> Optional.empty();
+          case LocalEntity ignored -> Optional.empty();
+          case SameAs ignored -> Optional.empty();
+          case Retraction ignored -> Optional.empty();
+        };
+    edge.ifPresent(this::requireBothEndpoints);
+  }
+
+  /**
+   * Both endpoints are checked before either is thrown for (#233 final review, minor 2), so an edge
+   * naming two unknown entities is refused ONCE naming both — not once, on the first, leaving the
+   * second undiscovered until a retry. {@code fromQid} and {@code toQid} can name the same entity
+   * (a self-loop); that is checked once, not reported twice.
+   */
+  private void requireBothEndpoints(AssertionRecord edge) {
+    List<String> missing = new ArrayList<>(2);
+    if (graph.node(edge.fromQid()).isEmpty()) {
+      missing.add(edge.fromQid());
+    }
+    if (!edge.toQid().equals(edge.fromQid()) && graph.node(edge.toQid()).isEmpty()) {
+      missing.add(edge.toQid());
+    }
+    if (!missing.isEmpty()) {
+      throw new UnknownEndpointException(missing, edge);
     }
   }
 }

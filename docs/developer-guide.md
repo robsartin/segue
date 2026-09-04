@@ -585,11 +585,24 @@ nor the graph.
 
 ### The ordering, and why it is not an accident
 
-`IngestService.record` is three lines: `log.append(assertion)` then `apply(graph, assertion)`. The
-two are deliberately **not** atomic. If the graph write fails, the log is ahead of the graph — the
-recoverable direction, because the next boot replays it. The reverse order would lose the claim
-permanently and leave the log authoritative in name only. Do not "fix" this by wrapping both in a
-transaction that rolls the log back.
+`IngestService.record` refuses what it cannot keep, then appends to the log, then applies to the
+graph. The last two are deliberately **not** atomic. If the graph write fails, the log is ahead of
+the graph — the recoverable direction, because the next boot replays it. The reverse order would
+lose the claim permanently and leave the log authoritative in name only. Do not "fix" this by
+wrapping both in a transaction that rolls the log back.
+
+**That recoverability has a precondition, and issue #233 is what happens without it.** The log is
+ahead recoverably only if the claim can eventually project. An edge naming an entity the graph holds
+no node for cannot: `TinkerGraphStore.requireVertex` and `JenaGraphStore.requireKnown` both refuse
+it, `GraphProjector.project` is fatal on the first failure, and ADR 19 forbids removing the row — so
+the live call fails once and every boot after it fails at that row. `record` therefore asks the
+store's own precondition, through `GraphStore.node`, **before** the append, and refuses with
+`UnknownEndpointException` naming the endpoint. The stores are unchanged: their throw is the last
+line of defence and a store must keep it whatever a producer does. Note the repair the refusal names
+is only correct at that moment — appending the missing node claim does **not** rescue a log that
+already carries such a row, because replay is positional and the later claim lands after the row that
+needed it. For a log that already carries one, the repair is to retract the endpoint (ADR 44), which
+withdraws the edge without deleting anything.
 
 ### Replay shares the apply step
 
@@ -749,6 +762,12 @@ the bounded assertion list; for each assertion naming a neighbour the graph has 
 identity from the adapter if the adapter supplied it and otherwise fetches it, records the node
 through `IngestService`, and only then records the edge. Every write is log-then-graph. The call
 returns a single `ToolResult` whose outcome is `ok` or `partial`, never a thrown exception.
+
+That was not true for one case until issue #233: an edge naming the seed at neither end had its
+second endpoint resolved by nobody, and the store's exception escaped the facade after some rows were
+already committed. `IngestService` now refuses such an edge before the append and `expandEntity`
+catches the refusal, skips the assertion and names the endpoint in `detail` — the same treatment an
+unresolvable neighbour already got.
 
 **The requested bound is resolved through `ExpansionBounds.effective` before anything else sees it**
 (issue #112, [ADR 49](adr/0049-a-kind-scoped-ceiling-on-concept-expansion.md)). A `CONCEPT` seed is
