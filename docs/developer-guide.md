@@ -339,6 +339,8 @@ graph TD
   census ==>|"one fold, not two"| export
   evaluate --> domain
   evaluate --> recommend
+  evaluate --> port
+  evaluate --> support
 ```
 
 **What the diagram shows.** Dependencies point downward and never back up. `domain` sits at the
