@@ -1,5 +1,9 @@
 package com.robsartin.segue.census;
 
+import com.robsartin.segue.port.AffinityStore;
+import com.robsartin.segue.port.AssertionLog;
+import com.robsartin.segue.sqlite.SqliteAffinityStore;
+import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import com.robsartin.segue.support.RequiredDatabase;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -110,6 +114,9 @@ public final class CensusCli {
           "no segue database at " + options.database() + " — nothing to count");
     }
 
-    log.info("counting {}", options.database());
+    try (AssertionLog assertions = new SqliteAssertionLog(options.database());
+        AffinityStore ratings = new SqliteAffinityStore(options.database())) {
+      new CensusRun(assertions, ratings).run(log::info);
+    }
   }
 }

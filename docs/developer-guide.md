@@ -329,8 +329,10 @@ graph TD
   own --> ingest
   own --> sqlite
   own --> support
+  census --> port
   census --> support
   census --> domain
+  census --> sqlite
   census --> wikidata
   census ==>|"one fold, not two"| export
 ```
