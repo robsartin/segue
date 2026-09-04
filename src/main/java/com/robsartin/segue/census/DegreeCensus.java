@@ -16,9 +16,11 @@ import java.util.Objects;
  *
  * <p><b>A quantile is a degree some node actually has</b>, on {@code FloorReading.medianDegree}'s
  * stated reason: a median of 6.5 edges describes nothing in the graph, and the figure is read
- * beside an integer floor. The rule is nearest-rank — {@code sorted.get(min(size - 1, (int) (size *
- * p)))} — which at {@code p = 0.5} is exactly that method's upper middle. An empty graph reads as
- * zero, distinguishable from every real reading because every floor is at least one.
+ * beside an integer floor. The rule is ADR 55's nearest-rank — {@code sorted.get(max(1, ceil(p *
+ * size)) - 1)}, the same one the MusicBrainz probe uses — not the naive {@code floor(p * size)}
+ * index, which agrees with it everywhere except where {@code p * size} lands on an exact integer.
+ * An empty graph reads as zero, distinguishable from every real reading because every floor is at
+ * least one.
  *
  * <p><b>Isolated nodes are in the population</b>, at degree zero. "At or below the floor" against a
  * denominator that had already dropped what nothing reaches would be a different question.
@@ -45,9 +47,12 @@ public record DegreeCensus(int floor, int p50, int p90, int p99, int max, int at
         (int) sorted.stream().filter(degree -> degree <= floor).count());
   }
 
+  /** ADR 55's nearest-rank convention: {@code sorted.get(max(1, ceil(p * size)) - 1)}. */
   private static int quantile(List<Integer> sorted, double proportion) {
-    return sorted.isEmpty()
-        ? 0
-        : sorted.get(Math.min(sorted.size() - 1, (int) (sorted.size() * proportion)));
+    if (sorted.isEmpty()) {
+      return 0;
+    }
+    int rank = (int) Math.ceil(proportion * sorted.size());
+    return sorted.get(Math.max(1, rank) - 1);
   }
 }
