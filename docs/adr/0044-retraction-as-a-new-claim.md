@@ -258,8 +258,8 @@ discriminator and not a source they might go looking for.
 a local id the owner had merged also reaches the edges that name the stand-in that merge created —
 and nothing else.**
 
-Nothing above is withdrawn and no sentence above is edited. *"The unit is the entity"* stands, and
-so does *"it does not cascade"*: what this adds is not a cascade to a neighbour but the same
+Nothing above is withdrawn and no sentence above is edited. The entity remains the unit, and so
+does *"it does not cascade"*: what this adds is not a cascade to a neighbour but the same
 entity's own node under the other name the owner himself gave it.
 
 **What was there, measured on `0783492`** — the commit that landed
@@ -287,8 +287,8 @@ this one too. Neither fold's loop changed. Those classes are the authority for t
 amendment mirrors no table of theirs.
 
 **This rule does not follow question 4's reach, and that is deliberate rather than a loose end left
-for the reader to reconcile.** Question 4 above says a retraction reaches *"backwards only, by
-position in the log"* — it retracts what precedes it, and a claim appended afterwards stands. That
+for the reader to reconcile.** Question 4 above says the reach is backwards and by position in the
+log — it retracts what precedes it, and a claim appended afterwards stands. That
 reach does not carry over to withdrawal. `Equivalences.retractedStandIns` computes the emptied ids
 over the whole log, and `Equivalences.foldEndpoints` takes no index, so an edge naming an emptied
 canonical id is withdrawn whether it was claimed before the retraction or after. This was tried the
