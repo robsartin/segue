@@ -1,57 +1,39 @@
 package com.robsartin.segue.domain;
 
+import static com.robsartin.segue.domain.FoldFixture.AS_CLAIMED;
+import static com.robsartin.segue.domain.FoldFixture.CANONICAL;
+import static com.robsartin.segue.domain.FoldFixture.MINTED;
+import static com.robsartin.segue.domain.FoldFixture.NEIGHBOUR;
+import static com.robsartin.segue.domain.FoldFixture.OTHER_CANONICAL;
+import static com.robsartin.segue.domain.FoldFixture.OTHER_MINTED;
+import static com.robsartin.segue.domain.FoldFixture.WHEN;
+import static com.robsartin.segue.domain.FoldFixture.edge;
+import static com.robsartin.segue.domain.FoldFixture.foldedLog;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
-import java.util.function.UnaryOperator;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** Issue #92: what a merge means to a reader of the taste layer. */
 class EquivalencesTest {
 
-  private static final String MINTED = "Q00900042";
-  private static final String OTHER_MINTED = "Q00900043";
-
   /**
    * A third minted id, for the one fixture that needs three: the second-order chain below has one
    * local retracted under each of the two canonical ids it empties, and a third standing in for the
-   * superseded merge between them. Two leading zeros, like its two siblings above (ADR 59).
+   * superseded merge between them. Two leading zeros (ADR 59), like the ones {@code FoldFixture}
+   * names for the log this file and {@code FoldTest} share.
    */
   private static final String THIRD_MINTED = "Q00900044";
 
   /**
-   * The two shapes this file needs, and they are not the same one. A merge's canonical side takes
-   * ADR 62's eleven digits, which {@code SameAs} admits there and nowhere else; {@code NEIGHBOUR}
-   * is only the far end of an edge, so it is an ordinary stand-in and takes ADR 58's single leading
-   * zero. Each is the id this file used before issue #171 carried into its shape.
+   * A third canonical id, for the second-order chain below. ADR 62's eleven digits, like {@code
+   * FoldFixture}'s.
    */
-  private static final String CANONICAL = "Q10000000900";
-
-  private static final String OTHER_CANONICAL = "Q10000000901";
-
-  /** A third canonical id, for the second-order chain below. ADR 62's eleven digits, as above. */
   private static final String THIRD_CANONICAL = "Q10000000902";
-
-  private static final String NEIGHBOUR = "Q0902";
-  private static final Instant WHEN = Instant.parse("2026-08-31T09:00:00Z");
-
-  /**
-   * Kinds as the claim stated them. Every fixture in this file states no classes, so {@code
-   * KindMapper.rederive} would be the identity on all of them (ADR 42) - naming it here says the
-   * choice was made rather than defaulted, and keeps {@code wikidata} out of a {@code domain} test.
-   *
-   * <p><b>It is honest only while that stays true.</b> A fixture added here that DOES state classes
-   * would go un-re-derived under this operator with nothing in this file to say so, and would then
-   * assert the claimed kind as though it were the answer both folds give. Nothing here can catch
-   * that - identity is a legitimate answer for a caller to hand in - so the guard is elsewhere:
-   * {@code StandInAgreesInEveryHomeTest} feeds a class-bearing claim through the real {@code
-   * KindMapper.rederive} in every home the rule has.
-   */
-  private static final UnaryOperator<NodeAssertion> AS_CLAIMED = UnaryOperator.identity();
 
   @Test
   @DisplayName("a merged local id's rating reads under the canonical id, and only there")
@@ -384,9 +366,9 @@ class EquivalencesTest {
     // NOTHING and SECOND's label wins outright, whatever the log order put first.
     //
     // Ids in the domain test's own style: two leading zeros for what the owner minted (ADR
-    // 58/59), eleven digits for a merge's canonical side (ADR 62) - the next free of each shape
-    // in this file, after MINTED/OTHER_MINTED/THIRD_MINTED and
-    // CANONICAL/OTHER_CANONICAL/THIRD_CANONICAL above.
+    // 58/59), eleven digits for a merge's canonical side (ADR 62). Local to this log, and
+    // deliberately not claimed to be unique in the file: the fixtures here are independent logs,
+    // no two of which are ever folded together, and several of them already reuse ids.
     String first = "Q00900046";
     String second = "Q00900047";
     String sharedCanonical = "Q10000000903";
@@ -688,8 +670,61 @@ class EquivalencesTest {
                 .kind());
   }
 
-  private static AssertionRecord edge(String from, String to) {
-    return new AssertionRecord(
-        from, to, "INFLUENCED_BY", null, null, new Provenance("invented", "invented:1", WHEN, 1.0));
+  @Test
+  @DisplayName("the merges built from a prebuilt emptied set are the ones in() builds itself")
+  void shouldGiveTheSameMergesWhenHandedTheEmptiedSetInWouldCompute() {
+    List<LoggedAssertion> log = foldedLog();
+
+    assertThat(Equivalences.in(log, Equivalences.retractedStandIns(log)))
+        .as(
+            "in(log, emptied) exists so a caller that already paid for the fixed point does not"
+                + " pay for it again; it is the same answer or it is a second fold")
+        .isEqualTo(Equivalences.in(log));
+    assertThat(Equivalences.retractedStandIns(log))
+        .as("and the emptied set is not empty, so the comparison above is not vacuous")
+        .containsExactly(CANONICAL);
+  }
+
+  @Test
+  @DisplayName("a fold built from prebuilt merges and emptied set is the one folding() builds")
+  void shouldGiveTheSameFoldWhenHandedTheMergesAndEmptiedSetFoldingWouldCompute() {
+    List<LoggedAssertion> log = foldedLog();
+    Set<String> emptied = Equivalences.retractedStandIns(log);
+
+    assertThat(Equivalences.folding(Equivalences.in(log, emptied), emptied))
+        .as(
+            "folding(merges, emptied) is where the boot's Equivalences is constructed; a"
+                + " different answer here is the two folds drifting")
+        .isEqualTo(Equivalences.folding(log));
+    assertThat(Equivalences.folding(log).retractedStandIns())
+        .as("and the fold names a retracted stand-in, so the comparison is not vacuous")
+        .containsExactly(CANONICAL);
+  }
+
+  @Test
+  @DisplayName("stand-ins built from prebuilt merges are the ones standIns() builds itself")
+  void shouldGiveTheSameStandInsWhenHandedTheMergesStandInsWouldCompute() {
+    List<LoggedAssertion> log = foldedLog();
+
+    assertThat(Equivalences.standIns(log, AS_CLAIMED, Equivalences.in(log)))
+        .as(
+            "standIns opens with Equivalences.in(log); handing it the same merges must not"
+                + " change which canonical ids get a node or what those nodes say")
+        .isEqualTo(Equivalences.standIns(log, AS_CLAIMED));
+  }
+
+  @Test
+  @DisplayName("the nodes the fold holds are the same when the stand-in ids are handed in")
+  void shouldNameTheSameNodesWhenHandedTheStandInIdsItWouldCompute() {
+    List<LoggedAssertion> log = foldedLog();
+
+    assertThat(Equivalences.nodesTheFoldHolds(log, Equivalences.standIns(log, AS_CLAIMED).keySet()))
+        .as(
+            "nodesTheFoldHolds(log) computes that key set itself; the overload lets a caller"
+                + " that already has it skip a second standIns walk, and must answer the same")
+        .isEqualTo(Equivalences.nodesTheFoldHolds(log));
+    assertThat(Equivalences.nodesTheFoldHolds(log))
+        .as("and it names something, so the comparison above is not comparing two empty sets")
+        .isNotEmpty();
   }
 }

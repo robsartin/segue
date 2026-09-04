@@ -2,6 +2,7 @@ package com.robsartin.segue.ingest;
 
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.Equivalences;
+import com.robsartin.segue.domain.Fold;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeRecord;
@@ -33,10 +34,10 @@ import java.util.Set;
  *
  * <p><b>One family of failure is refused before the loop begins, by name</b> (#228). An edge the
  * fold keeps, naming an entity no node in the log stands for, cannot be applied by any store, and
- * the message a store gives for it names the id and no cause. So the log is checked against {@link
- * Equivalences#nodesTheFoldHolds} first, every offending row is listed with its sequence number,
- * and the repair is named. The loop below still catches everything else on the first row that
- * fails.
+ * the message a store gives for it names the id and no cause. So the log is checked against the
+ * held set {@link Fold#nodesHeld} carries — {@link Equivalences#nodesTheFoldHolds}'s own answer for
+ * this log — first, every offending row is listed with its sequence number, and the repair is
+ * named. The loop below still catches everything else on the first row that fails.
  *
  * <p><b>Node kinds are re-derived here, always, from the {@code P31} classes the claim carries</b>
  * (ADR 42, issue #60). Replay is the moment the derived state is rebuilt, so it is the moment to
@@ -87,31 +88,32 @@ public final class GraphProjector {
    */
   public static long project(AssertionLog log, GraphStore store, IdentityMerge merges) {
     List<LoggedAssertion> assertions = log.readAll();
-    Retractions retractions = Retractions.in(assertions);
     // The graph half of a merge (#178), built from the same log and beside the same log's
     // retractions, because they are the same kind of rule: neither edits a row, and both decide
     // what the fold makes of one. Equivalences.in already asks Retractions.survives itself, so a
     // merge a retraction reaches folds nothing. folding() rather than in(): the fold is also where
-    // an edge naming a stand-in a retraction took away stops projecting (#224).
-    Equivalences equivalences = Equivalences.folding(assertions);
-    refuseRowsNamingAnEntityNoNodeStandsFor(assertions, retractions, equivalences);
+    // an edge naming a stand-in a retraction took away stops projecting (#224). Fold.of calls
+    // folding() for exactly this reason, and now builds the whole fold here once, rather than the
+    // pre-flight and the replay loop each paying for their own piece of it.
+    Fold fold = Fold.of(assertions, KindMapper::rederive);
+    refuseRowsNamingAnEntityNoNodeStandsFor(assertions, fold);
     // Every merged entity's canonical id gets its node before anything is applied (#178). See
     // Equivalences.standIns for why this cannot wait for the merge's own row: an edge whose
     // endpoint the fold below moves onto the canonical id can be claimed EARLIER in the log than
     // the merge that names it, and TinkerGraphStore.record refuses an endpoint it has never seen.
     // A real claim about the canonical id, wherever it sits in the log, lands on top of the
     // stand-in and wins by upsertNode's last-writer-wins.
-    for (NodeRecord standIn : Equivalences.standIns(assertions, KindMapper::rederive).values()) {
+    for (NodeRecord standIn : fold.standIns().values()) {
       store.upsertNode(standIn);
     }
     long applied = 0;
     for (int i = 0; i < assertions.size(); i++) {
       LoggedAssertion assertion = assertions.get(i);
-      if (!retractions.survives(i, assertion)) {
+      if (!fold.retractions().survives(i, assertion)) {
         continue;
       }
       try {
-        if (IngestService.apply(store, merges, equivalences, rederived(assertion))) {
+        if (IngestService.apply(store, merges, fold.equivalences(), rederived(assertion))) {
           applied++;
         }
       } catch (RuntimeException e) {
@@ -162,15 +164,15 @@ public final class GraphProjector {
    * answer is the opposite one, and {@code MergeAfterARetractionTest} pins both.
    */
   private static void refuseRowsNamingAnEntityNoNodeStandsFor(
-      List<LoggedAssertion> assertions, Retractions retractions, Equivalences equivalences) {
-    Set<String> held = Equivalences.nodesTheFoldHolds(assertions);
+      List<LoggedAssertion> assertions, Fold fold) {
+    Set<String> held = fold.nodesHeld();
     List<String> rows = new ArrayList<>();
     // Counted separately from the lines, because one row with both ends unheld earns two lines
     // and is still one row to repair (#228, task 6 review).
     Set<Integer> offending = new LinkedHashSet<>();
     for (int i = 0; i < assertions.size(); i++) {
       LoggedAssertion assertion = assertions.get(i);
-      if (!retractions.survives(i, assertion)) {
+      if (!fold.retractions().survives(i, assertion)) {
         continue;
       }
       Optional<AssertionRecord> claimed = asEdge(assertion);
@@ -178,7 +180,7 @@ public final class GraphProjector {
         // A node claim, a minted entity, a merge and a retraction name no endpoint to be missing.
         continue;
       }
-      Optional<LoggedAssertion> kept = equivalences.foldEndpoints(assertion);
+      Optional<LoggedAssertion> kept = fold.equivalences().foldEndpoints(assertion);
       if (kept.isEmpty()) {
         // Withdrawn (#224) or collapsed (#178). Nothing reaches the graph, so nothing can be
         // missing an endpoint.

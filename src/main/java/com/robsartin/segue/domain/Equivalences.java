@@ -206,7 +206,26 @@ public record Equivalences(
    */
   public static Equivalences in(List<LoggedAssertion> log) {
     Objects.requireNonNull(log, "log");
-    return new Equivalences(mergesIn(log), referencedEndpoints(log, emptiedCanonicalIds(log)));
+    return in(log, emptiedCanonicalIds(log));
+  }
+
+  /**
+   * {@link #in(List)}'s own answer, for a caller that has already computed {@link
+   * #retractedStandIns} for <b>this</b> log and does not want to pay for the fixed point twice.
+   *
+   * <p><b>Trusts the caller.</b> {@code emptied} is taken as given rather than checked against the
+   * log; handing it any set other than {@code retractedStandIns(log)} for this exact log answers a
+   * different question. It exists for {@code Fold.of} — the single per-boot fold that computes
+   * {@code retractedStandIns} once and hands it to every reader that would otherwise recompute it —
+   * and is fenced to that one caller.
+   *
+   * <p>{@code EquivalencesTest.shouldGiveTheSameMergesWhenHandedTheEmptiedSetInWouldCompute} pins
+   * the two forms to one answer.
+   */
+  public static Equivalences in(List<LoggedAssertion> log, Set<String> emptied) {
+    Objects.requireNonNull(log, "log");
+    Objects.requireNonNull(emptied, "emptied");
+    return new Equivalences(mergesIn(log), referencedEndpoints(log, emptied));
   }
 
   /** Each merged local id and the id it turned out to be, last surviving claim wins. */
@@ -396,7 +415,31 @@ public record Equivalences(
    */
   public static Map<String, NodeRecord> standIns(
       List<LoggedAssertion> log, UnaryOperator<NodeAssertion> rederive) {
-    Equivalences merges = Equivalences.in(log);
+    return standIns(log, rederive, Equivalences.in(log));
+  }
+
+  /**
+   * {@link #standIns(List, UnaryOperator)}'s own answer, for a caller that already holds the merges
+   * it would open by asking {@link #in(List)} for — {@link #in(List, Set)}'s reason again, one
+   * fixed point paid once rather than twice.
+   *
+   * <p><b>Trusts the caller.</b> {@code merges} is taken as given rather than checked against the
+   * log; handing it anything but the value {@link #in(List)} derives from this exact log answers a
+   * different question. It exists for {@code Fold.of} — the single per-boot fold that computes
+   * {@link #in(List)}'s answer once and hands it to every reader that would otherwise recompute it
+   * — and is fenced to that one caller.
+   *
+   * <p>{@code EquivalencesTest.shouldGiveTheSameStandInsWhenHandedTheMergesStandInsWouldCompute}
+   * pins the two forms to one answer.
+   *
+   * @param merges the merges this fold reads — {@link #in(List)}'s own answer for this log, or the
+   *     answer {@link #in(List, Set)} gives a caller that has already computed the emptied set
+   */
+  public static Map<String, NodeRecord> standIns(
+      List<LoggedAssertion> log, UnaryOperator<NodeAssertion> rederive, Equivalences merges) {
+    Objects.requireNonNull(log, "log");
+    Objects.requireNonNull(rederive, "rederive");
+    Objects.requireNonNull(merges, "merges");
     Map<String, NodeRecord> standIns = new LinkedHashMap<>();
     for (Map.Entry<Integer, NodeRecord> at : localsOfMerges(log, rederive).entrySet()) {
       if (log.get(at.getKey()) instanceof SameAs merge && merges.stands(merge)) {
@@ -443,6 +486,34 @@ public record Equivalences(
     Objects.requireNonNull(log, "log");
     return Collections.unmodifiableSet(
         nodesHeld(log, standIns(log, UnaryOperator.identity()).keySet()));
+  }
+
+  /**
+   * {@link #nodesTheFoldHolds(List)}'s own answer, for a caller that has already computed the
+   * stand-in id set — {@link #standIns(List, UnaryOperator, Equivalences)}'s key set under the real
+   * re-derivation, not only {@link UnaryOperator#identity()} — so it need not walk {@link
+   * #standIns} a second time under {@code identity()} to ask this.
+   *
+   * <p>A stand-in key set built under the real re-derivation is the same set the log-taking form
+   * computes under {@code identity()}: {@link #retractedStandIns}' own javadoc already relies on
+   * this, and {@code EquivalencesTest.shouldNameTheSameCanonicalIdsWhateverKindTheFoldDerives} is
+   * what pins it. {@code
+   * EquivalencesTest.shouldNameTheSameNodesWhenHandedTheStandInIdsItWouldCompute} pins this
+   * overload to the log-taking form's own answer.
+   *
+   * <p><b>Trusts the caller</b>, {@link #in(List, Set)}'s reason again: {@code standInIds} answers
+   * a different question unless it is this exact log's own stand-in key set, and this overload is
+   * fenced to one caller. {@code Fold.of} already holds {@link #standIns(List, UnaryOperator,
+   * Equivalences)}'s answer and does not want to walk it a second time — that is the caller this is
+   * fenced to.
+   *
+   * @param standInIds the stand-in id set this fold holds — {@link #standIns(List, UnaryOperator,
+   *     Equivalences)}'s key set for this log, under whichever re-derivation the calling fold uses
+   */
+  public static Set<String> nodesTheFoldHolds(List<LoggedAssertion> log, Set<String> standInIds) {
+    Objects.requireNonNull(log, "log");
+    Objects.requireNonNull(standInIds, "standInIds");
+    return Collections.unmodifiableSet(nodesHeld(log, standInIds));
   }
 
   /**
@@ -566,10 +637,12 @@ public record Equivalences(
    * canonical ids. So the chain from the empty set only grows, and a log has finitely many ids.
    *
    * <p><b>One round for a log with no retractions</b> - every log the owner's real graph has held -
-   * because the first step returns the empty set it was given. That count is per
-   * <em>invocation</em> of this method, not per boot: {@code GraphProjector.project} invokes the
-   * fold - and so this loop - more than once while replaying a single log, so the rounds are paid
-   * again each time rather than once per boot.
+   * because the first step returns the empty set it was given. That count is still per
+   * <em>invocation</em> of this method rather than per boot, but since #238 a boot invokes it once:
+   * {@code GraphProjector.project} builds one {@link Fold} and every reader takes what it holds, so
+   * the rounds are paid once for the whole replay. The dev tools still fold per run and pay them
+   * again each time. What that bought is a dated measurement, carried in {@code
+   * docs/adr/0064-fold-the-log-once-per-boot.md} (2026-09-04) rather than restated here.
    *
    * <p><b>What an extra round CANNOT do: add an id that an edge the fold still keeps names RAW.</b>
    * An id a round after the first adds was held in the round before, which means some merge onto it
@@ -662,9 +735,35 @@ public record Equivalences(
    * lists and what to offer, and neither folds an edge nor asks that question.
    */
   public static Equivalences folding(List<LoggedAssertion> log) {
-    Equivalences merges = Equivalences.in(log);
+    Objects.requireNonNull(log, "log");
+    Set<String> emptied = retractedStandIns(log);
+    return folding(in(log, emptied), emptied);
+  }
+
+  /**
+   * This class's own construction of a fold's {@code Equivalences}, for a caller that already holds
+   * the merges and the emptied set — {@link #in(List, Set)}'s reason exactly, one fixed point paid
+   * once rather than twice.
+   *
+   * <p><b>Trusts the caller.</b> Both {@code merges} and {@code retractedStandIns} are taken as
+   * given rather than checked against a log; handing either one anything but the value {@link
+   * #folding(List)} derives from this exact log answers a different question, and this overload is
+   * fenced to one caller. {@code Fold.of} computes {@link #retractedStandIns} once and hands it to
+   * every reader that would otherwise recompute it — that is the caller this is fenced to.
+   *
+   * <p>This stays the one construction site for a fold's {@code Equivalences}, for {@link
+   * #folding(List)}'s own reason: an overload that quietly gives a fold the edge-blind answer —
+   * {@link #retractedStandIns} left empty — is how the two folds drift.
+   *
+   * <p>{@code
+   * EquivalencesTest.shouldGiveTheSameFoldWhenHandedTheMergesAndEmptiedSetFoldingWouldCompute} pins
+   * the two forms to one answer.
+   */
+  public static Equivalences folding(Equivalences merges, Set<String> retractedStandIns) {
+    Objects.requireNonNull(merges, "merges");
+    Objects.requireNonNull(retractedStandIns, "retractedStandIns");
     return new Equivalences(
-        merges.canonicalByLocal(), merges.referencedEndpoints(), retractedStandIns(log));
+        merges.canonicalByLocal(), merges.referencedEndpoints(), retractedStandIns);
   }
 
   /**
