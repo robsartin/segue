@@ -70,6 +70,16 @@ class ScoringTest {
     assertThat(reading.meanNegativeRank()).hasValue(3.0);
   }
 
+  @Test
+  @DisplayName("the pool is the sweep with the rated-down entities removed, not the whole sweep")
+  void shouldReportThePoolWithNegativesRemovedWhenTheSweepIncludesARatedDownEntity() {
+    Sweep sweep = pool(List.of("Q0900401", "Q0900402", "Q0900403", "Q0900404"));
+
+    Reading reading = Scoring.read(sweep, SETTING, Set.of(), Set.of("Q0900403"), 4);
+
+    assertThat(reading.pool()).isEqualTo(3);
+  }
+
   /** Descending scores, so the qid order below is the ranked order. */
   private static Sweep pool(List<String> qids) {
     List<Recommendation> candidates = new ArrayList<>();
