@@ -507,7 +507,7 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `theRecommenderOnlyReads` | `recommend` calling the three world-fact writes or either taste-layer write (`AffinityStore.put`, `updateRating`), or depending on `IngestService` at all | [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
 | `theRecommenderReadsRatingsAndNeverNotes` | `recommend` depending on `AffinityRecord` **as a type**, or calling `AffinityStore.find` or `readAll` — it may hold the store and call the note-free `readRatings`, and nothing that carries free text | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 39](adr/0039-affinity-capture-and-read.md), [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
 | `onlyTheRatingsToolReadsANote` | calling `AffinityRecord.note()` from outside `ratings` and `sqlite` — the score is ordinary data, the note is the owner's and is read on their own machine | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 43](adr/0043-listing-your-own-ratings.md) |
-| `onlyTheRecommenderReadsEveryRating` | calling `AffinityStore.readRatings` from outside `recommend` **and `rate`** — the note-free bulk read belongs to the two dev-side tools that weight and deal by it, and ADR 26 still pins the surface at six tools | [ADR 26](adr/0026-mcp-tool-surface.md), [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
+| `onlyTheRecommenderReadsEveryRating` | calling `AffinityStore.readRatings` from outside `recommend`, `rate` **and `census`** — the note-free bulk read belongs to the three dev-side tools that weight, deal or count by it, and ADR 26 still pins the surface at six tools | [ADR 26](adr/0026-mcp-tool-surface.md), [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md), ADR 63 |
 | `theRecommenderOpensNothingElse` | `recommend` depending on `jena`, `mcp`, `app`, `java.net`, `javax.net` or every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`, so a new tool joins every fence at once) — `rate` depends on `recommend` by design, and this is what keeps that trip one-way | [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
 | `theRatingDeckWritesOnlyAffinity` | `rate` calling the three world-fact writes, or depending on `IngestService` **as a type** — the deck records what the owner thinks, never what the world says, and cannot route a claim through the one class allowed to write one | [ADR 46](adr/0046-the-rating-deck.md) |
 | `theRatingDeckNeverReadsANote` | `rate` calling `AffinityRecord.note()` — it writes the score and must not be able to display the note | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 46](adr/0046-the-rating-deck.md) |
@@ -2079,9 +2079,10 @@ dev tool whose shape is an HTTP server — what the network ban buys `ratings`, 
 `retract` is bought here by the loopback bind and the `Origin` allowlist instead.
 
 `ArchitectureTest.onlyTheRecommenderReadsEveryRating` also now names `..rate..`, beside
-`..recommend..`, as the only packages allowed to call `AffinityStore.readRatings()`. That widening
-is the ADR-level decision the rule's own javadoc asks for — see ADR 46 rather than assuming a bulk
-read that was reserved to one dev tool now belongs to any of them.
+`..recommend..`, as one of the packages allowed to call `AffinityStore.readRatings()`. That
+widening is the ADR-level decision the rule's own javadoc asks for — see ADR 46 rather than
+assuming a bulk read that was reserved to one dev tool now belongs to any of them. Issue #227
+widened it a second time, to `..census..`, on the same ADR-level argument — see ADR 63.
 
 ### Why this is not a controller in the running app, and not a seventh MCP tool
 
