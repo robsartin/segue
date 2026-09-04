@@ -23,7 +23,7 @@ fixed point twice — once inside `Equivalences.in` and once beside it in `retra
 plus `localsOfMerges`. The pre-flight `refuseRowsNamingAnEntityNoNodeStandsFor` then asked
 `Equivalences.nodesTheFoldHolds(List)`, which derives its own stand-ins and so pays a fourth. That
 fixed point is a loop of whole-log walks, not a scan: ADR 44's 2026-09-04 amendment carries the
-figure that prices a single pathological round of it at this log's scale.
+figure that prices a single pathological invocation of it at this log's scale.
 
 **The issue that filed this work read that multiple as "roughly a threefold multiple off the
 boot's whole-log work"**, from the #228 whole-branch review's instrumented counts on a small log —
@@ -68,17 +68,25 @@ carrying the kind lag [ADR 42](0042-store-p31-and-rederive-kind-at-projection.md
 with nothing at the call site saying so.
 
 **What pins the property is an ArchUnit fence, not an invocation counter.**
-`ArchitectureTest.theBootFoldsOnce` forbids `GraphProjector` from calling `Equivalences.in`,
-`folding`, `standIns`, `nodesTheFoldHolds`, `retractedStandIns`, `localsOfMerges` or
-`Retractions.in`. The boot's fold arrives through `Fold.of` and nowhere else. `Retractions.in` is in
-the list although only the `Equivalences` statics were named in the issue: after the migration
-`GraphProjector` genuinely does not call it, and leaving it out would let one whole-log walk return
-with the fence green.
+`ArchitectureTest.theBootFoldsOnce` forbids every class in `ingest` but `IngestService` from calling
+`Equivalences.in`, `folding`, `standIns`, `nodesTheFoldHolds`, `retractedStandIns`,
+`localsOfMerges` or `Retractions.in`. The boot's fold arrives through `Fold.of` and nowhere else.
+`Retractions.in` is in the list although only the `Equivalences` statics were named in the issue:
+after the migration `GraphProjector` genuinely does not call it, and leaving it out would let one
+whole-log walk return with the fence green.
 
-**The scope is the boot, and only the boot.** The fence names one class rather than the `ingest`
-package, because `IngestService` calls the same statics on the *live* path, where there is no boot
-and no fold to reuse. The dev tools — `census`, `export`, `own`, `rate`, `ratings`, `recommend`,
-`retract` — are untouched.
+**The fence is the package, not `GraphProjector` alone, because a fence naming one class cannot see
+a helper.** A package-private `ingest` class with a static method that folds, called from
+`GraphProjector.project`, is a second whole-log fold at boot — and it left the one-class form of
+this rule green, measured with exactly that plant during this branch's review. Naming the package
+states the property the decision is actually about: the boot folds once, wherever the boot's code
+lives.
+
+**The scope is still the boot, and only the boot.** `IngestService` is the single exception the
+fence carves out, because `claim`'s pre-append gate calls the same statics on the *live* path,
+where there is no boot and no fold to reuse. The dev tools — `census`, `export`, `own`, `rate`,
+`ratings`, `recommend`, `retract` — are untouched, which is not the same as unaffected: three of
+them replay through `GraphProjector.project`, and the consequences below count what each collects.
 
 ## Alternatives considered
 
@@ -95,7 +103,8 @@ on the standing decision, not on effort.
 **Widen every reader's signature**, so the dev tools also take a prebuilt fold. YAGNI. Each of those
 tools runs once and exits; the boot is the path that runs on every start of the server. A follow-up
 issue can take the tools if a measurement ever asks for it — and, as the consequences below note,
-they already collect half the saving without being touched.
+most of them already collect part of the saving without being touched, while the three that replay
+through `GraphProjector.project` collect all of it there.
 
 **Make `Fold` compute its own answers** rather than carry them. A second home for a rule is exactly
 the drift `BothFoldsAgreeTest` exists to catch. `Fold` carries; `Equivalences` decides.
@@ -139,9 +148,26 @@ rather than a fraction of the fold. It is a **floor** on the saving rather than 
 second reason too: the synthetic log is shallow in merges, carrying a handful, where the owner's
 real log may not be, and the fixed point costs more the more merges and retractions interact.
 
-**Every dev tool collects half the saving without being migrated.**
-`Equivalences.folding(List)` now delegates to the new overloads, so it pays the fixed point once
-rather than twice. Nothing that calls it was edited and nothing about its answer changed.
+**Some of the saving reaches the dev tools without any of them being migrated, and it is neither
+"half" nor the same amount for each.** `Equivalences.folding(List)` now delegates to the new
+overloads, so it pays the emptied-set fixed point once rather than twice; and three of the tools
+replay through the migrated `GraphProjector.project` itself. Counted in whole-log fixed points per
+run:
+
+- `census`, and `export`'s whole-log views, fold through `LogProjection.of` — **three to two**. Its
+  `Equivalences.standIns(List, UnaryOperator)` pays one either way, its `Retractions.in` pays none,
+  and its `Equivalences.folding(List)` drops from two to one.
+- `retract` goes **four to three**: the two `Equivalences.retractedStandIns` calls `RetractRun`
+  makes itself to name what a retraction newly empties, plus a `folding(List)` that was two and is
+  now one.
+- `export`'s bounded views, `recommend` and `rate` each replay into a throwaway graph through
+  `GraphProjector.project`, so on that call they collect the whole of the boot's saving — **four to
+  one** — without being migrated at all.
+- `own` and `ratings` collect **nothing**. They reach the log only through `Equivalences.in(List)`,
+  `Equivalences.standIns(List, UnaryOperator)` and `Retractions.in`, and no one of those changed
+  what it costs.
+
+Nothing that calls any of them was edited and no tool's answer changed.
 
 **The residual, stated rather than hidden.** `Retractions.in(log)` is still re-derived inside
 `Equivalences.mergesIn`, `referencedEndpoints`, `nodesHeld`, `emptiedGiven` and `localsOfMerges` —
@@ -149,11 +175,14 @@ once per invocation of each. This decision removes the *fold* multiplier and not
 a `Retractions` through those private methods is a separate change with its own risk, and whether it
 is worth doing is a question the figures above inform rather than answer. The tool-side re-folds are
 the other residual: `census`, `export`, `recommend` and `rate` each fold again per run, deliberately,
-and a follow-up may take them.
+and a follow-up may take them — the counts above say how much each still pays.
 
 **The fence is the pin.** Nothing about the boot's cost is asserted by any test — the machine is
 loaded and a wall-clock assertion would be a flake generator, so `FoldOnceBenchmark` asserts only
 that its fixture is the size it asked for and that the replay applied a non-zero count, and logs the
 elapsed milliseconds. What is enforced is the structural property: `theBootFoldsOnce` is what stops a
-second fold arriving in `GraphProjector`, and it was seen red under a plant that restored the
-pre-migration body, naming all four call sites.
+second fold arriving anywhere in `ingest` but `IngestService`. It was seen red three ways — under a
+plant that restored the pre-migration body, naming all four call sites; under a package-private
+helper class that folds and is called from `GraphProjector.project`, which the one-class form of the
+rule could not see at all; and, with the `IngestService` exemption dropped, on that class's own three
+live-path calls, which is what makes the exemption load-bearing rather than decorative.
