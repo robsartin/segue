@@ -266,7 +266,7 @@ class StandInAgreesInEveryHomeTest {
               null,
               "the working title he took back"));
 
-  // Read once. Every home gets the same nineteen rows, which is the whole point, and building
+  // Read once. Every home gets the same rows, which is the whole point, and building
   // the live graph per assertion would open a TinkerGraph six times over.
   private static final FakeAssertionLog LOG = fourHomesLog();
   private static final Map<String, NodeRecord> IN_THE_FOLD = LogProjection.of(LOG).nodes();
