@@ -141,3 +141,46 @@ would not be later. It is a genuine cost and is recorded here rather than glosse
 - Exports agree with the running graph about what a node is, because they apply the same
   rule. DOT colours and shapes nodes by kind (issue #61), so a disagreement would have been
   visible and misleading.
+
+**Amendment (2026-09-05, issue #261): the first growth of the table driven by the census, and
+what the lookup taught about the walk this ADR refuses.**
+
+Nothing here is withdrawn. This records the first time the whitelist grew from the reading
+ADR 63's CONCEPT-by-class section was built to give (its 2026-09-04 amendment, issue #248),
+rather than from a seeding sweep (issues #49 and #52) — which is the growth path this ADR's
+own decision promised, and the first time re-derivation carried a table change to every
+affected node with no re-seed, offline, at the next boot.
+
+**What was read.** The owner's reading of 2026-09-05, recorded in issue #261, listed the ten
+classes holding most of the graph's CONCEPT nodes. Every one was looked up live, label and
+description both, before anything was decided; the table of results is on the issue.
+
+**What changed.** Six of the ten are works or events the table had never learned — an
+edition or translation of a work, an extended play, a seven-inch single, an animated short
+film, an audio track, and a concert tour — and `KindMapper.BY_CLASS` now holds a line for
+each, one commit apiece with a failing test first. The code is the authority for the table;
+this amendment names the classes as history, not as a mirror.
+
+**What deliberately did not change.** Three of the ten are award classes, and they stay
+`CONCEPT` because ADR 38 and issue #52 depend on it: the hub rule reads "high-degree CONCEPT"
+as "hub", and `KindMapperTest` pins award, literary award and now class of award there. The
+tenth, fictional human, was the one judgment call. **Rejected: mapping it to `PERSON`.** It is
+not `Q5`; `PERSON` is the kind the recommender explores and the kind the MusicBrainz adapter
+describes (ADR 54), so the rule would have put characters in the candidate pool and sent
+them to a source that cannot know them, and a character appearing in many works is exactly
+the shape the hub rule exists to demote. It stays `CONCEPT`, pinned, so a later reading does
+not re-open it by accident.
+
+**What the lookup taught.** Literary award's own direct `P279` parent is planned event, which
+the table maps to `EVENT`. A mapper that walked `P279` even one level would have turned an
+award into an event. ADR 21 rejected the walk for its cost and because it could not settle
+"city versus film"; this is the first observed case where the walk would have been wrong
+outright, and it is recorded here as evidence for a decision that already stood. A second
+observation, noted and not acted on: audio track's parent "musical work" (Q2188189) is a
+different class from the "musical work/composition" (Q105543609) the table holds, and no
+reading has yet shown the former on a CONCEPT node.
+
+**What to read next.** The census after the next boot: the CONCEPT count should fall by
+roughly the sum of the six classes mapped, the `WORK` and `EVENT` by-kind degree lines should
+take those nodes, and the class section should show the six gone from its top ten. That
+reading, not this amendment, decides whether the smaller classes are worth a pass.
