@@ -705,3 +705,122 @@ discovered node is still not ranked, and the run reports how many are held out; 
 expansion state to feed the score is refused on measurement rather than deferred. The reading
 reproduces four of the eight rows of that amendment's before-and-after table, at both floors, which
 is how it was checked that it changes no ranking.
+
+**Amendment (2026-09-04, issue #242): the first measured reading of the recommender moved nothing,
+and the shipped scorer and floor stand on evidence rather than on judgement alone.**
+
+Nothing above is withdrawn and no decision above is edited. No constant changed and no code changed.
+What changed is the standing of two numbers: `lift` and a floor of five were chosen by reading
+ranked lists side by side, and they have now been measured against the owner's own held-out ratings
+and were not displaced.
+
+**The rule was fixed before the number existed, and that is the whole evidential value of this
+entry.** Commit `9937f86` on 2026-09-04 committed
+`docs/superpowers/specs/2026-09-04-calibrate-one-constant-design.md`, which states the decision rule
+in full — the denominator, the three-hit bar, the no-more-negatives condition, the
+dominance-across-floors condition, the one-constant limit, and the clause that says a near miss
+stands. The reading below was taken afterwards. Had the reading come first, this paragraph would be
+a rationalisation with a table attached; the rule is the authority on what would have counted and is
+not restated here.
+
+**The reading.** One run of `./gradlew evaluate` ([ADR 65](0065-an-offline-evaluation-harness-for-the-recommender.md))
+on the owner's database, quoted whole and unedited. Aggregates only, per
+[ADR 51](0051-what-an-adr-may-quote.md): every cell is a count, a one-decimal mean or a dash, and
+every label is a column name or a `Scorer` spelling.
+
+```
+# segue recommender evaluation — aggregates only: no labels, no ids, no notes, no ratings (ADR 51, ADR 63, ADR 65).
+# held out every 5 of 152 eligible entity(ies): 31 held out, 121 left on the known-list.
+# top 25 per setting, over 16 setting(s).
+scorer               floor  pool  in pool  hits  mean rank  negatives  neg mean rank
+raw                      2  3426       31     3        9.3          3           18.0
+raw                      5  1634       31     3        9.3          3           18.0
+raw                      8  1239       22     3        9.3          3           18.0
+raw                     12  1030       19     3        9.3          3           18.0
+adamic-adar              2  3426       31     3        4.0          2           18.5
+adamic-adar              5  1634       31     3        4.0          2           18.5
+adamic-adar              8  1239       22     3        4.0          2           18.5
+adamic-adar             12  1030       19     3        4.0          2           18.5
+resource-allocation      2  3426       31     4       10.3          2            9.5
+resource-allocation      5  1634       31     4       10.3          2            9.5
+resource-allocation      8  1239       22     4       10.3          2            9.5
+resource-allocation     12  1030       19     4       10.3          2            9.5
+lift                     2  3426       31     0          -          2           13.5
+lift                     5  1634       31     8       11.4         14           12.2
+lift                     8  1239       22     6       10.7         10           11.1
+lift                    12  1030       19     4       13.8          6            8.2
+```
+
+**What the rule made of it.** Clause 1 fixed every denominator as the setting's own `in pool` cell
+rather than the held-out count on the header line. Clause 2 asked the scorer question at the shipped
+floor: `raw`, `adamic-adar` and `resource-allocation` were each compared with `lift`'s row at that
+floor on `hits`, and none of the three reached the three-hit bar — each sits below `lift` there
+rather than above it — and none of the three beat `lift` on `hits` at the two floors above the
+shipped one either, `resource-allocation` tying rather than beating at the highest of them. Their
+`negatives` cells all satisfied the no-more-negatives condition, which settled nothing, because the
+hits condition had already failed for each. Clause 3 then asked the floor question at `lift`, since
+clause 2 had displaced nothing, comparing `hits` and `negatives` on `lift`'s rows at the lowest
+floor and at the two above the shipped one against `lift`'s shipped-floor row: every one falls short
+of the three-hit bar, the lowest floor by the widest margin in the grid. That clause's extra
+sub-check for a candidate floor below the shipped one — one `recommend` run whose `FloorReading`
+must sit inside [ADR 57](0057-the-floor-reports-itself.md)'s trigger band — was never reached, since
+the grid's only sub-shipped floor had already failed on hits, and no `recommend` run was made.
+Clause 4 therefore took its remaining branch. Clause 5 refused the two near misses by name:
+`adamic-adar` carries the best `mean rank` of any row at the shipped floor and fewer `hits` than
+`lift`, which is a mean-rank improvement without a hit improvement and is not a hit; and
+`resource-allocation` equals `lift` on `hits` at the highest floor, which is a tie and not a win.
+
+### What the table shows that the rule did not anticipate
+
+Three observations, recorded as observations. **The rule is not amended by any of them.** It was
+fixed at the commit named above, before the reading, and stands exactly as committed; each of these
+is for the issue that takes the next reading to weigh.
+
+- **The `negatives` column is confounded at the shipped setting, and the confound favours a
+  challenger.** A rating of one or two comes mostly from the rating deck
+  ([ADR 46](0046-the-rating-deck.md)), and the deck deals what `recommend` surfaces at the shipped
+  setting. So `lift`'s `negatives` cell at the shipped floor partly measures what the deck dealt and
+  the owner rejected, where every other row's `negatives` cell measures a list the owner was never
+  offered and so had no chance to reject. A "no more negatives" condition therefore reads in a
+  challenger's favour mechanically, without anything about the challenger being better. It decided
+  nothing here — no challenger reached the hits bar, so the negatives condition was never the
+  binding one — but a later reading has to weigh it before that condition can be trusted, and the
+  repair is that reading's to argue rather than this entry's.
+- **The shipped scorer records no hits at all at the lowest floor in the grid.** Its `hits` cell
+  there stands alone in that column and its `mean rank` cell is the dash. This ADR gave the floor a
+  reason — a score normalised by the candidate's own degree rewards whatever is thinnest, so `lift`
+  is paired with a floor rather than used alone — and that row is the reason as a number instead of
+  as an argument.
+- **The other three scorers do not move with the floor at all.** `raw`, `adamic-adar` and
+  `resource-allocation` each hold one `hits` value and one `negatives` value across every floor in
+  the grid, while `in pool` falls as the floor rises. What the floor removes is not what those three
+  put at the top of a list: their top is high-degree entities the floor never reaches, which is the
+  same finding this ADR recorded when it chose to normalise, read from the floor's side.
+
+### What this does and does not establish
+
+- **It does not establish that `lift` at five is the best setting.** It establishes that on this
+  reading, by this rule, nothing displaced it. ADR 65's first consequence is the governing one: no
+  row of that table means anything on its own.
+- **It does not establish that the harness can tell these settings apart.** The held-out set is
+  small — one entity is several points of hit rate, which is why the rule asked for a difference no
+  single entity could produce — so a null result is also what an instrument too blunt for the
+  question would produce. Nothing here distinguishes those two readings, and a second reading on a
+  larger split is the only thing that would.
+- **It says nothing about the entities ingest cannot reach.** Rates are read over the reachable
+  (ADR 65's consequence), so this is not a verdict on expansion coverage.
+- **The constants are no longer untested, and that is the change.** ADR 45 declined to tune them
+  because nothing could evaluate them; something now can, it has, and the answer was "stand".
+
+### Consequences of this amendment
+
+- **Nothing in the tool moves**, so no ranking, no deck and no output line changes.
+- **`Setting.GRID` is unchanged**, so the next reading is comparable to this one row by row — the
+  property #239 fixed the grid for.
+- **The question is re-asked, not closed.** A later issue takes a second reading, and a wider grid
+  or a further metric is that issue's to argue rather than this one's.
+- **Nothing here is unit-testable, and that is said out loud rather than left implied.** No
+  behaviour changed, so there is no test to write and nothing to see red. The verification is the
+  full gate over an otherwise unchanged tree — `AdrIndexTest` for the index this amendment does not
+  touch, `DocumentationLinksTest` for the four relative links above, and `javadoc -Werror` inside
+  `./gradlew check` — together with the ruling that applied the rule cell by cell.
