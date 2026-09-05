@@ -1779,11 +1779,12 @@ front of every line, on stdout. The prefix is the same on every line, so the ali
 draws and, through `Equivalences` and `Retractions`, the same rules `GraphProjector` replays at
 boot — and hands that one `Fold`, along with the rows and the `LogProjection` built from them, to
 every section (issue #246). The sections that need only the projection (`NodeCensus`, `EdgeCensus`,
-`DegreeCensus`, `BridgeCensus`) take it and nothing else; the claims section takes the projection,
-the raw rows and the `Fold` together, because it also reports the raw row count and walks the rows
-itself; the taste section takes the score map through `AffinityStore.readRatings`, the `Fold` and
-the projection, and needs no rows at all. A census with a fold of its own could disagree with the
-picture about how many nodes there are, which is the drift `BothFoldsAgreeTest` exists to catch.
+`DegreeCensus`, `BridgeCensus`, `ConceptClassCensus`) take it and nothing else; the claims section
+takes the projection, the raw rows and the `Fold` together, because it also reports the raw row
+count and walks the rows itself; the taste section takes the score map through
+`AffinityStore.readRatings`, the `Fold` and the projection, and needs no rows at all. A census with
+a fold of its own could disagree with the picture about how many nodes there are, which is the
+drift `BothFoldsAgreeTest` exists to catch.
 That is why `census` depends on `export`, the second of the two dependencies between dev tools.
 
 ### Three things this is not allowed to do
