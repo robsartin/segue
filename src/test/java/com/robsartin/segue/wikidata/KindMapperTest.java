@@ -289,6 +289,15 @@ class KindMapperTest {
         .isEqualTo(NodeKind.WORK);
   }
 
+  @Test
+  @DisplayName("a video game is a WORK")
+  void shouldMapToWorkWhenTheClassIsVideoGame() {
+    // Its own direct parent, audiovisual work (Q2431196), is already WORK; the table does not
+    // walk P279, so the class needs its own line. Issue #265.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q7889"))) // video game
+        .isEqualTo(NodeKind.WORK);
+  }
+
   private static void assertOrderIndependently(String a, String b, NodeKind expected) {
     assertThat(KindMapper.fromInstanceOf(List.of(a, b))).isEqualTo(expected);
     assertThat(KindMapper.fromInstanceOf(List.of(b, a))).isEqualTo(expected);

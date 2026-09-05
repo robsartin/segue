@@ -291,6 +291,11 @@ class StandInQidsDenoteNothingTest {
                   "entity — a real value in the recorded proposition-claims.json",
                   code("src/test/resources/wikidata/proposition-claims.json"))),
           entry(
+              "Q7889",
+              real(
+                  "class id — mapped by KindMapper (issue #265)",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
               "Q11424",
               real(
                   "class id — mapped by ClassLabels and KindMapper",

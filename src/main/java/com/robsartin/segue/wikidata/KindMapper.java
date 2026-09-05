@@ -99,6 +99,7 @@ public final class KindMapper {
     // Issue #265, the second census reading: three more works.
     put("Q108352496", NodeKind.WORK); // single release
     put("Q140727568", NodeKind.WORK); // comic book issue
+    put("Q7889", NodeKind.WORK); // video game
     // places
     put("Q515", NodeKind.PLACE); // city
     put("Q6256", NodeKind.PLACE); // country
