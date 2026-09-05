@@ -31,6 +31,7 @@ Everything here was checked against the source in `src/main/java/com/robsartin/s
 - [Calibrating the recommender](#calibrating-the-recommender)
 - [Rating one card at a time](#rating-one-card-at-a-time)
 - [Claiming something no source has](#claiming-something-no-source-has)
+- [A supervised first run](#a-supervised-first-run)
 - [How to read an ADR against the code](#how-to-read-an-adr-against-the-code)
 
 ## What segue is, in one pass
@@ -2620,6 +2621,184 @@ and owner claims are exempt from the corroboration ladder by design, so an MCP `
 let a model launder model-generated structure into the one tier that skips quarantine, which is
 exactly what [ADR 23](adr/0023-quarantine-model-generated-assertions.md) exists to prevent.
 Dev-side keeps it the owner's.
+
+## A supervised first run
+
+The census taken on 2026-09-04 says the owner tools have never touched real data: no merges, no
+retractions, one local entity minted, nothing MusicBrainz reached. Every merge, retraction and
+stand-in path in the fold is fixture-only on the owner's graph, and the first real one should be a
+supervised run rather than a surprise. This chapter is that run.
+
+**The owner types every command here.** Nothing in this repository runs against the real database,
+and an agent reading this chapter is reading a description of what the owner will do, not a script
+it may execute — `--db` is required and `SEGUE_DB` does not satisfy it precisely so that an agent
+inheriting the owner's shell cannot stand in for him
+([ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md)).
+
+Read [Claiming something no source has](#claiming-something-no-source-has),
+[Taking something back out](#taking-something-back-out) and
+[Looking at the shape of your graph](#looking-at-the-shape-of-your-graph) first. This chapter puts
+them in an order and says what to expect between them; it does not restate what they say.
+
+### 0. Quit the client, and confirm nothing is holding the database
+
+[ADR 24](adr/0024-sqlite-assertion-log.md) assumes a single writer, and **nothing detects a second
+one** — that is [convention, not a check](#which-rules-are-only-convention). A server left running
+through this run is the one way to open the window issue #234 measured: its graph still holds a
+node for an entity you have retracted, so a claim naming that id passes the ingest gate, is
+appended, and the next boot cannot get past that row.
+
+Quit the MCP client, which is what starts and stops segue as a subprocess on the stdio transport.
+Then confirm no JVM is left holding the file:
+
+```bash
+pgrep -fl segue
+```
+
+Nothing printed means nothing is running. If something is, stop it and look again before going on.
+That command reads a process list and writes nothing.
+
+### 1. The census before
+
+```bash
+./gradlew graphCensus --args="--db $HOME/.segue/segue.db"
+```
+
+Paste the whole block somewhere you can put the second one beside it. It is aggregates only, which
+is why it is safe to paste at all — [ADR 63](adr/0063-a-read-only-census-of-the-graph.md).
+
+### 2. Mint one entity, dry run first
+
+Choose the label yourself, and choose it knowing two things. `mint` allocates `Q00` and the
+smallest number **no row has ever named**, and ids are never handed back: retracting this entity
+later does not free its id, because the log is append-only
+([ADR 19](adr/0019-assertion-log-source-of-truth.md)) and a retraction is a claim rather than a
+deletion ([ADR 44](adr/0044-retraction-as-a-new-claim.md)). And the label goes into that same log,
+so it stays there after the retraction, readable, permanently. Pick something that says what it
+is. A shape that works: `segue supervised run 2026-09-04`.
+
+```bash
+# which id would this take, and what would it say? Nothing is written.
+./gradlew ownClaim --args="mint --db $HOME/.segue/segue.db --kind WORK --label 'segue supervised run 2026-09-04' --dry-run"
+
+# do it — the tool answers with the id it allocated
+./gradlew ownClaim --args="mint --db $HOME/.segue/segue.db --kind WORK --label 'segue supervised run 2026-09-04'"
+```
+
+Write down the id the second command printed. Every `Q00900042` below means that id.
+
+### 3. Join it to something real, dry run first
+
+Pick an entity your graph already holds — `Q12345` below stands for whichever you pick. An owner
+edge joins two ids that are **already** in the projection, so an endpoint that is not there is
+refused rather than created. It routes and never vouches: `Provenance.owner` is filtered out
+before distinct sources are counted, so this edge corroborates nothing
+([ADR 59](adr/0059-owner-claims-as-a-third-layer.md)).
+
+```bash
+./gradlew ownClaim --args="assert --db $HOME/.segue/segue.db --from Q00900042 --to Q12345 --type INFLUENCED_BY --dry-run"
+./gradlew ownClaim --args="assert --db $HOME/.segue/segue.db --from Q00900042 --to Q12345 --type INFLUENCED_BY"
+```
+
+### 4. Boot once, and look at what you claimed
+
+Start the MCP client again, so it launches segue and the boot folds the log. Ask it for
+`get_entity` on the id you minted: you should get back the label you chose, the kind you gave it,
+and one neighbour — the entity you picked in step 3.
+
+Then **quit the client again.** Step 5 is a second writer otherwise, which is what step 0 is about.
+
+### 5. Retract it, dry run first
+
+```bash
+./gradlew retractEntity --args="--db $HOME/.segue/segue.db --qid Q00900042 --reason 'supervised first run 2026-09-04' --dry-run"
+./gradlew retractEntity --args="--db $HOME/.segue/segue.db --qid Q00900042 --reason 'supervised first run 2026-09-04'"
+```
+
+The dry run names what would stop projecting — the node claim and the edge claim — and appends
+nothing. **Read the real run's closing note to the end.** It tells you to restart before anything
+else is ingested and names the consequence of not doing so; that note is ADR 24's 2026-09-04
+amendment in one sentence, and you have already satisfied it by quitting in step 4.
+
+### 6. Boot again, and let the pre-flight speak
+
+Start the client once more. **The boot must succeed.** Before it applies anything, `GraphProjector`
+refuses the whole log if any surviving row names an entity no node stands for, listing each
+offending row by sequence number, the id nothing stands for, and the repair.
+
+If you see `replay refused:`, that is the run's finding and its first move at once: do what the
+message says — retract the endpoint it names, which withdraws the edge without deleting anything —
+rather than anything else, and file the block you saw. Appending a node claim for the named id does
+not repair it, and the message says so.
+
+### 7. The census after
+
+```bash
+./gradlew graphCensus --args="--db $HOME/.segue/segue.db"
+```
+
+### 8. What should have moved, and what should not
+
+No figures are written here. The run is what produces them, and a table of expected counts would be
+a second source of truth about your graph, going stale on its own. What is written is **which
+lines** move, and in which direction. `CensusReport` is the authority on the labels.
+
+Between the census in step 1 and the census in step 7, the log grew and the projection did not:
+
+| line | direction | why |
+| --- | --- | --- |
+| `claims / log rows` | up, by three | the mint, the owner edge, the retraction — the raw size, the one figure here that is not a derivation |
+| `claims / retractions` | up, by one | rows that are a retraction |
+| `claims / rows they removed` | up, by two | the node claim and the edge claim the retraction reaches. Never the same figure as the line above, and the gap between them is the blast radius ADR 44 talks about |
+| `claims / entities they name` | up, by one | distinct entities a retraction names |
+| `claims / local entities minted` | **back where it started** | it counts *surviving* rows, and the retraction reaches the mint |
+| everything under `nodes`, `edges` and `degree` | **back where it started** | the whole point: the log remembers, the projection does not |
+| `edges / withdrawn` | **unchanged** | that count is a merge's canonical side emptied by a retraction, and this run makes no merge. A movement here is a finding |
+| everything under `taste` | **unchanged** | nothing was rated. A movement here is a finding |
+| everything under `bridge` | **unchanged** | until step 9 |
+
+If you also take a census between step 3 and step 5 — and it is worth taking — that one is the
+interesting one. Against step 1: `nodes / total` and the `WORK` line up by one, `edges / total` and
+the `of type INFLUENCED_BY` line up by one, a `backed by owner` line appearing or rising, and the
+new edge landing on `corroborated by 0` rather than `corroborated by 1`, because an owner claim is
+filtered out before distinct sources are counted. Under `degree`, the minted node arrives at zero
+and leaves at one, so `at or below the floor` moves twice and the percentiles may move with it.
+
+### 9. Optional: reach MusicBrainz once
+
+**There is no dev-side bridge tool, deliberately.** MusicBrainz is reached only by `expand_entity`
+running inside the server, and the adapter describes `PERSON` and `GROUP` and nothing else
+([ADR 54](adr/0054-musicbrainz-as-the-second-source.md),
+[ADR 61](adr/0061-the-bridge-returns-classes.md)). So this step is one you do through the client;
+there is no command for it in this chapter.
+
+Start the client, pick one person or one band already in your graph, and call `expand_entity` on
+it. Then quit — step 0's rule has not stopped applying — and take a third census:
+
+```bash
+./gradlew graphCensus --args="--db $HOME/.segue/segue.db"
+```
+
+`bridge / entities MusicBrainz reached` should be up, and `edges / backed by musicbrainz` with it;
+if neither moved, nothing was reached and the run has said so. If the first moved and
+`bridge / of those, carrying classes` did not, you have measured the residual ADR 55 and issue #167
+left open, for the first time on real data, and it is worth an issue of its own.
+
+### What to file from what you saw
+
+This run changes no code. What it produces is issues, and these are the ones to watch for:
+
+- **A boot that refused.** File the `replay refused:` block verbatim, sequence numbers and all,
+  with what you did about it. That is the first real exercise of the boot pre-flight.
+- **A line that moved when the table above says it should not** — `taste`, `edges / withdrawn`, or
+  `bridge` before step 9. Any of those means a rule reaches further than this chapter says.
+- **A line that did not move when the table says it should**, especially `claims / rows they
+  removed`: if the retraction reached fewer rows than the dry run reported, the report and the fold
+  disagree, and that is the more serious of the two.
+- **Anything a tool printed that you had to stop and think about.** A refusal that did not tell you
+  what to type next is a defect in the sentence, not in you.
+- **Anything this chapter got wrong.** It was written against the code and checked against the
+  parsers, and it has never been run. The first run is what makes it true.
 
 ## How to read an ADR against the code
 

@@ -1,7 +1,9 @@
 package com.robsartin.segue.arch;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -43,6 +45,12 @@ import java.util.regex.Pattern;
  * --args='--db $HOME/.segue/segue.db'} reaches the tool as a literal {@code $HOME} and dies. That
  * is the tilde defect one quote further out, so the refusal says which shape to use rather than
  * teaching this class to split a form the guide must not contain.
+ *
+ * <p><b>Chapter scoping was added for the supervised-run runbook (#249), and it exists because
+ * {@link #of} is deliberately whole-file.</b> That is what makes the three tool tests reach every
+ * example wherever it is written — including a chapter added later, with no new code — but it also
+ * means a whole chapter can be deleted with every one of them still green on the other chapters'
+ * examples. {@link #inChapter} is what can say "this chapter, these commands, in this order".
  */
 public final class GuideExamples {
 
@@ -70,6 +78,57 @@ public final class GuideExamples {
 
   /** Every example the guide shows for one Gradle task, in the order it shows them. */
   public static GuideExamples of(String taskName) {
+    String[] lines = guideLines();
+    return scan(lines, taskName, 0, lines.length);
+  }
+
+  /**
+   * Every example one {@code ## } chapter shows for one Gradle task — {@link #of} restricted to
+   * that chapter's lines, with the guide's own line numbers kept so a failure still opens.
+   *
+   * <p><b>Empty when the chapter is absent, rather than throwing</b>, so a guide missing the
+   * chapter reds on one named assertion rather than erroring in four. The loud guard is {@link
+   * #chapterText}, which the caller asserts is present before it reads anything else — see {@code
+   * DeveloperGuideSupervisedRunExamplesTest}.
+   */
+  public static GuideExamples inChapter(String heading, String taskName) {
+    String[] lines = guideLines();
+    int[] range = chapterRange(lines, heading);
+    return range == null
+        ? new GuideExamples(List.of(), List.of())
+        : scan(lines, taskName, range[0], range[1]);
+  }
+
+  /** One {@code ## } chapter's lines, joined; empty when the guide has no such chapter. */
+  public static Optional<String> chapterText(String heading) {
+    String[] lines = guideLines();
+    int[] range = chapterRange(lines, heading);
+    return range == null
+        ? Optional.empty()
+        : Optional.of(String.join("\n", Arrays.asList(lines).subList(range[0], range[1])));
+  }
+
+  private static String[] guideLines() {
+    return RepositoryTree.read(RepositoryTree.root().resolve(GUIDE)).split("\n", -1);
+  }
+
+  /** {@code [from, to)} over {@code lines} for {@code ## heading}, or null when it is absent. */
+  private static int[] chapterRange(String[] lines, String heading) {
+    for (int i = 0; i < lines.length; i++) {
+      if (!lines[i].equals("## " + heading)) {
+        continue;
+      }
+      for (int j = i + 1; j < lines.length; j++) {
+        if (lines[j].startsWith("## ")) {
+          return new int[] {i, j};
+        }
+      }
+      return new int[] {i, lines.length};
+    }
+    return null;
+  }
+
+  private static GuideExamples scan(String[] lines, String taskName, int from, int to) {
     // The widest true statement, and no argument syntax in it at all: this names the task. Three
     // rounds of "the shapes I can parse" each left the next shape invisible.
     Pattern mention =
@@ -77,11 +136,10 @@ public final class GuideExamples {
     // A colon-prefixed task is a legitimate invocation, so it is parsed rather than refused.
     Pattern complete =
         Pattern.compile("\\./gradlew :?" + Pattern.quote(taskName) + " --args=\"(.*)\"");
-    String[] lines = RepositoryTree.read(RepositoryTree.root().resolve(GUIDE)).split("\n", -1);
 
     List<Example> examples = new ArrayList<>();
     List<String> unreadable = new ArrayList<>();
-    for (int i = 0; i < lines.length; i++) {
+    for (int i = from; i < to; i++) {
       if (!lines[i].contains("./gradlew") || !mention.matcher(lines[i]).find()) {
         continue;
       }
