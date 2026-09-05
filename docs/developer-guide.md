@@ -2643,6 +2643,14 @@ Read [Claiming something no source has](#claiming-something-no-source-has),
 [Looking at the shape of your graph](#looking-at-the-shape-of-your-graph) first. This chapter puts
 them in an order and says what to expect between them; it does not restate what they say.
 
+Every `./gradlew` line below is executed by a test before you ever paste it.
+`DeveloperGuideOwnClaimExamplesTest`, `DeveloperGuideRetractionExamplesTest` and
+`DeveloperGuideCensusExamplesTest` split each `--args` string the way a shell would and hand it to
+that tool's own parser, wherever in this guide it is written; `DeveloperGuideSupervisedRunExamplesTest`
+checks this chapter in particular — that it is here, that its commands are these commands in this
+order, and that it cites the decisions it leans on. A flag renamed in a tool reds this chapter, and
+so does a step written out of order.
+
 ### 0. Quit the client, and confirm nothing is holding the database
 
 [ADR 24](adr/0024-sqlite-assertion-log.md) assumes a single writer, and **nothing detects a second
