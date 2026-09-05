@@ -58,12 +58,26 @@ class DegreeCensusTest {
             "PERSON is [2, 2, 6] and WORK is [0, 0, 0, 0, 1, 1, 1, 5]; the whole graph's p50 of 1 is"
                 + " a degree neither kind's median has")
         .containsExactly(
-            entry(NodeKind.PERSON, new DegreeCensus.KindDegrees(2, 6, 6, 6, 2)),
-            entry(NodeKind.GROUP, new DegreeCensus.KindDegrees(2, 2, 2, 2, 1)),
-            entry(NodeKind.WORK, new DegreeCensus.KindDegrees(0, 5, 5, 5, 8)),
-            entry(NodeKind.PLACE, new DegreeCensus.KindDegrees(0, 0, 0, 0, 0)),
-            entry(NodeKind.EVENT, new DegreeCensus.KindDegrees(0, 0, 0, 0, 0)),
-            entry(NodeKind.CONCEPT, new DegreeCensus.KindDegrees(2, 2, 2, 2, 1)));
+            entry(NodeKind.PERSON, new DegreeCensus.KindDegrees(2, 6, 6, 6, 2, 67)),
+            entry(NodeKind.GROUP, new DegreeCensus.KindDegrees(2, 2, 2, 2, 1, 100)),
+            entry(NodeKind.WORK, new DegreeCensus.KindDegrees(0, 5, 5, 5, 8, 100)),
+            entry(NodeKind.PLACE, new DegreeCensus.KindDegrees(0, 0, 0, 0, 0, 0)),
+            entry(NodeKind.EVENT, new DegreeCensus.KindDegrees(0, 0, 0, 0, 0, 0)),
+            entry(NodeKind.CONCEPT, new DegreeCensus.KindDegrees(2, 2, 2, 2, 1, 100)));
+  }
+
+  @Test
+  @DisplayName("the floor's bite is reported as a whole percent of the population it is applied to")
+  void shouldReportTheFloorsBiteAsAWholePercentWhenAPopulationIsRead() {
+    assertThat(CENSUS.atOrBelowTheFloorPercent())
+        .as("twelve of thirteen is 92.3%, and a whole percent of it is 92")
+        .isEqualTo(92);
+    assertThat(CENSUS.byKind().get(NodeKind.PERSON).atOrBelowTheFloorPercent())
+        .as("two of three is 66.7%, and an exact-two-thirds share rounds up rather than truncating")
+        .isEqualTo(67);
+    assertThat(CENSUS.byKind().get(NodeKind.PLACE).atOrBelowTheFloorPercent())
+        .as("an empty population reads zero rather than dividing by nothing")
+        .isEqualTo(0);
   }
 
   @Test
@@ -130,11 +144,11 @@ class DegreeCensusTest {
     assertThat(census.byKind())
         .as("all six kinds are present at zero, never absent — NodeCensus's rule")
         .containsExactly(
-            entry(NodeKind.PERSON, new DegreeCensus.KindDegrees(0, 0, 0, 0, 0)),
-            entry(NodeKind.GROUP, new DegreeCensus.KindDegrees(0, 0, 0, 0, 0)),
-            entry(NodeKind.WORK, new DegreeCensus.KindDegrees(0, 0, 0, 0, 0)),
-            entry(NodeKind.PLACE, new DegreeCensus.KindDegrees(0, 0, 0, 0, 0)),
-            entry(NodeKind.EVENT, new DegreeCensus.KindDegrees(0, 0, 0, 0, 0)),
-            entry(NodeKind.CONCEPT, new DegreeCensus.KindDegrees(0, 0, 0, 0, 0)));
+            entry(NodeKind.PERSON, new DegreeCensus.KindDegrees(0, 0, 0, 0, 0, 0)),
+            entry(NodeKind.GROUP, new DegreeCensus.KindDegrees(0, 0, 0, 0, 0, 0)),
+            entry(NodeKind.WORK, new DegreeCensus.KindDegrees(0, 0, 0, 0, 0, 0)),
+            entry(NodeKind.PLACE, new DegreeCensus.KindDegrees(0, 0, 0, 0, 0, 0)),
+            entry(NodeKind.EVENT, new DegreeCensus.KindDegrees(0, 0, 0, 0, 0, 0)),
+            entry(NodeKind.CONCEPT, new DegreeCensus.KindDegrees(0, 0, 0, 0, 0, 0)));
   }
 }

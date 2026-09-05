@@ -55,6 +55,8 @@ import java.util.Objects;
  *     {@code CandidateSweep} excludes below</b> ({@code candidateDegree < minDegree}), so this is
  *     the sweep's exclusions plus the nodes sitting exactly on the floor — the population {@code
  *     FloorReading.headOnTheFloor} says one expansion moves first
+ * @param atOrBelowTheFloorPercent the same population as a whole percent of every node, printed
+ *     beside the count rather than instead of it
  * @param byKind the same reading taken over each kind's own nodes, in {@code NodeKind} declaration
  *     order. An {@code EnumMap} rather than {@code Map.copyOf}, on {@code NodeCensus}'s reason:
  *     that factory's iteration order is unspecified and salted per JVM, and ADR 43's byte-identical
@@ -67,6 +69,7 @@ public record DegreeCensus(
     int p99,
     int max,
     int atOrBelowTheFloor,
+    int atOrBelowTheFloorPercent,
     Map<NodeKind, KindDegrees> byKind) {
 
   public DegreeCensus {
@@ -79,7 +82,8 @@ public record DegreeCensus(
   }
 
   /** One kind's population, read by the rules the whole graph is read by. */
-  public record KindDegrees(int p50, int p90, int p99, int max, int atOrBelowTheFloor) {}
+  public record KindDegrees(
+      int p50, int p90, int p99, int max, int atOrBelowTheFloor, int atOrBelowTheFloorPercent) {}
 
   public static DegreeCensus of(LogProjection projection) {
     Objects.requireNonNull(projection, "projection");
@@ -102,18 +106,35 @@ public record DegreeCensus(
         whole.p99(),
         whole.max(),
         whole.atOrBelowTheFloor(),
+        whole.atOrBelowTheFloorPercent(),
         byKind);
   }
 
   /** One population's figures — the whole graph's and every kind's, by one rule rather than two. */
   private static KindDegrees read(List<Integer> population, int floor) {
     List<Integer> sorted = population.stream().sorted().toList();
+    int atOrBelowTheFloor = (int) sorted.stream().filter(degree -> degree <= floor).count();
     return new KindDegrees(
         quantile(sorted, 0.50),
         quantile(sorted, 0.90),
         quantile(sorted, 0.99),
         sorted.isEmpty() ? 0 : sorted.getLast(),
-        (int) sorted.stream().filter(degree -> degree <= floor).count());
+        atOrBelowTheFloor,
+        percent(atOrBelowTheFloor, sorted.size()));
+  }
+
+  /**
+   * A whole percent of the population, nearest, an exact half going up: {@code (200 * part + whole)
+   * / (2 * whole)} in integers, so no floating point decides a boundary and the value the report
+   * prints stays an integer (ADR 63). <b>An empty population reads zero</b> rather than dividing by
+   * nothing — and a share of zero is why the count is printed beside it, because zero covers both
+   * "none" and "a handful of a hundred thousand".
+   */
+  private static int percent(int part, int whole) {
+    if (whole == 0) {
+      return 0;
+    }
+    return (200 * part + whole) / (2 * whole);
   }
 
   /** ADR 55's nearest-rank convention: {@code sorted.get(max(1, ceil(p * size)) - 1)}. */
