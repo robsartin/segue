@@ -4,7 +4,6 @@ import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.KnownList;
 import com.robsartin.segue.domain.Recommendation;
 import com.robsartin.segue.domain.Recommendations;
-import com.robsartin.segue.domain.Scorer;
 import com.robsartin.segue.port.GraphStore;
 import com.robsartin.segue.recommend.CandidateSweep;
 import com.robsartin.segue.recommend.Explained;
@@ -25,6 +24,12 @@ import java.util.function.Consumer;
  * <p><b>Candidates come from the recommender's own sweep, not a second implementation.</b> A card's
  * routes are then the routes {@code find_paths} would return for the same pair, which is the
  * property that makes "why is this here" answerable at all.
+ *
+ * <p><b>Scored with the recommender's own default, by reference.</b> The sweep's scorer is {@code
+ * Recommendations.DEFAULT_SCORER} — the same constant {@code RecommendCli} defaults {@code
+ * --scorer} to — rather than a second copy of the enum here, which is the rule the floor below
+ * already follows (issue #244). Move the constant and both tools move together; that is what keeps
+ * a card in this deck the card {@code ./gradlew recommend} would have printed.
  *
  * <p>Notes go to a {@link Consumer} rather than to a logger of this class's own, as {@code
  * RatingsRun} does, so a test can assert on their order and content — and so this class has no
@@ -125,7 +130,7 @@ public final class RateRun {
               .over(
                   known,
                   KnownList.notOffered(ratings, merges),
-                  Scorer.LIFT,
+                  Recommendations.DEFAULT_SCORER,
                   minDegree,
                   Recommendations.regardFor(ratings));
       Routes routes = new Routes(graph, RecognitionInstitutions::isRecognitionInstitution);

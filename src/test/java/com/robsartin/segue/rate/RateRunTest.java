@@ -1,5 +1,6 @@
 package com.robsartin.segue.rate;
 
+import static com.robsartin.segue.domain.Recommendations.DEFAULT_SCORER;
 import static com.robsartin.segue.domain.Recommendations.MIN_CANDIDATE_DEGREE;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -399,7 +400,7 @@ class RateRunTest {
       // its own degree does not bury. Asserted, not assumed, so a later fixture change that made
       // the two agree fails here instead of reporting clean forever.
       String byCounting = topCandidate(graph, everything, Scorer.RAW);
-      String byTheDefault = topCandidate(graph, everything, Scorer.LIFT);
+      String byTheDefault = topCandidate(graph, everything, DEFAULT_SCORER);
       assertThat(byTheDefault).isNotEqualTo(byCounting);
 
       List<Card> deck =

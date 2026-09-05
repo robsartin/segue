@@ -26,7 +26,7 @@ class RecommendCliTest {
 
     assertThat(options.known()).isEqualTo(Path.of("/tmp/known.csv"));
     assertThat(options.out()).isEqualTo(Path.of("/tmp/out.txt"));
-    assertThat(options.scorer()).isEqualTo(Scorer.LIFT);
+    assertThat(options.scorer()).isEqualTo(Recommendations.DEFAULT_SCORER);
     assertThat(options.minDegree()).isEqualTo(Recommendations.MIN_CANDIDATE_DEGREE);
     assertThat(options.top()).isEqualTo(RecommendCli.DEFAULT_TOP);
     assertThat(options.database()).isEqualTo(Path.of(HOME, ".segue", "segue.db"));
