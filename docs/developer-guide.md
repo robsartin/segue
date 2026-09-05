@@ -2693,13 +2693,15 @@ Read [Claiming something no source has](#claiming-something-no-source-has),
 [Looking at the shape of your graph](#looking-at-the-shape-of-your-graph) first. This chapter puts
 them in an order and says what to expect between them; it does not restate what they say.
 
-Every `./gradlew` line below is executed by a test before you ever paste it.
+Every `./gradlew` line below that carries `--args` is executed by a test before you ever paste it.
 `DeveloperGuideOwnClaimExamplesTest`, `DeveloperGuideRetractionExamplesTest` and
 `DeveloperGuideCensusExamplesTest` split each `--args` string the way a shell would and hand it to
 that tool's own parser, wherever in this guide it is written; `DeveloperGuideSupervisedRunExamplesTest`
 checks this chapter in particular — that it is here, that its commands are these commands in this
-order, and that it cites the decisions it leans on. A flag renamed in a tool reds this chapter, and
-so does a step written out of order.
+order, and that it cites the decisions it leans on. The one `./gradlew` line here with no `--args`
+at all — the rebuild before step 4 — carries no arguments for a parser to check, so that same test
+class pins its position in the chapter text instead: it must appear, and it must appear before
+step 4. A flag renamed in a tool reds this chapter, and so does a step written out of order.
 
 ### 0. Quit the client, and confirm nothing is holding the database
 
@@ -2710,16 +2712,23 @@ node for an entity you have retracted, so a claim naming that id passes the inge
 appended, and the next boot cannot get past that row.
 
 Quit the MCP client, which is what starts and stops segue as a subprocess on the stdio transport.
-Then confirm no JVM is left holding the file:
+Then confirm no JVM is left holding the file — match a process whose *command* is `java`, bare or
+by its full path, with "segue" somewhere in its arguments. The first run showed why each half of
+that matters: a pattern that looked for `java` anywhere on the command line matched dozens of
+orphaned shell loops whose command lines carried a source path under `src/main/java` and the word
+"segue", without ever running Java at all, and a pattern that insisted on `bin/java` missed the
+one way the client is actually configured, a bare `java` on the `PATH` (the `"command"` in the
+README's client config). Anchoring `java` to the start of the command line or to a `/` keeps both
+straight; do not "simplify" it back to either.
 
 ```bash
-pgrep -fl 'java.*segue'
+pgrep -fl '(^|/)java .*segue'
 ```
 
 Nothing printed means nothing is running. If something is, stop it and look again before going on.
-A bare `pgrep -fl segue` also matches a Gradle daemon or an editor with the project open; a match
-that is not a JVM running segue is not a second writer. That command reads a process list and
-writes nothing.
+The pattern also matches a Gradle daemon or test worker whose arguments mention the project, or a
+server started with `bootRun`; a match that is not a JVM running segue is not a second writer, and
+one that is, is. That command reads a process list and writes nothing.
 
 ### 1. The census before
 
@@ -2748,7 +2757,11 @@ is. A shape that works: `segue supervised run 2026-09-04`.
 ./gradlew ownClaim --args="mint --db $HOME/.segue/segue.db --kind WORK --label 'segue supervised run 2026-09-04'"
 ```
 
-Write down the id the second command printed. Every `Q00900042` below means that id.
+The dry run allocates nothing — it can only report what the real mint would do, which is why
+running it twice in a row can print the same id twice. The id to carry forward is the one the
+**real** run printed, the second command above, without `--dry-run`. Write it down. Every
+`Q00900042` below means that id — an id only a dry run has printed has not been allocated, and
+step 3 will refuse it.
 
 ### 3. Join it to something real, dry run first
 
@@ -2761,6 +2774,23 @@ before distinct sources are counted, so this edge corroborates nothing
 ```bash
 ./gradlew ownClaim --args="assert --db $HOME/.segue/segue.db --from Q00900042 --to Q12345 --type INFLUENCED_BY --dry-run"
 ./gradlew ownClaim --args="assert --db $HOME/.segue/segue.db --from Q00900042 --to Q12345 --type INFLUENCED_BY"
+```
+
+Look at the jar's date before deciding whether to rebuild it — compare it to when you minted and
+joined the entity in steps 2 and 3, which you already know, rather than a start time this runbook
+never asked you to write down:
+
+```bash
+ls -l build/libs/
+```
+
+**Before step 4, rebuild the client's jar.** If the one on disk predates owner claims, it was built
+against code that never heard of the two rows you just appended — the mint and the owner edge —
+and whatever the MCP client launches would be running stale code against a log it cannot fully
+understand:
+
+```bash
+./gradlew bootJar
 ```
 
 ### 4. Boot once, and look at what you claimed

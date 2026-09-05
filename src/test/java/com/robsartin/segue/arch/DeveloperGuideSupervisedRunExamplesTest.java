@@ -38,7 +38,12 @@ class DeveloperGuideSupervisedRunExamplesTest {
 
   private static final String CHAPTER = "A supervised first run";
 
-  /** Every task the chapter shows a command for. */
+  /**
+   * Every task whose {@code --args} this class parses — not every task the chapter shows a command
+   * for. {@code bootJar} also appears in the chapter (the rebuild before step 4) but takes no
+   * {@code --args}, so it is prose to {@link GuideExamples#scan} and is never a candidate here;
+   * {@link #shouldPinTheRebuildBeforeStepFourWhenTheChapterShowsIt()} is what checks it instead.
+   */
   private static final List<String> TASKS = List.of("graphCensus", "ownClaim", "retractEntity");
 
   /** {@code adr/0044-} — the number is what is asserted, so a renamed file is not a false red. */
@@ -78,6 +83,39 @@ class DeveloperGuideSupervisedRunExamplesTest {
             "retractEntity",
             "graphCensus",
             "graphCensus");
+  }
+
+  @Test
+  @DisplayName("the client's jar is rebuilt before step 4, not merely mentioned somewhere")
+  void shouldPinTheRebuildBeforeStepFourWhenTheChapterShowsIt() {
+    String chapter = GuideExamples.chapterText(CHAPTER).orElse("");
+    List<String> lines = List.of(chapter.split("\n", -1));
+    int bootJarLine = lines.indexOf("./gradlew bootJar");
+    int stepFourLine = -1;
+    for (int i = 0; i < lines.size(); i++) {
+      if (lines.get(i).startsWith("### 4.")) {
+        stepFourLine = i;
+        break;
+      }
+    }
+
+    assertThat(bootJarLine)
+        .as(
+            "docs/developer-guide.md, '%s' — a line that is exactly `./gradlew bootJar`. It"
+                + " carries no --args, so no parser in this suite ever reads it (see the TASKS"
+                + " javadoc above); this is the only check that the rebuild exists at all",
+            CHAPTER)
+        .isGreaterThanOrEqualTo(0);
+    assertThat(stepFourLine)
+        .as("docs/developer-guide.md, '%s' — a '### 4.' heading", CHAPTER)
+        .isGreaterThanOrEqualTo(0);
+    assertThat(bootJarLine)
+        .as(
+            "docs/developer-guide.md, '%s' — the rebuild must come before step 4 boots the"
+                + " client; a rebuild that happens after the boot is worthless, which is the"
+                + " whole content of correction 1",
+            CHAPTER)
+        .isLessThan(stepFourLine);
   }
 
   @Test
