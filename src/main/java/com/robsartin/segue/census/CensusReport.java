@@ -121,6 +121,19 @@ public final class CensusReport {
     body.add(count("p99", degree.p99()));
     body.add(count("max", degree.max()));
     body.add(count("at or below the floor", degree.atOrBelowTheFloor()));
+    body.add(count("at or below the floor %", degree.atOrBelowTheFloorPercent()));
+    for (Map.Entry<NodeKind, DegreeCensus.KindDegrees> kind : degree.byKind().entrySet()) {
+      // The kind's own name, as the nodes section already labels its counts with it: a NodeKind
+      // constant is vocabulary this file compiles against, not text read off the log.
+      String of = kind.getKey().name() + " ";
+      DegreeCensus.KindDegrees read = kind.getValue();
+      body.add(count(of + "p50", read.p50()));
+      body.add(count(of + "p90", read.p90()));
+      body.add(count(of + "p99", read.p99()));
+      body.add(count(of + "max", read.max()));
+      body.add(count(of + "at or below the floor", read.atOrBelowTheFloor()));
+      body.add(count(of + "at or below the floor %", read.atOrBelowTheFloorPercent()));
+    }
 
     body.add(section("bridge"));
     body.add(count("entities MusicBrainz reached", census.bridge().entitiesReached()));
