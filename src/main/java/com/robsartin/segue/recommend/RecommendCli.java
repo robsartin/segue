@@ -4,6 +4,7 @@ import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.Recommendations;
 import com.robsartin.segue.domain.Scorer;
 import com.robsartin.segue.ingest.GraphProjector;
+import com.robsartin.segue.ingest.Replay;
 import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
@@ -204,20 +205,19 @@ public final class RecommendCli {
     try (SqliteAssertionLog assertions = new SqliteAssertionLog(options.database());
         SqliteAffinityStore affinity = new SqliteAffinityStore(options.database());
         TinkerGraphStore graph = new TinkerGraphStore()) {
-      long applied = GraphProjector.project(assertions, graph, IdentityMerge.NONE);
-      log.info("replayed {} assertion(s) from {}", applied, options.database());
+      Replay replay = GraphProjector.replay(assertions, graph, IdentityMerge.NONE);
+      log.info("replayed {} assertion(s) from {}", replay.applied(), options.database());
 
-      // A second pass over the log, and the cheaper shapes are worse (#92). The merges could be
-      // returned by project() instead, but three of its four callers have no use for them and the
-      // return type is a count today; and they cannot be read off the graph at all, because a
-      // merge is deliberately not drawn there as an edge. So: read the log again.
+      // The merges the replay already derived, handed back rather than read out of the log a
+      // second time (#246). They are not on the graph — a merge is deliberately not drawn there
+      // as an edge — which is why this tool had to fold at all; project() answering with a count
+      // was the other half of the reason, and Replay is what answers with both.
       //
-      // Measured rather than waved through, on a synthetic log of 102,000 assertions (34,000 node
-      // claims and 68,000 edges), best of three passes in one JVM: project() 1918ms, this second
-      // readAll() plus Equivalences.in 244ms — a ratio of 0.127 on a replay this tool already
-      // performs. Linear in the log, and dominated by building the graph rather than decoding the
-      // rows. The probe was a throwaway and is deleted; the real database was never opened.
-      Equivalences merges = Equivalences.in(assertions.readAll());
+      // fold.equivalences() is the folding form where this held Equivalences.in's merges-only
+      // one. The two differ in retractedStandIns alone, which only namesARetractedStandIn reads
+      // and nothing in this package calls; pinned by
+      // EquivalencesTest.shouldAnswerAsTheMergesDoWhenTheFoldingFormIsAskedTheToolsQuestions.
+      Equivalences merges = replay.fold().equivalences();
 
       // The one line in this tool that reads the taste layer, and it reads half of it (issue #85).
       // A count, never a qid and never a score: how much somebody has rated is a fact about them,
