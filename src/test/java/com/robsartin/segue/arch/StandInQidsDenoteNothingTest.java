@@ -831,7 +831,8 @@ class StandInQidsDenoteNothingTest {
           entry(
               "Q15632617",
               real(
-                  "class id — mapped (deliberately to CONCEPT) by KindMapper (issue #261)",
+                  "class id — deliberately left unmapped by KindMapper, pinned at CONCEPT by"
+                      + " KindMapperTest (issue #261)",
                   code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
           entry(
               "Q16334295",
@@ -881,7 +882,8 @@ class StandInQidsDenoteNothingTest {
           entry(
               "Q38033430",
               real(
-                  "class id — mapped (deliberately to CONCEPT) by KindMapper (issue #261)",
+                  "class id — deliberately left unmapped by KindMapper, pinned at CONCEPT by"
+                      + " KindMapperTest (issue #261)",
                   code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
           entry(
               "Q45400320",
