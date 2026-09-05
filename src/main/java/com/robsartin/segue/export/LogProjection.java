@@ -3,6 +3,7 @@ package com.robsartin.segue.export;
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.EdgeRecord;
 import com.robsartin.segue.domain.Equivalences;
+import com.robsartin.segue.domain.Fold;
 import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
@@ -20,6 +21,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -122,20 +124,44 @@ public record LogProjection(
   /** Read the log once and fold it. */
   public static LogProjection of(AssertionLog log) {
     List<LoggedAssertion> logged = log.readAll();
-    Retractions retractions = Retractions.in(logged);
+    return of(logged, Fold.of(logged, KindMapper::rederive));
+  }
+
+  /**
+   * This fold, over rows and a {@link Fold} the caller has already built (#246).
+   *
+   * <p>Every log-taking rule this method used to call — {@code Retractions.in}, {@code
+   * Equivalences.standIns} and {@code Equivalences.folding} — is one of the four answers a {@link
+   * Fold} carries, so a caller that already holds one was paying for the same three walks twice.
+   * {@code census} is that caller: it reads the log for its own row counts and then asked for this
+   * projection, which read the log again and folded it again.
+   *
+   * <p><b>Trusts the caller</b>, as the {@code Equivalences} overloads {@code Fold.of} uses do:
+   * {@code fold} must be {@code Fold.of(logged, KindMapper::rederive)} for these exact rows, or
+   * this answers a different question.
+   *
+   * <p>{@code LogProjectionTest.shouldGiveTheSameProjectionWhenHandedTheFoldOfWouldCompute} pins
+   * the two forms to one answer, and {@code ArchitectureTest.theExportFoldsOnce} is what keeps this
+   * class the export's only fold.
+   */
+  public static LogProjection of(List<LoggedAssertion> logged, Fold fold) {
+    Objects.requireNonNull(logged, "logged");
+    Objects.requireNonNull(fold, "fold");
+    Retractions retractions = fold.retractions();
     // Every merged entity's canonical id has its node before the fold begins (#178), from the same
-    // method the boot replay seeds itself with. A real node claim about the canonical id, wherever
-    // it sits in the log, lands on top of the stand-in below and wins - which is the guarantee
-    // that used to come from asking whether the id had been claimed yet at the merge's own row.
-    Map<String, NodeRecord> nodes =
-        new LinkedHashMap<>(Equivalences.standIns(logged, KindMapper::rederive));
+    // stand-ins the boot replay seeds itself with — arriving here on the Fold rather than being
+    // computed afresh. A real node claim about the canonical id, wherever it sits in the log,
+    // lands on top of the stand-in below and wins - which is the guarantee that used to come
+    // from asking whether the id had been claimed yet at the merge's own row.
+    Map<String, NodeRecord> nodes = new LinkedHashMap<>(fold.standIns());
     // The graph half of a merge, over the whole log and from the same type the boot replay uses
-    // (#178). Every edge below has both of its endpoints read through this, so an edge claimed
-    // against a merged local id is folded onto the canonical id once - which is why there is no
-    // copy at the merge's own row any more, and no accumulator here deciding whether to make one.
-    // folding() rather than in(): the fold is also where an edge naming a stand-in a retraction
-    // took away stops projecting (#224).
-    Equivalences equivalences = Equivalences.folding(logged);
+    // (#178) — fold.equivalences() rather than a fresh Equivalences.folding(logged) call. Every
+    // edge below has both of its endpoints read through this, so an edge claimed against a merged
+    // local id is folded onto the canonical id once - which is why there is no copy at the
+    // merge's own row any more, and no accumulator here deciding whether to make one. It is the
+    // folding() form rather than the merges-only in(): the fold is also where an edge naming a
+    // stand-in a retraction took away stops projecting (#224).
+    Equivalences equivalences = fold.equivalences();
     Map<String, List<AssertionRecord>> byEdge = new LinkedHashMap<>();
     // Keys, not rows, so that this really is danglingEdges' sibling: that count runs over byEdge
     // AFTER corroborating claims are grouped, so two sources asserting one withdrawn relationship

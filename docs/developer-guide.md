@@ -552,6 +552,7 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `theWorldFactLayerNeverTouchesAffinity` | `ingest` or any graph/source adapter depending on a taste-layer type | [ADR 33](adr/0033-taste-layer-separation.md) |
 | `onlyJackson3` | Jackson 2's `core`/`databind`/`datatype` packages | [ADR 35](adr/0035-jackson-3-single-json-library.md) |
 | `theBootFoldsOnce` | any ingest class but `IngestService` calling `Equivalences.in`, `folding`, `standIns`, `nodesTheFoldHolds`, `retractedStandIns` or `localsOfMerges`, or `Retractions.in` — the boot builds one `Fold` and every reader takes what it holds. The package rather than `GraphProjector` alone, because a fence naming one class cannot see a package-private helper that folds and is called from the replay. `IngestService` is the single exception: `claim`'s pre-append gate folds on the live path, where there is no boot fold to reuse | [ADR 64](adr/0064-fold-the-log-once-per-boot.md) |
+| `theExportFoldsOnce` | any `export` class but `LogProjection` calling the seven log-taking fold statics or `Fold.of` — the export folds in one place and every other class takes what it holds. `Fold.of` is forbidden too, unlike in `theBootFoldsOnce`, because here it is the second class's route to a second fold rather than the sanctioned one | [ADR 64](adr/0064-fold-the-log-once-per-boot.md) |
 
 ### Which rules are only convention
 

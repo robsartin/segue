@@ -9,13 +9,18 @@ import static com.robsartin.segue.export.InventedGraph.edge;
 import static com.robsartin.segue.export.InventedGraph.merged;
 import static com.robsartin.segue.export.InventedGraph.minted;
 import static com.robsartin.segue.export.InventedGraph.node;
+import static com.robsartin.segue.export.InventedGraph.owned;
+import static com.robsartin.segue.export.InventedGraph.retract;
 import static com.robsartin.segue.export.InventedGraph.secondSource;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.domain.EdgeRecord;
+import com.robsartin.segue.domain.Fold;
+import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.Retraction;
 import com.robsartin.segue.export.InventedGraph.FakeAssertionLog;
+import com.robsartin.segue.wikidata.KindMapper;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -24,6 +29,53 @@ import org.junit.jupiter.api.Test;
 class LogProjectionTest {
 
   private static final Instant WHEN_RETRACTED = Instant.parse("2026-02-01T00:00:00Z");
+
+  /** A local entity minted and then merged onto an eleven-digit canonical id (ADR 62). */
+  private static final String MERGED_LOCAL = "Q00900201";
+
+  private static final String MERGED_CANONICAL = "Q10000000950";
+
+  /** A second local entity, minted, merged, and then retracted — so its merge is withdrawn. */
+  private static final String RETRACTED_LOCAL = "Q00900202";
+
+  private static final String RETRACTED_CANONICAL = "Q10000000951";
+
+  /** The far end of the edge naming {@link #MERGED_LOCAL} — a plain, source-shaped id (ADR 58). */
+  private static final String FAR_END = "Q0900301";
+
+  /**
+   * A minted local entity, merged onto an eleven-digit canonical id, with an edge naming the local
+   * id (so the fold's stand-ins are exercised); a second minted-and-merged local id whose merge is
+   * retracted (so the fold's retractions are exercised); and a node claim on the far end of the
+   * edge. Invented ids only (ADR 58, ADR 59, ADR 62).
+   */
+  private static LoggedAssertion[] mergedAndRetractedLog() {
+    return new LoggedAssertion[] {
+      minted(MERGED_LOCAL, NodeKind.WORK, "the merged work"),
+      merged(MERGED_LOCAL, MERGED_CANONICAL),
+      owned(MERGED_LOCAL, FAR_END, "INFLUENCED_BY"),
+      minted(RETRACTED_LOCAL, NodeKind.WORK, "the retracted work"),
+      merged(RETRACTED_LOCAL, RETRACTED_CANONICAL),
+      retract(RETRACTED_LOCAL),
+      node(FAR_END, NodeKind.WORK, "the far end")
+    };
+  }
+
+  @Test
+  @DisplayName("the projection built from a prebuilt fold is the one of(log) builds itself")
+  void shouldGiveTheSameProjectionWhenHandedTheFoldOfWouldCompute() {
+    FakeAssertionLog log = new FakeAssertionLog().with(mergedAndRetractedLog());
+    List<LoggedAssertion> logged = log.readAll();
+
+    assertThat(LogProjection.of(logged, Fold.of(logged, KindMapper::rederive)))
+        .as(
+            "issue #246: of(log) reads Retractions.in, standIns and folding off the log, which"
+                + " are exactly what a Fold carries — the same answer or it is a second fold")
+        .isEqualTo(LogProjection.of(log));
+    assertThat(LogProjection.of(log).nodes())
+        .as("and the fixture projects something, so the comparison is not two empty projections")
+        .isNotEmpty();
+  }
 
   @Test
   @DisplayName("node claims become nodes, and the last claim about an entity wins")

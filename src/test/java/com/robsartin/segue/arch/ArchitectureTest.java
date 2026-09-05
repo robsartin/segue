@@ -16,6 +16,7 @@ import com.robsartin.segue.domain.OwnerEdge;
 import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.domain.Retractions;
 import com.robsartin.segue.domain.SameAs;
+import com.robsartin.segue.export.LogProjection;
 import com.robsartin.segue.ingest.GraphProjector;
 import com.robsartin.segue.ingest.IngestService;
 import com.robsartin.segue.musicbrainz.BridgedIdentity;
@@ -1867,4 +1868,35 @@ class ArchitectureTest {
                   + " takes what it holds — a second log-taking call in any ingest class but"
                   + " IngestService, whose live path has no boot fold to reuse, is a second"
                   + " fold");
+
+  /**
+   * Issue #246: the export folds the log once, in LogProjection, and hands it on.
+   *
+   * <p>Fold.of is in the forbidden list as well as the seven log-taking statics, which
+   * theBootFoldsOnce does not need: for the boot, Fold.of IS the sanctioned route, and here it is
+   * the thing a second class would use to build a second fold. A statics-only rule would be green
+   * while ViewSelector folded the whole log again through the type this issue introduced to stop
+   * exactly that.
+   */
+  @ArchTest
+  static final ArchRule theExportFoldsOnce =
+      noClasses()
+          .that()
+          .resideInAPackage("com.robsartin.segue.export..")
+          .and()
+          .doNotBelongToAnyOf(LogProjection.class)
+          .should()
+          .accessTargetWhere(
+              callTo("in", Equivalences.class)
+                  .or(callTo("folding", Equivalences.class))
+                  .or(callTo("standIns", Equivalences.class))
+                  .or(callTo("nodesTheFoldHolds", Equivalences.class))
+                  .or(callTo("retractedStandIns", Equivalences.class))
+                  .or(callTo("localsOfMerges", Equivalences.class))
+                  .or(callTo("in", Retractions.class))
+                  .or(callTo("of", Fold.class)))
+          .because(
+              "issue #246: LogProjection is the export's one fold — every other class in the"
+                  + " package takes what it holds, and may not build a second one through"
+                  + " Fold.of either");
 }
