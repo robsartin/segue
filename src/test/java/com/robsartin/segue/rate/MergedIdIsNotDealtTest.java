@@ -11,6 +11,7 @@ import com.robsartin.segue.domain.OwnerEdge;
 import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.domain.SameAs;
 import com.robsartin.segue.ingest.GraphProjector;
+import com.robsartin.segue.ingest.Replay;
 import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.rate.RateCli.Options;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
@@ -92,8 +93,8 @@ class MergedIdIsNotDealtTest {
     Path db = dir.resolve("scratch.db");
     try (SqliteAssertionLog assertions = logOnDisk(db);
         TinkerGraphStore graph = new TinkerGraphStore()) {
-      GraphProjector.project(assertions, graph, IdentityMerge.NONE);
-      return RateCli.deck(graph, assertions.readAll(), asStored, options(), notes::add);
+      Replay replay = GraphProjector.replay(assertions, graph, IdentityMerge.NONE);
+      return RateCli.deck(graph, replay.fold().equivalences(), asStored, options(), notes::add);
     }
   }
 

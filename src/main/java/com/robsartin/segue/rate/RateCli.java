@@ -2,10 +2,10 @@ package com.robsartin.segue.rate;
 
 import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.KnownList;
-import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.RatingScale;
 import com.robsartin.segue.domain.Recommendations;
 import com.robsartin.segue.ingest.GraphProjector;
+import com.robsartin.segue.ingest.Replay;
 import com.robsartin.segue.port.GraphStore;
 import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.sqlite.SqliteAffinityStore;
@@ -187,15 +187,11 @@ public final class RateCli {
     try (SqliteAssertionLog assertions = new SqliteAssertionLog(options.database());
         SqliteAffinityStore affinity = new SqliteAffinityStore(options.database());
         TinkerGraphStore graph = new TinkerGraphStore()) {
-      long applied = GraphProjector.project(assertions, graph, IdentityMerge.NONE);
-      log.info("replayed {} assertion(s) from {}", applied, options.database());
+      Replay replay = GraphProjector.replay(assertions, graph, IdentityMerge.NONE);
+      log.info("replayed {} assertion(s) from {}", replay.applied(), options.database());
 
-      // A second pass over the log, for the merges (#92): they are not on the graph — a merge is
-      // deliberately not drawn there as an edge — and project() returns a count. RecommendCli
-      // reads them the same way, for the same reason, and carries the measurement of what it
-      // costs: about an eighth of the replay it already performs.
       List<Card> deck =
-          deck(graph, assertions.readAll(), affinity.readRatings(), options, RateCli::note);
+          deck(graph, replay.fold().equivalences(), affinity.readRatings(), options, RateCli::note);
 
       RateServer server = new RateServer(deck, affinity, options.port());
       server.start();
@@ -210,8 +206,8 @@ public final class RateCli {
   }
 
   /**
-   * Everything between the two stores being read and the server being started: fold the merges out
-   * of the log, resolve the ratings through them, compose the known-list, deal the deck.
+   * Everything between the two stores being read and the server being started: resolve the ratings
+   * through the fold's merges, compose the known-list, deal the deck.
    *
    * <p><b>A seam for the reason {@link #known} is one, and it was added because the gap it closes
    * was measured.</b> The review of #92 task 4b reverted the {@code Equivalences.resolve} call in
@@ -224,19 +220,20 @@ public final class RateCli {
    * the one the deck was actually built from — the resolved map, one row per thing. A count, never
    * a qid and never a score (ADR 33).
    *
-   * @param logged the log as {@code AssertionLog.readAll} returns it, for {@code Equivalences.in}
+   * @param merges the merges this run folds by — {@code Replay.fold().equivalences()} from the
+   *     replay {@code main} has already performed (#246). It used to be the raw log rows, which
+   *     this method folded itself: a second whole-log read and a second fixed point for a value the
+   *     replay had just built
    * @param asStored the affinity table as it stands, before any equivalence is applied. Resolved
    *     here and nowhere else, so the known-list, the weighting and the already-rated filter are
    *     one view of the taste layer rather than three
    */
   static List<Card> deck(
       GraphStore graph,
-      List<LoggedAssertion> logged,
+      Equivalences merges,
       Map<String, Integer> asStored,
       Options options,
       Consumer<String> notes) {
-    Equivalences merges = Equivalences.in(logged);
-
     // After a merge two affinity rows name one thing, and promoting both would put the same
     // entity on the known list twice — here that shows up as the deck weighting one opinion
     // twice when it picks candidates, and as the canonical id being offered back as a discovery.
