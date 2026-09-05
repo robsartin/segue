@@ -209,6 +209,14 @@ class KindMapperTest {
   }
 
   @Test
+  @DisplayName("a seven-inch single is a WORK")
+  void shouldMapToWorkWhenTheClassIsSevenInchSingle() {
+    // A physical format of a single (Q134556, already WORK). Issue #261.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q6128115"))) // 7-inch single
+        .isEqualTo(NodeKind.WORK);
+  }
+
+  @Test
   @DisplayName("a concert tour is an EVENT")
   void shouldMapToEventWhenTheClassIsConcertTour() {
     // A series of concerts, the way a festival (Q132241, already EVENT) is. Issue #261.
