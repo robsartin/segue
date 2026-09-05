@@ -5,14 +5,18 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.Equivalences;
+import com.robsartin.segue.domain.Fold;
+import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.domain.Retraction;
+import com.robsartin.segue.domain.SameAs;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import com.robsartin.segue.tinker.TinkerGraphStore;
+import com.robsartin.segue.wikidata.KindMapper;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -289,5 +293,43 @@ class GraphProjectorTest {
 
   private static long lines(Throwable thrown, String containing) {
     return thrown.getMessage().lines().filter(line -> line.contains(containing)).count();
+  }
+
+  @Test
+  @DisplayName("a replay hands back the fold it applied, and the count project() returns")
+  void shouldReturnTheFoldItAppliedWhenTheLogIsReplayed() {
+    try (AssertionLog log = SqliteAssertionLog.inMemory();
+        TinkerGraphStore store = new TinkerGraphStore();
+        TinkerGraphStore comparison = new TinkerGraphStore()) {
+      mergedAndRetractedLog(log);
+
+      Replay replay = GraphProjector.replay(log, store, IdentityMerge.NONE);
+
+      assertThat(replay.fold())
+          .as(
+              "issue #246: recommend, rate and evaluate read the log a second time and folded it"
+                  + " again for merges this replay had already derived — handing the fold back is"
+                  + " the whole change, so it has to BE the fold, not a fresh one")
+          .isEqualTo(Fold.of(log.readAll(), KindMapper::rederive));
+      assertThat(replay.applied())
+          .as("and the count is the one project() has always returned")
+          .isEqualTo(GraphProjector.project(log, comparison, IdentityMerge.NONE));
+      assertThat(replay.applied()).as("on a fixture that applies something").isPositive();
+    }
+  }
+
+  /**
+   * A minted local entity merged onto a canonical id, beside an unrelated retracted entity —
+   * invented ids only (ADR 58, ADR 59, ADR 62), so the fold's stand-ins and retractions are both
+   * exercised by the one log this test replays.
+   */
+  private static void mergedAndRetractedLog(AssertionLog log) {
+    log.append(new NodeAssertion("Q0900401", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+    log.append(new NodeAssertion("Q0900402", NodeKind.GROUP, "The Bad Seeds", WIKIDATA));
+    log.append(new AssertionRecord("Q0900401", "Q0900402", "MEMBER_OF", null, null, WIKIDATA));
+    log.append(new NodeAssertion("Q0900403", NodeKind.WORK, "A Painting", WIKIDATA));
+    log.append(new Retraction("Q0900403", "resolved to the wrong entity", RETRACTED_AT));
+    log.append(LocalEntity.minted("Q00900401", NodeKind.PERSON, "a minted person", RETRACTED_AT));
+    log.append(SameAs.declared("Q00900401", "Q10000000401", RETRACTED_AT));
   }
 }

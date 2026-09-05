@@ -87,6 +87,22 @@ public final class GraphProjector {
    *     withdrawn edge, #178 for a self-loop the fold collapsed)
    */
   public static long project(AssertionLog log, GraphStore store, IdentityMerge merges) {
+    return replay(log, store, merges).applied();
+  }
+
+  /**
+   * Replay {@code log} into {@code store}, and hand back the {@link Fold} the replay built beside
+   * the count {@link #project} has always returned (#246).
+   *
+   * <p>See {@link #project} for the {@code merges} contract — this is the same replay, under a
+   * different return type. It exists so a caller that must ask the log a second question — {@code
+   * recommend}, {@code rate} and {@code evaluate}, each of which reads the log again for the merges
+   * a graph does not draw as an edge — takes the fold this replay already built rather than
+   * building a second one over the same rows.
+   *
+   * @return the count {@link #project} returns, beside the {@link Fold} this replay applied
+   */
+  public static Replay replay(AssertionLog log, GraphStore store, IdentityMerge merges) {
     List<LoggedAssertion> assertions = log.readAll();
     // The graph half of a merge (#178), built from the same log and beside the same log's
     // retractions, because they are the same kind of rule: neither edits a row, and both decide
@@ -121,7 +137,7 @@ public final class GraphProjector {
         throw new IllegalStateException("replay failed at sequence " + (i + 1), e);
       }
     }
-    return applied;
+    return new Replay(applied, fold);
   }
 
   /**
