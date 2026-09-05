@@ -201,6 +201,14 @@ class KindMapperTest {
   }
 
   @Test
+  @DisplayName("an extended play is a WORK")
+  void shouldMapToWorkWhenTheClassIsExtendedPlay() {
+    // The same family as album (Q482994). Issue #261.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q169930"))) // extended play
+        .isEqualTo(NodeKind.WORK);
+  }
+
+  @Test
   @DisplayName("a concert tour is an EVENT")
   void shouldMapToEventWhenTheClassIsConcertTour() {
     // A series of concerts, the way a festival (Q132241, already EVENT) is. Issue #261.

@@ -92,6 +92,7 @@ public final class KindMapper {
     // learned; the other four stay CONCEPT on purpose (awards, and fictional humans — see
     // KindMapperTest). Every one was looked up and confirmed by label AND description.
     put("Q3331189", NodeKind.WORK); // version, edition or translation
+    put("Q169930", NodeKind.WORK); // extended play
     // places
     put("Q515", NodeKind.PLACE); // city
     put("Q6256", NodeKind.PLACE); // country
