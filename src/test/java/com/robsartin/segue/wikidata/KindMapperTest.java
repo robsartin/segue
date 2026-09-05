@@ -217,6 +217,15 @@ class KindMapperTest {
   }
 
   @Test
+  @DisplayName("an animated short film is a WORK")
+  void shouldMapToWorkWhenTheClassIsAnimatedShortFilm() {
+    // Both of its parents, animated film (Q202866) and short film (Q24862), are already WORK;
+    // the table does not walk P279, so the class needs its own line. Issue #261.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q17517379"))) // animated short film
+        .isEqualTo(NodeKind.WORK);
+  }
+
+  @Test
   @DisplayName("a concert tour is an EVENT")
   void shouldMapToEventWhenTheClassIsConcertTour() {
     // A series of concerts, the way a festival (Q132241, already EVENT) is. Issue #261.
