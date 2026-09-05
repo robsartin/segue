@@ -24,12 +24,15 @@ import java.util.stream.Collectors;
  *
  * <p><b>It is a display table, not a mapping table.</b> {@code KindMapper} decides what a class
  * MEANS and this decides what it is CALLED; the two lists overlap and neither is derived from the
- * other, because a class that determines no kind still deserves a name — "version, edition or
- * translation" and "concert tour" are the two largest CONCEPT classes in a real graph and both map
- * to nothing. A class missing here costs one tooltip a QID and cannot break anything else, which is
- * why the table is allowed to be a sample of the long tail rather than a promise about it. Measured
- * on a real 54,448-node graph, 861 distinct classes appear and the top 40 cover 96.6%: a table is
- * the right shape for that distribution and a complete one is not available offline at any size.
+ * other, because a class that determines no kind still deserves a name. "version, edition or
+ * translation" and "concert tour" were the two largest {@code CONCEPT} classes in the reading this
+ * table was first written against, and mapped to nothing at the time; issue #261 later mapped them
+ * to {@code WORK} and {@code EVENT}, and this table did not change when they did, which is exactly
+ * the point of its being a display table rather than a mirror of {@code KindMapper}. A class
+ * missing here costs one tooltip a QID and cannot break anything else, which is why the table is
+ * allowed to be a sample of the long tail rather than a promise about it. Measured on a real
+ * 54,448-node graph, 861 distinct classes appear and the top 40 cover 96.6%: a table is the right
+ * shape for that distribution and a complete one is not available offline at any size.
  *
  * <p><b>It lives in {@code support} rather than in {@code export} because two tools read it.</b>
  * The exporter puts a class name in a DOT tooltip; the rating deck puts it on a card. A dev tool
@@ -73,19 +76,27 @@ public final class ClassLabels {
     put("Q10590726", "video album");
     put("Q58483083", "dramatico-musical work");
     put("Q15079786", "ballet");
+    put("Q17517379", "animated short film");
+    // The rest of issue #261's six: a specific edition (Q3331189), an EP (Q169930) and a
+    // physical single format (Q6128115) are all WORK, the same family as album and single above.
+    put("Q3331189", "version, edition or translation");
+    put("Q169930", "extended play");
+    // A double prime, escaped rather than typed: the value is then the same whatever charset
+    // reads this file.
+    put("Q6128115", "7\u2033 single");
     // People and groups.
     put("Q5", "human");
     put("Q215380", "musical group");
     put("Q5741069", "rock band");
     put("Q15632617", "fictional human");
     put("Q3658341", "literary character");
-    // Concepts, including the two largest classes in a real graph that map to no kind at all.
-    put("Q3331189", "version, edition or translation");
+    // Events.
+    put("Q182832", "concert");
+    // Issue #261's sixth: a concert tour is EVENT, the same kind as the concerts on it.
     put("Q1573906", "concert tour");
-    put("Q169930", "extended play");
-    // A double prime, escaped rather than typed: the value is then the same whatever charset
-    // reads this file.
-    put("Q6128115", "7\u2033 single");
+    // Concepts: the award family (ADR 38 keeps these out of KindMapper on purpose, so a novel
+    // can route through its prize rather than through the prize's own broad class) and
+    // discography, which states no class KindMapper recognises.
     put("Q273057", "discography");
     put("Q618779", "award");
     put("Q38033430", "class of award");
@@ -93,7 +104,6 @@ public final class ClassLabels {
     put("Q1364556", "music award");
     put("Q378427", "literary award");
     put("Q11448906", "science award");
-    put("Q182832", "concert");
   }
 
   private ClassLabels() {}

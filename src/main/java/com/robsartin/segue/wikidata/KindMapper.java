@@ -87,6 +87,15 @@ public final class KindMapper {
     put("Q1259759", NodeKind.WORK); // miniseries
     put("Q202866", NodeKind.WORK); // animated film
     put("Q10590726", NodeKind.WORK); // video album
+    // The first census reading (issue #261, 2026-09-05) listed the ten Wikidata classes holding
+    // most of the graph's CONCEPT nodes. Six of them are works or events the table had never
+    // learned; the other four stay CONCEPT on purpose (awards, and fictional humans — see
+    // KindMapperTest). Every one was looked up and confirmed by label AND description.
+    put("Q3331189", NodeKind.WORK); // version, edition or translation
+    put("Q169930", NodeKind.WORK); // extended play
+    put("Q6128115", NodeKind.WORK); // 7-inch single
+    put("Q17517379", NodeKind.WORK); // animated short film
+    put("Q7302866", NodeKind.WORK); // audio track
     // places
     put("Q515", NodeKind.PLACE); // city
     put("Q6256", NodeKind.PLACE); // country
@@ -99,6 +108,7 @@ public final class KindMapper {
     put("Q182832", NodeKind.EVENT); // concert
     put("Q132241", NodeKind.EVENT); // festival
     put("Q198", NodeKind.EVENT); // war
+    put("Q1573906", NodeKind.EVENT); // concert tour
   }
 
   /**

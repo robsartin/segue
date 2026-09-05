@@ -190,6 +190,60 @@ class KindMapperTest {
   }
 
   @Test
+  @DisplayName("an edition or translation of a work is a WORK")
+  void shouldMapToWorkWhenTheClassIsVersionEditionOrTranslation() {
+    // The class that held the most CONCEPT nodes in the first census reading (issue #261,
+    // 2026-09-05). Wikidata uses it to say "this item is a specific edition, adaptation or
+    // translation of a work" — which is a work, in the sense PERFORMED and AUTHORED point at.
+    // Label and description confirmed live before this line was written.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q3331189"))) // version, edition or translation
+        .isEqualTo(NodeKind.WORK);
+  }
+
+  @Test
+  @DisplayName("an extended play is a WORK")
+  void shouldMapToWorkWhenTheClassIsExtendedPlay() {
+    // The same family as album (Q482994). Issue #261.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q169930"))) // extended play
+        .isEqualTo(NodeKind.WORK);
+  }
+
+  @Test
+  @DisplayName("a seven-inch single is a WORK")
+  void shouldMapToWorkWhenTheClassIsSevenInchSingle() {
+    // A physical format of a single (Q134556, already WORK). Issue #261.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q6128115"))) // 7-inch single
+        .isEqualTo(NodeKind.WORK);
+  }
+
+  @Test
+  @DisplayName("an animated short film is a WORK")
+  void shouldMapToWorkWhenTheClassIsAnimatedShortFilm() {
+    // Both of its parents, animated film (Q202866) and short film (Q24862), are already WORK;
+    // the table does not walk P279, so the class needs its own line. Issue #261.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q17517379"))) // animated short film
+        .isEqualTo(NodeKind.WORK);
+  }
+
+  @Test
+  @DisplayName("an audio track is a WORK")
+  void shouldMapToWorkWhenTheClassIsAudioTrack() {
+    // The same family as song (Q7366) and music track with vocals (Q55850593). Its parent
+    // "musical work" (Q2188189) is NOT the "musical work/composition" (Q105543609) the table
+    // holds — two similarly named classes, and only the latter is registered. Issue #261.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q7302866"))) // audio track
+        .isEqualTo(NodeKind.WORK);
+  }
+
+  @Test
+  @DisplayName("a concert tour is an EVENT")
+  void shouldMapToEventWhenTheClassIsConcertTour() {
+    // A series of concerts, the way a festival (Q132241, already EVENT) is. Issue #261.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q1573906"))) // concert tour
+        .isEqualTo(NodeKind.EVENT);
+  }
+
+  @Test
   @DisplayName("an award is still a CONCEPT, which is what makes 'high-degree CONCEPT' mean 'hub'")
   void awardsStayConcepts() {
     // ADR 38 chose CONCEPT for award nodes deliberately, and issue #52 depends on that choice
@@ -201,6 +255,19 @@ class KindMapperTest {
     assertThat(KindMapper.fromInstanceOf(List.of("Q1046088"))) // hall of fame
         .isEqualTo(NodeKind.CONCEPT);
     assertThat(KindMapper.fromInstanceOf(List.of("Q378427"))) // literary award
+        .isEqualTo(NodeKind.CONCEPT);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q38033430"))) // class of award
+        .isEqualTo(NodeKind.CONCEPT);
+  }
+
+  @Test
+  @DisplayName("a fictional human stays a CONCEPT, deliberately")
+  void shouldStayConceptWhenTheClassIsFictionalHuman() {
+    // Issue #261's one judgment call. Q15632617 is not Q5: PERSON is the kind the recommender
+    // explores and the MusicBrainz adapter describes (ADR 54), so mapping it would put
+    // characters in the candidate pool and send them to a source that cannot know them. A
+    // character that appears in many works is exactly the shape the hub rule demotes.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q15632617"))) // fictional human
         .isEqualTo(NodeKind.CONCEPT);
   }
 

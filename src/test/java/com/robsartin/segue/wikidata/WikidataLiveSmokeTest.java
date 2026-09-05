@@ -109,6 +109,16 @@ class WikidataLiveSmokeTest {
   }
 
   @Test
+  @DisplayName("the class added for issue #261 places a real edition where it claims")
+  void shouldMapARealEditionToWorkWhenItStatesOnlyVersionEditionOrTranslation() {
+    // Same reason as the #52 control above: the offline test says the table maps Q3331189 to
+    // WORK, which is true of whatever Q3331189 is. Only a live read says the entity wearing it
+    // is an edition of a work. This entity states no class the table knew before #261.
+    assertThat(kindOf("Q92463")) // The Annotated Hobbit
+        .isEqualTo(NodeKind.WORK);
+  }
+
+  @Test
   @DisplayName("a real expansion still produces whitelisted, attributed claims")
   void expansionStillWorks() {
     ExpandResult result =

@@ -37,4 +37,10 @@ class ClassLabelsTest {
     assertThat(ClassLabels.label("Q0900901")).isEqualTo("Q0900901");
     assertThat(ClassLabels.describe(List.of())).isEqualTo(ClassLabels.NO_CLASS);
   }
+
+  @Test
+  @DisplayName("animated short film has a label, confirmed live 2026-09-05 (issue #261)")
+  void shouldLabelAnimatedShortFilmWhenTheClassIsQ17517379() {
+    assertThat(ClassLabels.label("Q17517379")).isEqualTo("animated short film");
+  }
 }
