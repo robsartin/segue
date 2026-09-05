@@ -78,7 +78,9 @@ public final class RecommendCli {
       "usage: --known <file of QIDs> --out <file>"
           + " [--scorer <"
           + Scorer.names()
-          + ">, default lift]"
+          + ">, default "
+          + Recommendations.DEFAULT_SCORER.spelling()
+          + "]"
           + " [--min-degree <n>, default "
           + Recommendations.MIN_CANDIDATE_DEGREE
           + "] [--top <n>, default "

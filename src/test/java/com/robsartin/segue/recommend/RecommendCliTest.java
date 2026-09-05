@@ -86,6 +86,15 @@ class RecommendCliTest {
   }
 
   @Test
+  @DisplayName("the usage message spells the default scorer from the constant, not a second word")
+  void shouldSpellTheDefaultScorerFromTheConstantWhenItRefusesAnything() {
+    // The word in the usage string was a third copy of the default (issue #244): the enum could
+    // move and the sentence offered to the operator would go on saying the old word.
+    assertThatThrownBy(() -> parse("--out", "/tmp/out.txt"))
+        .hasMessageContaining("default " + Recommendations.DEFAULT_SCORER.spelling());
+  }
+
+  @Test
   @DisplayName("the floor and the length of the list are both arguments")
   void theFloorAndTheLengthAreArguments() {
     Options options =
