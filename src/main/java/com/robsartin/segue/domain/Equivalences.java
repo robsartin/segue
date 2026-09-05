@@ -738,9 +738,12 @@ public record Equivalences(
    * below directly with that already-held set, so this method's callers are back to the original
    * two: {@code GraphProjector.project} and {@code LogProjection.of}.
    *
-   * <p>Every caller of {@link #in} — {@code OwnRun}, {@code RateCli}, {@code ratings/Labels},
-   * {@code RecommendCli} and {@code EvaluateCli} — asks about ratings, labels, known lists and what
-   * to offer, and neither folds an edge nor asks that question.
+   * <p>Every direct caller of {@link #in(List)} — {@code OwnRun} and {@code ratings/Labels} — asks
+   * about known lists and labels, and neither folds an edge nor asks that question. Three tools
+   * used to call it too, for their ratings and known-list questions — {@code RecommendCli}, {@code
+   * RateCli} and {@code EvaluateCli} — and since #246 none of them does any more: each takes the
+   * replay's own fold instead of folding a second time. {@code RetractRun} reaches {@link #in(List,
+   * Set)} directly, with the emptied set it already holds — see that overload's own javadoc.
    */
   public static Equivalences folding(List<LoggedAssertion> log) {
     Objects.requireNonNull(log, "log");

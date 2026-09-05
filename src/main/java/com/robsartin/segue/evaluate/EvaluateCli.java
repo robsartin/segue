@@ -2,6 +2,7 @@ package com.robsartin.segue.evaluate;
 
 import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.ingest.GraphProjector;
+import com.robsartin.segue.ingest.Replay;
 import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.recommend.RecommendCli;
 import com.robsartin.segue.sqlite.SqliteAffinityStore;
@@ -148,13 +149,13 @@ public final class EvaluateCli {
     try (SqliteAssertionLog assertions = new SqliteAssertionLog(options.database());
         SqliteAffinityStore affinity = new SqliteAffinityStore(options.database());
         TinkerGraphStore graph = new TinkerGraphStore()) {
-      long applied = GraphProjector.project(assertions, graph, IdentityMerge.NONE);
-      log.info("replayed {} assertion(s)", applied);
+      Replay replay = GraphProjector.replay(assertions, graph, IdentityMerge.NONE);
+      log.info("replayed {} assertion(s)", replay.applied());
 
-      // Resolved through the merges before anything downstream sees it, exactly as RecommendCli
+      // Resolved through the merges the replay already derived (#246), exactly as RecommendCli
       // does and for the same reason: a merge leaves two affinity rows naming one thing, and a
       // split that counted both would hold out one id and leave the other in the known-list.
-      Equivalences merges = Equivalences.in(assertions.readAll());
+      Equivalences merges = replay.fold().equivalences();
       Map<String, Integer> ratings = merges.resolve(affinity.readRatings());
       // A count, never a qid and never a score.
       log.info("read {} rating(s)", ratings.size());

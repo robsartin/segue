@@ -1929,4 +1929,41 @@ class ArchitectureTest {
               "issue #246: Census.of builds the census's one fold and hands it to every"
                   + " section — ClaimCensus and TasteCensus took the raw rows and folded them"
                   + " again, which is three extra whole-log fixed points and a second read");
+
+  /**
+   * Issue #246: a tool that replays the log does not fold it again.
+   *
+   * <p>One rule over three packages because it states one property. Each of these tools calls
+   * {@code GraphProjector.project}, which builds the whole fold, and each then read the log a
+   * second time and rebuilt the merges from it. Since #246 the fold comes back from {@code
+   * GraphProjector.replay}, so no class in any of the three has any business folding — there is no
+   * exempt class here, unlike theBootFoldsOnce and theExportFoldsOnce, because the one home of
+   * these tools' fold is not in these packages at all.
+   *
+   * <p>{@code evaluate} is in the list although issue #246 does not name it: it grew the same shape
+   * in #242, after ADR 64 was written, and a fence that skipped it would be green over a third copy
+   * of the defect.
+   */
+  @ArchTest
+  static final ArchRule theReplayingToolsTakeTheBootsFold =
+      noClasses()
+          .that()
+          .resideInAnyPackage(
+              "com.robsartin.segue.recommend..",
+              "com.robsartin.segue.rate..",
+              "com.robsartin.segue.evaluate..")
+          .should()
+          .accessTargetWhere(
+              callTo("in", Equivalences.class)
+                  .or(callTo("folding", Equivalences.class))
+                  .or(callTo("standIns", Equivalences.class))
+                  .or(callTo("nodesTheFoldHolds", Equivalences.class))
+                  .or(callTo("retractedStandIns", Equivalences.class))
+                  .or(callTo("localsOfMerges", Equivalences.class))
+                  .or(callTo("in", Retractions.class))
+                  .or(callTo("of", Fold.class)))
+          .because(
+              "issue #246: these tools replay the log through GraphProjector, which folds it —"
+                  + " they take that fold back from Replay rather than reading the log a second"
+                  + " time and folding it again");
 }
