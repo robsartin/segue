@@ -350,6 +350,11 @@ class StandInQidsDenoteNothingTest {
                   code(
                       "src/test/java/com/robsartin/segue/wikidata/RecognitionInstitutionsTest.java"))),
           entry(
+              "Q92463",
+              real(
+                  "entity — WikidataLiveSmokeTest asks the real API about it (issue #261)",
+                  code("src/test/java/com/robsartin/segue/wikidata/WikidataLiveSmokeTest.java"))),
+          entry(
               "Q118066",
               real(
                   "entity — a real value in the recorded bad-seeds-claims.json",
@@ -387,6 +392,11 @@ class StandInQidsDenoteNothingTest {
                   "entity — a real value in the recorded bad-seeds-reverse.json",
                   code("src/test/java/com/robsartin/segue/wikidata/WikidataSourceAdapterTest.java"),
                   code("src/test/resources/wikidata/bad-seeds-reverse.json"))),
+          entry(
+              "Q169930",
+              real(
+                  "class id — mapped by KindMapper (issue #261)",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
           entry(
               "Q177220",
               real(
@@ -655,6 +665,11 @@ class StandInQidsDenoteNothingTest {
                   "class id — mapped by KindMapper",
                   code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
           entry(
+              "Q1573906",
+              real(
+                  "class id — mapped by KindMapper (issue #261)",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
               "Q1656682",
               real(
                   "class id — mapped by KindMapper",
@@ -699,8 +714,9 @@ class StandInQidsDenoteNothingTest {
           entry(
               "Q3331189",
               real(
-                  "class id — mapped by ClassLabels",
-                  code("src/test/resources/wikidata/cave-reverse.json"))),
+                  "class id — mapped by ClassLabels and, since issue #261, by KindMapper",
+                  code("src/test/resources/wikidata/cave-reverse.json"),
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
           entry(
               "Q4649799",
               real(
@@ -728,6 +744,11 @@ class StandInQidsDenoteNothingTest {
                   "entity — a real value in the recorded search-cave.json",
                   code("src/test/resources/wikidata/search-cave.json"))),
           entry(
+              "Q6128115",
+              real(
+                  "class id — mapped by KindMapper (issue #261)",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
               "Q6301911",
               real(
                   "entity — a real value in the recorded cave-reverse.json",
@@ -743,6 +764,11 @@ class StandInQidsDenoteNothingTest {
               real(
                   "entity — SharedAwardRouteLiveTest asks the real API about it",
                   code("src/test/java/com/robsartin/segue/mcp/SharedAwardRouteLiveTest.java"))),
+          entry(
+              "Q7302866",
+              real(
+                  "class id — mapped by KindMapper (issue #261)",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
           entry(
               "Q7558495",
               real(
@@ -803,9 +829,19 @@ class StandInQidsDenoteNothingTest {
                   "class id — mapped by KindMapper",
                   code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
           entry(
+              "Q15632617",
+              real(
+                  "class id — mapped (deliberately to CONCEPT) by KindMapper (issue #261)",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
               "Q16334295",
               real(
                   "class id — mapped by KindMapper",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
+              "Q17517379",
+              real(
+                  "class id — mapped by KindMapper (issue #261)",
                   code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
           entry(
               "Q18510489",
@@ -841,6 +877,11 @@ class StandInQidsDenoteNothingTest {
               real(
                   "entity — a real value in the recorded bad-seeds-claims.json",
                   code("src/test/resources/wikidata/bad-seeds-claims.json"))),
+          entry(
+              "Q38033430",
+              real(
+                  "class id — mapped (deliberately to CONCEPT) by KindMapper (issue #261)",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
           entry(
               "Q45400320",
               real(
