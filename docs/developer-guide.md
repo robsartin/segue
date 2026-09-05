@@ -2820,6 +2820,7 @@ Between the census in step 1 and the census in step 7, the log grew and the proj
 | `edges / withdrawn` | **unchanged** | that count is a merge's canonical side emptied by a retraction, and this run makes no merge. A movement here is a finding |
 | everything under `taste` | **unchanged** | nothing was rated. A movement here is a finding |
 | everything under `bridge` | **unchanged** | until step 9 |
+| everything under `concept classes` | **unchanged** | a minted local states no class at all (`LocalEntity.toNode`), and the section counts only `CONCEPT` nodes by stated class (`ConceptClassCensus`) — this chapter mints a `WORK`, which the section never even looks at. A movement here is a finding |
 
 If you also take a census between step 3 and step 5 — and it is worth taking — that one is the
 interesting one. Against step 1: `nodes / total` and the `WORK` line up by one, `edges / total` and
@@ -2830,6 +2831,19 @@ population at zero and the edge takes it to one — both at or below the floor t
 so `at or below the floor` moves up by one at the mint and not again for the edge. The entity you
 picked in step 3 gains an edge too, so if it was sitting exactly on the floor that line moves back
 down by one; the percentiles may move with it.
+
+The same reading is taken again per kind (issue #247, `DegreeCensus.byKind`), and each kind moves
+exactly as the whole-graph line does, never twice for one event: the minted node is a `WORK`, so
+`WORK / at or below the floor` moves up by one at the mint and not again for the edge; whichever
+kind you picked in step 3, that kind's own `at or below the floor` moves back down by one under the
+same condition the whole-graph line does — the entity was already sitting exactly on the floor.
+Either kind's own `p50`/`p90`/`p99` and `at or below the floor %` may move too, by the same
+nearest-rank and whole-percent rules the whole-graph figures use. `concept classes` does not move
+at all: a minted local carries no class in the log (`LocalEntity.toNode` records an empty
+`instanceOf`), and the section only counts `CONCEPT` nodes by stated class (`ConceptClassCensus`)
+— this chapter's example mints `--kind WORK`, so the entity never reaches that filter to begin
+with. Minting `--kind CONCEPT` instead would not add a class row either, but it would move
+`stating no class` up by one, since that line counts a `CONCEPT` node with no stated class at all.
 
 ### 9. Optional: reach MusicBrainz once
 
@@ -2858,8 +2872,8 @@ This run changes no code. What it produces is issues, and these are the ones to 
 - **A boot that refused.** File the `replay refused:` block verbatim, sequence numbers and all,
   with what you did about it. That is the first real exercise of the boot pre-flight.
 - **A line that moved when the table above says it should not** — `taste`, `edges / withdrawn`, the
-  `claims` merge and stand-in lines, or `bridge` before step 9. Any of those means a rule reaches
-  further than this chapter says.
+  `claims` merge and stand-in lines, `concept classes`, or `bridge` before step 9. Any of those
+  means a rule reaches further than this chapter says.
 - **A line that did not move when the table says it should**, especially `claims / rows they
   removed`: if the retraction reached fewer rows than the dry run reported, the report and the fold
   disagree, and that is the more serious of the two.
