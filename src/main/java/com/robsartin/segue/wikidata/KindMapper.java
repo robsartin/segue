@@ -104,6 +104,7 @@ public final class KindMapper {
     put("Q182832", NodeKind.EVENT); // concert
     put("Q132241", NodeKind.EVENT); // festival
     put("Q198", NodeKind.EVENT); // war
+    put("Q1573906", NodeKind.EVENT); // concert tour
   }
 
   /**

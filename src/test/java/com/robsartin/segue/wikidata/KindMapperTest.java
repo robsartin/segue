@@ -201,6 +201,14 @@ class KindMapperTest {
   }
 
   @Test
+  @DisplayName("a concert tour is an EVENT")
+  void shouldMapToEventWhenTheClassIsConcertTour() {
+    // A series of concerts, the way a festival (Q132241, already EVENT) is. Issue #261.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q1573906"))) // concert tour
+        .isEqualTo(NodeKind.EVENT);
+  }
+
+  @Test
   @DisplayName("an award is still a CONCEPT, which is what makes 'high-degree CONCEPT' mean 'hub'")
   void awardsStayConcepts() {
     // ADR 38 chose CONCEPT for award nodes deliberately, and issue #52 depends on that choice
