@@ -647,13 +647,45 @@ pre-flight checks against (ADR [64](adr/0064-fold-the-log-once-per-boot.md) has 
 the emptied-canonical-id fixed point paid inside more than one of them. `GraphProjector.project` now builds a single `Fold` (in `domain`, beside `Equivalences` and
 `Retractions`, a carrier that decides nothing) and hands it to the pre-flight, the stand-in seeding
 and the replay loop. Every fold rule stays where it was and every log-taking static keeps its
-signature, so the dev tools still fold per run and are deliberately out of scope.
+signature, so nothing a dev tool calls changed its shape or its answer.
 `ArchitectureTest.theBootFoldsOnce` is what stops a second fold arriving: it forbids every class in
 `ingest` but `IngestService` — whose live path has no boot fold to reuse — from calling the
 log-taking statics at all, so the boot's fold comes through `Fold.of` or not at all. The package
 rather than `GraphProjector` alone, because a helper class that folds and is called from the replay
 is a second boot fold a one-class fence cannot see. ADR [64](adr/0064-fold-the-log-once-per-boot.md) has the decision, the
 rejected alternatives and the dated before/after measurement.
+
+### Each tool folds once too
+
+The dev tools were ADR 64's first residual, and issue #246 took it: each of them now derives the
+log's fold once per run, in one place, and hands it to every reader. Three mechanisms, chosen per
+tool by what that tool is allowed to know.
+
+- **`export` and `census` build a `Fold` and thread it.** `LogProjection.of(List, Fold)` is the
+  overload that carries the rows and the fold together, and `Census.of` reads the log once, builds
+  the census's single fold, and hands it and the projection to every section.
+- **`recommend`, `rate` and `evaluate` take the boot's fold back.** They already replayed the log
+  into a throwaway graph, and that replay folds it; `GraphProjector.replay` returns a `Replay`
+  carrying the `Fold` beside the count `project` has always returned, so none of the three reads the
+  log a second time to rebuild merges the replay had already derived. `project` keeps its signature
+  and every one of its other call sites.
+- **`retract` threads the emptied set it is already holding** into the caller-trusting
+  `Equivalences.in(List, Set)` and `Equivalences.folding(Equivalences, Set)`, and keeps two folds on
+  purpose: it compares the log as it stands against the log this retraction would produce, which is
+  two questions about two different lists. It deliberately builds no `Fold` — `Fold.of` requires a
+  `rederive`, and `Equivalences.retractedStandIns` carries no such parameter precisely so that
+  `retract` need not learn Wikidata's vocabulary ([ADR 44](adr/0044-retraction-as-a-new-claim.md)).
+- **`own` and `ratings` were not edited.** Each already folded once per run; there was never a
+  second fold in either to remove.
+
+`theExportFoldsOnce`, `theCensusFoldsOnce` and `theReplayingToolsTakeTheBootsFold` are what keep it
+that way — the same shape as `theBootFoldsOnce`, and each forbidding `Fold.of` as well as the
+log-taking statics, because outside the boot `Fold.of` is the route a second class would take to a
+second fold. `retract` gets no fence, because a rule that had to exempt `RetractRun` would be green
+while `RetractRun` folded any number of times; `own` and `ratings` get none because #246 changed no
+code in either. ADR [64](adr/0064-fold-the-log-once-per-boot.md)'s 2026-09-04 amendment holds the
+per-tool counts before and after, the correction it makes to that ADR's own `census` figure, and
+the residuals — they live there once and are deliberately not repeated here.
 
 ### Nodes are claims too
 
