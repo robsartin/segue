@@ -78,7 +78,9 @@ public final class RecommendCli {
       "usage: --known <file of QIDs> --out <file>"
           + " [--scorer <"
           + Scorer.names()
-          + ">, default lift]"
+          + ">, default "
+          + Recommendations.DEFAULT_SCORER.spelling()
+          + "]"
           + " [--min-degree <n>, default "
           + Recommendations.MIN_CANDIDATE_DEGREE
           + "] [--top <n>, default "
@@ -115,7 +117,7 @@ public final class RecommendCli {
     String db = null;
     Path known = null;
     Path out = null;
-    Scorer scorer = Scorer.LIFT;
+    Scorer scorer = Recommendations.DEFAULT_SCORER;
     int minDegree = Recommendations.MIN_CANDIDATE_DEGREE;
     int top = DEFAULT_TOP;
 

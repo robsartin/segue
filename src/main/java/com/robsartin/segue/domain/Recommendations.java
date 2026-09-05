@@ -14,6 +14,28 @@ import java.util.function.ToDoubleFunction;
 public final class Recommendations {
 
   /**
+   * Where on {@link Scorer}'s spectrum both tools start.
+   *
+   * <p><b>Measured, not chosen.</b> ADR 45 is the authority for why this point and not another, and
+   * for what the ranked lists looked like at the others; nothing here restates it. {@link Scorer}'s
+   * own javadoc holds the failure mode at each end of the dial.
+   *
+   * <p><b>One copy, because two tools apply it.</b> {@code RecommendCli} defaults {@code --scorer}
+   * to this and {@code RateRun} sweeps with it, so the rating deck's candidate cards are the
+   * candidates {@code ./gradlew recommend} would rank for the same known-list. Each held its own
+   * literal until issue #244 — and issue #242 came within one clause of moving one of them, which
+   * would have left the deck dealing one tool's answer while the report gave another's, with
+   * nothing failing. This is the floor's rule (see {@link #MIN_CANDIDATE_DEGREE}) applied to the
+   * other dial: by reference, never by a second copy.
+   *
+   * <p><b>It is a default and not a verdict</b>, which is why {@code --scorer} exists on {@code
+   * recommend}: the honest way to disagree with it is to run two scorers and read the two lists.
+   * The deck has no such flag on purpose — a deck that could deal something other than the
+   * recommender's answer is the divergence this constant exists to prevent.
+   */
+  public static final Scorer DEFAULT_SCORER = Scorer.LIFT;
+
+  /**
    * The number of edges below which a candidate is not ranked at all.
    *
    * <p><b>A floor is not optional under a normalised score, and that was measured.</b> Dividing by

@@ -1,5 +1,6 @@
 package com.robsartin.segue.rate;
 
+import static com.robsartin.segue.domain.Recommendations.DEFAULT_SCORER;
 import static com.robsartin.segue.domain.Recommendations.MIN_CANDIDATE_DEGREE;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -10,7 +11,12 @@ import com.robsartin.segue.domain.KnownList;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.Provenance;
+import com.robsartin.segue.domain.Recommendations;
+import com.robsartin.segue.domain.Scorer;
+import com.robsartin.segue.recommend.CandidateSweep;
+import com.robsartin.segue.recommend.Sweep;
 import com.robsartin.segue.tinker.TinkerGraphStore;
+import com.robsartin.segue.wikidata.RecognitionInstitutions;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -58,6 +64,15 @@ class RateRunTest {
 
   private static final String BELOVED = "Q0900301";
   private static final String CROWDED = "Q0900302";
+
+  /** A candidate three of yours reach, sitting at the floor — small enough for lift to like it. */
+  private static final String OBSCURE = "Q0900401";
+
+  /** A candidate six of yours reach, big enough that dividing by its own degree buries it. */
+  private static final String FAMOUS = "Q0900402";
+
+  /** Twelve times the floor: far enough apart that lift and counting cannot agree. */
+  private static final int FAMOUS_DEGREE = 60;
 
   @Test
   @DisplayName("the deck is built from the graph, and the notes carry counts and no rating")
@@ -367,6 +382,47 @@ class RateRunTest {
     }
   }
 
+  @Test
+  @DisplayName("the deck deals the candidate the recommender's default scorer ranks first")
+  void shouldDealTheRecommendersTopCandidateWhenTheScorersDisagree() throws Exception {
+    // The deck's sweep held its own copy of the recommender's default scorer (issue #244): a
+    // literal here, a literal in RecommendCli.parse, and nothing pairing them. Issue #242 came
+    // within one clause of moving that default — and had it moved, the deck would have gone on
+    // dealing lift candidates while `recommend` ranked with something else, with the whole gate
+    // green. This is the check that would not have been.
+    try (TinkerGraphStore graph = new TinkerGraphStore()) {
+      oneObscureAndOneFamous(graph);
+      List<String> everything = new ArrayList<>(LOVED);
+      everything.addAll(LUKEWARM);
+
+      // The fixture has to be able to tell the scorers apart, or every assertion below is
+      // vacuously true: counting prefers the candidate more of yours reach, lift prefers the one
+      // its own degree does not bury. Asserted, not assumed, so a later fixture change that made
+      // the two agree fails here instead of reporting clean forever.
+      String byCounting = topCandidate(graph, everything, Scorer.RAW);
+      String byTheDefault = topCandidate(graph, everything, DEFAULT_SCORER);
+      assertThat(byTheDefault)
+          .as(
+              "this fixture separates %s from raw counting; if the default has moved, rebuild"
+                  + " oneObscureAndOneFamous so it discriminates the new default",
+              DEFAULT_SCORER)
+          .isNotEqualTo(byCounting);
+
+      List<Card> deck =
+          RateRun.buildDeck(
+              graph,
+              everything,
+              Map.of(),
+              Equivalences.NONE,
+              1,
+              MIN_CANDIDATE_DEGREE,
+              OptionalInt.empty(),
+              note -> {});
+
+      assertThat(deck).extracting(Card::qid).contains(byTheDefault).doesNotContain(byCounting);
+    }
+  }
+
   /** Invented ratings, never Rob's (ADR 33, issue #37). Every one of them is also an exclusion. */
   private static Map<String, Integer> ratings() {
     Map<String, Integer> ratings = new LinkedHashMap<>();
@@ -390,6 +446,44 @@ class RateRunTest {
     // the two on equal terms.
     padDegreeTo(graph, BELOVED, MIN_CANDIDATE_DEGREE);
     padDegreeTo(graph, CROWDED, MIN_CANDIDATE_DEGREE);
+  }
+
+  /**
+   * Two ancestors the scorers rank in opposite orders. One is reached by three of yours and carries
+   * the floor's worth of edges; the other is reached by six and carries twelve times as many.
+   * Counting, Adamic-Adar and resource allocation all prefer the crowded one; lift, which divides
+   * by the candidate's own degree, is alone in preferring the other — so this graph does not merely
+   * separate lift from counting, it separates lift from every other point on the dial.
+   */
+  private static void oneObscureAndOneFamous(TinkerGraphStore graph) {
+    node(graph, OBSCURE, NodeKind.GROUP, "the obscure ancestor");
+    node(graph, FAMOUS, NodeKind.GROUP, "the famous ancestor");
+    int intermediate = 0;
+    for (String seed : LOVED) {
+      reaches(graph, seed, "Q09004" + (10 + intermediate++), OBSCURE);
+    }
+    for (String seed : LUKEWARM) {
+      reaches(graph, seed, "Q09004" + (10 + intermediate++), FAMOUS);
+    }
+    padDegreeTo(graph, OBSCURE, MIN_CANDIDATE_DEGREE);
+    padDegreeTo(graph, FAMOUS, FAMOUS_DEGREE);
+  }
+
+  /**
+   * What the recommender's own sweep ranks first under one scorer, run here exactly as {@code
+   * RateRun} runs it — same sweep class, same institution filter, same floor, same regard — so the
+   * scorer is the only thing that differs between the two sides of the assertion.
+   */
+  private static String topCandidate(TinkerGraphStore graph, List<String> known, Scorer scorer) {
+    Sweep sweep =
+        new CandidateSweep(graph, RecognitionInstitutions::isRecognitionInstitution)
+            .over(
+                known,
+                KnownList.notOffered(Map.of(), Equivalences.NONE),
+                scorer,
+                MIN_CANDIDATE_DEGREE,
+                Recommendations.regardFor(Map.of()));
+    return Recommendations.rank(sweep.candidates(), 1).get(0).entity().qid();
   }
 
   /** One of yours cites an artist; that artist cites the candidate. */

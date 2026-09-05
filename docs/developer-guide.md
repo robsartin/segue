@@ -1838,7 +1838,7 @@ same for the next one.
 ## What to explore next
 
 ```bash
-# the measured defaults: lift, `Recommendations.MIN_CANDIDATE_DEGREE`, twenty-five candidates, three routes each
+# the measured defaults: `Recommendations.DEFAULT_SCORER`, `Recommendations.MIN_CANDIDATE_DEGREE`, twenty-five candidates, three routes each
 ./gradlew recommend --args="--known $HOME/known.csv --out $HOME/next.txt"
 
 # turn the dial, and read the two lists side by side
@@ -2206,7 +2206,9 @@ produces: promoted entities leave the candidate pool, suppressed ones leave it t
 ([ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md)), and the sweep seeds from a larger
 known set, so different entities fill the same slots. `RateCli`'s `--min-degree` defaults to the same
 `Recommendations.MIN_CANDIDATE_DEGREE` `recommend`'s does — by reference, not by a second copy of
-the number `RateRun` used to hold (issue #119) — so at those defaults the deck's candidates and
+the number `RateRun` used to hold (issue #119), and the deck's sweep scores with the same
+`Recommendations.DEFAULT_SCORER` `recommend` defaults `--scorer` to, again by reference rather than
+a second copy of the enum (issue #244) — so at those defaults the deck's candidates and
 `./gradlew recommend`'s agree, which is what ADR 46's issue-#101 review made true and this keeps
 true. Move it the same way `recommend --min-degree` does, to rate one floor's candidate list against
 another's instead of only reading about the difference — the method ADR 45 used and issues #117 and

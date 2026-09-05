@@ -26,7 +26,7 @@ class RecommendCliTest {
 
     assertThat(options.known()).isEqualTo(Path.of("/tmp/known.csv"));
     assertThat(options.out()).isEqualTo(Path.of("/tmp/out.txt"));
-    assertThat(options.scorer()).isEqualTo(Scorer.LIFT);
+    assertThat(options.scorer()).isEqualTo(Recommendations.DEFAULT_SCORER);
     assertThat(options.minDegree()).isEqualTo(Recommendations.MIN_CANDIDATE_DEGREE);
     assertThat(options.top()).isEqualTo(RecommendCli.DEFAULT_TOP);
     assertThat(options.database()).isEqualTo(Path.of(HOME, ".segue", "segue.db"));
@@ -83,6 +83,15 @@ class RecommendCliTest {
                 parse("--known", "/tmp/known.csv", "--out", "/tmp/out.txt", "--scorer", "pagerank"))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("pagerank");
+  }
+
+  @Test
+  @DisplayName("the usage message spells the default scorer from the constant, not a second word")
+  void shouldSpellTheDefaultScorerFromTheConstantWhenItRefusesAnything() {
+    // The word in the usage string was a third copy of the default (issue #244): the enum could
+    // move and the sentence offered to the operator would go on saying the old word.
+    assertThatThrownBy(() -> parse("--out", "/tmp/out.txt"))
+        .hasMessageContaining("default " + Recommendations.DEFAULT_SCORER.spelling());
   }
 
   @Test
