@@ -267,3 +267,51 @@ does.
   recoverable only by driving `CandidateSweep` directly, which is what measuring it took before.
 - **The trigger is held by a reader, like ADR 51's rule.** Nothing fails a build when the floor
   drifts. What changes is that a drifted run now *looks* different.
+
+**Amendment (2026-09-05, issue #260): the floor's first reading by kind.**
+
+Nothing above is withdrawn and no decision above is edited. [ADR 63](0063-a-read-only-census-of-the-graph.md)'s
+2026-09-04 amendment (issue #247) gave the census's degree section a second pass, read once per
+`NodeKind` as well as once over the whole graph, because `CandidateSweep.couldBeExplored` only ever
+offers `PERSON` and `GROUP` to the floor, so a whole-graph reading is, in that amendment's words,
+"the share of nodes below a cut most of them are never offered to." Issue #247 built the section. It
+did not run it.
+
+The owner ran the census on 2026-09-05, read-only against the graph itself, and pasted its degree section
+verbatim:
+
+```
+degree: floor 5; whole p50 1 p90 2 p99 30 max 545; at/below 120867 = 97%
+  PERSON p50 1 p90 7 p99 149 max 503; at/below 14893 = 88%
+  GROUP  p50 2 p90 61 p99 500 max 545; at/below 1553 = 67%
+  WORK   p50 1 p90 2 p99 4 max 78; at/below 87179 = 100%
+  PLACE 1/1/1/1 100%; EVENT p50 1 p90 1 p99 2 max 4 100%; CONCEPT p50 1 p90 1 p99 6 max 211; 16882 = 99%
+```
+
+Aggregates only, per [ADR 51](0051-what-an-adr-may-quote.md) and ADR 63 above: the census prints no
+label and no entity id, and this amendment names neither.
+
+**The `whole` line is the one this ADR's context and decision were read against, and it is
+dominated by a population the floor is never applied to at all.** `WORK` is the largest population
+in the graph by a wide margin, and its own row above sits at the ceiling the `whole` row only
+approaches. A floor this ADR chose by reading ranked lists of `PERSON` and `GROUP` candidates was,
+on the single whole-graph figure it had, mostly describing works instead.
+
+**`PERSON` and `GROUP` are the population the floor actually cuts, and reading them against each
+other rather than against `whole` shows they are not the same shape.** Both pass a far larger share
+of their nodes than the whole-graph figure implied — the `whole` row's share at or below the cut is
+the highest of the three — and `GROUP` carries the far longer tail of the two.
+
+**Nothing here moves the floor.** This ADR's refusal of a relative floor is a refusal of a *shape*
+— a cut that tracks the pool's own distribution rather than holding still — and it stands exactly
+as argued above: a second population to read the same cut against is not a new measurement of that
+shape, and no new comparison was run here. **The by-kind reading invites the same shape once more,
+split by kind** — a per-kind floor, one cut for `PERSON` and another for `GROUP` — and it is refused
+on the same two grounds: a degree reading is not a measurement of recommendation quality, and any
+move of the floor's *value*, on any axis, belongs to
+[ADR 65](0065-an-offline-evaluation-harness-for-the-recommender.md)'s harness (issue #245), on its
+own measurement, not to a single census reading.
+
+**From this reading on, the by-kind lines are what the floor is judged against, and the `whole`
+line is not.** A later re-reading of this section should be compared to the `PERSON` and `GROUP`
+rows above, not to `whole`.
