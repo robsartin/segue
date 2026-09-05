@@ -755,8 +755,9 @@ lift                    12  1030       19     4       13.8          6           
 rather than the held-out count on the header line. Clause 2 asked the scorer question at the shipped
 floor: `raw`, `adamic-adar` and `resource-allocation` were each compared with `lift`'s row at that
 floor on `hits`, and none of the three reached the three-hit bar — each sits below `lift` there
-rather than above it — and none of the three beat `lift` on `hits` at the two floors above the
-shipped one either, `resource-allocation` tying rather than beating at the highest of them. Their
+rather than above it. Each of the three does beat `lift` on `hits` at the lowest floor, where
+`lift` records none, and none of the three beats it at the two floors above the shipped one,
+`resource-allocation` tying rather than beating at the highest of them. Their
 `negatives` cells all satisfied the no-more-negatives condition, which settled nothing, because the
 hits condition had already failed for each. Clause 3 then asked the floor question at `lift`, since
 clause 2 had displaced nothing, comparing `hits` and `negatives` on `lift`'s rows at the lowest
@@ -772,7 +773,7 @@ Clause 4 therefore took its remaining branch. Clause 5 refused the two near miss
 
 ### What the table shows that the rule did not anticipate
 
-Three observations, recorded as observations. **The rule is not amended by any of them.** It was
+Four observations, recorded as observations. **The rule is not amended by any of them.** It was
 fixed at the commit named above, before the reading, and stands exactly as committed; each of these
 is for the issue that takes the next reading to weigh.
 
@@ -796,6 +797,16 @@ is for the issue that takes the next reading to weigh.
   the grid, while `in pool` falls as the floor rises. What the floor removes is not what those three
   put at the top of a list: their top is high-degree entities the floor never reaches, which is the
   same finding this ADR recorded when it chose to normalise, read from the floor's side.
+- **Two conditions in the rule are weaker on this table than they read, and the next reading
+  should say so before trusting them.** The dominance-across-floors condition is free at the
+  lowest floor, because the shipped scorer's `hits` cell there is the one the bullet above
+  singles out and every challenger clears it without being better; and it is one comparison
+  repeated at the two upper floors, because the three challengers hold a single `hits` value
+  across the grid. Separately, both that condition and the floor clause compare `hits` as counts
+  between rows whose `in pool` cells differ — `in pool` falls as the floor rises — so a higher
+  floor is judged on absolute hits while reaching fewer of the held-out entities. The rule chose
+  counts deliberately and is not amended by this; it is what the issue that takes the next
+  reading has to weigh.
 
 ### What this does and does not establish
 
