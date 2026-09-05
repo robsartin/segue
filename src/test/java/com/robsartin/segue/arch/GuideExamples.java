@@ -112,7 +112,11 @@ public final class GuideExamples {
     return RepositoryTree.read(RepositoryTree.root().resolve(GUIDE)).split("\n", -1);
   }
 
-  /** {@code [from, to)} over {@code lines} for {@code ## heading}, or null when it is absent. */
+  /**
+   * {@code [from, to)} over {@code lines} for {@code ## heading}, or null when it is absent. The
+   * chapter ends at the next line that starts {@code ## } wherever it is: a fenced code block
+   * containing such a line would end the chapter early, and nothing here notices.
+   */
   private static int[] chapterRange(String[] lines, String heading) {
     for (int i = 0; i < lines.length; i++) {
       if (!lines[i].equals("## " + heading)) {

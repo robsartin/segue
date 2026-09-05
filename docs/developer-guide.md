@@ -2624,13 +2624,13 @@ Dev-side keeps it the owner's.
 
 ## A supervised first run
 
-No merge and no retraction has ever reached the owner's graph —
+No retraction has ever reached the owner's graph —
 [ADR 24](adr/0024-sqlite-assertion-log.md)'s 2026-09-04 amendment measured it directly: "the real
-log holds no retractions at all." Every merge, retraction and stand-in path in the fold is
-fixture-only, and the first real one should be a supervised run rather than a surprise. This
-chapter is that run. What the census says about local entities minted and MusicBrainz reached is
-its own to report — read the `claims` and `bridge` lines it prints in step 1, rather than a figure
-restated here.
+log holds no retractions at all." The retraction and stand-in paths in the fold are fixture-only,
+and the first real one should be a supervised run rather than a surprise. This chapter is that
+first supervised retraction; a first real merge is deliberately not in it. What the census says
+about merges standing, local entities minted and MusicBrainz reached is its own to report — read
+the `claims` and `bridge` lines it prints in step 1, rather than a figure restated here.
 
 **The owner types every command here.** Nothing in this repository runs against the real database,
 and an agent reading this chapter is reading a description of what the owner will do, not a script
@@ -2740,8 +2740,9 @@ refuses the whole log if any surviving row names an entity no node stands for, l
 offending row by sequence number, the id nothing stands for, and the repair.
 
 If you see `replay refused:`, that is the run's finding and its first move at once: do what the
-message says — retract the endpoint it names, which withdraws the edge without deleting anything —
-rather than anything else, and file the block you saw. Appending a node claim for the named id does
+message says — retract the endpoint it names, which withdraws the edge without deleting anything.
+The message also names a merge as a repair; for this run the retraction is the answer, because a
+merge asserts an identity you do not mean. Then file the block you saw. Appending a node claim for the named id does
 not repair it, and the message says so.
 
 ### 7. The census after

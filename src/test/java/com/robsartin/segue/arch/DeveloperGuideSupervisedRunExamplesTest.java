@@ -131,7 +131,7 @@ class DeveloperGuideSupervisedRunExamplesTest {
         .as(
             "docs/developer-guide.md, '%s' — retractEntity is the one destructive command this"
                 + " chapter shows, and every --qid in it must be shaped like LocalEntity.isLocal"
-                + " (Q00\\\\d+, ADR 59): a Wikidata-shaped id here would retract a real entity from"
+                + " (Q00\\d+, ADR 59): a Wikidata-shaped id here would retract a real entity from"
                 + " the owner's graph instead of the one this run minted",
             CHAPTER)
         .isEmpty();
