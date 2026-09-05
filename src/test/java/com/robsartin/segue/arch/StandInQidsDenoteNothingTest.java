@@ -204,6 +204,7 @@ class StandInQidsDenoteNothingTest {
                   "class id — mapped by ClassLabels and KindMapper",
                   code(
                       "src/test/java/com/robsartin/segue/app/WikidataMusicBrainzIdentityTest.java"),
+                  code("src/test/java/com/robsartin/segue/census/ConceptClassCensusTest.java"),
                   code("src/test/java/com/robsartin/segue/domain/LoggedAssertionTest.java"),
                   code("src/test/java/com/robsartin/segue/domain/RecordInvariantsTest.java"),
                   code("src/test/java/com/robsartin/segue/export/DotWriterTest.java"),

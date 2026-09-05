@@ -497,7 +497,7 @@ line is drawn there.
 | `recommend` | The recommender ([ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md)): ranks entities absent from the known-list by how much more of that list reaches them than their size predicts, and explains each with real routes. Run as `./gradlew recommend`. The list is the supplied `--known` file plus everything rated 4 or 5 that the file does not name, through `KnownList.promoted` ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)) — so a highly rated entity stops being offered back — and since [ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md) the sweep also takes `KnownList.suppressed` as a separate set, so an entity rated 2 or below stops being offered back too. Plain Java, read-only, offline, and since issue #85 it weights every candidate by the owner's ratings — `Recommendations.regardFor` over `AffinityStore.readRatings`, the note-free half of the taste layer. (This row said it "cannot see the taste layer at all" until the final review of issue #101; that was already false on `main`.) | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `support` |
 | `own` | The owner-claim tool (issue [#92](https://github.com/robsartin/segue/issues/92)): mints a local entity Wikidata does not model, asserts an edge between two ids, or merges a local id into the QID it turned out to be — one operation per run, as `./gradlew ownClaim`. Plain Java, offline, and the second dev tool that writes a world-fact claim; it appends through `IngestService.claim` and holds no graph, so the projection catches up at the next boot. Deliberately not an MCP tool: an owner claim is exempt from the corroboration count, so a model must not be able to make one. Since #179 it has no default database: `--db` is required, `SEGUE_DB` does not satisfy it, and `./gradlew own` still resolves to `:ownClaim` — it refuses rather than reporting an unknown task ([ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md)). | `port`, `domain`, `ingest`, `sqlite`, `support` |
 | `rate` | The rating deck ([ADR 46](adr/0046-the-rating-deck.md)): a loopback page on 127.0.0.1:8090 dealing one unrated entity per keystroke, run as `./gradlew rate`. Plain Java, offline, and the only dev tool that writes a rating. Composes its known list through the same `KnownList.promoted` `recommend` does ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)), passes the same `KnownList.suppressed` to its sweep, and deals revisions over `KnownList.revisitable` ([ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md)). | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `recommend`, `support` |
-| `census` | The graph census: nodes by kind, edges by type, source and corroboration, the claim rows and what retraction and merge did to them, the taste layer by score, degree quantiles against `Recommendations.MIN_CANDIDATE_DEGREE`, and what MusicBrainz reached. Run as `./gradlew graphCensus`. Plain Java, read-only, offline, and the whole output is aggregates — no label, no id, no note — so it is safe to paste. `--db` is required, and `SEGUE_DB` does not satisfy it. | `port`, `domain`, `sqlite`, `support`, `export`, `wikidata` |
+| `census` | The graph census: nodes by kind, edges by type, source and corroboration, the claim rows and what retraction and merge did to them, the taste layer by score, degree quantiles against `Recommendations.MIN_CANDIDATE_DEGREE`, what MusicBrainz reached, and the classes its `CONCEPT` nodes state. Run as `./gradlew graphCensus`. Plain Java, read-only, offline, and the whole output is aggregates and class ids — no label, no note, no entity id — so it is safe to paste. `--db` is required, and `SEGUE_DB` does not satisfy it. | `port`, `domain`, `sqlite`, `support`, `export`, `wikidata` |
 | `evaluate` | The recommender's evaluation harness ([ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md)): holds out a deterministic slice of the entities you rated highly, runs the shipped candidate sweep from what is left over a fixed grid of scorers and degree floors, and reports where the held-out entities and the ones you rated down land. Run as `./gradlew evaluate`. Plain Java, read-only, offline, and the whole output is aggregates — no label, no id, no note, no rating — so it is safe to paste. `--db` is required, and `SEGUE_DB` does not satisfy it. | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `recommend`, `support` |
 
 ### Which rules a machine enforces
@@ -1718,7 +1718,7 @@ the variable, and this output is the shape of your whole graph and taste layer. 
 
 ### What it is for
 
-Three questions this repository has left open need a number nobody has, and all three are aggregates
+Four questions this repository has left open need a number nobody has, and all four are aggregates
 over the one database nobody but you may open:
 
 - how many merges the real graph holds, which [ADR 59](adr/0059-owner-claims-as-a-third-layer.md)'s
@@ -1728,7 +1728,11 @@ over the one database nobody but you may open:
   re-opens on figures `FloorReading` takes over one recommender run's candidate pool — nothing
   reports the nodes that pool never considers;
 - how much of what MusicBrainz reached the graph can describe, which
-  [ADR 55](adr/0055-what-the-musicbrainz-adapter-refuses.md) and issue #167 left open.
+  [ADR 55](adr/0055-what-the-musicbrainz-adapter-refuses.md) and issue #167 left open;
+- which Wikidata classes the `CONCEPT` nodes are wearing, which is the map of `KindMapper`'s gaps —
+  `fromInstanceOf` answers `CONCEPT` for any class its whitelist has never met, so an unknown share
+  of those nodes are people, groups, works or places. The `concept classes` section counts them, and
+  which classes then deserve a rule is a separate issue that only a real reading can open.
 
 `CensusReport` is the authority on which counts are emitted and in what order; this chapter does not
 list them, because a list here would be a second copy going stale on its own. What it prints is a
@@ -1738,16 +1742,22 @@ a six-figure count moves the column rather than jutting out of it.
 
 ### Why the output is safe to paste
 
-Every value is an integer, and every label is a literal in `CensusReport` but for two it reads off
-the log — the edge type codes and the source ids, in `of type …` and `backed by …`. Those are
-vocabulary rather than entities, and the test's "nothing `Q`-shaped anywhere" clause covers them;
-what the remaining labels interpolate is a score or a corroboration count, which are numbers. No
-qid, label or note reaches the output, so [ADR 51](adr/0051-what-an-adr-may-quote.md)'s line — an
-aggregate over your data may be published, an entity presented as yours may not — is satisfied by
-construction rather than by care. `CensusIsSafeToPasteTest` holds it: it feeds a graph containing a
-label, a note and a `Q` id inside that note, captures every log line at TRACE, and asserts that none
-of the three appears anywhere. ADR 51 says its rule cannot be tested in general and explains why;
-this is the one artefact where it can be, and
+Every value is an integer, and every label is a literal in `CensusReport` but for three it reads off
+the log — the edge type codes and the source ids, in `of type …` and `backed by …`, and the class
+qids in the `concept classes` rows. All three are vocabulary rather than entities. The first two are
+covered by the test's "nothing `Q`-shaped anywhere" clause; the third is the one exception to it,
+narrowed to the `  class Q…` prefix that only those rows can produce, with three planted lines
+asserting that a qid anywhere else — including a second one on an allowed row — still fires. See
+[ADR 63](adr/0063-a-read-only-census-of-the-graph.md)'s 2026-09-04 amendment. What the remaining
+labels interpolate is a score or a corroboration count, which are numbers. No label and no note
+reaches the output, and the only qid that does is a class id at the head of a `  class Q…` row, so
+[ADR 51](adr/0051-what-an-adr-may-quote.md)'s line — an aggregate over your data may be published, an
+entity presented as yours may not — is satisfied by construction rather than by care.
+`CensusIsSafeToPasteTest` holds it: it feeds a graph containing a label, a note, a `Q` id inside that
+note, and a node stating a class the whitelist has never met — so the concept-classes rows are
+non-vacuous rather than absent — captures every log line at TRACE, and asserts that only the class id
+reaches the output, and only where the narrowed clause allows it. ADR 51 says its rule cannot be
+tested in general and explains why; this is the one artefact where it can be, and
 [ADR 63](adr/0063-a-read-only-census-of-the-graph.md) records why.
 
 That guarantee is about the census itself, not about everything a run can put on your terminal: a

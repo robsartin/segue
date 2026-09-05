@@ -11,14 +11,14 @@ import org.junit.jupiter.api.Test;
 /**
  * The whole report for the invented fixture, pinned exactly.
  *
- * <p>Every number here is one the six section tests already assert on its own; what this adds is
+ * <p>Every number here is one the seven section tests already assert on its own; what this adds is
  * the labels, the order and the alignment — the part a person reads, and the part no per-number
  * test can see.
  *
  * <p><b>The column is arithmetic, not a copy of the output.</b> It is {@link CensusReport}'s own
  * rule — stated there, and not restated here — applied by hand to this fixture's widest label and
  * widest count. If a run disagrees on the padding then the padding is the finding; if it disagrees
- * on a number then the number is, and the six section tests say which.
+ * on a number then the number is, and the seven section tests say which.
  *
  * <p><b>The three taste lines below the scores are not a partition.</b> A local id, a stand-in and
  * a retracted id are independent properties of the rated entity — nothing here proves them
@@ -52,12 +52,13 @@ class CensusReportTest {
                 fold,
                 projection),
             DegreeCensus.of(projection),
-            BridgeCensus.of(projection));
+            BridgeCensus.of(projection),
+            ConceptClassCensus.of(projection));
 
     assertThat(String.join("\n", CensusReport.lines(census)))
         .isEqualTo(
             """
-            # segue graph census — aggregates only: no labels, no ids, no notes (ADR 51, ADR 63).
+            # segue graph census — aggregates and Wikidata class ids only: no labels, no notes, no entity ids (ADR 51, ADR 63).
 
             nodes
               total                                  13
@@ -116,6 +117,11 @@ class CensusReportTest {
 
             bridge
               entities MusicBrainz reached            2
-              of those, carrying classes              1""");
+              of those, carrying classes              1
+
+            concept classes
+              stating no class                        0
+              distinct classes                        1
+              class Q0900301                          1""");
   }
 }

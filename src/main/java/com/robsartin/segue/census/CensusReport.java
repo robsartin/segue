@@ -28,16 +28,18 @@ import java.util.function.ToIntFunction;
  * expectation rather than a transcript.
  *
  * <p><b>Every label is a literal in this file.</b> Nothing here interpolates a value read from the
- * data except an integer, which is the property that makes the whole output safe to paste and the
- * property {@code CensusIsSafeToPasteTest} asserts. The two exceptions are the edge type codes and
- * source ids, which are vocabulary rather than entities and are covered by that test's "no Q-shaped
- * token anywhere" clause.
+ * data except an integer and one identifier. The exceptions are the edge type codes and source ids,
+ * which are vocabulary rather than entities and are covered by {@code CensusIsSafeToPasteTest}'s
+ * "no Q-shaped token anywhere" clause, and the class qids in the concept-classes rows, which ADR
+ * 63's 2026-09-04 amendment rules the same way and for which that clause is narrowed to the {@code
+ * class Q…} prefix this block owns.
  */
 public final class CensusReport {
 
   /** Said on the first line, every time — what this is, and what it is not. */
   public static final String HEADER =
-      "# segue graph census — aggregates only: no labels, no ids, no notes (ADR 51, ADR 63).";
+      "# segue graph census — aggregates and Wikidata class ids only: no labels, no notes, no entity"
+          + " ids (ADR 51, ADR 63).";
 
   private static final String GAP = "  ";
 
@@ -123,6 +125,14 @@ public final class CensusReport {
     body.add(section("bridge"));
     body.add(count("entities MusicBrainz reached", census.bridge().entitiesReached()));
     body.add(count("of those, carrying classes", census.bridge().entitiesReachedWithClasses()));
+
+    ConceptClassCensus conceptClasses = census.conceptClasses();
+    body.add(section("concept classes"));
+    body.add(count("stating no class", conceptClasses.statingNoClass()));
+    body.add(count("distinct classes", conceptClasses.distinctClasses()));
+    for (ConceptClassCensus.ConceptClass stated : conceptClasses.top()) {
+      body.add(count("class " + stated.classQid(), stated.nodes()));
+    }
 
     return body;
   }

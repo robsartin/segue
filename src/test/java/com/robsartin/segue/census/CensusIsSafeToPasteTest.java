@@ -40,8 +40,28 @@ class CensusIsSafeToPasteTest {
   /** Anything qid-shaped at all, wherever it appears. */
   private static final Pattern A_QID = Pattern.compile("\\bQ\\d+\\b");
 
+  /**
+   * The one place ADR 63's 2026-09-04 amendment lets a qid stand: the head of a concept-classes
+   * row. {@code CensusReport} indents every counted line by two spaces and puts the literal {@code
+   * class } in front of the id, so no other line in the report can produce this prefix.
+   */
+  private static final Pattern A_CLASS_ROW = Pattern.compile("^  class Q\\d+");
+
   private static final String LABEL = "A Label Unlike Anything Real";
   private static final String NOTE = "an invented note that names Q0900901 and nothing else";
+
+  /** A class no whitelist knows, so the claim below re-derives to CONCEPT and reaches the rows. */
+  private static final String A_CLASS = "Q0900302";
+
+  /**
+   * Whether a line carries a qid the amendment does not allow it. Exactly one class-row prefix is
+   * removed, once and only from the head; the unchanged clause is then applied to everything left,
+   * so a second qid on an allowed row fires, a qid on any other line fires, and the section's own
+   * words without its indent fire.
+   */
+  private static boolean carriesAnIdItMayNot(String line) {
+    return A_QID.matcher(A_CLASS_ROW.matcher(line).replaceFirst("")).find();
+  }
 
   @TempDir private Path home;
 
@@ -72,6 +92,9 @@ class CensusIsSafeToPasteTest {
     try (SqliteAssertionLog log = new SqliteAssertionLog(db);
         SqliteAffinityStore affinity = new SqliteAffinityStore(db)) {
       log.append(InventedCensus.node("Q0900901", NodeKind.WORK, LABEL));
+      log.append(
+          InventedCensus.node(
+              "Q0900903", NodeKind.WORK, "Another Label Unlike Anything Real", List.of(A_CLASS)));
       affinity.put(new AffinityRecord("Q0900901", 5, NOTE, Instant.parse("2026-02-01T08:00:00Z")));
     }
     captured.list.clear();
@@ -86,6 +109,11 @@ class CensusIsSafeToPasteTest {
         .contains(CensusReport.HEADER)
         .anyMatch(line -> line.startsWith("  ratings"));
     assertThat(everyLine)
+        .as(
+            "the concept-classes section printed a class row — without this the narrowed clause"
+                + " below is satisfied by a run that emitted no qid at all")
+        .anyMatch(line -> line.startsWith("  class Q"));
+    assertThat(everyLine)
         .as("no line carries a label (ADR 51, ADR 63)")
         .noneMatch(line -> line.contains(LABEL));
     assertThat(everyLine)
@@ -94,7 +122,27 @@ class CensusIsSafeToPasteTest {
     assertThat(everyLine)
         .as(
             "no line carries anything qid-shaped, wherever it came from — a label, a note, a source"
-                + " id or an edge type code that turned out to look like an entity")
-        .noneMatch(line -> A_QID.matcher(line).find());
+                + " id or an edge type code that turned out to look like an entity. The one"
+                + " exception is a class id at the head of a concept-classes row (ADR 63,"
+                + " amended 2026-09-04), and it is one prefix wide")
+        .noneMatch(CensusIsSafeToPasteTest::carriesAnIdItMayNot);
+  }
+
+  @Test
+  @DisplayName(
+      "the carve-out is one prefix wide: only a class id at the head of a class row passes")
+  void shouldFireWhenAQidSitsAnywhereButTheHeadOfAClassRow() {
+    assertThat(carriesAnIdItMayNot("  class Q0900302                         1"))
+        .as("the row the amendment allows")
+        .isFalse();
+    assertThat(carriesAnIdItMayNot("  ratings                        Q0900901"))
+        .as("an entity id on another section's line")
+        .isTrue();
+    assertThat(carriesAnIdItMayNot("  class Q0900302  Q0900901"))
+        .as("a second id smuggled onto an allowed row")
+        .isTrue();
+    assertThat(carriesAnIdItMayNot("class Q0900302  1"))
+        .as("the section's own words without the indent no other line can fake")
+        .isTrue();
   }
 }
