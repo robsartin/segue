@@ -5,10 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.robsartin.segue.census.ConceptClassCensus.ConceptClass;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeKind;
-import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.export.LogProjection;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -25,9 +23,6 @@ class ConceptClassCensusTest {
 
   private static final String CLASS_ONE = "Q0900302";
   private static final String CLASS_TWO = "Q0900303";
-
-  /** A second invented class, so the other-kind test does not repeat {@link #CLASS_ONE}. */
-  private static final String PERSON_CLASS = "Q0900304";
 
   private static LogProjection fold(LoggedAssertion... claims) {
     return LogProjection.of(new InventedCensus.FakeAssertionLog().with(claims));
@@ -54,22 +49,15 @@ class ConceptClassCensusTest {
   @Test
   @DisplayName("a class stated by a node of another kind is not counted")
   void shouldCountConceptNodesAloneWhenAnotherKindStatesAClass() {
-    // Built directly rather than folded: any class this fictitious re-derives EVERY kind to
-    // CONCEPT (ADR 42, KindMapper.rederive), so a folded log cannot state a class on a node that
-    // stays some other kind — NodeCensusTest's NEIGHBOUR is exactly that case. Building the
-    // projection by hand isolates this section's own kind filter from that re-derivation, which
-    // is NodeCensusTest's and KindMapperTest's to cover.
+    // Folded through the normal path, like every other test in this class: ANOTHER_NODE states
+    // Q5 (human), a class KindMapper.rederive maps to PERSON, so it stays a PERSON node rather
+    // than re-deriving to CONCEPT — the fold never sees a node whose stated class disagrees with
+    // its kind, because rederive settles that before this section ever reads a NodeRecord.
     LogProjection projection =
-        new LogProjection(
-            Map.of(
-                A_NODE,
-                new NodeRecord(A_NODE, NodeKind.CONCEPT, "an invented thing", List.of(CLASS_ONE)),
-                ANOTHER_NODE,
-                new NodeRecord(
-                    ANOTHER_NODE, NodeKind.PERSON, "an invented person", List.of(PERSON_CLASS))),
-            List.of(),
-            0,
-            0);
+        fold(
+            InventedCensus.node(A_NODE, NodeKind.CONCEPT, "an invented thing", List.of(CLASS_ONE)),
+            InventedCensus.node(
+                ANOTHER_NODE, NodeKind.PERSON, "an invented person", List.of("Q5")));
 
     assertThat(ConceptClassCensus.of(projection).top())
         .as("the section counts CONCEPT nodes only, whatever the other node's own class is")
