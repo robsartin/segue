@@ -73,9 +73,10 @@ public final class GraphProjector {
    * <p><b>{@code merges} is required rather than defaulted, and it is not always the real one.</b>
    * A merge has an effect outside the graph - the owner's rating follows the equivalence - and
    * replay is what repairs a merge whose rating was never carried, because affinity is the one
-   * thing here that is durable and is therefore rebuilt by nothing. But three of this method's four
-   * production callers are read-only dev tools that replay into a throwaway graph ({@code
-   * ExportCli}, {@code RecommendCli}, {@code RateCli}); an exporter that wrote a rating would be
+   * thing here that is durable and is therefore rebuilt by nothing. But its two production callers
+   * are the boot replay ({@code SegueConfiguration}) and {@code ExportCli}, and the three dev tools
+   * that reach the same replay through {@link #replay} — {@code ExportCli}, {@code RecommendCli}
+   * and {@code RateCli} — replay into a throwaway graph; an exporter that wrote a rating would be
    * exactly what {@code ArchitectureTest.theExporterOnlyReads} exists to prevent, and no ArchUnit
    * rule would catch it, because the write would happen inside {@code port}. They pass {@link
    * IdentityMerge#NONE} and say so. The application's boot replay passes the real one.
@@ -96,8 +97,8 @@ public final class GraphProjector {
    *
    * <p>See {@link #project} for the {@code merges} contract — this is the same replay, under a
    * different return type. It exists so a caller that must ask the log a second question — {@code
-   * recommend}, {@code rate} and {@code evaluate}, each of which reads the log again for the merges
-   * a graph does not draw as an edge — takes the fold this replay already built rather than
+   * recommend}, {@code rate} and {@code evaluate}, each of which used to read the log again for the
+   * merges a graph does not draw as an edge — takes the fold this replay already built rather than
    * building a second one over the same rows.
    *
    * @return the count {@link #project} returns, beside the {@link Fold} this replay applied

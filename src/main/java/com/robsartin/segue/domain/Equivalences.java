@@ -724,8 +724,9 @@ public record Equivalences(
    * <p><b>Named rather than an overload of {@link #in}, on {@link #localsOfMerges}' reason.</b> The
    * two folds are the only callers of {@link #foldEndpoints} that hold a log, and an overload
    * quietly giving one of them the older, edge-blind answer is how the two would drift while
-   * looking identical at the call site. {@code GraphProjector.project} and {@code LogProjection.of}
-   * both build their equivalences here.
+   * looking identical at the call site. Since #246, {@code GraphProjector.project} and {@code
+   * LogProjection.of} reach this same answer through {@code Fold.of} and {@link
+   * #folding(Equivalences, Set)}.
    *
    * <p><b>{@code RetractRun.strandedByThisRetraction} used to be a third caller here, and folded
    * nothing itself.</b> It builds an {@link Equivalences} over the log the retraction WOULD
@@ -735,15 +736,17 @@ public record Equivalences(
    * empty one and would answer {@code false} for everything. Coming through here paid for {@link
    * #retractedStandIns} a second time, on top of the one it already held to compute what it was
    * newly emptying — the very re-fold issue #246 removes. Since #246 it calls the two overloads
-   * below directly with that already-held set, so this method's callers are back to the original
-   * two: {@code GraphProjector.project} and {@code LogProjection.of}.
+   * below directly with that already-held set, so this method's one production caller is now
+   * IngestService's pre-append gate, which folds the log a claim would produce on the live path,
+   * where there is no boot fold to reuse.
    *
-   * <p>Every direct caller of {@link #in(List)} — {@code OwnRun} and {@code ratings/Labels} — asks
-   * about known lists and labels, and neither folds an edge nor asks that question. Three tools
-   * used to call it too, for their ratings and known-list questions — {@code RecommendCli}, {@code
-   * RateCli} and {@code EvaluateCli} — and since #246 none of them does any more: each takes the
-   * replay's own fold instead of folding a second time. {@code RetractRun} reaches {@link #in(List,
-   * Set)} directly, with the emptied set it already holds — see that overload's own javadoc.
+   * <p>Every caller outside this class of {@link #in(List)} — {@code OwnRun} and {@code
+   * ratings/Labels} — asks about known lists and labels, and neither folds an edge nor asks that
+   * question. Three tools used to call it too, for their ratings and known-list questions — {@code
+   * RecommendCli}, {@code RateCli} and {@code EvaluateCli} — and since #246 none of them does any
+   * more: each takes the replay's own fold instead of folding a second time. {@code RetractRun}
+   * reaches {@link #in(List, Set)} directly, with the emptied set it already holds — see that
+   * overload's own javadoc.
    */
   public static Equivalences folding(List<LoggedAssertion> log) {
     Objects.requireNonNull(log, "log");

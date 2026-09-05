@@ -179,7 +179,7 @@ elsewhere in the package is a second fold that a statics-only fence would not se
 | tool | fence | the one home | why |
 | --- | --- | --- | --- |
 | `export` | `theExportFoldsOnce` | `LogProjection` | `LogProjection` is already the only class in `export` that folds; the one-argument `of` is now the only place a `Fold` is built |
-| `census` | `theCensusFoldsOnce` | `Census` | after the migration `Census.of` builds the single fold and the five section types take what it holds |
+| `census` | `theCensusFoldsOnce` | `Census` | after the migration `Census.of` builds the single fold and the six section types take what it holds |
 | `recommend`, `rate`, `evaluate` | `theReplayingToolsTakeTheBootsFold` | none — no class in any of the three may fold | their fold arrives from `GraphProjector.replay`; one rule over three packages, because it states one property |
 
 **No fence for `retract`**, on the issue's own boundary: it folds twice, legitimately, for two

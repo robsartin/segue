@@ -18,9 +18,9 @@ import java.util.Objects;
  * defeat the callback, and the ordering of the callback against the replay would be a convention
  * rather than a type.
  *
- * <p>{@code GraphProjector.project} is unchanged and returns {@link #applied} alone — sixty call
- * sites keep the signature they have, which is what makes this a parallel field rather than a
- * big-bang change to a return type (ADR 4).
+ * <p>{@code GraphProjector.project} is unchanged and returns {@link #applied} alone — every other
+ * call site keeps the signature it already has, which is what makes this a parallel field rather
+ * than a big-bang change to a return type (ADR 4).
  */
 public record Replay(long applied, Fold fold) {
 

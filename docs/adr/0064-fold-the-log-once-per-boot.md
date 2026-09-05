@@ -197,10 +197,13 @@ tool's output changed** — each tool now derives its fold once per run and hand
 consequences above read "`census`, and `export`'s whole-log views, fold through `LogProjection.of`
 — three to two". That is `LogProjection.of`'s count. `census` also ran `ClaimCensus.of` and
 `TasteCensus.of`, which folded the same rows three further times, and it read the whole log twice.
-The tool paid five whole-log fixed points per run, not three.
+So where that bullet reads "three to two" for census, it should read six to five: as this ADR left
+the code, the tool paid five whole-log fixed points per run and read the log twice.
 
 Counted the same way — invocations of the fixed point `Equivalences.retractedStandIns` computes —
-and read off the call sites after #246 rather than subtracted from the figures above:
+and read off the call sites after #246 rather than subtracted from the figures above. The before
+column is the code as this ADR left it (branch base da8efa9); the after column is read off the
+call sites once #246 landed.
 
 | tool | before | after | how |
 | --- | --- | --- | --- |
