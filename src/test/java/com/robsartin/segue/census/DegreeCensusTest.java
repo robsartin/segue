@@ -1,6 +1,7 @@
 package com.robsartin.segue.census;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.entry;
 
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeKind;
@@ -47,6 +48,35 @@ class DegreeCensusTest {
     assertThat(CENSUS.atOrBelowTheFloor())
         .as("twelve of the thirteen; only the degree-6 node is above the floor of 5")
         .isEqualTo(12);
+  }
+
+  @Test
+  @DisplayName("each kind's distribution is read over that kind's own nodes")
+  void shouldReadEachKindsOwnDistributionWhenTheKindsDifferFromTheWhole() {
+    assertThat(CENSUS.byKind())
+        .as(
+            "PERSON is [2, 2, 6] and WORK is [0, 0, 0, 0, 1, 1, 1, 5]; the whole graph's p50 of 1 is"
+                + " a degree neither kind's median has")
+        .containsExactly(
+            entry(NodeKind.PERSON, new DegreeCensus.KindDegrees(2, 6, 6, 6, 2)),
+            entry(NodeKind.GROUP, new DegreeCensus.KindDegrees(2, 2, 2, 2, 1)),
+            entry(NodeKind.WORK, new DegreeCensus.KindDegrees(0, 5, 5, 5, 8)),
+            entry(NodeKind.PLACE, new DegreeCensus.KindDegrees(0, 0, 0, 0, 0)),
+            entry(NodeKind.EVENT, new DegreeCensus.KindDegrees(0, 0, 0, 0, 0)),
+            entry(NodeKind.CONCEPT, new DegreeCensus.KindDegrees(2, 2, 2, 2, 1)));
+  }
+
+  @Test
+  @DisplayName("the kinds partition the graph, so their counts sum to the whole graph's")
+  void shouldSumEachKindsCountToTheWholeGraphsWhenBothAreRead() {
+    int summed =
+        CENSUS.byKind().values().stream()
+            .mapToInt(DegreeCensus.KindDegrees::atOrBelowTheFloor)
+            .sum();
+
+    assertThat(summed)
+        .as("every node has exactly one kind, so no node may be counted twice or dropped")
+        .isEqualTo(CENSUS.atOrBelowTheFloor());
   }
 
   /**
@@ -97,5 +127,14 @@ class DegreeCensusTest {
     assertThat(census.p99()).isEqualTo(0);
     assertThat(census.max()).isEqualTo(0);
     assertThat(census.atOrBelowTheFloor()).isEqualTo(0);
+    assertThat(census.byKind())
+        .as("all six kinds are present at zero, never absent — NodeCensus's rule")
+        .containsExactly(
+            entry(NodeKind.PERSON, new DegreeCensus.KindDegrees(0, 0, 0, 0, 0)),
+            entry(NodeKind.GROUP, new DegreeCensus.KindDegrees(0, 0, 0, 0, 0)),
+            entry(NodeKind.WORK, new DegreeCensus.KindDegrees(0, 0, 0, 0, 0)),
+            entry(NodeKind.PLACE, new DegreeCensus.KindDegrees(0, 0, 0, 0, 0)),
+            entry(NodeKind.EVENT, new DegreeCensus.KindDegrees(0, 0, 0, 0, 0)),
+            entry(NodeKind.CONCEPT, new DegreeCensus.KindDegrees(0, 0, 0, 0, 0)));
   }
 }

@@ -1,8 +1,13 @@
 package com.robsartin.segue.census;
 
+import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.Recommendations;
 import com.robsartin.segue.export.LogProjection;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -35,21 +40,75 @@ import java.util.Objects;
  * <p><b>Isolated nodes are in the population</b>, at degree zero. "At or below the floor" against a
  * denominator that had already dropped what nothing reaches would be a different question.
  *
+ * <p><b>The same figures are read again per {@link com.robsartin.segue.domain.NodeKind}</b>, all
+ * six kinds and zeros included, because the floor is applied to two of them and nothing else:
+ * {@code CandidateSweep.couldBeExplored} refuses every kind but {@code PERSON} and {@code GROUP}
+ * before the degree test is reached, so the whole-graph reading above is a true statement about the
+ * graph and a misleading one about the floor (issue #247). The whole-graph reading stays because
+ * issue #135's question is about the graph the floor was measured against. One rule reads both —
+ * {@code read} — so a kind's quantile and the graph's cannot come to disagree about what a quantile
+ * is.
+ *
  * @param floor {@code Recommendations.MIN_CANDIDATE_DEGREE}, by reference and never by a second
  *     copy of the number — a reading has to say which floor it is a reading of
  * @param atOrBelowTheFloor nodes whose degree is at most {@code floor}. <b>At or below, where
  *     {@code CandidateSweep} excludes below</b> ({@code candidateDegree < minDegree}), so this is
  *     the sweep's exclusions plus the nodes sitting exactly on the floor — the population {@code
  *     FloorReading.headOnTheFloor} says one expansion moves first
+ * @param byKind the same reading taken over each kind's own nodes, in {@code NodeKind} declaration
+ *     order. An {@code EnumMap} rather than {@code Map.copyOf}, on {@code NodeCensus}'s reason:
+ *     that factory's iteration order is unspecified and salted per JVM, and ADR 43's byte-identical
+ *     contract is what the order serves
  */
-public record DegreeCensus(int floor, int p50, int p90, int p99, int max, int atOrBelowTheFloor) {
+public record DegreeCensus(
+    int floor,
+    int p50,
+    int p90,
+    int p99,
+    int max,
+    int atOrBelowTheFloor,
+    Map<NodeKind, KindDegrees> byKind) {
+
+  public DegreeCensus {
+    Objects.requireNonNull(byKind, "byKind");
+    // new EnumMap<>(map) refuses an empty map it cannot infer the key type from; the class
+    // constructor plus putAll takes one, and no caller has to know that.
+    Map<NodeKind, KindDegrees> copy = new EnumMap<>(NodeKind.class);
+    copy.putAll(byKind);
+    byKind = Collections.unmodifiableMap(copy);
+  }
+
+  /** One kind's population, read by the rules the whole graph is read by. */
+  public record KindDegrees(int p50, int p90, int p99, int max, int atOrBelowTheFloor) {}
 
   public static DegreeCensus of(LogProjection projection) {
     Objects.requireNonNull(projection, "projection");
-    List<Integer> sorted = Degrees.in(projection).values().stream().sorted().toList();
+    Map<String, Integer> degrees = Degrees.in(projection);
     int floor = Recommendations.MIN_CANDIDATE_DEGREE;
+    Map<NodeKind, List<Integer>> collected = new EnumMap<>(NodeKind.class);
+    for (NodeKind kind : NodeKind.values()) {
+      collected.put(kind, new ArrayList<>());
+    }
+    // Every key came from projection.nodes(), which Degrees.in seeds itself from, so there is no
+    // absent node to defend against here.
+    degrees.forEach((qid, degree) -> collected.get(projection.nodes().get(qid).kind()).add(degree));
+    Map<NodeKind, KindDegrees> byKind = new EnumMap<>(NodeKind.class);
+    collected.forEach((kind, population) -> byKind.put(kind, read(population, floor)));
+    KindDegrees whole = read(List.copyOf(degrees.values()), floor);
     return new DegreeCensus(
         floor,
+        whole.p50(),
+        whole.p90(),
+        whole.p99(),
+        whole.max(),
+        whole.atOrBelowTheFloor(),
+        byKind);
+  }
+
+  /** One population's figures — the whole graph's and every kind's, by one rule rather than two. */
+  private static KindDegrees read(List<Integer> population, int floor) {
+    List<Integer> sorted = population.stream().sorted().toList();
+    return new KindDegrees(
         quantile(sorted, 0.50),
         quantile(sorted, 0.90),
         quantile(sorted, 0.99),
