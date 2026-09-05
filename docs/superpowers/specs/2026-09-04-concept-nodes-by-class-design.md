@@ -25,7 +25,7 @@ A seventh census section, `concept classes`, printing:
 concept classes
   stating no class                        N
   distinct classes                        M
-  class Q…… unmapped                      n
+  class Q……                               n
   …
 ```
 
@@ -57,10 +57,10 @@ whole distribution, a count of one can reach the output. Nothing hides it, and A
 applies — `--db` is typed per invocation because whether to publish is the owner's decision, taken
 each time.
 
-### The `mapped` / `unmapped` marker, and where the issue's premise does not match the code
+### The `mapped` / `unmapped` marker: dropped (YAGNI amendment, 2026-09-04)
 
-The issue and the dispatch both describe the marker as separating "mapped classes that still landed
-as `CONCEPT` via precedence" from unmapped ones. **That case cannot occur.** `KindMapper`:
+The issue and the dispatch both described a marker separating "mapped classes that still landed as
+`CONCEPT` via precedence" from unmapped ones. **That case cannot occur.** `KindMapper`:
 
 - `fromInstanceOf` maps each stated class through `BY_CLASS` and `filter(Objects::nonNull)` — a
   class the whitelist does not know is *skipped*, never ranked;
@@ -72,35 +72,16 @@ So a node that states any class the whitelist knows is never `CONCEPT`, and prec
 produce one. `LogProjection` re-derives on both node paths that carry classes
 (`Equivalences.standIns(logged, KindMapper::rederive)` and the `NodeAssertion` case); the third,
 `LocalEntity`, does not re-derive but `LocalEntity` carries no classes at all. **Through the
-production fold, every row this section prints reads `unmapped`.**
+production fold, every row this section could ever print reads `unmapped`** — a constant, not a
+distinction the fold draws.
 
-The marker is kept anyway, on two grounds it can carry honestly:
-
-1. **It is the section's invariant, printed.** The section's headline claim is "these are classes
-   the mapper has no rule for". Without the marker that is an assumption; with it, a row reading
-   `mapped` is the fold and the mapper having come apart — a whitelist entry that maps to `CONCEPT`,
-   or a node reaching the projection without re-derivation, which the `LocalEntity` branch already
-   does and which would start producing one the moment a local entity carried a class.
-2. **It is `isMapped`'s first production caller.** [ADR 21](../../adr/0021-six-kind-ontology.md)'s
-   issue-#87 amendment rejected a conflict flag partly because *"`isMapped`, the existing 'report
-   what we could not map' seam, has no production caller to report through"*, and said the surface
-   could be added later against unchanged data. This is that surface, and the data is unchanged.
-
-**Rejected: drop the marker and print class qid and count alone.** One boolean and one call
-cheaper, and the column is a constant today. It loses because the section would then assert its own
-premise with nothing checking it, and because a reader cannot tell a whitelist that has quietly
-grown a `CONCEPT` entry from one that has not.
-
-**Rejected: one summary line — "stated by a class the mapper knows: 0" — instead of a per-row
-word.** Shorter, and it carries the same invariant. It loses on the truncation: a summary count says
-some mapped class is down there without saying which, and the rows are already sorted so that the
-one worth seeing is at the top.
-
-**Rejected: `ClassLabels` for a human-readable name beside the qid.** It is a hand-curated display
-table whose fallback prints the bare qid, so on exactly the classes this section exists to surface —
-the ones nobody has met — it would print the qid anyway, plus a column of blanks. It would also put
-a curated English string into an output whose whole guarantee is that it interpolates nothing but
-integers and one identifier.
+The original draft kept the marker anyway, arguing it prints the section's own invariant (a row
+reading `mapped` would mean the fold and the mapper had come apart) and gives `isMapped` its first
+production caller. Both arguments are true and neither earns a field: a boolean that is `false` on
+every path the production fold can reach is speculative structure, not an invariant worth a column,
+and `isMapped` can wait for a real caller rather than a constant one built to give it one. **The
+marker is dropped.** `ConceptClass` is `(classQid, nodes)`, the record has no marker field, and
+`KindMapper.isMapped` stays unused. The section prints a class qid and a count and nothing else.
 
 ## Printing a class qid, and the guard that has to be narrowed for it
 
@@ -131,8 +112,8 @@ guard itself:
 | Planted line | What it stands for | Plant that makes it pass wrongly |
 | --- | --- | --- |
 | `  ratings` … `Q0900901` | an entity id on another section's line | widen the prefix to `^  \w+\s+Q\d+` |
-| `  class Q0900302 unmapped  Q0900901` | a second id smuggled onto an allowed row | short-circuit `line.startsWith("  class")` to allowed |
-| `class Q0900302 unmapped  1` | the section's own words without its indent | drop the `^  ` anchor |
+| `  class Q0900302  Q0900901` | a second id smuggled onto an allowed row | short-circuit `line.startsWith("  class")` to allowed |
+| `class Q0900302  1` | the section's own words without its indent | drop the `^  ` anchor |
 
 The `\bQ\d+\b` clause in `EvaluationIsSafeToPasteTest` is a separate guard over a separate report
 and is **not** narrowed.
@@ -145,10 +126,10 @@ into a number the `nodes` section already reports, and a drill-down reads after 
 into. The second is mechanical — issue #247 is adding a by-kind breakdown to the `degree` section on
 this same base, and a section appended after the last one renumbers none of its lines.
 
-The longest label this section produces is `  class ` plus an eleven-digit qid plus ` unmapped`, 29
-characters, well under the report's existing widest label (`  merges superseded but edge-referenced`,
-38). Its counts are no wider than the existing widest. So neither derived column width moves, and
-the change to `CensusReportTest`'s pinned block is three appended lines rather than a reflow.
+The longest label this section produces is `  class ` plus an eleven-digit qid, 20 characters, well
+under the report's existing widest label (`  merges superseded but edge-referenced`, 38). Its counts
+are no wider than the existing widest. So neither derived column width moves, and the change to
+`CensusReportTest`'s pinned block is three appended lines rather than a reflow.
 
 `Census`'s own javadoc — *"no qid, label or note reaches this type"* — stops being true and is
 corrected in the same commit, with the carve-out and a pointer to the amendment. That sentence is
@@ -158,18 +139,13 @@ exists to prevent.
 ## What holds it
 
 - `ConceptClassCensusTest` — the counting: once per class per node, `CONCEPT` nodes only, the
-  no-class line, `distinct classes` counting past the cut, the order (count descending, qid
-  ascending), the cut at ten, and the marker reading `mapped`. Every case but the last folds a small
-  invented log of its own, the precedent `EdgeCensusTest` set for a case the shared fixture cannot
-  reach. The last builds a `LogProjection` by hand and says in its javadoc that it must, because the
-  fold cannot produce a `CONCEPT` node stating a mapped class — the finding above, pinned as a test.
+  no-class line, `distinct classes` counting past the cut, and the order (count descending, qid
+  ascending) with the cut at ten. Every case folds a small invented log of its own, the precedent
+  `EdgeCensusTest` set for a case the shared fixture cannot reach.
 - `CensusReportTest` — the three new lines, in place, with the alignment applied by hand.
 - `CensusIsSafeToPasteTest` — the narrowed guard, its anchor assertion (`anyMatch` on
   `  class Q`, so the carve-out is never vacuously satisfied by a run that printed no class row) and
   the three controls above.
-- `StandInQidsDenoteNothingTest` — the `Q5` allowance gains one site, because the marker test needs
-  a class the whitelist really knows. `Q5`'s existing entry already reads *"class id — mapped by
-  ClassLabels and KindMapper"* and lists nine sites; this is a tenth.
 - The developer guide's census chapter, and the ADR 63 amendment. Neither has unit-testable
   behaviour; both are verified by the full `check` gate, which runs `AdrIndexTest`, the doc-link
   test and `DeveloperGuideEnumerationsTest` over them. No new package import edge is introduced —

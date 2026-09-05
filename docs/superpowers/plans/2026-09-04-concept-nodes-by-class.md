@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** `graphCensus` prints a seventh section, `concept classes`, listing the classes `CONCEPT` nodes state — the top ten by count, each with its class qid, its count and whether `KindMapper` has a rule for it — plus the `CONCEPT` nodes that state no class at all, so the owner can paste it and open the follow-up issue about which classes deserve a mapper rule.
+**Goal:** `graphCensus` prints a seventh section, `concept classes`, listing the classes `CONCEPT` nodes state — the top ten by count, each with its class qid and its count — plus the `CONCEPT` nodes that state no class at all, so the owner can paste it and open the follow-up issue about which classes deserve a mapper rule.
 
 **Architecture:** One new section record, `census.ConceptClassCensus`, a pure `of(LogProjection)` like its six siblings; a seventh component on `Census`; a seventh block in `CensusReport.body`. `CensusIsSafeToPasteTest`'s `\bQ\d+\b` guard is narrowed to allow a qid only at the head of a line matching `^  class Q\d+`, with three planted controls. ADR 63 gains a dated amendment ruling that a class id is vocabulary. No `KindMapper` change.
 
@@ -18,7 +18,7 @@
 - Gate, **blocking, never backgrounded**: `SEGUE_REQUIRE_BROWSER=true SEGUE_REQUIRE_GRAPHVIZ=true ./gradlew check --rerun-tasks`. Run `./gradlew spotlessApply` before each gate. Fast loop per task is named in the task.
 - **Only JDK 25 is installed.** Plain `./gradlew`; never `/usr/libexec/java_home -v 21` (it silently returns 25).
 - **Never run a writing dev task** (`own`, `ownClaim`, `retractEntity`, any seeding task), and **never run `graphCensus`**. `~/.segue/segue.db` is never read, written, copied or created; every test builds its own database under a `@TempDir`.
-- Every id invented in `src/test` must take an unallocatable shape or `arch/StandInQidsDenoteNothingTest` reds: two leading zeros for a local entity (ADR 59), eleven digits with no leading zero for a merge's canonical side (ADR 62), **one leading zero for anything else, class ids included** (ADR 58). The one real id used here is `Q5`, and Task 1 adds its site to that test's `ALLOWED` map in the same step that introduces it.
+- Every id invented in `src/test` must take an unallocatable shape or `arch/StandInQidsDenoteNothingTest` reds: two leading zeros for a local entity (ADR 59), eleven digits with no leading zero for a merge's canonical side (ADR 62), **one leading zero for anything else, class ids included** (ADR 58). No real id is used anywhere in this plan, so `StandInQidsDenoteNothingTest` is never touched.
 - **A stub step carries only the imports its stub body uses.** `spotlessApply` runs `removeUnusedImports`, so an import added ahead of the code that needs it is silently deleted and the next compile fails on a name that was there a minute ago. Each GREEN step adds the imports its own code needs.
 - **Do not touch `InventedCensus.log()`.** Its row numbers are cited by every hand-counted expectation in the package, and issue #247 is editing the same package on this base. New cases build their own small logs, the precedent `EdgeCensusTest` set.
 - **Do not edit any census section but the new one**, and append the new report block after `bridge`. Issue #247 is adding a by-kind breakdown to the `degree` section on this same base.
@@ -29,7 +29,7 @@
 
 ### Task 1: `ConceptClassCensus` — the counting
 
-**Files:** Create `src/main/java/com/robsartin/segue/census/ConceptClassCensus.java`, `src/test/java/com/robsartin/segue/census/ConceptClassCensusTest.java`. Modify `src/test/java/com/robsartin/segue/arch/StandInQidsDenoteNothingTest.java`.
+**Files:** Create `src/main/java/com/robsartin/segue/census/ConceptClassCensus.java`, `src/test/java/com/robsartin/segue/census/ConceptClassCensusTest.java`.
 
 No new package import edge: `census --> wikidata` and `census --> export` are both already in the developer guide's layering diagram, and `theCensusOpensNothingElse` deliberately does not ban `wikidata`.
 
@@ -69,18 +69,8 @@ import java.util.Objects;
  */
 public record ConceptClassCensus(int statingNoClass, int distinctClasses, List<ConceptClass> top) {
 
-  /**
-   * One class, and how many {@code CONCEPT} nodes state it.
-   *
-   * <p>{@code mapped} is {@code KindMapper.isMapped}, and it is the section's invariant printed
-   * rather than a distinction the production fold can draw: {@code fromInstanceOf} skips a class
-   * the whitelist does not know and every whitelist entry maps to a kind other than {@code
-   * CONCEPT}, so a {@code CONCEPT} node cannot state a class the mapper knows. A row that reads
-   * {@code mapped} is the fold and the mapper having come apart. It is also {@code isMapped}'s
-   * first production caller — the seam ADR 21's issue-#87 amendment named and left unbuilt for
-   * want of one.
-   */
-  public record ConceptClass(String classQid, int nodes, boolean mapped) {
+  /** One class, and how many {@code CONCEPT} nodes state it. */
+  public record ConceptClass(String classQid, int nodes) {
 
     public ConceptClass {
       Objects.requireNonNull(classQid, "classQid");
@@ -98,13 +88,7 @@ public record ConceptClassCensus(int statingNoClass, int distinctClasses, List<C
 }
 ```
 
-- [ ] **Step 2 — the `Q5` site, so the tests below may name a class the whitelist really knows.** In `StandInQidsDenoteNothingTest`, the `"Q5"` entry already reads `real("class id — mapped by ClassLabels and KindMapper", …)` over nine sites. Add one, in path order, immediately after the `app/WikidataMusicBrainzIdentityTest.java` site and before the `domain/LoggedAssertionTest.java` one:
-
-```java
-                  code("src/test/java/com/robsartin/segue/census/ConceptClassCensusTest.java"),
-```
-
-- [ ] **Step 3 — RED (counting, kinds, and the no-class line).** Create `ConceptClassCensusTest.java`:
+- [ ] **Step 2 — RED (counting, kinds, and the no-class line).** Create `ConceptClassCensusTest.java`:
 
 ```java
 package com.robsartin.segue.census;
@@ -114,10 +98,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.robsartin.segue.census.ConceptClassCensus.ConceptClass;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeKind;
-import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.export.LogProjection;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -125,11 +107,6 @@ import org.junit.jupiter.api.Test;
  * Small logs of this section's own, folded — the precedent {@code EdgeCensusTest} set for a case
  * {@code InventedCensus.log()} cannot reach without renumbering every hand-counted expectation in
  * the package.
- *
- * <p><b>{@code Q5} is real, and it is here on purpose.</b> The marker asks whether {@code
- * KindMapper} has a rule for a class, and only a class the whitelist really holds can answer yes.
- * Its site is in {@code StandInQidsDenoteNothingTest}'s allowlist, beside the nine other files that
- * name it for the same reason.
  */
 class ConceptClassCensusTest {
 
@@ -140,8 +117,8 @@ class ConceptClassCensusTest {
   private static final String CLASS_ONE = "Q0900302";
   private static final String CLASS_TWO = "Q0900303";
 
-  /** Wikidata's "human" — the one class here the whitelist really knows. */
-  private static final String HUMAN = "Q5";
+  /** A second invented class, so the other-kind test does not repeat {@link #CLASS_ONE}. */
+  private static final String PERSON_CLASS = "Q0900304";
 
   private static LogProjection fold(LoggedAssertion... claims) {
     return LogProjection.of(new InventedCensus.FakeAssertionLog().with(claims));
@@ -162,8 +139,7 @@ class ConceptClassCensusTest {
 
     assertThat(ConceptClassCensus.of(projection).top())
         .as("a row is nodes stating the class, so the repeat is one node and not two")
-        .containsExactly(
-            new ConceptClass(CLASS_ONE, 2, false), new ConceptClass(CLASS_TWO, 1, false));
+        .containsExactly(new ConceptClass(CLASS_ONE, 2), new ConceptClass(CLASS_TWO, 1));
   }
 
   @Test
@@ -173,11 +149,11 @@ class ConceptClassCensusTest {
         fold(
             InventedCensus.node(A_NODE, NodeKind.CONCEPT, "an invented thing", List.of(CLASS_ONE)),
             InventedCensus.node(
-                ANOTHER_NODE, NodeKind.PERSON, "an invented person", List.of(HUMAN)));
+                ANOTHER_NODE, NodeKind.PERSON, "an invented person", List.of(PERSON_CLASS)));
 
     assertThat(ConceptClassCensus.of(projection).top())
-        .as("the person states a class the whitelist knows, so the fold keeps it PERSON")
-        .containsExactly(new ConceptClass(CLASS_ONE, 1, false));
+        .as("the person's class is not a CONCEPT node's, so the fold never counts it")
+        .containsExactly(new ConceptClass(CLASS_ONE, 1));
   }
 
   @Test
@@ -193,14 +169,14 @@ class ConceptClassCensusTest {
     assertThat(counted.statingNoClass())
         .as("no whitelist entry could ever reach a node whose source stated no class")
         .isEqualTo(1);
-    assertThat(counted.top()).containsExactly(new ConceptClass(CLASS_ONE, 1, false));
+    assertThat(counted.top()).containsExactly(new ConceptClass(CLASS_ONE, 1));
   }
 }
 ```
 
-- [ ] **Step 4 — run it and watch it fail for the right reason.** `./gradlew test --tests 'com.robsartin.segue.census.ConceptClassCensusTest'`. Expect three `AssertionError`s from the stub's empty answer — `Expecting actual: [] to contain exactly …` on the first two, and `expected: 1 but was: 0` on `statingNoClass`. Quote one verbatim in the report.
+- [ ] **Step 3 — run it and watch it fail for the right reason.** `./gradlew test --tests 'com.robsartin.segue.census.ConceptClassCensusTest'`. Expect three `AssertionError`s from the stub's empty answer — `Expecting actual: [] to contain exactly …` on the first two, and `expected: 1 but was: 0` on `statingNoClass`. Quote one verbatim in the report.
 
-- [ ] **Step 5 — GREEN.** Replace the body of `of` in `ConceptClassCensus.java`, and extend its imports to `com.robsartin.segue.domain.NodeKind`, `com.robsartin.segue.domain.NodeRecord`, `java.util.Map`, `java.util.Set`, `java.util.TreeMap`:
+- [ ] **Step 4 — GREEN.** Replace the body of `of` in `ConceptClassCensus.java`, and extend its imports to `com.robsartin.segue.domain.NodeKind`, `com.robsartin.segue.domain.NodeRecord`, `java.util.Map`, `java.util.Set`, `java.util.TreeMap`:
 
 ```java
   public static ConceptClassCensus of(LogProjection projection) {
@@ -222,15 +198,15 @@ class ConceptClassCensusTest {
     }
     List<ConceptClass> top =
         byClass.entrySet().stream()
-            .map(stated -> new ConceptClass(stated.getKey(), stated.getValue(), false))
+            .map(stated -> new ConceptClass(stated.getKey(), stated.getValue()))
             .toList();
     return new ConceptClassCensus(statingNoClass, byClass.size(), top);
   }
 ```
 
-- [ ] **Step 6 — run it and watch it pass.** Same command. Three green.
+- [ ] **Step 5 — run it and watch it pass.** Same command. Three green.
 
-- [ ] **Step 7 — RED (the order and the cut).** Add to `ConceptClassCensusTest`:
+- [ ] **Step 6 — RED (the order and the cut).** Add to `ConceptClassCensusTest`:
 
 ```java
   /**
@@ -268,16 +244,16 @@ class ConceptClassCensusTest {
                 + " would put it last and the cut would keep it; count first puts it first, and"
                 + " the tie-break then drops Q0900320 as the highest of the ones left")
         .containsExactly(
-            new ConceptClass("Q0900321", 2, false),
-            new ConceptClass("Q0900311", 1, false),
-            new ConceptClass("Q0900312", 1, false),
-            new ConceptClass("Q0900313", 1, false),
-            new ConceptClass("Q0900314", 1, false),
-            new ConceptClass("Q0900315", 1, false),
-            new ConceptClass("Q0900316", 1, false),
-            new ConceptClass("Q0900317", 1, false),
-            new ConceptClass("Q0900318", 1, false),
-            new ConceptClass("Q0900319", 1, false));
+            new ConceptClass("Q0900321", 2),
+            new ConceptClass("Q0900311", 1),
+            new ConceptClass("Q0900312", 1),
+            new ConceptClass("Q0900313", 1),
+            new ConceptClass("Q0900314", 1),
+            new ConceptClass("Q0900315", 1),
+            new ConceptClass("Q0900316", 1),
+            new ConceptClass("Q0900317", 1),
+            new ConceptClass("Q0900318", 1),
+            new ConceptClass("Q0900319", 1));
   }
 
   @Test
@@ -289,9 +265,9 @@ class ConceptClassCensusTest {
   }
 ```
 
-- [ ] **Step 8 — run it and watch it fail for the right reason.** Expect the order test to fail on the actual list starting `Q0900311` and holding eleven entries. `distinctClasses` is already right — say so, and note that it is asserted here because it is the number that makes the cut readable, not because it was red.
+- [ ] **Step 7 — run it and watch it fail for the right reason.** Expect the order test to fail on the actual list starting `Q0900311` and holding eleven entries. `distinctClasses` is already right — say so, and note that it is asserted here because it is the number that makes the cut readable, not because it was red.
 
-- [ ] **Step 9 — GREEN.** In `ConceptClassCensus.java`, add `private static final int TOP = 10;` above the compact constructor (deliberately private: a test that read it would assert the cut against itself), add `import java.util.Comparator;`, and replace the `top` assignment:
+- [ ] **Step 8 — GREEN.** In `ConceptClassCensus.java`, add `private static final int TOP = 10;` above the compact constructor (deliberately private: a test that read it would assert the cut against itself), add `import java.util.Comparator;`, and replace the `top` assignment:
 
 ```java
     // A total order, so two runs over one unchanged log print one order and a diff between them is
@@ -304,45 +280,16 @@ class ConceptClassCensusTest {
         byClass.entrySet().stream()
             .sorted(commonestFirst)
             .limit(TOP)
-            .map(stated -> new ConceptClass(stated.getKey(), stated.getValue(), false))
+            .map(stated -> new ConceptClass(stated.getKey(), stated.getValue()))
             .toList();
 ```
 
-- [ ] **Step 10 — run it and watch it pass.** Five green.
+- [ ] **Step 9 — run it and watch it pass.** Five green.
 
-- [ ] **Step 11 — RED (the marker).** Add to `ConceptClassCensusTest`:
-
-```java
-  @Test
-  @DisplayName("a class the whitelist knows is marked mapped, which the fold cannot produce")
-  void shouldSayMappedWhenTheWhitelistKnowsTheClass() {
-    // Built by hand rather than folded, and it has to be: KindMapper.fromInstanceOf skips a class
-    // BY_CLASS does not know and every BY_CLASS entry maps to a kind other than CONCEPT, so no log
-    // can fold to a CONCEPT node stating a mapped class. That is exactly why the marker is worth
-    // printing — a row that reads mapped means the fold and the mapper have come apart.
-    LogProjection byHand =
-        new LogProjection(
-            Map.of(A_NODE, new NodeRecord(A_NODE, NodeKind.CONCEPT, "an invented thing",
-                List.of(HUMAN))),
-            List.of(),
-            0,
-            0);
-
-    assertThat(ConceptClassCensus.of(byHand).top())
-        .containsExactly(new ConceptClass(HUMAN, 1, true));
-  }
-```
-
-- [ ] **Step 12 — run it and watch it fail for the right reason.** Expect `expected: ConceptClass[classQid=Q5, nodes=1, mapped=true] but was: ConceptClass[classQid=Q5, nodes=1, mapped=false]`. Quote it.
-
-- [ ] **Step 13 — GREEN.** In `ConceptClassCensus.java`, add `import com.robsartin.segue.wikidata.KindMapper;` and replace `false` in the `map` with `KindMapper.isMapped(stated.getKey())`.
-
-- [ ] **Step 14 — run it and watch it pass.** Six green.
-
-- [ ] **Step 15 — gate and commit.** `./gradlew spotlessApply`, then `SEGUE_REQUIRE_BROWSER=true SEGUE_REQUIRE_GRAPHVIZ=true ./gradlew check --rerun-tasks`, blocking. `git status`, then stage by explicit path:
+- [ ] **Step 10 — gate and commit.** `./gradlew spotlessApply`, then `SEGUE_REQUIRE_BROWSER=true SEGUE_REQUIRE_GRAPHVIZ=true ./gradlew check --rerun-tasks`, blocking. `git status`, then stage by explicit path:
 
 ```
-git add src/main/java/com/robsartin/segue/census/ConceptClassCensus.java src/test/java/com/robsartin/segue/census/ConceptClassCensusTest.java src/test/java/com/robsartin/segue/arch/StandInQidsDenoteNothingTest.java
+git add src/main/java/com/robsartin/segue/census/ConceptClassCensus.java src/test/java/com/robsartin/segue/census/ConceptClassCensusTest.java
 ```
 
 Commit: `Count CONCEPT nodes by the class they state (#248)`.
@@ -363,10 +310,10 @@ The alignment is `CensusReport`'s own rule applied by hand, not copied from a ru
             concept classes
               stating no class                       0
               distinct classes                       1
-              class Q0900301 unmapped                1
+              class Q0900301                         1
 ```
 
-`  stating no class` and `  distinct classes` are 18 characters, so 23 spaces then the digit; `  class Q0900301 unmapped` is 25, so 16 spaces then the digit.
+`  stating no class` and `  distinct classes` are 18 characters, so 23 spaces then the digit; `  class Q0900301` is 16, so 25 spaces then the digit.
 
 - [ ] **Step 2 — run it and watch it fail for the right reason.** `./gradlew test --tests 'com.robsartin.segue.census.CensusReportTest'`. Expect a string-comparison failure whose diff ends at `bridge`: the four expected lines are absent from the actual. Quote the tail of the diff.
 
@@ -412,10 +359,7 @@ Correct the two counts in its javadoc — `in the six sections it prints them in
     body.add(count("stating no class", conceptClasses.statingNoClass()));
     body.add(count("distinct classes", conceptClasses.distinctClasses()));
     for (ConceptClassCensus.ConceptClass stated : conceptClasses.top()) {
-      body.add(
-          count(
-              "class " + stated.classQid() + (stated.mapped() ? " mapped" : " unmapped"),
-              stated.nodes()));
+      body.add(count("class " + stated.classQid(), stated.nodes()));
     }
 ```
 
@@ -427,8 +371,7 @@ and replace the **Every label is a literal in this file** paragraph's last sente
  * ids, which are vocabulary rather than entities and are covered by {@code
  * CensusIsSafeToPasteTest}'s "no Q-shaped token anywhere" clause, and the class qids in the
  * concept-classes rows, which ADR 63's 2026-09-04 amendment rules the same way and for which that
- * clause is narrowed to the {@code   class Q…} prefix this block owns. The word after the qid is a
- * literal chosen from a boolean, not text read off the data.
+ * clause is narrowed to the {@code   class Q…} prefix this block owns.
 ```
 
 - [ ] **Step 5 — GREEN, part three: the fixture's constructor call.** In `CensusReportTest`, add the seventh argument to `new Census(...)`:
@@ -483,7 +426,7 @@ not save a duplicate), and add an anchor to the first assertion group:
         .anyMatch(line -> line.startsWith("  class Q"));
 ```
 
-- [ ] **Step 2 — run it and watch it fail for the right reason.** Expect the *existing* `\bQ\d+\b` assertion to fire on `  class Q0900302 unmapped                1` (the anchor above passes). Quote it: this is the evidence that the clause ADR 63's amendment narrows was not vacuous, and it is the only red this task gets from the code rather than from a plant.
+- [ ] **Step 2 — run it and watch it fail for the right reason.** Expect the *existing* `\bQ\d+\b` assertion to fire on `  class Q0900302                         1` (the anchor above passes). Quote it: this is the evidence that the clause ADR 63's amendment narrows was not vacuous, and it is the only red this task gets from the code rather than from a plant.
 
 - [ ] **Step 3 — GREEN: narrow the clause to one prefix.** Replace the `A_QID` constant's neighbourhood with the pattern pair and the predicate:
 
@@ -530,16 +473,16 @@ and change the last assertion to use it:
   @Test
   @DisplayName("the carve-out is one prefix wide: only a class id at the head of a class row passes")
   void shouldFireWhenAQidSitsAnywhereButTheHeadOfAClassRow() {
-    assertThat(carriesAnIdItMayNot("  class Q0900302 unmapped                1"))
+    assertThat(carriesAnIdItMayNot("  class Q0900302                         1"))
         .as("the row the amendment allows")
         .isFalse();
     assertThat(carriesAnIdItMayNot("  ratings                        Q0900901"))
         .as("an entity id on another section's line")
         .isTrue();
-    assertThat(carriesAnIdItMayNot("  class Q0900302 unmapped  Q0900901"))
+    assertThat(carriesAnIdItMayNot("  class Q0900302  Q0900901"))
         .as("a second id smuggled onto an allowed row")
         .isTrue();
-    assertThat(carriesAnIdItMayNot("class Q0900302 unmapped  1"))
+    assertThat(carriesAnIdItMayNot("class Q0900302  1"))
         .as("the section's own words without the indent no other line can fake")
         .isTrue();
   }
