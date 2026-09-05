@@ -43,11 +43,12 @@ import java.util.Objects;
  * <p><b>The same figures are read again per {@link com.robsartin.segue.domain.NodeKind}</b>, all
  * six kinds and zeros included, because the floor is applied to two of them and nothing else:
  * {@code CandidateSweep.couldBeExplored} refuses every kind but {@code PERSON} and {@code GROUP}
- * before the degree test is reached, so the whole-graph reading above is a true statement about the
- * graph and a misleading one about the floor (issue #247). The whole-graph reading stays because
- * issue #135's question is about the graph the floor was measured against. One rule reads both —
- * {@code read} — so a kind's quantile and the graph's cannot come to disagree about what a quantile
- * is.
+ * (and, within those two, a node stating a recognition-institution class) before the degree test is
+ * reached, so these two rows bound the floor's population from above rather than name it, and the
+ * whole-graph reading above is a true statement about the graph and a misleading one about the
+ * floor (issue #247). The whole-graph reading stays because issue #135's question is about the
+ * graph the floor was measured against. One rule reads both — {@code read} — so a kind's quantile
+ * and the graph's cannot come to disagree about what a quantile is.
  *
  * @param floor {@code Recommendations.MIN_CANDIDATE_DEGREE}, by reference and never by a second
  *     copy of the number — a reading has to say which floor it is a reading of
@@ -128,7 +129,9 @@ public record DegreeCensus(
    * / (2 * whole)} in integers, so no floating point decides a boundary and the value the report
    * prints stays an integer (ADR 63). <b>An empty population reads zero</b> rather than dividing by
    * nothing — and a share of zero is why the count is printed beside it, because zero covers both
-   * "none" and "a handful of a hundred thousand".
+   * "none" and "a handful of a hundred thousand"; an empty kind is told apart from a kind with
+   * nothing at or below the floor by its {@code max}, which no non-empty such kind can read as
+   * zero.
    */
   private static int percent(int part, int whole) {
     if (whole == 0) {

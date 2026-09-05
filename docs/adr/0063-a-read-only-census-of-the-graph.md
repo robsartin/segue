@@ -265,9 +265,11 @@ order**, and this amendment lists none of them, for the reason the decision abov
 Three things this does not do.
 
 - **It does not move the floor, and it does not make one per kind.**
-  [ADR 57](0057-the-floor-reports-itself.md) refused an adaptive floor on measurements and that
-  refusal stands untouched: a floor that varied with a property of the candidate is the shape it
-  rejected. What changes here is the reading, not the cut.
+  [ADR 57](0057-the-floor-reports-itself.md) settled the floor's value and made it report itself,
+  and what changes here is the reading, not the cut. A floor keyed on kind is not one of the shapes
+  that ADR measured — its refusals are a relative floor, an expansion-state signal and a
+  per-candidate flag — so it is neither taken nor refused here, and deciding it would need a
+  measurement no census has yet been run to supply.
 - **It does not touch `FloorReading`.** That record was read against the code for this issue, and
   every figure it carries is already over the `PERSON`/`GROUP` pool, for the ordering above. Issue
   #247 offered it as an alternative home; the code decided against it.
