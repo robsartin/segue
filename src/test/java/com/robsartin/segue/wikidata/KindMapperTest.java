@@ -271,6 +271,47 @@ class KindMapperTest {
         .isEqualTo(NodeKind.CONCEPT);
   }
 
+  @Test
+  @DisplayName("film, television and animated characters stay CONCEPT, as fictional human does")
+  void shouldStayConceptWhenTheClassIsAFictionalCharacter() {
+    // Issue #265 turns issue #261's fictional-human ruling into a family rule: a character shared
+    // by several works is a subject those works have in common, not something anyone did, and
+    // that is the hub shape the CONCEPT-gated rules exist to demote.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q15773347"))) // film character
+        .isEqualTo(NodeKind.CONCEPT);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q15773317"))) // television character
+        .isEqualTo(NodeKind.CONCEPT);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q15711870"))) // animated character
+        .isEqualTo(NodeKind.CONCEPT);
+  }
+
+  @Test
+  @DisplayName("a single release is a WORK")
+  void shouldMapToWorkWhenTheClassIsSingleRelease() {
+    // The second census reading (issue #265, 2026-09-05). A release of a single is WORK the way
+    // single (Q134556) and the seven-inch single (Q6128115) already are. Label and description
+    // confirmed live before this line was written.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q108352496"))) // single release
+        .isEqualTo(NodeKind.WORK);
+  }
+
+  @Test
+  @DisplayName("a comic book issue is a WORK")
+  void shouldMapToWorkWhenTheClassIsComicBookIssue() {
+    // An issue of a published comic: a published work, the way book (Q571) is. Issue #265.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q140727568"))) // comic book issue
+        .isEqualTo(NodeKind.WORK);
+  }
+
+  @Test
+  @DisplayName("a video game is a WORK")
+  void shouldMapToWorkWhenTheClassIsVideoGame() {
+    // Its own direct parent, audiovisual work (Q2431196), is already WORK; the table does not
+    // walk P279, so the class needs its own line. Issue #265.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q7889"))) // video game
+        .isEqualTo(NodeKind.WORK);
+  }
+
   private static void assertOrderIndependently(String a, String b, NodeKind expected) {
     assertThat(KindMapper.fromInstanceOf(List.of(a, b))).isEqualTo(expected);
     assertThat(KindMapper.fromInstanceOf(List.of(b, a))).isEqualTo(expected);
