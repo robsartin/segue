@@ -247,14 +247,25 @@ public final class RetractRun {
     List<LoggedAssertion> after = new ArrayList<>(before);
     after.add(new Retraction(options.qid(), options.reason(), clock.instant()));
 
-    Set<String> newlyEmptied = new LinkedHashSet<>(Equivalences.retractedStandIns(after));
+    // The emptied set for the log this retraction would produce, computed once and threaded
+    // (#246). Equivalences.folding(after) below would recompute it — that is a whole-log fixed
+    // point, a loop of whole-log walks, paid for an answer this method is already holding. The
+    // two-argument forms are the caller-trusting overloads ADR 64 added, and their contract is
+    // honoured exactly: emptiedAfter IS retractedStandIns of this same list.
+    //
+    // The before/after pair stays two folds, and that is the design rather than a shortfall:
+    // they are two different questions about two different lists, and the difference between
+    // them is what "newly emptied" means.
+    Set<String> emptiedAfter = Equivalences.retractedStandIns(after);
+    Set<String> newlyEmptied = new LinkedHashSet<>(emptiedAfter);
     newlyEmptied.removeAll(Equivalences.retractedStandIns(before));
     if (newlyEmptied.isEmpty()) {
       return List.of();
     }
 
     Retractions retractions = Retractions.in(after);
-    Equivalences equivalences = Equivalences.folding(after);
+    Equivalences equivalences =
+        Equivalences.folding(Equivalences.in(after, emptiedAfter), emptiedAfter);
     Map<String, Set<String>> edgeKeysByCanonical = new LinkedHashMap<>();
     for (String canonical : newlyEmptied) {
       edgeKeysByCanonical.put(canonical, new LinkedHashSet<>());

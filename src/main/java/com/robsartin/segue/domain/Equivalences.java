@@ -216,8 +216,11 @@ public record Equivalences(
    * <p><b>Trusts the caller.</b> {@code emptied} is taken as given rather than checked against the
    * log; handing it any set other than {@code retractedStandIns(log)} for this exact log answers a
    * different question. It exists for {@code Fold.of} — the single per-boot fold that computes
-   * {@code retractedStandIns} once and hands it to every reader that would otherwise recompute it —
-   * and is fenced to that one caller.
+   * {@code retractedStandIns} once and hands it to every reader — and {@code
+   * ArchitectureTest.theBootFoldsOnce} is what keeps the boot going through it. Since #246 {@code
+   * RetractRun.strandedByThisRetraction} calls it too: that method holds {@code retractedStandIns}
+   * of the log a retraction would produce, for its own report, and {@code folding(List)} would have
+   * recomputed it. Same contract, honoured the same way — the set is this exact list's own.
    *
    * <p>{@code EquivalencesTest.shouldGiveTheSameMergesWhenHandedTheEmptiedSetInWouldCompute} pins
    * the two forms to one answer.
@@ -724,15 +727,20 @@ public record Equivalences(
    * looking identical at the call site. {@code GraphProjector.project} and {@code LogProjection.of}
    * both build their equivalences here.
    *
-   * <p><b>{@code RetractRun.strandedByThisRetraction} is the third caller, and folds nothing.</b>
-   * It builds an {@link Equivalences} over the log the retraction WOULD produce, purely to ask
-   * {@link #namesARetractedStandIn} of every surviving claim, so that the edges its report names
-   * are the edges the export will actually withdraw. It has to come through here rather than
-   * through {@link #in} for the same drift reason: {@link #in} carries an empty {@link
-   * #retractedStandIns}, so that predicate would answer {@code false} for everything and the report
-   * would silently name nothing. Every other caller of {@link #in} — {@code OwnRun}, {@code
-   * RateCli}, {@code ratings/Labels} and {@code RecommendCli} — asks about ratings, labels, known
-   * lists and what to offer, and neither folds an edge nor asks that question.
+   * <p><b>{@code RetractRun.strandedByThisRetraction} used to be a third caller here, and folded
+   * nothing itself.</b> It builds an {@link Equivalences} over the log the retraction WOULD
+   * produce, purely to ask {@link #namesARetractedStandIn} of every surviving claim, so that the
+   * edges its report names are the edges the export will actually withdraw — which needs the
+   * non-empty {@link #retractedStandIns} this method supplies, where {@link #in} alone carries an
+   * empty one and would answer {@code false} for everything. Coming through here paid for {@link
+   * #retractedStandIns} a second time, on top of the one it already held to compute what it was
+   * newly emptying — the very re-fold issue #246 removes. Since #246 it calls the two overloads
+   * below directly with that already-held set, so this method's callers are back to the original
+   * two: {@code GraphProjector.project} and {@code LogProjection.of}.
+   *
+   * <p>Every caller of {@link #in} — {@code OwnRun}, {@code RateCli}, {@code ratings/Labels},
+   * {@code RecommendCli} and {@code EvaluateCli} — asks about ratings, labels, known lists and what
+   * to offer, and neither folds an edge nor asks that question.
    */
   public static Equivalences folding(List<LoggedAssertion> log) {
     Objects.requireNonNull(log, "log");
@@ -747,9 +755,12 @@ public record Equivalences(
    *
    * <p><b>Trusts the caller.</b> Both {@code merges} and {@code retractedStandIns} are taken as
    * given rather than checked against a log; handing either one anything but the value {@link
-   * #folding(List)} derives from this exact log answers a different question, and this overload is
-   * fenced to one caller. {@code Fold.of} computes {@link #retractedStandIns} once and hands it to
-   * every reader that would otherwise recompute it — that is the caller this is fenced to.
+   * #folding(List)} derives from this exact log answers a different question. {@code Fold.of}
+   * computes {@link #retractedStandIns} once and hands it to every reader that would otherwise
+   * recompute it — that is its own reason for calling this. Since #246 {@code
+   * RetractRun.strandedByThisRetraction} calls it too, over the log the retraction would produce
+   * rather than the boot's own: same trust, same contract, a second caller that holds its own
+   * {@code retractedStandIns} rather than the boot's.
    *
    * <p>This stays the one construction site for a fold's {@code Equivalences}, for {@link
    * #folding(List)}'s own reason: an overload that quietly gives a fold the edge-blind answer —
