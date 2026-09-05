@@ -256,6 +256,19 @@ class KindMapperTest {
         .isEqualTo(NodeKind.CONCEPT);
     assertThat(KindMapper.fromInstanceOf(List.of("Q378427"))) // literary award
         .isEqualTo(NodeKind.CONCEPT);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q38033430"))) // class of award
+        .isEqualTo(NodeKind.CONCEPT);
+  }
+
+  @Test
+  @DisplayName("a fictional human stays a CONCEPT, deliberately")
+  void shouldStayConceptWhenTheClassIsFictionalHuman() {
+    // Issue #261's one judgment call. Q15632617 is not Q5: PERSON is the kind the recommender
+    // explores and the MusicBrainz adapter describes (ADR 54), so mapping it would put
+    // characters in the candidate pool and send them to a source that cannot know them. A
+    // character that appears in many works is exactly the shape the hub rule demotes.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q15632617"))) // fictional human
+        .isEqualTo(NodeKind.CONCEPT);
   }
 
   private static void assertOrderIndependently(String a, String b, NodeKind expected) {
