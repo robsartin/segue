@@ -281,6 +281,14 @@ class KindMapperTest {
         .isEqualTo(NodeKind.WORK);
   }
 
+  @Test
+  @DisplayName("a comic book issue is a WORK")
+  void shouldMapToWorkWhenTheClassIsComicBookIssue() {
+    // An issue of a published comic: a published work, the way book (Q571) is. Issue #265.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q140727568"))) // comic book issue
+        .isEqualTo(NodeKind.WORK);
+  }
+
   private static void assertOrderIndependently(String a, String b, NodeKind expected) {
     assertThat(KindMapper.fromInstanceOf(List.of(a, b))).isEqualTo(expected);
     assertThat(KindMapper.fromInstanceOf(List.of(b, a))).isEqualTo(expected);

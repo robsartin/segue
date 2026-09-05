@@ -959,6 +959,11 @@ class StandInQidsDenoteNothingTest {
                   "entity — WikidataLiveSmokeTest asks the real API about it",
                   code("src/test/java/com/robsartin/segue/wikidata/WikidataLiveSmokeTest.java"))),
           entry(
+              "Q140727568",
+              real(
+                  "class id — mapped by KindMapper (issue #265)",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
               "Q1000000000",
               real(
                   "negative control, deliberately allocatable — QidTest asserts Wikibase's grammar"
