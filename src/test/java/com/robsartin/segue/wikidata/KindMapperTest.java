@@ -271,6 +271,16 @@ class KindMapperTest {
         .isEqualTo(NodeKind.CONCEPT);
   }
 
+  @Test
+  @DisplayName("a single release is a WORK")
+  void shouldMapToWorkWhenTheClassIsSingleRelease() {
+    // The second census reading (issue #265, 2026-09-05). A release of a single is WORK the way
+    // single (Q134556) and the seven-inch single (Q6128115) already are. Label and description
+    // confirmed live before this line was written.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q108352496"))) // single release
+        .isEqualTo(NodeKind.WORK);
+  }
+
   private static void assertOrderIndependently(String a, String b, NodeKind expected) {
     assertThat(KindMapper.fromInstanceOf(List.of(a, b))).isEqualTo(expected);
     assertThat(KindMapper.fromInstanceOf(List.of(b, a))).isEqualTo(expected);

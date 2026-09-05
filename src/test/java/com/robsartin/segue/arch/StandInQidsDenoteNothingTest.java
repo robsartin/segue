@@ -931,6 +931,11 @@ class StandInQidsDenoteNothingTest {
                   code("src/test/java/com/robsartin/segue/export/ViewSelectorTest.java"),
                   code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
           entry(
+              "Q108352496",
+              real(
+                  "class id — mapped by ClassLabels and, since issue #265, by KindMapper",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
               "Q110039749",
               real(
                   "class id — mapped by ClassLabels and KindMapper",
