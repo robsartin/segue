@@ -61,67 +61,104 @@ class CensusReportTest {
             # segue graph census — aggregates and Wikidata class ids only: no labels, no notes, no entity ids (ADR 51, ADR 63).
 
             nodes
-              total                                  13
-              PERSON                                  3
-              GROUP                                   1
-              WORK                                    8
-              PLACE                                   0
-              EVENT                                   0
-              CONCEPT                                 1
+              total                                   13
+              PERSON                                   3
+              GROUP                                    1
+              WORK                                     8
+              PLACE                                    0
+              EVENT                                    0
+              CONCEPT                                  1
 
             edges
-              total                                  11
-              dangling                                1
-              withdrawn                               0
-              backed by also-invented                 1
-              backed by invented                      6
-              backed by llm:invented                  1
-              backed by musicbrainz                   1
-              backed by owner                         3
-              of type INFLUENCED_BY                   6
-              of type MEMBER_OF                       5
-              corroborated by 0                       3
-              corroborated by 1                       7
-              corroborated by 2                       1
+              total                                   11
+              dangling                                 1
+              withdrawn                                0
+              backed by also-invented                  1
+              backed by invented                       6
+              backed by llm:invented                   1
+              backed by musicbrainz                    1
+              backed by owner                          3
+              of type INFLUENCED_BY                    6
+              of type MEMBER_OF                        5
+              corroborated by 0                        3
+              corroborated by 1                        7
+              corroborated by 2                        1
 
             claims
-              log rows                               30
-              retractions                             1
-              rows they removed                       2
-              entities they name                      1
-              local entities minted                   3
-              merges standing                         3
-              merges superseded                       2
-              merges superseded but edge-referenced   1
-              stand-ins                               4
-              stand-ins with no edge                  1
+              log rows                                30
+              retractions                              1
+              rows they removed                        2
+              entities they name                       1
+              local entities minted                    3
+              merges standing                          3
+              merges superseded                        2
+              merges superseded but edge-referenced    1
+              stand-ins                                4
+              stand-ins with no edge                   1
 
             taste
-              ratings                                 8
-              rated 1                                 1
-              rated 2                                 2
-              rated 3                                 1
-              rated 4                                 2
-              rated 5                                 2
-              on a local id                           2
-              on a stand-in                           1
-              on a retracted id                       1
+              ratings                                  8
+              rated 1                                  1
+              rated 2                                  2
+              rated 3                                  1
+              rated 4                                  2
+              rated 5                                  2
+              on a local id                            2
+              on a stand-in                            1
+              on a retracted id                        1
 
             degree
-              floor                                   5
-              p50                                     1
-              p90                                     5
-              p99                                     6
-              max                                     6
-              at or below the floor                  12
+              floor                                    5
+              p50                                      1
+              p90                                      5
+              p99                                      6
+              max                                      6
+              at or below the floor                   12
+              at or below the floor %                 92
+              PERSON p50                               2
+              PERSON p90                               6
+              PERSON p99                               6
+              PERSON max                               6
+              PERSON at or below the floor             2
+              PERSON at or below the floor %          67
+              GROUP p50                                2
+              GROUP p90                                2
+              GROUP p99                                2
+              GROUP max                                2
+              GROUP at or below the floor              1
+              GROUP at or below the floor %          100
+              WORK p50                                 0
+              WORK p90                                 5
+              WORK p99                                 5
+              WORK max                                 5
+              WORK at or below the floor               8
+              WORK at or below the floor %           100
+              PLACE p50                                0
+              PLACE p90                                0
+              PLACE p99                                0
+              PLACE max                                0
+              PLACE at or below the floor              0
+              PLACE at or below the floor %            0
+              EVENT p50                                0
+              EVENT p90                                0
+              EVENT p99                                0
+              EVENT max                                0
+              EVENT at or below the floor              0
+              EVENT at or below the floor %            0
+              CONCEPT p50                              2
+              CONCEPT p90                              2
+              CONCEPT p99                              2
+              CONCEPT max                              2
+              CONCEPT at or below the floor            1
+              CONCEPT at or below the floor %        100
 
             bridge
-              entities MusicBrainz reached            2
-              of those, carrying classes              1
+              entities MusicBrainz reached             2
+              of those, carrying classes               1
 
             concept classes
-              stating no class                        0
-              distinct classes                        1
-              class Q0900301                          1""");
+              stating no class                         0
+              distinct classes                         1
+              class Q0900301                           1""");
   }
 }
