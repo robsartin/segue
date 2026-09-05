@@ -4,6 +4,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 import com.robsartin.segue.app.SegueApplication;
+import com.robsartin.segue.census.Census;
 import com.robsartin.segue.domain.AffinityRecord;
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.EdgeRecord;
@@ -16,6 +17,7 @@ import com.robsartin.segue.domain.OwnerEdge;
 import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.domain.Retractions;
 import com.robsartin.segue.domain.SameAs;
+import com.robsartin.segue.export.LogProjection;
 import com.robsartin.segue.ingest.GraphProjector;
 import com.robsartin.segue.ingest.IngestService;
 import com.robsartin.segue.musicbrainz.BridgedIdentity;
@@ -1867,4 +1869,101 @@ class ArchitectureTest {
                   + " takes what it holds — a second log-taking call in any ingest class but"
                   + " IngestService, whose live path has no boot fold to reuse, is a second"
                   + " fold");
+
+  /**
+   * Issue #246: the export folds the log once, in LogProjection, and hands it on.
+   *
+   * <p>Fold.of is in the forbidden list as well as the seven log-taking statics, which
+   * theBootFoldsOnce does not need: for the boot, Fold.of IS the sanctioned route, and here it is
+   * the thing a second class would use to build a second fold. A statics-only rule would be green
+   * while ViewSelector folded the whole log again through the type this issue introduced to stop
+   * exactly that.
+   */
+  @ArchTest
+  static final ArchRule theExportFoldsOnce =
+      noClasses()
+          .that()
+          .resideInAPackage("com.robsartin.segue.export..")
+          .and()
+          .doNotBelongToAnyOf(LogProjection.class)
+          .should()
+          .accessTargetWhere(
+              callTo("in", Equivalences.class)
+                  .or(callTo("folding", Equivalences.class))
+                  .or(callTo("standIns", Equivalences.class))
+                  .or(callTo("nodesTheFoldHolds", Equivalences.class))
+                  .or(callTo("retractedStandIns", Equivalences.class))
+                  .or(callTo("localsOfMerges", Equivalences.class))
+                  .or(callTo("in", Retractions.class))
+                  .or(callTo("of", Fold.class)))
+          .because(
+              "issue #246: LogProjection is the export's one fold — every other class in the"
+                  + " package takes what it holds, and may not build a second one through"
+                  + " Fold.of either");
+
+  /**
+   * Issue #246: the census folds the log once, in {@code Census.of}, and hands it on.
+   *
+   * <p>The same shape as {@code theExportFoldsOnce}, over {@code com.robsartin.segue.census..}
+   * instead: {@code Fold.of} is forbidden alongside the seven log-taking statics, because here too
+   * it is a second class's route to a second fold rather than the sanctioned one.
+   */
+  @ArchTest
+  static final ArchRule theCensusFoldsOnce =
+      noClasses()
+          .that()
+          .resideInAPackage("com.robsartin.segue.census..")
+          .and()
+          .doNotBelongToAnyOf(Census.class)
+          .should()
+          .accessTargetWhere(
+              callTo("in", Equivalences.class)
+                  .or(callTo("folding", Equivalences.class))
+                  .or(callTo("standIns", Equivalences.class))
+                  .or(callTo("nodesTheFoldHolds", Equivalences.class))
+                  .or(callTo("retractedStandIns", Equivalences.class))
+                  .or(callTo("localsOfMerges", Equivalences.class))
+                  .or(callTo("in", Retractions.class))
+                  .or(callTo("of", Fold.class)))
+          .because(
+              "issue #246: Census.of builds the census's one fold and hands it to every"
+                  + " section — ClaimCensus and TasteCensus took the raw rows and folded them"
+                  + " again, which is three extra whole-log fixed points and a second read");
+
+  /**
+   * Issue #246: a tool that replays the log does not fold it again.
+   *
+   * <p>One rule over three packages because it states one property. Each of these tools calls
+   * {@code GraphProjector.project}, which builds the whole fold, and each then read the log a
+   * second time and rebuilt the merges from it. Since #246 the fold comes back from {@code
+   * GraphProjector.replay}, so no class in any of the three has any business folding — there is no
+   * exempt class here, unlike theBootFoldsOnce and theExportFoldsOnce, because the one home of
+   * these tools' fold is not in these packages at all.
+   *
+   * <p>{@code evaluate} is in the list although issue #246 does not name it: it grew the same shape
+   * in #242, after ADR 64 was written, and a fence that skipped it would be green over a third copy
+   * of the defect.
+   */
+  @ArchTest
+  static final ArchRule theReplayingToolsTakeTheBootsFold =
+      noClasses()
+          .that()
+          .resideInAnyPackage(
+              "com.robsartin.segue.recommend..",
+              "com.robsartin.segue.rate..",
+              "com.robsartin.segue.evaluate..")
+          .should()
+          .accessTargetWhere(
+              callTo("in", Equivalences.class)
+                  .or(callTo("folding", Equivalences.class))
+                  .or(callTo("standIns", Equivalences.class))
+                  .or(callTo("nodesTheFoldHolds", Equivalences.class))
+                  .or(callTo("retractedStandIns", Equivalences.class))
+                  .or(callTo("localsOfMerges", Equivalences.class))
+                  .or(callTo("in", Retractions.class))
+                  .or(callTo("of", Fold.class)))
+          .because(
+              "issue #246: these tools replay the log through GraphProjector, which folds it —"
+                  + " they take that fold back from Replay rather than reading the log a second"
+                  + " time and folding it again");
 }

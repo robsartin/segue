@@ -186,3 +186,57 @@ plant that restored the pre-migration body, naming all four call sites; under a 
 helper class that folds and is called from `GraphProjector.project`, which the one-class form of the
 rule could not see at all; and, with the `IngestService` exemption dropped, on that class's own three
 live-path calls, which is what makes the exemption load-bearing rather than decorative.
+
+## Amendment, 2026-09-04 — the tool side, and a correction to this ADR's census figure
+
+Issue [#246](https://github.com/robsartin/segue/issues/246) took the first residual named above:
+the dev tools that read the log directly. **No fold rule changed, no reader's answer changed and no
+tool's output changed** — each tool now derives its fold once per run and hands it on.
+
+**This ADR's own count for `census` was wrong, and this says so rather than editing it.** The
+consequences above read "`census`, and `export`'s whole-log views, fold through `LogProjection.of`
+— three to two". That is `LogProjection.of`'s count. `census` also ran `ClaimCensus.of` and
+`TasteCensus.of`, which folded the same rows three further times, and it read the whole log twice.
+So where that bullet reads "three to two" for census, it should read six to five: as this ADR left
+the code, the tool paid five whole-log fixed points per run and read the log twice.
+
+Counted the same way — invocations of the fixed point `Equivalences.retractedStandIns` computes —
+and read off the call sites after #246 rather than subtracted from the figures above. The before
+column is the code as this ADR left it (branch base da8efa9); the after column is read off the
+call sites once #246 landed.
+
+| tool | before | after | how |
+| --- | --- | --- | --- |
+| `census` | 5 folds, 2 log reads | 1, 1 | `Census.of` builds one `Fold` and one row list for all six sections |
+| `export`, whole-log views | 2, 1 | 1, 1 | `LogProjection.of(List, Fold)` |
+| `export`, bounded views | 1, 1 | unchanged | already the boot's single fold |
+| `retract` | 3, 2 | 2, 2 | the emptied set threaded into `in(List, Set)` and `folding(Equivalences, Set)`; two folds kept, for two questions about two lists |
+| `recommend` | 2, 2 | 1, 1 | `GraphProjector.replay` hands the fold back, on the `Replay` record it returns |
+| `rate` | 2, 2 | 1, 1 | as above |
+| `evaluate` | 2, 2 | 1, 1 | as above. Not named by #246 — it grew this shape in #242, after this ADR |
+| `own` | 1 (0 on `mint`), 1 | unchanged | it already folded once; there was never a second to remove |
+| `ratings` | 1, 1 | unchanged | as above |
+
+**No timing figure is claimed for any of this and none was taken.** The dated measurement above is
+the boot's, and it stands as the only one; these tools run once and exit.
+
+**What pins it is three more fences, and one tool deliberately without one.** `theExportFoldsOnce`,
+`theCensusFoldsOnce` and `theReplayingToolsTakeTheBootsFold` each forbid the seven log-taking
+statics **and `Fold.of`** outside the tool's one home — `Fold.of` too, unlike `theBootFoldsOnce`,
+because outside the boot it is the route a second class would take to a second fold. `retract` gets
+none: it folds twice by design, so a fence would have to exempt `RetractRun`, and a rule whose only
+clause is "`RetractRun` may fold" is green while `RetractRun` folds five times. `own` and `ratings`
+get none because #246 changed no code in either.
+
+**`Equivalences.in(List, Set)` and `folding(Equivalences, Set)` have a second caller.** Their
+javadoc said they were fenced to `Fold.of`; `RetractRun.strandedByThisRetraction` calls both,
+honouring the same contract — the set is `retractedStandIns` of that exact list. `retract` does not
+build a `Fold` and must not: `Fold.of` requires a `rederive`, and `Equivalences.retractedStandIns`
+carries no such parameter precisely so that `retract` can call it without learning Wikidata's
+vocabulary (ADR 44).
+
+**The residuals this leaves.** `Retractions.in(log)` is still re-derived inside
+`Equivalences.mergesIn`, `referencedEndpoints`, `nodesHeld`, `emptiedGiven` and `localsOfMerges` —
+untouched, as above. `retract` still reads the whole log twice, and `OwnRun` still calls
+`Retractions.in` twice on one list: those are read savings rather than fold savings and were left
+out of scope deliberately.

@@ -2,7 +2,9 @@ package com.robsartin.segue.census;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.robsartin.segue.domain.Fold;
 import com.robsartin.segue.export.LogProjection;
+import com.robsartin.segue.wikidata.KindMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -30,11 +32,12 @@ class CensusReportTest {
   void shouldRenderTheWholeCensusWhenTheFixtureIsCounted() {
     LogProjection projection =
         LogProjection.of(new InventedCensus.FakeAssertionLog().with(InventedCensus.log()));
+    Fold fold = Fold.of(InventedCensus.log(), KindMapper::rederive);
     Census census =
         new Census(
             NodeCensus.of(projection),
             EdgeCensus.of(projection),
-            ClaimCensus.of(InventedCensus.log(), projection),
+            ClaimCensus.of(InventedCensus.log(), projection, fold),
             TasteCensus.of(
                 new InventedCensus.FakeAffinityStore()
                     .rated(InventedCensus.WREN, 5)
@@ -46,7 +49,7 @@ class CensusReportTest {
                     .rated(InventedCensus.NEIGHBOUR, 2)
                     .rated(InventedCensus.GONE, 1)
                     .readRatings(),
-                InventedCensus.log(),
+                fold,
                 projection),
             DegreeCensus.of(projection),
             BridgeCensus.of(projection));

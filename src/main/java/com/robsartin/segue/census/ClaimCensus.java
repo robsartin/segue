@@ -1,13 +1,13 @@
 package com.robsartin.segue.census;
 
 import com.robsartin.segue.domain.Equivalences;
+import com.robsartin.segue.domain.Fold;
 import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.Retraction;
 import com.robsartin.segue.domain.Retractions;
 import com.robsartin.segue.domain.SameAs;
 import com.robsartin.segue.export.LogProjection;
-import com.robsartin.segue.wikidata.KindMapper;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -52,12 +52,17 @@ public record ClaimCensus(
     int standIns,
     int standInsWithNoEdge) {
 
-  public static ClaimCensus of(List<LoggedAssertion> logged, LogProjection projection) {
+  public static ClaimCensus of(List<LoggedAssertion> logged, LogProjection projection, Fold fold) {
     Objects.requireNonNull(logged, "logged");
     Objects.requireNonNull(projection, "projection");
+    Objects.requireNonNull(fold, "fold");
 
-    Retractions retractions = Retractions.in(logged);
-    Equivalences equivalences = Equivalences.in(logged);
+    Retractions retractions = fold.retractions();
+    // The folding Equivalences answers last() and stands() exactly as the merges-only one this
+    // section used to build did — the two differ in retractedStandIns alone, which only
+    // namesARetractedStandIn reads and nothing in census calls (#246). Pinned by
+    // EquivalencesTest.shouldAnswerAsTheMergesDoWhenTheFoldingFormIsAskedTheToolsQuestions.
+    Equivalences equivalences = fold.equivalences();
     Map<String, Integer> degrees = Degrees.in(projection);
 
     int retractionRows = 0;
@@ -88,7 +93,7 @@ public record ClaimCensus(
       }
     }
 
-    Set<String> standIns = Equivalences.standIns(logged, KindMapper::rederive).keySet();
+    Set<String> standIns = fold.standIns().keySet();
     int withNoEdge =
         (int) standIns.stream().filter(qid -> degrees.getOrDefault(qid, 0) == 0).count();
 

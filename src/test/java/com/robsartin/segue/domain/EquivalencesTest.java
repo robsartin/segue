@@ -727,4 +727,40 @@ class EquivalencesTest {
         .as("and it names something, so the comparison above is not comparing two empty sets")
         .isNotEmpty();
   }
+
+  @Test
+  @DisplayName("a folding Equivalences answers every non-edge question the merges one answers")
+  void shouldAnswerAsTheMergesDoWhenTheFoldingFormIsAskedTheToolsQuestions() {
+    List<LoggedAssertion> log = foldedLog();
+    Equivalences merges = Equivalences.in(log);
+    Equivalences folding = Equivalences.folding(log);
+
+    // folding(List) and in(List) share one fixed point by construction (both derive
+    // canonicalByLocal the same way), so once canonicalByLocal() and referencedEndpoints() are
+    // shown equal below, the canonicalByLocal/merged/canonical/resolve/stands/last assertions
+    // that follow are implied rather than independently informative - they are kept as
+    // documentation of what "answers the same" means. Only the referencedEndpoints wiring check
+    // and the retractedStandIns inequality at the end can fail on their own.
+    assertThat(folding.canonicalByLocal())
+        .as(
+            "issue #246 hands folding() to census, recommend, rate and evaluate where they held"
+                + " in(); the two differ in retractedStandIns alone, which only"
+                + " namesARetractedStandIn reads, and none of those tools calls it")
+        .isEqualTo(merges.canonicalByLocal());
+    assertThat(folding.referencedEndpoints()).isEqualTo(merges.referencedEndpoints());
+    assertThat(folding.merged()).isEqualTo(merges.merged());
+    assertThat(folding.canonical(MINTED)).isEqualTo(merges.canonical(MINTED));
+    assertThat(folding.resolve(Map.of(MINTED, 5, OTHER_MINTED, 4)))
+        .isEqualTo(merges.resolve(Map.of(MINTED, 5, OTHER_MINTED, 4)));
+    for (LoggedAssertion assertion : log) {
+      if (assertion instanceof SameAs merge) {
+        assertThat(folding.stands(merge)).isEqualTo(merges.stands(merge));
+        assertThat(folding.last(merge)).isEqualTo(merges.last(merge));
+      }
+    }
+    assertThat(folding.retractedStandIns())
+        .as("and the two really do differ somewhere, so this is not comparing a value to itself")
+        .containsExactly(CANONICAL)
+        .isNotEqualTo(merges.retractedStandIns());
+  }
 }
