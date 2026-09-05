@@ -272,6 +272,20 @@ class KindMapperTest {
   }
 
   @Test
+  @DisplayName("film, television and animated characters stay CONCEPT, as fictional human does")
+  void shouldStayConceptWhenTheClassIsAFictionalCharacter() {
+    // Issue #265 turns issue #261's fictional-human ruling into a family rule: a character shared
+    // by several works is a subject those works have in common, not something anyone did, and
+    // that is the hub shape the CONCEPT-gated rules exist to demote.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q15773347"))) // film character
+        .isEqualTo(NodeKind.CONCEPT);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q15773317"))) // television character
+        .isEqualTo(NodeKind.CONCEPT);
+    assertThat(KindMapper.fromInstanceOf(List.of("Q15711870"))) // animated character
+        .isEqualTo(NodeKind.CONCEPT);
+  }
+
+  @Test
   @DisplayName("a single release is a WORK")
   void shouldMapToWorkWhenTheClassIsSingleRelease() {
     // The second census reading (issue #265, 2026-09-05). A release of a single is WORK the way
