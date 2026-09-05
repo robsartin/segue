@@ -95,6 +95,7 @@ public final class KindMapper {
     put("Q169930", NodeKind.WORK); // extended play
     put("Q6128115", NodeKind.WORK); // 7-inch single
     put("Q17517379", NodeKind.WORK); // animated short film
+    put("Q7302866", NodeKind.WORK); // audio track
     // places
     put("Q515", NodeKind.PLACE); // city
     put("Q6256", NodeKind.PLACE); // country

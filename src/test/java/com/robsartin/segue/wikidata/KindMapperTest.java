@@ -226,6 +226,16 @@ class KindMapperTest {
   }
 
   @Test
+  @DisplayName("an audio track is a WORK")
+  void shouldMapToWorkWhenTheClassIsAudioTrack() {
+    // The same family as song (Q7366) and music track with vocals (Q55850593). Its parent
+    // "musical work" (Q2188189) is NOT the "musical work/composition" (Q105543609) the table
+    // holds — two similarly named classes, and only the latter is registered. Issue #261.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q7302866"))) // audio track
+        .isEqualTo(NodeKind.WORK);
+  }
+
+  @Test
   @DisplayName("a concert tour is an EVENT")
   void shouldMapToEventWhenTheClassIsConcertTour() {
     // A series of concerts, the way a festival (Q132241, already EVENT) is. Issue #261.
