@@ -1838,7 +1838,7 @@ same for the next one.
 ## What to explore next
 
 ```bash
-# the measured defaults: lift, `Recommendations.MIN_CANDIDATE_DEGREE`, twenty-five candidates, three routes each
+# the measured defaults: `Recommendations.DEFAULT_SCORER`, `Recommendations.MIN_CANDIDATE_DEGREE`, twenty-five candidates, three routes each
 ./gradlew recommend --args="--known $HOME/known.csv --out $HOME/next.txt"
 
 # turn the dial, and read the two lists side by side

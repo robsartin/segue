@@ -401,7 +401,12 @@ class RateRunTest {
       // the two agree fails here instead of reporting clean forever.
       String byCounting = topCandidate(graph, everything, Scorer.RAW);
       String byTheDefault = topCandidate(graph, everything, DEFAULT_SCORER);
-      assertThat(byTheDefault).isNotEqualTo(byCounting);
+      assertThat(byTheDefault)
+          .as(
+              "this fixture separates %s from raw counting; if the default has moved, rebuild"
+                  + " oneObscureAndOneFamous so it discriminates the new default",
+              DEFAULT_SCORER)
+          .isNotEqualTo(byCounting);
 
       List<Card> deck =
           RateRun.buildDeck(
