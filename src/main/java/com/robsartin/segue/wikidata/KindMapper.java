@@ -87,6 +87,11 @@ public final class KindMapper {
     put("Q1259759", NodeKind.WORK); // miniseries
     put("Q202866", NodeKind.WORK); // animated film
     put("Q10590726", NodeKind.WORK); // video album
+    // The first census reading (issue #261, 2026-09-05) listed the ten Wikidata classes holding
+    // most of the graph's CONCEPT nodes. Six of them are works or events the table had never
+    // learned; the other four stay CONCEPT on purpose (awards, and fictional humans — see
+    // KindMapperTest). Every one was looked up and confirmed by label AND description.
+    put("Q3331189", NodeKind.WORK); // version, edition or translation
     // places
     put("Q515", NodeKind.PLACE); // city
     put("Q6256", NodeKind.PLACE); // country

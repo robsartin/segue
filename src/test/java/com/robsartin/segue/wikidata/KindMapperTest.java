@@ -190,6 +190,17 @@ class KindMapperTest {
   }
 
   @Test
+  @DisplayName("an edition or translation of a work is a WORK")
+  void shouldMapToWorkWhenTheClassIsVersionEditionOrTranslation() {
+    // The class that held the most CONCEPT nodes in the first census reading (issue #261,
+    // 2026-09-05). Wikidata uses it to say "this item is a specific edition, adaptation or
+    // translation of a work" — which is a work, in the sense PERFORMED and AUTHORED point at.
+    // Label and description confirmed live before this line was written.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q3331189"))) // version, edition or translation
+        .isEqualTo(NodeKind.WORK);
+  }
+
+  @Test
   @DisplayName("an award is still a CONCEPT, which is what makes 'high-degree CONCEPT' mean 'hub'")
   void awardsStayConcepts() {
     // ADR 38 chose CONCEPT for award nodes deliberately, and issue #52 depends on that choice
