@@ -92,6 +92,9 @@ public final class ClassLabels {
     put("Q5", "human");
     put("Q215380", "musical group");
     put("Q5741069", "rock band");
+    // Characters. Not people: KindMapper leaves every one of these unmapped on purpose, and its
+    // tests pin them at CONCEPT (issues #261 and #265). They are named here so a tooltip can say
+    // what the node is without the graph treating it as someone.
     put("Q15632617", "fictional human");
     put("Q3658341", "literary character");
     // The rest of issue #265's family: film, television and animated characters stay CONCEPT for
