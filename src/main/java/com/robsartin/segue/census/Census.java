@@ -10,12 +10,15 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Every number the census reports, in the six sections it prints them in.
+ * Every number the census reports, in the seven sections it prints them in.
  *
- * <p><b>Aggregates and nothing else.</b> Every component is an integer or a map of integers; no
- * qid, label or note reaches this type, which is what lets {@code CensusIsSafeToPasteTest} assert
- * over the whole output rather than over a filtered part of it. That is {@code FloorReading}'s own
- * design — "every field is an aggregate, and that is deliberate" — applied to the whole graph.
+ * <p><b>Aggregates, and one identifier.</b> Every component is an integer or a map of integers,
+ * with a single exception ruled on by ADR 63's 2026-09-04 amendment: {@link ConceptClassCensus}
+ * carries the class qids that {@code CONCEPT} nodes state. A class id is vocabulary rather than an
+ * entity — the standing the edge type codes and source ids already have — and it is the only value
+ * here that is not a number. No label and no note reaches this type at all, which is what still
+ * lets {@code CensusIsSafeToPasteTest} assert over the whole output rather than a filtered part of
+ * it.
  *
  * <p><b>The log is read once, and folded once</b> (#246). It used to be read twice — once for the
  * raw rows and once inside {@link LogProjection#of(AssertionLog)} — and folded five times, because
@@ -33,7 +36,8 @@ public record Census(
     ClaimCensus claims,
     TasteCensus taste,
     DegreeCensus degree,
-    BridgeCensus bridge) {
+    BridgeCensus bridge,
+    ConceptClassCensus conceptClasses) {
 
   public Census {
     Objects.requireNonNull(nodes, "nodes");
@@ -42,9 +46,10 @@ public record Census(
     Objects.requireNonNull(taste, "taste");
     Objects.requireNonNull(degree, "degree");
     Objects.requireNonNull(bridge, "bridge");
+    Objects.requireNonNull(conceptClasses, "conceptClasses");
   }
 
-  /** Fold once, read once, count six ways. */
+  /** Fold once, read once, count seven ways. */
   public static Census of(AssertionLog log, AffinityStore ratings) {
     Objects.requireNonNull(log, "log");
     Objects.requireNonNull(ratings, "ratings");
@@ -57,6 +62,7 @@ public record Census(
         ClaimCensus.of(logged, projection, fold),
         TasteCensus.of(ratings.readRatings(), fold, projection),
         DegreeCensus.of(projection),
-        BridgeCensus.of(projection));
+        BridgeCensus.of(projection),
+        ConceptClassCensus.of(projection));
   }
 }
