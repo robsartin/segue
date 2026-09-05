@@ -3,6 +3,7 @@ package com.robsartin.segue.arch;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.arch.GuideExamples.Example;
+import com.robsartin.segue.domain.LocalEntity;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -108,6 +109,30 @@ class DeveloperGuideSupervisedRunExamplesTest {
             "docs/developer-guide.md, '%s' — a tilde does not expand inside the double quotes of"
                 + " --args=\"…\", so the owner would paste a line that dies. This is a runbook;"
                 + " every line in it is meant to be pasted exactly as written",
+            CHAPTER)
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("retractEntity is only ever shown against a local entity, never a Wikidata id")
+  void shouldNameALocalEntityWhenTheChapterRetracts() {
+    List<String> notLocal = new ArrayList<>();
+    for (Example example : GuideExamples.inChapter(CHAPTER, "retractEntity").examples()) {
+      List<String> arguments = example.arguments();
+      int qidIndex = arguments.indexOf("--qid");
+      String qid =
+          qidIndex >= 0 && qidIndex + 1 < arguments.size() ? arguments.get(qidIndex + 1) : null;
+      if (!LocalEntity.isLocal(qid)) {
+        notLocal.add("line " + example.line() + ": --qid " + qid);
+      }
+    }
+
+    assertThat(notLocal)
+        .as(
+            "docs/developer-guide.md, '%s' — retractEntity is the one destructive command this"
+                + " chapter shows, and every --qid in it must be shaped like LocalEntity.isLocal"
+                + " (Q00\\\\d+, ADR 59): a Wikidata-shaped id here would retract a real entity from"
+                + " the owner's graph instead of the one this run minted",
             CHAPTER)
         .isEmpty();
   }

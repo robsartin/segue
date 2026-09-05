@@ -317,13 +317,15 @@ Cite it; do not restate its reasoning.
   **Run it, blocking:**
   `./gradlew test --tests '*DeveloperGuideSupervisedRunExamplesTest'`
 
-  **Observe and quote a real assertion failure**, not a compile error. Expect exactly two red
-  methods: `shouldShowTheChapterWhenTheGuideDocumentsASupervisedRun`
-  (`Expecting Optional to contain a value but it was empty`) and
-  `shouldRunEveryStepInOrderWhenTheChapterIsRead` (`Expecting actual: [] to contain exactly …`). The
-  other three pass vacuously on an absent chapter, which is exactly why the first one exists. Paste
-  both messages into the task report verbatim. If the run fails to compile instead, fix the
-  compilation and run again — the compile error is not the red.
+  **Observe and quote a real assertion failure**, not a compile error. Expect three red methods:
+  `shouldShowTheChapterWhenTheGuideDocumentsASupervisedRun`
+  (`Expecting Optional to contain a value but it was empty`),
+  `shouldRunEveryStepInOrderWhenTheChapterIsRead` (`Expecting actual: [] to contain exactly …`), and
+  `shouldCiteTheDecisionsWhenTheChapterTellsTheOwnerWhatToType` (`Expecting ArrayList: [] to contain
+  …` — `contains` on the empty list of an absent chapter fails too). The other two pass vacuously on
+  an absent chapter, which is exactly why the first one exists. Paste all three messages into the
+  task report verbatim. If the run fails to compile instead, fix the compilation and run again — the
+  compile error is not the red.
 
 - [ ] **Step 2 (GREEN) — write the chapter.**
 
@@ -528,7 +530,8 @@ Cite it; do not restate its reasoning.
   to `## A supervised first run (draft)`. Run the new test class, blocking. Both
   `shouldShowTheChapterWhenTheGuideDocumentsASupervisedRun` and
   `shouldRunEveryStepInOrderWhenTheChapterIsRead` must red, the first naming the chapter. Quote both.
-  Revert with `git checkout -- docs/developer-guide.md` and re-run to green.
+  The chapter is not yet committed at this point, so `git checkout -- docs/developer-guide.md` would
+  delete it rather than revert the plant; restore the authored heading by hand and re-run to green.
 
 - [ ] **Step 4 (positive control) — plant a step out of order.** Move step 1's `graphCensus` block to
   sit *after* step 2's two `mint` lines. Run the class. `shouldRunEveryStepInOrderWhenTheChapterIsRead`

@@ -2624,10 +2624,13 @@ Dev-side keeps it the owner's.
 
 ## A supervised first run
 
-The census taken on 2026-09-04 says the owner tools have never touched real data: no merges, no
-retractions, one local entity minted, nothing MusicBrainz reached. Every merge, retraction and
-stand-in path in the fold is fixture-only on the owner's graph, and the first real one should be a
-supervised run rather than a surprise. This chapter is that run.
+No merge and no retraction has ever reached the owner's graph —
+[ADR 24](adr/0024-sqlite-assertion-log.md)'s 2026-09-04 amendment measured it directly: "the real
+log holds no retractions at all." Every merge, retraction and stand-in path in the fold is
+fixture-only, and the first real one should be a supervised run rather than a surprise. This
+chapter is that run. What the census says about local entities minted and MusicBrainz reached is
+its own to report — read the `claims` and `bridge` lines it prints in step 1, rather than a figure
+restated here.
 
 **The owner types every command here.** Nothing in this repository runs against the real database,
 and an agent reading this chapter is reading a description of what the owner will do, not a script
@@ -2652,11 +2655,13 @@ Quit the MCP client, which is what starts and stops segue as a subprocess on the
 Then confirm no JVM is left holding the file:
 
 ```bash
-pgrep -fl segue
+pgrep -fl 'java.*segue'
 ```
 
 Nothing printed means nothing is running. If something is, stop it and look again before going on.
-That command reads a process list and writes nothing.
+A bare `pgrep -fl segue` also matches a Gradle daemon or an editor with the project open; a match
+that is not a JVM running segue is not a second writer. That command reads a process list and
+writes nothing.
 
 ### 1. The census before
 
@@ -2749,10 +2754,11 @@ Between the census in step 1 and the census in step 7, the log grew and the proj
 | --- | --- | --- |
 | `claims / log rows` | up, by three | the mint, the owner edge, the retraction — the raw size, the one figure here that is not a derivation |
 | `claims / retractions` | up, by one | rows that are a retraction |
-| `claims / rows they removed` | up, by two | the node claim and the edge claim the retraction reaches. Never the same figure as the line above, and the gap between them is the blast radius ADR 44 talks about |
+| `claims / rows they removed` | up, by two | the node claim and the edge claim the retraction reaches. Not the same measure as the line above, and the gap between them is the blast radius ADR 44 talks about |
 | `claims / entities they name` | up, by one | distinct entities a retraction names |
 | `claims / local entities minted` | **back where it started** | it counts *surviving* rows, and the retraction reaches the mint |
 | everything under `nodes`, `edges` and `degree` | **back where it started** | the whole point: the log remembers, the projection does not |
+| `claims / merges standing`, `merges superseded`, `merges superseded but edge-referenced`, `stand-ins`, `stand-ins with no edge` | **unchanged** | this run makes no merge and no stand-in. A movement here is a finding |
 | `edges / withdrawn` | **unchanged** | that count is a merge's canonical side emptied by a retraction, and this run makes no merge. A movement here is a finding |
 | everything under `taste` | **unchanged** | nothing was rated. A movement here is a finding |
 | everything under `bridge` | **unchanged** | until step 9 |
@@ -2761,8 +2767,11 @@ If you also take a census between step 3 and step 5 — and it is worth taking �
 interesting one. Against step 1: `nodes / total` and the `WORK` line up by one, `edges / total` and
 the `of type INFLUENCED_BY` line up by one, a `backed by owner` line appearing or rising, and the
 new edge landing on `corroborated by 0` rather than `corroborated by 1`, because an owner claim is
-filtered out before distinct sources are counted. Under `degree`, the minted node arrives at zero
-and leaves at one, so `at or below the floor` moves twice and the percentiles may move with it.
+filtered out before distinct sources are counted. Under `degree`, the minted node enters the
+population at zero and the edge takes it to one — both at or below the floor the census prints —
+so `at or below the floor` moves up by one at the mint and not again for the edge. The entity you
+picked in step 3 gains an edge too, so if it was sitting exactly on the floor that line moves back
+down by one; the percentiles may move with it.
 
 ### 9. Optional: reach MusicBrainz once
 
@@ -2790,8 +2799,9 @@ This run changes no code. What it produces is issues, and these are the ones to 
 
 - **A boot that refused.** File the `replay refused:` block verbatim, sequence numbers and all,
   with what you did about it. That is the first real exercise of the boot pre-flight.
-- **A line that moved when the table above says it should not** — `taste`, `edges / withdrawn`, or
-  `bridge` before step 9. Any of those means a rule reaches further than this chapter says.
+- **A line that moved when the table above says it should not** — `taste`, `edges / withdrawn`, the
+  `claims` merge and stand-in lines, or `bridge` before step 9. Any of those means a rule reaches
+  further than this chapter says.
 - **A line that did not move when the table says it should**, especially `claims / rows they
   removed`: if the retraction reached fewer rows than the dry run reported, the report and the fold
   disagree, and that is the more serious of the two.
