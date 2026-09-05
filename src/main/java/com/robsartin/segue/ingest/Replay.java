@@ -16,7 +16,7 @@ import java.util.Objects;
  * <p><b>A value rather than a {@code Consumer<Fold>} callback</b>, which was the alternative: a
  * consumer cannot return, so every caller would invent a mutable holder whose only purpose is to
  * defeat the callback, and the ordering of the callback against the replay would be a convention
- * rather than a type. See the design note ADR 64 points at.
+ * rather than a type.
  *
  * <p>{@code GraphProjector.project} is unchanged and returns {@link #applied} alone — sixty call
  * sites keep the signature they have, which is what makes this a parallel field rather than a
