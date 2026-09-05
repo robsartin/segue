@@ -735,6 +735,12 @@ class EquivalencesTest {
     Equivalences merges = Equivalences.in(log);
     Equivalences folding = Equivalences.folding(log);
 
+    // folding(List) and in(List) share one fixed point by construction (both derive
+    // canonicalByLocal the same way), so once canonicalByLocal() and referencedEndpoints() are
+    // shown equal below, the canonicalByLocal/merged/canonical/resolve/stands/last assertions
+    // that follow are implied rather than independently informative - they are kept as
+    // documentation of what "answers the same" means. Only the referencedEndpoints wiring check
+    // and the retractedStandIns inequality at the end can fail on their own.
     assertThat(folding.canonicalByLocal())
         .as(
             "issue #246 hands folding() to census, recommend, rate and evaluate where they held"
