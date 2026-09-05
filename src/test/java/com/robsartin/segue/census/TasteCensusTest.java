@@ -3,9 +3,11 @@ package com.robsartin.segue.census;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.entry;
 
+import com.robsartin.segue.domain.Fold;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.export.LogProjection;
+import com.robsartin.segue.wikidata.KindMapper;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,6 +23,8 @@ class TasteCensusTest {
   private static final LogProjection PROJECTION =
       LogProjection.of(new InventedCensus.FakeAssertionLog().with(InventedCensus.log()));
 
+  private static final Fold FOLD = Fold.of(InventedCensus.log(), KindMapper::rederive);
+
   private static final TasteCensus CENSUS =
       TasteCensus.of(
           new InventedCensus.FakeAffinityStore()
@@ -33,7 +37,7 @@ class TasteCensusTest {
               .rated(InventedCensus.NEIGHBOUR, 2)
               .rated(InventedCensus.GONE, 1)
               .readRatings(),
-          InventedCensus.log(),
+          FOLD,
           PROJECTION);
 
   @Test
@@ -69,7 +73,7 @@ class TasteCensusTest {
     TasteCensus census =
         TasteCensus.of(
             new InventedCensus.FakeAffinityStore().rated(InventedCensus.WREN, 5).readRatings(),
-            readded,
+            Fold.of(readded, KindMapper::rederive),
             LogProjection.of(new InventedCensus.FakeAssertionLog().with(readded)));
 
     assertThat(census.onARetractedId())

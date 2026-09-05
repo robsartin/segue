@@ -4,6 +4,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 import com.robsartin.segue.app.SegueApplication;
+import com.robsartin.segue.census.Census;
 import com.robsartin.segue.domain.AffinityRecord;
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.EdgeRecord;
@@ -1899,4 +1900,33 @@ class ArchitectureTest {
               "issue #246: LogProjection is the export's one fold — every other class in the"
                   + " package takes what it holds, and may not build a second one through"
                   + " Fold.of either");
+
+  /**
+   * Issue #246: the census folds the log once, in {@code Census.of}, and hands it on.
+   *
+   * <p>The same shape as {@code theExportFoldsOnce}, over {@code com.robsartin.segue.census..}
+   * instead: {@code Fold.of} is forbidden alongside the seven log-taking statics, because here too
+   * it is a second class's route to a second fold rather than the sanctioned one.
+   */
+  @ArchTest
+  static final ArchRule theCensusFoldsOnce =
+      noClasses()
+          .that()
+          .resideInAPackage("com.robsartin.segue.census..")
+          .and()
+          .doNotBelongToAnyOf(Census.class)
+          .should()
+          .accessTargetWhere(
+              callTo("in", Equivalences.class)
+                  .or(callTo("folding", Equivalences.class))
+                  .or(callTo("standIns", Equivalences.class))
+                  .or(callTo("nodesTheFoldHolds", Equivalences.class))
+                  .or(callTo("retractedStandIns", Equivalences.class))
+                  .or(callTo("localsOfMerges", Equivalences.class))
+                  .or(callTo("in", Retractions.class))
+                  .or(callTo("of", Fold.class)))
+          .because(
+              "issue #246: Census.of builds the census's one fold and hands it to every"
+                  + " section — ClaimCensus and TasteCensus took the raw rows and folded them"
+                  + " again, which is three extra whole-log fixed points and a second read");
 }

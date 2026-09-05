@@ -1,14 +1,10 @@
 package com.robsartin.segue.census;
 
-import com.robsartin.segue.domain.Equivalences;
+import com.robsartin.segue.domain.Fold;
 import com.robsartin.segue.domain.LocalEntity;
-import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.RatingScale;
-import com.robsartin.segue.domain.Retractions;
 import com.robsartin.segue.export.LogProjection;
-import com.robsartin.segue.wikidata.KindMapper;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -51,18 +47,22 @@ public record TasteCensus(
         Collections.unmodifiableMap(new TreeMap<>(Objects.requireNonNull(byScore, "byScore")));
   }
 
-  public static TasteCensus of(
-      Map<String, Integer> ratings, List<LoggedAssertion> logged, LogProjection projection) {
+  /**
+   * @param fold this census's one fold (#246) — its stand-in key set and its retractions are the
+   *     only two things this section ever read off the log, so the rows themselves are no longer a
+   *     parameter
+   */
+  public static TasteCensus of(Map<String, Integer> ratings, Fold fold, LogProjection projection) {
     Objects.requireNonNull(ratings, "ratings");
-    Objects.requireNonNull(logged, "logged");
+    Objects.requireNonNull(fold, "fold");
     Objects.requireNonNull(projection, "projection");
     Map<Integer, Integer> byScore = new TreeMap<>();
     for (int score = RatingScale.MIN; score <= RatingScale.MAX; score++) {
       byScore.put(score, 0);
     }
 
-    Set<String> standIns = Equivalences.standIns(logged, KindMapper::rederive).keySet();
-    Set<String> retracted = Retractions.in(logged).lastRetraction().keySet();
+    Set<String> standIns = fold.standIns().keySet();
+    Set<String> retracted = fold.retractions().lastRetraction().keySet();
 
     int onALocalId = 0;
     int onAStandIn = 0;

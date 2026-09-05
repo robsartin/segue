@@ -2,7 +2,9 @@ package com.robsartin.segue.census;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.robsartin.segue.domain.Fold;
 import com.robsartin.segue.export.LogProjection;
+import com.robsartin.segue.wikidata.KindMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -20,7 +22,8 @@ class ClaimCensusTest {
   private static final ClaimCensus CENSUS =
       ClaimCensus.of(
           InventedCensus.log(),
-          LogProjection.of(new InventedCensus.FakeAssertionLog().with(InventedCensus.log())));
+          LogProjection.of(new InventedCensus.FakeAssertionLog().with(InventedCensus.log())),
+          Fold.of(InventedCensus.log(), KindMapper::rederive));
 
   @Test
   @DisplayName("every row in the log is counted, retractions and superseded merges included")

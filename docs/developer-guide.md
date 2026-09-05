@@ -553,6 +553,7 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `onlyJackson3` | Jackson 2's `core`/`databind`/`datatype` packages | [ADR 35](adr/0035-jackson-3-single-json-library.md) |
 | `theBootFoldsOnce` | any ingest class but `IngestService` calling `Equivalences.in`, `folding`, `standIns`, `nodesTheFoldHolds`, `retractedStandIns` or `localsOfMerges`, or `Retractions.in` — the boot builds one `Fold` and every reader takes what it holds. The package rather than `GraphProjector` alone, because a fence naming one class cannot see a package-private helper that folds and is called from the replay. `IngestService` is the single exception: `claim`'s pre-append gate folds on the live path, where there is no boot fold to reuse | [ADR 64](adr/0064-fold-the-log-once-per-boot.md) |
 | `theExportFoldsOnce` | any `export` class but `LogProjection` calling the seven log-taking fold statics or `Fold.of` — the export folds in one place and every other class takes what it holds. `Fold.of` is forbidden too, unlike in `theBootFoldsOnce`, because here it is the second class's route to a second fold rather than the sanctioned one | [ADR 64](adr/0064-fold-the-log-once-per-boot.md) |
+| `theCensusFoldsOnce` | any `census` class but `Census` calling the seven log-taking fold statics or `Fold.of` — `Census.of` builds the one fold and `ClaimCensus` and `TasteCensus` take what it holds instead of folding the rows again | [ADR 64](adr/0064-fold-the-log-once-per-boot.md) |
 
 ### Which rules are only convention
 
@@ -1728,14 +1729,16 @@ front of every line, on stdout. The prefix is the same on every line, so the ali
 
 ### It counts the export's fold, not a second one
 
-`Census` names its sections, and the ones whose `of` takes a `LogProjection` and nothing else count
-that fold alone — the same fold `exportGraph` draws and, through `Equivalences` and `Retractions`,
-the same rules `GraphProjector` replays at boot. Of the rest, the claims section reads the raw log
-rows beside it, and the taste section the score map through `AffinityStore.readRatings` as well as
-both. A census
-with a fold of its own could disagree with the picture about how many nodes there are, which is the
-drift `BothFoldsAgreeTest` exists to catch. That is why `census` depends on `export`, the second of
-the two dependencies between dev tools.
+`Census.of` reads the log once and folds it once, into one `Fold` — the same fold `exportGraph`
+draws and, through `Equivalences` and `Retractions`, the same rules `GraphProjector` replays at
+boot — and hands that one `Fold`, along with the rows and the `LogProjection` built from them, to
+every section (issue #246). The sections that need only the projection (`NodeCensus`, `EdgeCensus`,
+`DegreeCensus`, `BridgeCensus`) take it and nothing else; the claims section takes the projection,
+the raw rows and the `Fold` together, because it also reports the raw row count and walks the rows
+itself; the taste section takes the score map through `AffinityStore.readRatings`, the `Fold` and
+the projection, and needs no rows at all. A census with a fold of its own could disagree with the
+picture about how many nodes there are, which is the drift `BothFoldsAgreeTest` exists to catch.
+That is why `census` depends on `export`, the second of the two dependencies between dev tools.
 
 ### Three things this is not allowed to do
 
