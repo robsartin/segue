@@ -1723,10 +1723,12 @@ over the one database nobody but you may open:
 
 - how many merges the real graph holds, which [ADR 59](adr/0059-owner-claims-as-a-third-layer.md)'s
   residual says is unmeasured;
-- where the whole graph's degree distribution sits relative to
-  `Recommendations.MIN_CANDIDATE_DEGREE`, which [ADR 57](adr/0057-the-floor-reports-itself.md)
-  re-opens on figures `FloorReading` takes over one recommender run's candidate pool — nothing
-  reports the nodes that pool never considers;
+- where the degree distribution sits relative to `Recommendations.MIN_CANDIDATE_DEGREE`, which
+  [ADR 57](adr/0057-the-floor-reports-itself.md) re-opens on figures `FloorReading` takes over one
+  recommender run's candidate pool — nothing reports the nodes that pool never considers. The degree
+  section reads it twice, over the whole graph and over each kind separately, because
+  `CandidateSweep.couldBeExplored` refuses every kind but `PERSON` and `GROUP` before the floor is
+  applied, so the floor only ever cuts those two;
 - how much of what MusicBrainz reached the graph can describe, which
   [ADR 55](adr/0055-what-the-musicbrainz-adapter-refuses.md) and issue #167 left open;
 - which Wikidata classes the `CONCEPT` nodes are wearing, which is the map of `KindMapper`'s gaps —

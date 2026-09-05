@@ -244,6 +244,38 @@ entity, so no row can attribute a rating to one.
 
 ---
 
+**Amendment (2026-09-04, issue #247): the degree section is read by kind as well as over the whole
+graph.**
+
+The context above says what that section was for: `FloorReading`'s figures are readings of one run's
+candidate pool, "so what nobody has is where the floor sits against the *graph*". The section shipped
+answers that, and the answer is dominated by a population the floor is never applied to.
+`CandidateSweep.couldBeExplored` refuses every kind but `PERSON` and `GROUP`, and the sweep asks it
+*before* it asks the degree question — the two are deliberately separate, so that what the floor held
+out is countable apart from what the kind rules refused. A whole-graph reading is therefore a true
+statement about the graph and a misleading one about the floor: it is the share of nodes below a cut
+most of them are never offered to.
+
+So the degree section now reads its figures twice — once over every node, once per `NodeKind`, all
+six kinds and zeros included — and reports the floor's bite as a count and a whole percent in both.
+One rule reads every population, so a kind's quantile and the graph's cannot come to disagree about
+what a quantile is. **`CensusReport` remains the authority on which counts are emitted and in what
+order**, and this amendment lists none of them, for the reason the decision above already gives.
+
+Three things this does not do.
+
+- **It does not move the floor, and it does not make one per kind.**
+  [ADR 57](0057-the-floor-reports-itself.md) refused an adaptive floor on measurements and that
+  refusal stands untouched: a floor that varied with a property of the candidate is the shape it
+  rejected. What changes here is the reading, not the cut.
+- **It does not touch `FloorReading`.** That record was read against the code for this issue, and
+  every figure it carries is already over the `PERSON`/`GROUP` pool, for the ordering above. Issue
+  #247 offered it as an alternative home; the code decided against it.
+- **It records no reading.** The first consequence above already says so — this tool is the
+  instrument, and deciding something about the floor from what it prints is separate work. No census
+  of the real graph is taken here, and an amendment to ADR 57 written before the owner has run the
+  tool would record a decision nobody took.
+
 **Amendment (2026-09-04, issue #248): the "nothing matching `\bQ\d+\b` anywhere" clause of *Every
 value is an integer, and that is what makes ADR 51 testable here* above is narrowed by one prefix,
 because a class identifier is vocabulary.** The census gained a section counting `CONCEPT` nodes by
