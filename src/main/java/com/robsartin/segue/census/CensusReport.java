@@ -38,7 +38,8 @@ public final class CensusReport {
 
   /** Said on the first line, every time — what this is, and what it is not. */
   public static final String HEADER =
-      "# segue graph census — aggregates only: no labels, no ids, no notes (ADR 51, ADR 63).";
+      "# segue graph census — aggregates and Wikidata class ids only: no labels, no notes, no entity"
+          + " ids (ADR 51, ADR 63).";
 
   private static final String GAP = "  ";
 

@@ -134,4 +134,18 @@ class ConceptClassCensusTest {
         .as("without this the reader cannot tell a whole distribution from a truncated one")
         .isEqualTo(11);
   }
+
+  @Test
+  @DisplayName("an empty log yields no gap and no rows, not a stale count from an earlier fold")
+  void shouldYieldNothingWhenTheProjectionHasNoConceptNode() {
+    LogProjection projection = fold();
+
+    ConceptClassCensus counted = ConceptClassCensus.of(projection);
+
+    assertThat(counted.statingNoClass())
+        .as("nothing folded, so nothing can have stated no class either")
+        .isEqualTo(0);
+    assertThat(counted.distinctClasses()).isEqualTo(0);
+    assertThat(counted.top()).isEmpty();
+  }
 }

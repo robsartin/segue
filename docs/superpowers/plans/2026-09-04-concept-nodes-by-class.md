@@ -18,7 +18,7 @@
 - Gate, **blocking, never backgrounded**: `SEGUE_REQUIRE_BROWSER=true SEGUE_REQUIRE_GRAPHVIZ=true ./gradlew check --rerun-tasks`. Run `./gradlew spotlessApply` before each gate. Fast loop per task is named in the task.
 - **Only JDK 25 is installed.** Plain `./gradlew`; never `/usr/libexec/java_home -v 21` (it silently returns 25).
 - **Never run a writing dev task** (`own`, `ownClaim`, `retractEntity`, any seeding task), and **never run `graphCensus`**. `~/.segue/segue.db` is never read, written, copied or created; every test builds its own database under a `@TempDir`.
-- Every id invented in `src/test` must take an unallocatable shape or `arch/StandInQidsDenoteNothingTest` reds: two leading zeros for a local entity (ADR 59), eleven digits with no leading zero for a merge's canonical side (ADR 62), **one leading zero for anything else, class ids included** (ADR 58). No real id is used anywhere in this plan, so `StandInQidsDenoteNothingTest` is never touched.
+- Every id invented in `src/test` must take an unallocatable shape or `arch/StandInQidsDenoteNothingTest` reds: two leading zeros for a local entity (ADR 59), eleven digits with no leading zero for a merge's canonical side (ADR 62), **one leading zero for anything else, class ids included** (ADR 58). No real id is used anywhere in this plan, so `StandInQidsDenoteNothingTest` is never touched. *(Corrected: what landed folds the person's node through a real class, `Q5`, which `StandInQidsDenoteNothingTest` allows as a genuinely real id stated beside it — see the Task 1 test block below.)*
 - **A stub step carries only the imports its stub body uses.** `spotlessApply` runs `removeUnusedImports`, so an import added ahead of the code that needs it is silently deleted and the next compile fails on a name that was there a minute ago. Each GREEN step adds the imports its own code needs.
 - **Do not touch `InventedCensus.log()`.** Its row numbers are cited by every hand-counted expectation in the package, and issue #247 is editing the same package on this base. New cases build their own small logs, the precedent `EdgeCensusTest` set.
 - **Do not edit any census section but the new one**, and append the new report block after `bridge`. Issue #247 is adding a by-kind breakdown to the `degree` section on this same base.
@@ -119,6 +119,11 @@ class ConceptClassCensusTest {
 
   /** A second invented class, so the other-kind test does not repeat {@link #CLASS_ONE}. */
   private static final String PERSON_CLASS = "Q0900304";
+```
+
+*(Corrected: what landed drops this constant and states the real class `Q5` (human) as a literal on the person node instead, which `KindMapper.rederive` maps to `PERSON` — that is the point of the test, and `StandInQidsDenoteNothingTest` allows `Q5` as a genuinely real id.)*
+
+```java
 
   private static LogProjection fold(LoggedAssertion... claims) {
     return LogProjection.of(new InventedCensus.FakeAssertionLog().with(claims));

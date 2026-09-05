@@ -1718,7 +1718,7 @@ the variable, and this output is the shape of your whole graph and taste layer. 
 
 ### What it is for
 
-Three questions this repository has left open need a number nobody has, and all three are aggregates
+Four questions this repository has left open need a number nobody has, and all four are aggregates
 over the one database nobody but you may open:
 
 - how many merges the real graph holds, which [ADR 59](adr/0059-owner-claims-as-a-third-layer.md)'s
@@ -1728,7 +1728,7 @@ over the one database nobody but you may open:
   re-opens on figures `FloorReading` takes over one recommender run's candidate pool — nothing
   reports the nodes that pool never considers;
 - how much of what MusicBrainz reached the graph can describe, which
-  [ADR 55](adr/0055-what-the-musicbrainz-adapter-refuses.md) and issue #167 left open.
+  [ADR 55](adr/0055-what-the-musicbrainz-adapter-refuses.md) and issue #167 left open;
 - which Wikidata classes the `CONCEPT` nodes are wearing, which is the map of `KindMapper`'s gaps —
   `fromInstanceOf` answers `CONCEPT` for any class its whitelist has never met, so an unknown share
   of those nodes are people, groups, works or places. The `concept classes` section counts them, and
@@ -1749,13 +1749,15 @@ covered by the test's "nothing `Q`-shaped anywhere" clause; the third is the one
 narrowed to the `  class Q…` prefix that only those rows can produce, with three planted lines
 asserting that a qid anywhere else — including a second one on an allowed row — still fires. See
 [ADR 63](adr/0063-a-read-only-census-of-the-graph.md)'s 2026-09-04 amendment. What the remaining
-labels interpolate is a score or a corroboration count, which are numbers. No
-qid, label or note reaches the output, so [ADR 51](adr/0051-what-an-adr-may-quote.md)'s line — an
-aggregate over your data may be published, an entity presented as yours may not — is satisfied by
-construction rather than by care. `CensusIsSafeToPasteTest` holds it: it feeds a graph containing a
-label, a note and a `Q` id inside that note, captures every log line at TRACE, and asserts that none
-of the three appears anywhere. ADR 51 says its rule cannot be tested in general and explains why;
-this is the one artefact where it can be, and
+labels interpolate is a score or a corroboration count, which are numbers. No label and no note
+reaches the output, and the only qid that does is a class id at the head of a `  class Q…` row, so
+[ADR 51](adr/0051-what-an-adr-may-quote.md)'s line — an aggregate over your data may be published, an
+entity presented as yours may not — is satisfied by construction rather than by care.
+`CensusIsSafeToPasteTest` holds it: it feeds a graph containing a label, a note, a `Q` id inside that
+note, and a node stating a class the whitelist has never met — so the concept-classes rows are
+non-vacuous rather than absent — captures every log line at TRACE, and asserts that only the class id
+reaches the output, and only where the narrowed clause allows it. ADR 51 says its rule cannot be
+tested in general and explains why; this is the one artefact where it can be, and
 [ADR 63](adr/0063-a-read-only-census-of-the-graph.md) records why.
 
 That guarantee is about the census itself, not about everything a run can put on your terminal: a

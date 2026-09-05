@@ -58,7 +58,7 @@ class CensusReportTest {
     assertThat(String.join("\n", CensusReport.lines(census)))
         .isEqualTo(
             """
-            # segue graph census — aggregates only: no labels, no ids, no notes (ADR 51, ADR 63).
+            # segue graph census — aggregates and Wikidata class ids only: no labels, no notes, no entity ids (ADR 51, ADR 63).
 
             nodes
               total                                  13

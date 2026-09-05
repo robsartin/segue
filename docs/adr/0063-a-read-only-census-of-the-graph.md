@@ -242,6 +242,8 @@ entity, so no row can attribute a rating to one.
   what is pasted, and where, stays the owner's decision — which is the whole reason `--db` is typed
   per invocation.
 
+---
+
 **Amendment (2026-09-04, issue #248): the "nothing matching `\bQ\d+\b` anywhere" clause of *Every
 value is an integer, and that is what makes ADR 51 testable here* above is narrowed by one prefix,
 because a class identifier is vocabulary.** The census gained a section counting `CONCEPT` nodes by
@@ -253,10 +255,10 @@ by, so the section would answer a question nobody could act on without a second 
 **The ruling is that a Wikidata class id is vocabulary rather than the owner's data.** That is not
 new ground: this decision already admits two kinds of raw text off the log on exactly that basis, the
 edge type codes in `of type …` and the source ids in `backed by …`. A class id is the same kind of
-thing — Wikidata's shared name for a category, stated by a source about an entity — and it identifies
-no entity in the owner's graph. What the row adds to it is a count, which is an aggregate. ADR 51's
-line is where that lands, and ADR 51 itself is untouched: it remains the rule for prose, held by
-review.
+thing — Wikidata's shared name for a category, stated by a source about an entity — and it is
+Wikidata's name for a category rather than an id of the owner's, and the row attributes nothing to
+the entity it names. What the row adds to it is a count, which is an aggregate. ADR 51's line is
+where that lands, and ADR 51 itself is untouched: it remains the rule for prose, held by review.
 
 **The carve-out is one prefix wide, and that is enforced rather than intended.**
 `CensusIsSafeToPasteTest` strips exactly one leading `^  class Q\d+` and applies the unchanged clause
@@ -274,6 +276,12 @@ descending is what pushes such a row out — that is the load-bearing reason for
 brevity — but on a graph small enough that ten rows is the whole distribution, a count of one can
 still reach the output. Nothing hides it, and the answer is this decision's own: `--db` is typed per
 invocation because whether to publish is the owner's decision, taken each time.
+
+A second residual: `instanceOf` is whatever P31 stated, and nothing validates that the target is a
+class, so a P31 naming a specific entity — a modelling error, or an item like an award that Wikidata
+really does use in the class position — would be printed as a class row, and this clause can no
+longer red on it the way it does for an entity-shaped edge type code. What the row still adds is a
+count over the owner's nodes, and the id itself is Wikidata's, public either way.
 
 **What was rejected.** Printing a label beside the qid from `ClassLabels`: its fallback prints the
 bare qid, so on exactly the classes this section exists to surface — the ones nobody has met — it
