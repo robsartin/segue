@@ -84,12 +84,21 @@ public final class ClassLabels {
     // A double prime, escaped rather than typed: the value is then the same whatever charset
     // reads this file.
     put("Q6128115", "7\u2033 single");
+    // The second census reading's two more works (issue #265): a comic book issue is a published
+    // work the way book is, and video game's own direct parent, audiovisual work, already is one.
+    put("Q140727568", "comic book issue");
+    put("Q7889", "video game");
     // People and groups.
     put("Q5", "human");
     put("Q215380", "musical group");
     put("Q5741069", "rock band");
     put("Q15632617", "fictional human");
     put("Q3658341", "literary character");
+    // The rest of issue #265's family: film, television and animated characters stay CONCEPT for
+    // the same reason fictional human does, right above.
+    put("Q15773347", "film character");
+    put("Q15773317", "television character");
+    put("Q15711870", "animated character");
     // Events.
     put("Q182832", "concert");
     // Issue #261's sixth: a concert tour is EVENT, the same kind as the concerts on it.

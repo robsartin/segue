@@ -293,8 +293,9 @@ class StandInQidsDenoteNothingTest {
           entry(
               "Q7889",
               real(
-                  "class id — mapped by KindMapper (issue #265)",
-                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+                  "class id — mapped by ClassLabels and, since issue #265, by KindMapper",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"),
+                  code("src/test/java/com/robsartin/segue/support/ClassLabelsTest.java"))),
           entry(
               "Q11424",
               real(
@@ -842,21 +843,24 @@ class StandInQidsDenoteNothingTest {
           entry(
               "Q15711870",
               real(
-                  "class id — deliberately left unmapped by KindMapper, pinned at CONCEPT by"
-                      + " KindMapperTest (issue #265)",
-                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+                  "class id — named by ClassLabels, deliberately left unmapped by KindMapper,"
+                      + " pinned at CONCEPT by KindMapperTest (issue #265)",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"),
+                  code("src/test/java/com/robsartin/segue/support/ClassLabelsTest.java"))),
           entry(
               "Q15773317",
               real(
-                  "class id — deliberately left unmapped by KindMapper, pinned at CONCEPT by"
-                      + " KindMapperTest (issue #265)",
-                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+                  "class id — named by ClassLabels, deliberately left unmapped by KindMapper,"
+                      + " pinned at CONCEPT by KindMapperTest (issue #265)",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"),
+                  code("src/test/java/com/robsartin/segue/support/ClassLabelsTest.java"))),
           entry(
               "Q15773347",
               real(
-                  "class id — deliberately left unmapped by KindMapper, pinned at CONCEPT by"
-                      + " KindMapperTest (issue #265)",
-                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+                  "class id — named by ClassLabels, deliberately left unmapped by KindMapper,"
+                      + " pinned at CONCEPT by KindMapperTest (issue #265)",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"),
+                  code("src/test/java/com/robsartin/segue/support/ClassLabelsTest.java"))),
           entry(
               "Q16334295",
               real(
@@ -984,8 +988,9 @@ class StandInQidsDenoteNothingTest {
           entry(
               "Q140727568",
               real(
-                  "class id — mapped by KindMapper (issue #265)",
-                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+                  "class id — mapped by ClassLabels and, since issue #265, by KindMapper",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"),
+                  code("src/test/java/com/robsartin/segue/support/ClassLabelsTest.java"))),
           entry(
               "Q1000000000",
               real(

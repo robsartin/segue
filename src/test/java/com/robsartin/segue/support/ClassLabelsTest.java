@@ -43,4 +43,34 @@ class ClassLabelsTest {
   void shouldLabelAnimatedShortFilmWhenTheClassIsQ17517379() {
     assertThat(ClassLabels.label("Q17517379")).isEqualTo("animated short film");
   }
+
+  @Test
+  @DisplayName("comic book issue has a label, confirmed live 2026-09-05 (issue #265)")
+  void shouldLabelComicBookIssueWhenTheClassIsQ140727568() {
+    assertThat(ClassLabels.label("Q140727568")).isEqualTo("comic book issue");
+  }
+
+  @Test
+  @DisplayName("video game has a label, confirmed live 2026-09-05 (issue #265)")
+  void shouldLabelVideoGameWhenTheClassIsQ7889() {
+    assertThat(ClassLabels.label("Q7889")).isEqualTo("video game");
+  }
+
+  @Test
+  @DisplayName("film character has a label, confirmed live 2026-09-05 (issue #265)")
+  void shouldLabelFilmCharacterWhenTheClassIsQ15773347() {
+    assertThat(ClassLabels.label("Q15773347")).isEqualTo("film character");
+  }
+
+  @Test
+  @DisplayName("television character has a label, confirmed live 2026-09-05 (issue #265)")
+  void shouldLabelTelevisionCharacterWhenTheClassIsQ15773317() {
+    assertThat(ClassLabels.label("Q15773317")).isEqualTo("television character");
+  }
+
+  @Test
+  @DisplayName("animated character has a label, confirmed live 2026-09-05 (issue #265)")
+  void shouldLabelAnimatedCharacterWhenTheClassIsQ15711870() {
+    assertThat(ClassLabels.label("Q15711870")).isEqualTo("animated character");
+  }
 }
