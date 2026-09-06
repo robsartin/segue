@@ -1,5 +1,6 @@
 package com.robsartin.segue.evaluate;
 
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -34,5 +35,50 @@ public record Reading(
 
   public Reading {
     Objects.requireNonNull(setting, "setting");
+  }
+
+  /**
+   * One row of the report from one reading per fold (issue #268).
+   *
+   * <p><b>Counts add, rank sums add, and nothing here divides.</b> The report takes the single
+   * division, over every hit in the run — see {@link #hitRankSum}. The folds of one split are
+   * disjoint, so a held-out entity is counted in exactly one of them and a total is a total rather
+   * than an overlap.
+   *
+   * <p><b>It refuses folds of two different settings</b>, which is the one transposition this
+   * arithmetic is exposed to: summing down the grid instead of across the folds would produce a
+   * table that looks entirely plausible and means nothing.
+   *
+   * @param folds one reading per fold, all of one setting, at least one
+   */
+  public static Reading summed(List<Reading> folds) {
+    Objects.requireNonNull(folds, "folds");
+    if (folds.isEmpty()) {
+      throw new IllegalArgumentException(
+          "no folds to sum: a row of the report is one setting over at least one fold");
+    }
+
+    Setting setting = folds.get(0).setting();
+    int pool = 0;
+    int heldOutInPool = 0;
+    int hits = 0;
+    int hitRankSum = 0;
+    int negativesOffered = 0;
+    int negativeRankSum = 0;
+    for (Reading fold : folds) {
+      if (!setting.equals(fold.setting())) {
+        throw new IllegalArgumentException(
+            "readings of two different settings cannot be summed: one row of the report is one"
+                + " setting read over every fold of the split");
+      }
+      pool += fold.pool();
+      heldOutInPool += fold.heldOutInPool();
+      hits += fold.hits();
+      hitRankSum += fold.hitRankSum();
+      negativesOffered += fold.negativesOffered();
+      negativeRankSum += fold.negativeRankSum();
+    }
+    return new Reading(
+        setting, pool, heldOutInPool, hits, hitRankSum, negativesOffered, negativeRankSum);
   }
 }
