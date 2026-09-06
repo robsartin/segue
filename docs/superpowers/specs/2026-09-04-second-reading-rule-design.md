@@ -218,3 +218,21 @@ implied. The rule is verified by its commit preceding the reading; a scorer move
 `RecommendCliTest`'s pin going red then green; a floor move by the full gate over every by-reference
 consumer plus the owner's `FloorReading`; the amendment by `AdrIndexTest`, `DocumentationLinksTest`
 and the guide's derived checks inside `./gradlew check`.
+
+## Note added 2026-09-06: why the second reading is taken now
+
+The rule above was written for a second reading triggered by the owner's ratings moving. The
+trigger that actually arrived is different, and it is recorded here before the reading exists so
+the rule's ordering property survives it: **the graph moved under unchanged ratings.** Issues #261
+and #265 (merged 2026-09-05) re-kinded roughly a tenth of the graph out of `CONCEPT` and, with it,
+out of the CONCEPT-gated hub demotion and hub exclusion the routes pass through. No `PERSON` or
+`GROUP` changed kind, so the candidate pool is the same; the ratings are the same, so the held-out
+set is the same. The second reading is therefore the same instrument on the same population with
+only the routes changed.
+
+Nothing in the rule changes. Every clause applies as written, and its outcome is still exactly one
+of the three. What this note adds is one **observation** the amendment must also carry, judged by
+nothing and moving nothing: the shipped setting's hit rate in this reading beside the first
+reading's, read from the two amendments side by side, and whether the difference is inside or
+outside clause 2's margin. That is the before-and-after on the kind changes; a difference outside
+the margin, in either direction, is a finding to file, not a constant to move.
