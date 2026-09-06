@@ -958,3 +958,112 @@ aggregates allow.
   relative links above, and `javadoc -Werror` inside `./gradlew check` — together with the ruling
   that applied the rule cell by cell, and a byte comparison of the block above against the owner's
   paste and against the previous amendment's block.
+
+
+**Amendment (2026-09-06, issue #270): the first reading by the folded harness, judged by the same
+rule, moved nothing — and it is the baseline every later folded reading is read against.**
+
+Nothing above is withdrawn and no decision above is edited, including the two amendments immediately
+above this one: their readings, their rulings and their observations stand exactly as written. No
+constant changed and no code changed. What changed is the instrument: issue #268 made the harness
+read every fold of its split, so every eligible entity is held out exactly once over a run and the
+hit counts a ruling rests on are the size five folds give rather than one
+([ADR 65](0065-an-offline-evaluation-harness-for-the-recommender.md)'s 2026-09-06 amendment).
+
+**The rule was fixed before the number existed, for the third time.** The rule is the one committed
+as `33a0dd63c5fca13efc5cfdd38ecac6dab67df4ba` and described in the amendment above; it was not
+changed. What was added before this reading was a dated note, committed and pushed as
+`e0e398b` on 2026-09-06 at 12:57, before the reading the owner pasted carrying a 13:57 timestamp,
+appended to `docs/superpowers/specs/2026-09-04-second-reading-rule-design.md` and saying how the
+rule reads a folded table: no clause changes; `in pool` and `hits` are entity counts, because each held-out
+entity is in exactly one fold, while `pool` and `negatives` are entity-fold counts, because a
+rated-down entity is offered once per fold; clause 2's void check is near-vacuous on totals rather
+than invalid, and is run and recorded anyway; and the single-fold readings above are not row for row
+comparable to this one, so the only cross-reading observation recorded is the shipped setting's own
+hit rate. The rule is the authority on what would have counted and is not restated here.
+
+**The reading.** One run of `./gradlew evaluate` on the owner's database on 2026-09-06, on the
+folded harness, quoted whole and unedited. Aggregates only, per
+[ADR 51](0051-what-an-adr-may-quote.md): every cell is a count, a one-decimal mean or a dash, every
+label is a column name or a `Scorer` spelling, and the split line names the folds.
+
+```
+# segue recommender evaluation — aggregates only: no labels, no ids, no notes, no ratings (ADR 51, ADR 63, ADR 65).
+# held out every 5 of 152 eligible entity(ies), in 5 fold(s): 152 held out over all folds, at least 121 left on the known-list in each.
+# top 25 per setting, over 16 setting(s).
+scorer               floor   pool  in pool  hits  mean rank  negatives  neg mean rank
+raw                      2  17104      152    15       10.0         15           17.5
+raw                      5   8154      152    15       10.0         15           17.5
+raw                      8   6195      115    15       10.0         15           17.5
+raw                     12   5140       93    15       10.0         15           17.5
+adamic-adar              2  17104      152    16        7.5         12           18.7
+adamic-adar              5   8154      152    16        7.5         12           18.7
+adamic-adar              8   6195      115    16        7.5         12           18.7
+adamic-adar             12   5140       93    16        7.5         12           18.7
+resource-allocation      2  17104      152    17       10.0         10            9.4
+resource-allocation      5   8154      152    17       10.0         10            9.4
+resource-allocation      8   6195      115    17       10.0         10            9.4
+resource-allocation     12   5140       93    17       10.0         10            9.4
+lift                     2  17104      152     0          -         10           15.0
+lift                     5   8154      152    40       12.6         70           11.5
+lift                     8   6195      115    37       11.4         53           12.4
+lift                    12   5140       93    20       11.9         33            9.0
+```
+
+**What the rule made of it.** Clause 2's void check was run first and, as the note expected, did not
+fire: the smallest `in pool` cell among the rows any clause compared is a total over five folds and
+sits far above the bound at which one entity is worth the whole margin. Clause 3(a) compared every
+non-shipped scorer's `hits` over its own `in pool` at the shipped floor with `lift`'s row there, and
+each is below `lift`'s rate, not merely short of the fifteen points. Clause 3(b) derived the
+dominance range from the table as the floors other than the shipped one at which `lift`'s `hits`
+cell is non-zero — floors eight and twelve — and at both, every challenger's rate is below `lift`'s;
+no two rates the rule compared are equal. No scorer moved, so clause 4 compared `lift`'s rate at
+every other floor with its rate at the shipped floor: floor eight is the closest and clears a little
+over a third of the margin, which clause 7 says is a stand; floor twelve is below the shipped
+floor's rate; and floor two, where `lift` records no hits, is the observation the 2026-09-04
+amendment already made. The `negatives` and `neg mean rank` cells were
+read for every row and, per clause 5, decided nothing. Outcome: the shipped setting stands.
+
+**The observation the note asked for.** The shipped setting's hit rate on this reading is within a
+single point of its rate on the two single-fold readings above, which were themselves identical,
+and the difference is inside clause 2's margin by nearly the whole of it. Two further things this
+table shows on its own, both observations and neither a ruling, and neither a comparison with any
+earlier row: every non-shipped scorer's `hits` cell is the same at all four floors while its
+`in pool` falls, so those scorers' rates rise with the floor — which the aggregates support, and
+which says nothing about whether the entities behind the counts are the same ones; and `lift`'s
+rate is above every challenger's at every floor in the dominance range.
+
+### What this does and does not establish
+
+- **It does not establish that the shipped setting is the best one.** It establishes that on this
+  reading, by this rule, nothing displaced it. ADR 65's first consequence is the governing one: no
+  row of that table means anything on its own.
+- **It establishes that the null result survives being read on every fold rather than one.** The
+  totals are over the whole eligible population and the ruling is the same by every clause. The
+  question the previous amendment left live — whether the instrument can tell these settings apart
+  — is narrowed rather than answered: the rule issues no affirmative win for the incumbent, `lift`
+  has no hits at all at the lowest floor, and the margin is what it was.
+- **It is the folded baseline.** Every later folded reading is compared to this block row by row; the
+  single-fold readings above are compared to each other and not to this one.
+- **The negatives condition was dropped rather than satisfied**, so nothing here is a finding about
+  the negatives column; the cells are quoted above, on the entity-fold scale, and decided nothing.
+- **It says nothing about the entities ingest cannot reach.** Rates are read over the reachable
+  (ADR 65's consequence), so this is not a verdict on expansion coverage.
+
+### Consequences of this amendment
+
+- **Nothing in the tool moves**, so no ranking, no deck and no output line changes.
+- **`Setting.GRID` and `HeldOut.EVERY` are unchanged**, so the next folded reading is comparable to
+  this one row by row.
+- **The next reading that can say something new needs the ratings to move, or a wider split.** The
+  instrument now reads every fold, and the graph has been reshaped under it; `HeldOut.EVERY` is
+  unchanged, so a wider split (a smaller interval) remains the other lever, and this amendment does
+  not take it. What has not changed across three readings is the taste layer. A fourth reading is
+  worth taking after the owner has rated through the client, and the rule above applies to it
+  unchanged.
+- **Nothing here is unit-testable, and that is said out loud rather than left implied.** No
+  behaviour changed, so there is no test to write and nothing to see red. The verification is the
+  full gate over an otherwise unchanged tree — `AdrIndexTest`, `DocumentationLinksTest` for the
+  relative links above, and `javadoc -Werror` inside `./gradlew check` — together with the ruling
+  that applied the rule cell by cell and a byte comparison of the block above against the owner's
+  paste.
