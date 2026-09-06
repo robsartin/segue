@@ -31,7 +31,7 @@ class ScoringTest {
     assertThat(reading.pool()).isEqualTo(4);
     assertThat(reading.heldOutInPool()).isEqualTo(1);
     assertThat(reading.hits()).isEqualTo(1);
-    assertThat(reading.meanHitRank()).hasValue(2.0);
+    assertThat(reading.hitRankSum()).as("one hit, at rank 2").isEqualTo(2);
   }
 
   @Test
@@ -43,9 +43,9 @@ class ScoringTest {
 
     assertThat(reading.heldOutInPool()).isEqualTo(1);
     assertThat(reading.hits()).isZero();
-    assertThat(reading.meanHitRank())
-        .as("a mean over nothing is absent, not zero — zero is a rank")
-        .isEmpty();
+    assertThat(reading.hitRankSum())
+        .as("a sum over nothing is zero, and it is the hit count beside it that prints the dash")
+        .isZero();
   }
 
   @Test
@@ -56,7 +56,9 @@ class ScoringTest {
     Reading reading = Scoring.read(sweep, SETTING, Set.of("Q0900401", "Q0900404"), Set.of(), 4);
 
     assertThat(reading.hits()).isEqualTo(2);
-    assertThat(reading.meanHitRank()).hasValue(2.5);
+    assertThat(reading.hitRankSum())
+        .as("ranks 1 and 4, which the report means to 2.5")
+        .isEqualTo(5);
   }
 
   @Test
@@ -67,7 +69,7 @@ class ScoringTest {
     Reading reading = Scoring.read(sweep, SETTING, Set.of(), Set.of("Q0900403"), 4);
 
     assertThat(reading.negativesOffered()).isEqualTo(1);
-    assertThat(reading.meanNegativeRank()).hasValue(3.0);
+    assertThat(reading.negativeRankSum()).isEqualTo(3);
   }
 
   @Test

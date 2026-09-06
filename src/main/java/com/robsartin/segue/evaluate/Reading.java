@@ -1,7 +1,6 @@
 package com.robsartin.segue.evaluate;
 
 import java.util.Objects;
-import java.util.OptionalDouble;
 
 /**
  * What one setting's sweep said about the held-out entities and the rated-down ones (ADR 65).
@@ -16,24 +15,24 @@ import java.util.OptionalDouble;
  *     hit count with no denominator says nothing: an entity below the floor and an entity ranked
  *     900th are different failures
  * @param hits how many held-out entities the top N names
- * @param meanHitRank the mean 1-based rank of those, absent when there are none. Absent rather than
- *     zero, because zero is a rank a reader would compare against
+ * @param hitRankSum the sum of those 1-based ranks — a sum rather than a mean, so that folds add
+ *     exactly (issue #268). The report divides it by {@link #hits} once, over every hit in the run.
+ *     Zero when there are none, which is why the report reads the count and not this field to
+ *     decide on the dash: no hits and a mean rank of zero are still different facts
  * @param negativesOffered how many entities rated at or below {@code KnownList.SUPPRESSION_RATING}
  *     the ranking would have offered in the top N with suppression off (ADR 50)
- * @param meanNegativeRank the mean 1-based rank of those, absent when there are none
+ * @param negativeRankSum the sum of those 1-based ranks, on the same terms
  */
 public record Reading(
     Setting setting,
     int pool,
     int heldOutInPool,
     int hits,
-    OptionalDouble meanHitRank,
+    int hitRankSum,
     int negativesOffered,
-    OptionalDouble meanNegativeRank) {
+    int negativeRankSum) {
 
   public Reading {
     Objects.requireNonNull(setting, "setting");
-    Objects.requireNonNull(meanHitRank, "meanHitRank");
-    Objects.requireNonNull(meanNegativeRank, "meanNegativeRank");
   }
 }

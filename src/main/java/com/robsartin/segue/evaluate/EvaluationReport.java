@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.OptionalDouble;
 
 /**
  * Readings in, one aligned block of text out. A pure function, and the only class here that decides
@@ -22,7 +21,9 @@ import java.util.OptionalDouble;
  * <p><b>A mean over nothing is a dash rather than zero.</b> No hits and a mean rank of zero are
  * different facts, and a table that renders them the same is a table that misleads. One decimal
  * rather than a whole number because the point of the block is comparing its rows: at a top of 25 a
- * mean of 8 and a mean of 8.4 are a real difference.
+ * mean of 8 and a mean of 8.4 are a real difference. The division happens here and nowhere else:
+ * {@link Reading} carries the rank sum and the count, so a row summed over the folds of the split
+ * is meaned over every hit in the run rather than over a mean of means (issue #268).
  *
  * <p><b>The widths are derived from the cells</b>, exactly as {@code CensusReport} derives its
  * column, so a five-figure pool moves the column rather than jutting out of it and no number here
@@ -88,13 +89,14 @@ public final class EvaluationReport {
         String.valueOf(reading.pool()),
         String.valueOf(reading.heldOutInPool()),
         String.valueOf(reading.hits()),
-        mean(reading.meanHitRank()),
+        mean(reading.hitRankSum(), reading.hits()),
         String.valueOf(reading.negativesOffered()),
-        mean(reading.meanNegativeRank()));
+        mean(reading.negativeRankSum(), reading.negativesOffered()));
   }
 
-  private static String mean(OptionalDouble value) {
-    return value.isPresent() ? String.format(Locale.ROOT, "%.1f", value.getAsDouble()) : NO_MEAN;
+  /** A mean over nothing is the dash rather than zero, and the count is what says which. */
+  private static String mean(int rankSum, int count) {
+    return count == 0 ? NO_MEAN : String.format(Locale.ROOT, "%.1f", (double) rankSum / count);
   }
 
   private static int[] widths(List<List<String>> rows) {

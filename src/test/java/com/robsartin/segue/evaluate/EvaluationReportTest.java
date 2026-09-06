@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.atIndex;
 
 import com.robsartin.segue.domain.Scorer;
 import java.util.List;
-import java.util.OptionalDouble;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -55,15 +54,7 @@ class EvaluationReportTest {
   @Test
   @DisplayName("every column lines up, because the widths come from the cells")
   void shouldAlignTheColumnsWhenACountIsWiderThanItsHeading() {
-    Reading wide =
-        new Reading(
-            new Setting(Scorer.RAW, 2),
-            123456,
-            40,
-            12,
-            OptionalDouble.of(9.25),
-            0,
-            OptionalDouble.empty());
+    Reading wide = new Reading(new Setting(Scorer.RAW, 2), 123456, 40, 12, 111, 0, 0);
 
     List<String> lines =
         EvaluationReport.lines(ELIGIBLE, HELD_OUT_COUNT, 25, List.of(wide, sparse()));
@@ -87,12 +78,10 @@ class EvaluationReportTest {
   }
 
   private static Reading reading() {
-    return new Reading(
-        new Setting(Scorer.LIFT, 5), 900, 40, 4, OptionalDouble.of(7.5), 2, OptionalDouble.of(4.0));
+    return new Reading(new Setting(Scorer.LIFT, 5), 900, 40, 4, 30, 2, 8);
   }
 
   private static Reading sparse() {
-    return new Reading(
-        new Setting(Scorer.RAW, 12), 40, 3, 0, OptionalDouble.empty(), 0, OptionalDouble.empty());
+    return new Reading(new Setting(Scorer.RAW, 12), 40, 3, 0, 0, 0, 0);
   }
 }
