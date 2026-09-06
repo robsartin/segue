@@ -1067,3 +1067,106 @@ rate is above every challenger's at every floor in the dominance range.
   relative links above, and `javadoc -Werror` inside `./gradlew check` — together with the ruling
   that applied the rule cell by cell and a byte comparison of the block above against the owner's
   paste.
+
+
+**Amendment (2026-09-06, issue #272): the first reading after the ratings moved, judged by the same
+rule, moved nothing — and it is the first reading with something to say about the shipped setting.**
+
+Nothing above is withdrawn and no decision above is edited, including the three amendments
+immediately above this one. No constant changed and no code changed. What changed is the taste
+layer: the owner rated a deck ([ADR 46](0046-the-rating-deck.md)) on 2026-09-06, and this is the
+trigger the rule was written for. How many ratings moved is recorded on issue #272 from the census's
+`taste` section, read before the harness ran; the graph, the grid, the fold count and every constant
+are as they were at the folded baseline above.
+
+**The rule was fixed before the number existed, for the fourth time.** The rule is the one committed
+as `33a0dd63c5fca13efc5cfdd38ecac6dab67df4ba` and described two amendments above; it was not
+changed. A dated note was committed and pushed as `3c2171e` on 2026-09-06 at 15:47, before the
+reading the owner pasted carrying a 16:11 timestamp, appended to
+`docs/superpowers/specs/2026-09-04-second-reading-rule-design.md`: no clause changes; the note on
+folded tables applies as written; the eligible population is what is rated at or above the
+promotion threshold and absent from the `--known` file, so a session of the deck changes it and every
+row's `in pool` is over the changed population; and exactly two comparisons to the folded baseline
+are recorded, as observations deciding nothing — the shipped setting's hit rate and the split line's
+eligible count. The rule is the authority on what would have counted and is not restated here.
+
+**The reading.** One run of `./gradlew evaluate` on the owner's database on 2026-09-06, on the
+folded harness, quoted whole and unedited. Aggregates only, per
+[ADR 51](0051-what-an-adr-may-quote.md): every cell is a count, a one-decimal mean or a dash, every
+label is a column name or a `Scorer` spelling, and the split line names the folds. `in pool` and
+`hits` count entities; `pool` and `negatives` count entity-folds.
+
+```
+# segue recommender evaluation — aggregates only: no labels, no ids, no notes, no ratings (ADR 51, ADR 63, ADR 65).
+# held out every 5 of 263 eligible entity(ies), in 5 fold(s): 263 held out over all folds, at least 210 left on the known-list in each.
+# top 25 per setting, over 16 setting(s).
+scorer               floor   pool  in pool  hits  mean rank  negatives  neg mean rank
+raw                      2  16281      263    24       10.7         18           18.9
+raw                      5   7260      263    25       11.2         18           18.9
+raw                      8   5668      192    25       11.2         18           18.9
+raw                     12   4747      149    24       10.7         18           18.9
+adamic-adar              2  16281      263    28        8.1         16           18.5
+adamic-adar              5   7260      263    28        8.1         16           18.5
+adamic-adar              8   5668      192    28        8.1         16           18.5
+adamic-adar             12   4747      149    28        8.1         16           18.5
+resource-allocation      2  16281      263    31        9.2         15            7.6
+resource-allocation      5   7260      263    31        9.2         15            7.6
+resource-allocation      8   5668      192    31        9.2         15            7.6
+resource-allocation     12   4747      149    31        9.2         15            7.6
+lift                     2  16281      263     0          -          7           18.6
+lift                     5   7260      263    42       11.0         68           12.2
+lift                     8   5668      192    40       12.1         48           11.8
+lift                    12   4747      149    25       11.8         35           10.9
+```
+
+**What the rule made of it.** Clause 2's void check was run first and did not fire. Clause 3(a)
+compared every non-shipped scorer's `hits` over its own `in pool` at the shipped floor with `lift`'s
+row there, and each is below `lift`'s rate. Clause 3(b) derived the dominance range as floors eight
+and twelve. At floor eight every challenger's rate is below `lift`'s. **At floor twelve two of them,
+`adamic-adar` and `resource-allocation`, are above it**, and the rule saw it and it changed nothing,
+because a scorer moves only on both conditions and neither cleared the first; the ruling records the
+comparison rather than swallowing it. No scorer moved, so clause 4 compared `lift`'s rate
+at every other floor with its rate at the shipped floor: floor eight is the closest and clears about
+a third of the margin, which clause 7 says is a stand; floor twelve is a hair above the shipped
+floor's rate; floor two is where `lift` records no hits. The
+`negatives` and `neg mean rank` cells were read for every row and, per clause 5, decided nothing.
+Outcome: the shipped setting stands.
+
+**The two observations the note asked for, and no third.** The eligible population grew by about
+three quarters against the folded baseline, which is the deck session's promotions entering it. The
+shipped setting's hit rate fell by about two thirds of the margin against the baseline, inside the
+margin. Both are read from two cells each and decide nothing. Why the rate fell is not read from
+this table: the population under every row changed, every fold was re-cut over it, and the
+aggregates do not say which entities the top twenty-five reached before and does not now. That
+question is issue #272's to carry, not this amendment's to answer.
+
+### What this does and does not establish
+
+- **It does not establish that the shipped setting is the best one.** It establishes that on this
+  reading, by this rule, nothing displaced it. ADR 65's first consequence is the governing one: no
+  row of that table means anything on its own.
+- **It records, without acting on it, that two challengers exceed the shipped scorer at the highest
+  floor in the grid.** The rule asks the scorer question at the shipped floor, where both are below
+  it, and clause 7 is why a comparison that clears nothing stands as a comparison.
+- **It does not establish why the shipped rate fell**, only that it did, and by how much of the
+  margin.
+- **The negatives condition was dropped rather than satisfied**, so nothing here is a finding about
+  the negatives column; the cells are quoted above, on the entity-fold scale, and decided nothing.
+- **It says nothing about the entities ingest cannot reach.** Rates are read over the reachable
+  (ADR 65's consequence), so this is not a verdict on expansion coverage.
+
+### Consequences of this amendment
+
+- **Nothing in the tool moves**, so no ranking, no deck and no output line changes.
+- **`Setting.GRID` and `HeldOut.EVERY` are unchanged.** The folded baseline above remains what the
+  amendment that recorded it says it is; this block stands beside it as the first reading over a
+  population the deck has moved.
+- **The next reading worth taking follows the next deck session**, and its question is whether the
+  shipped rate steadies or keeps falling as the deck's promotions accumulate. The rule above applies
+  to it unchanged.
+- **Nothing here is unit-testable, and that is said out loud rather than left implied.** No
+  behaviour changed, so there is no test to write and nothing to see red. The verification is the
+  full gate over an otherwise unchanged tree — `AdrIndexTest`, `DocumentationLinksTest` for the
+  relative links above, and `javadoc -Werror` inside `./gradlew check` — together with the ruling
+  that applied the rule cell by cell and a byte comparison of the block above against the owner's
+  paste.
