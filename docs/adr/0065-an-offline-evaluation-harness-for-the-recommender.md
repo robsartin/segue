@@ -296,7 +296,11 @@ ADR keeps the grid off it: the value of the tool is one comparable block, and a 
 stack of runs nobody could line up beside each other.
 
 **One row per setting, still sixteen rows.** Counts are totals over the folds; means are over every
-hit in the run. The arithmetic is exact rather than nearly so: `Reading` carries the *sum* of the
+hit in the run. Not every count totals the same kind of thing: `hits` and `heldOutInPool` total
+distinct entities, because the folds partition the held-out set, while `pool` and
+`negativesOffered` total entity-fold offers, because a rated-down entity is never held out and so
+is offered again in every fold — `Reading`'s javadoc carries the reasoning and is the authority on
+it. The arithmetic is exact rather than nearly so: `Reading` carries the *sum* of the
 ranks as an integer and the report divides once. Combining per-fold means instead would divide once
 per fold and multiply back, and a value a hair either side of a rounding boundary would render a
 different tenth — which an instrument whose whole value is that two readings diff row by row cannot

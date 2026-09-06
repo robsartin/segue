@@ -2161,8 +2161,8 @@ out, and why, is the protocol below. `recommend`'s dials — `Recommendations.MI
 its scorer, [ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)'s promotion threshold,
 [ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md)'s suppression boundary — have each been
 argued from a measurement, but never against a held-out set anybody agreed on beforehand. This is
-that set, read once per grid point so the settings can be compared against each other rather than
-against nothing.
+that set, read once per grid point per fold so the settings can be compared against each other
+rather than against nothing.
 
 ### The protocol
 
@@ -2185,12 +2185,12 @@ its counts totalled over the folds and its means taken over every hit in the run
 `HeldOut.EVERY` times the sweeps** — the replay and the sweep's memoised degrees are still paid once,
 but budget five times a single-fold run.
 
-**One sweep per setting, with suppression withheld.** Each setting's candidate pool is swept once
-with nothing suppressed, so the entities you rated down are in it and can be ranked — that ranking
-is the negative reading. The same sweep's result, with the suppressed candidates filtered back out,
-is the positive reading: excluding a candidate from a pool is purely subtractive and changes no
-surviving candidate's score or order, so filtering after the sweep reproduces the shipped ranking
-exactly, without paying for a second sweep.
+**One sweep per setting per fold, with suppression withheld.** Each setting's candidate pool is
+swept once per fold with nothing suppressed, so the entities you rated down are in it and can be
+ranked — that ranking is the negative reading. The same sweep's result, with the suppressed
+candidates filtered back out, is the positive reading: excluding a candidate from a pool is purely
+subtractive and changes no surviving candidate's score or order, so filtering after the sweep
+reproduces the shipped ranking exactly, without paying for a second sweep.
 
 **The grid is fixed, and no flag moves it.** `Setting.GRID` is the authority on what is swept and in
 what order. There is no `--scorer` and no `--min-degree` here — the value of this tool is one block
