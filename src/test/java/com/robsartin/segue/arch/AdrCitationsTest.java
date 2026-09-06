@@ -22,9 +22,9 @@ import org.junit.jupiter.api.Test;
  * <p>This repository squash-merges. A branch commit is rewritten into a single commit on {@code
  * main} and the original object is never in {@code main}'s history, so a hash an amendment cited as
  * evidence of ordering — "the rule was committed as … before the reading existed" — resolves to
- * nothing in a fresh clone. Read on 2026-09-06 against {@code main} at {@code 7e2651c}, seven of the
- * thirteen hashes then cited were unreachable, and one of the seven had never been pushed at all: it
- * is on GitHub nowhere and on {@code main} nowhere.
+ * nothing in a fresh clone. Read on 2026-09-06 against {@code main} at {@code 7e2651c}, seven of
+ * the thirteen hashes then cited were unreachable, and one of the seven had never been pushed at
+ * all: it is on GitHub nowhere and on {@code main} nowhere.
  *
  * <p><b>The list is (file, hash) pairs, and the assertion is exact in both directions.</b> A new
  * citation reds, which is the guard. A pair that is allowlisted but no longer in the tree reds too,
@@ -32,10 +32,10 @@ import org.junit.jupiter.api.Test;
  * citation is an edit somebody made on purpose — which is the rule ADR 1's 2026-09-06 amendment
  * states.
  *
- * <p><b>What is deliberately NOT checked</b>, so nobody reads more assurance into this class than it
- * gives: whether a hash still resolves anywhere. That needs the network and a remote, and the answer
- * changes without this repository changing. The amendment records the answer as it was read on
- * 2026-09-06; this class only controls what may be written.
+ * <p><b>What is deliberately NOT checked</b>, so nobody reads more assurance into this class than
+ * it gives: whether a hash still resolves anywhere. That needs the network and a remote, and the
+ * answer changes without this repository changing. The amendment records the answer as it was read
+ * on 2026-09-06; this class only controls what may be written.
  */
 class AdrCitationsTest {
 
@@ -170,9 +170,9 @@ class AdrCitationsTest {
   }
 
   /**
-   * Every {@code *.md} in {@code docs/adr}, the index included — a hash pasted into
-   * {@code README.md} is a citation too, which is why {@link AdrIndexTest}'s narrower filename
-   * filter is not reused here: it exists there to exclude the index.
+   * Every {@code *.md} in {@code docs/adr}, the index included — a hash pasted into {@code
+   * README.md} is a citation too, which is why {@link AdrIndexTest}'s narrower filename filter is
+   * not reused here: it exists there to exclude the index.
    */
   private static List<Citation> citedInTheAdrs() {
     List<Citation> found = new ArrayList<>();
