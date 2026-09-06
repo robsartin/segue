@@ -19,7 +19,8 @@ import java.util.function.Predicate;
 import java.util.function.ToDoubleFunction;
 
 /**
- * Split, sweep the grid, report — in that order, and one sweep per setting (ADR 65).
+ * Split, sweep the grid, report — in that order, every fold of the split, and one sweep per setting
+ * per fold (ADR 65, issue #268).
  *
  * <p><b>Lines go to a {@link Consumer} rather than to a logger of this class's own</b>, so the
  * whole report is observable from a test and this class has no logger to misuse — {@code
@@ -34,6 +35,14 @@ import java.util.function.ToDoubleFunction;
  * from that one map — the same discipline {@code RecommendCli} keeps when it resolves the merges
  * once and hands the result to both {@code regardFor} and {@code KnownList.promoted}. Two views of
  * the taste layer inside one run is how a split stops meaning what it says.
+ *
+ * <p><b>Every fold, and the counts are totals over them.</b> The split has {@link HeldOut#EVERY}
+ * folds and this runs all of them, so every eligible entity is held out exactly once and no fold's
+ * known-list is any smaller than a single fold's was (issue #268). One row per setting reaches the
+ * report — {@link Reading#summed} over that setting's folds — so the counts are totals and the
+ * means are over every hit in the run. It costs {@code HeldOut.EVERY} times the sweeps; the boot,
+ * the projection and the sweep's memoised degrees are still paid once, because none of them depends
+ * on the known-list.
  *
  * <p><b>The graph is booted once and one {@link CandidateSweep} is reused across the grid</b>, so
  * the replay is paid for once and the sweep's memoised degrees are paid for once. ADR 45's
@@ -80,27 +89,44 @@ public final class EvaluateRun {
     Objects.requireNonNull(lines, "lines");
 
     List<String> fromFile = QidList.read(known);
+    Set<String> onFile = new LinkedHashSet<>(fromFile);
     CandidateSweep sweep = new CandidateSweep(graph, recognitionInstitutionClass);
-    HeldOut split =
-        HeldOut.every(
-            HeldOut.EVERY, 0, ratings, new LinkedHashSet<>(fromFile), sweep::couldBeExplored);
 
-    List<String> knownList = KnownList.promoted(fromFile, split.ratingsWithout());
-    ToDoubleFunction<String> regard = Recommendations.regardFor(split.ratingsWithout());
-    Set<String> negatives = KnownList.suppressed(split.ratingsWithout());
-    Set<String> heldOut = Set.copyOf(split.heldOut());
-
-    List<Reading> readings = new ArrayList<>();
-    for (Setting setting : Setting.GRID) {
-      // Suppression withheld on purpose: merges.merged() and nothing else, so the rated-down
-      // entities are in the pool and can be ranked. Scoring filters them back out for the
-      // held-out reading.
-      Sweep swept =
-          sweep.over(knownList, merges.merged(), setting.scorer(), setting.floor(), regard);
-      readings.add(Scoring.read(swept, setting, heldOut, negatives, top));
+    List<List<Reading>> byFold = new ArrayList<>();
+    for (int setting = 0; setting < Setting.GRID.size(); setting++) {
+      byFold.add(new ArrayList<>());
     }
 
-    EvaluationReport.lines(split.eligible(), split.heldOut().size(), top, readings).forEach(lines);
+    int eligible = 0;
+    int heldOutTotal = 0;
+    int leastLeft = 0;
+    for (int fold = 0; fold < HeldOut.EVERY; fold++) {
+      HeldOut split = HeldOut.every(HeldOut.EVERY, fold, ratings, onFile, sweep::couldBeExplored);
+      List<String> knownList = KnownList.promoted(fromFile, split.ratingsWithout());
+      ToDoubleFunction<String> regard = Recommendations.regardFor(split.ratingsWithout());
+      Set<String> negatives = KnownList.suppressed(split.ratingsWithout());
+      Set<String> heldOut = Set.copyOf(split.heldOut());
+
+      // The same in every fold: the eligibility rule does not read the offset.
+      eligible = split.eligible();
+      heldOutTotal += split.heldOut().size();
+      int left = split.eligible() - split.heldOut().size();
+      leastLeft = fold == 0 ? left : Math.min(leastLeft, left);
+
+      for (int i = 0; i < Setting.GRID.size(); i++) {
+        Setting setting = Setting.GRID.get(i);
+        // Suppression withheld on purpose: merges.merged() and nothing else, so the rated-down
+        // entities are in the pool and can be ranked. Scoring filters them back out for the
+        // held-out reading.
+        Sweep swept =
+            sweep.over(knownList, merges.merged(), setting.scorer(), setting.floor(), regard);
+        byFold.get(i).add(Scoring.read(swept, setting, heldOut, negatives, top));
+      }
+    }
+
+    List<Reading> readings = byFold.stream().map(Reading::summed).toList();
+    EvaluationReport.lines(eligible, HeldOut.EVERY, heldOutTotal, leastLeft, top, readings)
+        .forEach(lines);
     return List.copyOf(readings);
   }
 }

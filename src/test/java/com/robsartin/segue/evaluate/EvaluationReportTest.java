@@ -14,22 +14,28 @@ class EvaluationReportTest {
   /** Anything qid-shaped at all, wherever it appears. */
   private static final Pattern A_QID = Pattern.compile("\\bQ\\d+\\b");
 
-  /** What the split reported: 10 eligible, 2 held out — the counts {@link #lines} now takes. */
+  /** What the split reported: 10 eligible, 5 folds, all 10 held out over them, 8 left at least. */
   private static final int ELIGIBLE = 10;
 
-  private static final int HELD_OUT_COUNT = 2;
+  private static final int FOLDS = 5;
+
+  private static final int HELD_OUT_TOTAL = 10;
+
+  private static final int LEAST_LEFT = 8;
 
   @Test
   @DisplayName("the header names the split and the top, and the table has one row per reading")
   void shouldStateTheSplitAndOneRowPerReadingWhenTheReportIsRendered() {
     List<String> lines =
-        EvaluationReport.lines(ELIGIBLE, HELD_OUT_COUNT, 25, List.of(reading(), sparse()));
+        EvaluationReport.lines(
+            ELIGIBLE, FOLDS, HELD_OUT_TOTAL, LEAST_LEFT, 25, List.of(reading(), sparse()));
 
     assertThat(lines.get(0)).isEqualTo(EvaluationReport.HEADER);
     assertThat(lines.get(1))
         .contains("10 eligible")
-        .contains("2 held out")
-        .contains("8 left on the known-list");
+        .contains("in 5 fold(s)")
+        .contains("10 held out over all folds")
+        .contains("at least 8 left on the known-list");
     assertThat(lines.get(2)).contains("top 25").contains("2 setting(s)");
     assertThat(lines).hasSize(3 + 1 + 2);
     assertThat(lines.get(3)).startsWith("scorer").contains("neg mean rank");
@@ -39,7 +45,8 @@ class EvaluationReportTest {
   @DisplayName("a mean is one decimal, and a mean over nothing is a literal dash")
   void shouldRenderADashWhenAMeanHasNothingToAverage() {
     List<String> lines =
-        EvaluationReport.lines(ELIGIBLE, HELD_OUT_COUNT, 25, List.of(reading(), sparse()));
+        EvaluationReport.lines(
+            ELIGIBLE, FOLDS, HELD_OUT_TOTAL, LEAST_LEFT, 25, List.of(reading(), sparse()));
 
     // Complete cells, not substrings — "7.50" would satisfy .contains("7.5") but must not satisfy
     // this. reading()'s columns are: scorer, floor, pool, in pool, hits, mean rank, negatives,
@@ -57,7 +64,8 @@ class EvaluationReportTest {
     Reading wide = new Reading(new Setting(Scorer.RAW, 2), 123456, 40, 12, 111, 0, 0);
 
     List<String> lines =
-        EvaluationReport.lines(ELIGIBLE, HELD_OUT_COUNT, 25, List.of(wide, sparse()));
+        EvaluationReport.lines(
+            ELIGIBLE, FOLDS, HELD_OUT_TOTAL, LEAST_LEFT, 25, List.of(wide, sparse()));
 
     assertThat(lines.get(3).length())
         .as("the heading row is padded to the same width as every body row")
@@ -68,7 +76,9 @@ class EvaluationReportTest {
   @Test
   @DisplayName("nothing qid-shaped reaches the report, whatever the split held")
   void shouldCarryNoIdentifierWhenTheSplitNamesEntities() {
-    assertThat(EvaluationReport.lines(ELIGIBLE, HELD_OUT_COUNT, 25, List.of(reading())))
+    assertThat(
+            EvaluationReport.lines(
+                ELIGIBLE, FOLDS, HELD_OUT_TOTAL, LEAST_LEFT, 25, List.of(reading())))
         .noneMatch(line -> A_QID.matcher(line).find());
   }
 

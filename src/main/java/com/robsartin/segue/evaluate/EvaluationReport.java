@@ -28,6 +28,13 @@ import java.util.Objects;
  * <p><b>The widths are derived from the cells</b>, exactly as {@code CensusReport} derives its
  * column, so a five-figure pool moves the column rather than jutting out of it and no number here
  * is a constant somebody has to keep.
+ *
+ * <p><b>The split line states folds</b> (issue #268). The folds partition the eligible population,
+ * so the total held out equals the denominator beside it and a reader can see the two agree; what
+ * each fold leaves on the known-list differs by one between folds, so the line states the smallest
+ * — the worst case for what the recommender had to learn from — rather than a number that is right
+ * for some folds only. The fold count is passed rather than read off {@code HeldOut.EVERY}, because
+ * how many folds were read is a fact about the run rather than an assumption this class may make.
  */
 public final class EvaluationReport {
 
@@ -50,14 +57,15 @@ public final class EvaluationReport {
   /**
    * Render the whole block, header included.
    *
-   * @param eligible how many entities could have been held out — the split's denominator, the only
-   *     fact about the split this method needs
-   * @param heldOutCount how many of those were actually held out
+   * @param eligible how many entities could have been held out — the split's denominator
+   * @param folds how many folds of that split were read
+   * @param heldOutTotal how many entities were held out over all of them
+   * @param leastLeft the fewest left on the known-list in any one fold
    * @param top how many candidates each setting was read over
    * @param readings one per setting, in the order they should be read
    */
   public static List<String> lines(
-      int eligible, int heldOutCount, int top, List<Reading> readings) {
+      int eligible, int folds, int heldOutTotal, int leastLeft, int top, List<Reading> readings) {
     Objects.requireNonNull(readings, "readings");
 
     List<List<String>> rows = new ArrayList<>();
@@ -72,11 +80,13 @@ public final class EvaluationReport {
             + HeldOut.EVERY
             + " of "
             + eligible
-            + " eligible entity(ies): "
-            + heldOutCount
-            + " held out, "
-            + (eligible - heldOutCount)
-            + " left on the known-list.");
+            + " eligible entity(ies), in "
+            + folds
+            + " fold(s): "
+            + heldOutTotal
+            + " held out over all folds, at least "
+            + leastLeft
+            + " left on the known-list in each.");
     rendered.add("# top " + top + " per setting, over " + readings.size() + " setting(s).");
     rows.forEach(row -> rendered.add(render(row, widths)));
     return List.copyOf(rendered);
