@@ -14,7 +14,7 @@ import java.util.Objects;
  * output safe to paste and what {@code EvaluationIsSafeToPasteTest} asserts — the same property
  * {@code CensusReport} has and ADR 63 argues for. No qid, label, note or rating value reaches this
  * method at all — and that is true of the whole signature, not just {@link Reading}'s shape: {@link
- * #lines} takes two plain counts and a top instead of the {@code HeldOut} that produced them,
+ * #lines} takes four plain counts and a top instead of the {@code HeldOut} that produced them,
  * deliberately narrower than the plan first drafted, because a type that carries a qid list and a
  * qid-keyed map has somewhere to put one even when this method never reads it.
  *

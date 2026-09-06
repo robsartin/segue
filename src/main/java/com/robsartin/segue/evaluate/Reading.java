@@ -9,19 +9,32 @@ import java.util.Objects;
  * <p>Every field is a count or a mean of ranks. Nothing here names an entity, which is what makes
  * the report over it safe to paste (ADR 51, ADR 63).
  *
+ * <p><b>A row summed over folds counts two different things at two different scales</b> (issue
+ * #268). {@link #hits} and {@link #heldOutInPool} count entities: the folds of one split partition
+ * the eligible population, so a held-out entity is counted in exactly one fold and the summed value
+ * is still a count of distinct entities. {@link #pool} and {@link #negativesOffered} count
+ * entity-fold offers instead, because a rated-down entity is never held out and so is offered again
+ * in every fold: one such entity summed over {@code HeldOut.EVERY} folds reads as {@code
+ * HeldOut.EVERY}, not one. The two pairs are not on the same scale, and a mean taken over one is
+ * not the same kind of mean as one taken over the other.
+ *
  * @param setting which scorer and which floor produced it
  * @param pool how many candidates cleared the floor, the rated-down ones removed — the pool the
- *     recommender would actually have ranked
+ *     recommender would actually have ranked, in one fold. Summed over folds this is an entity-fold
+ *     count rather than a pool anybody ranked (see above)
  * @param heldOutInPool how many held-out entities are in that pool at all, whatever their rank. A
  *     hit count with no denominator says nothing: an entity below the floor and an entity ranked
- *     900th are different failures
- * @param hits how many held-out entities the top N names
+ *     900th are different failures. Summed over folds this stays an entity count (see above)
+ * @param hits how many held-out entities the top N names. Summed over folds this stays an entity
+ *     count too: the folds partition the held-out set, so each entity is counted once
  * @param hitRankSum the sum of those 1-based ranks — a sum rather than a mean, so that folds add
  *     exactly (issue #268). The report divides it by {@link #hits} once, over every hit in the run.
  *     Zero when there are none, which is why the report reads the count and not this field to
  *     decide on the dash: no hits and a mean rank of zero are still different facts
  * @param negativesOffered how many entities rated at or below {@code KnownList.SUPPRESSION_RATING}
- *     the ranking would have offered in the top N with suppression off (ADR 50)
+ *     the ranking would have offered in the top N with suppression off (ADR 50), in one fold.
+ *     Summed over folds this is an entity-fold count (see above): a rated-down entity is never held
+ *     out, so it is offered once in every fold
  * @param negativeRankSum the sum of those 1-based ranks, on the same terms
  */
 public record Reading(

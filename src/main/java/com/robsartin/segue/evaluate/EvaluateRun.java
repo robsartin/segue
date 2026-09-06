@@ -92,9 +92,9 @@ public final class EvaluateRun {
     Set<String> onFile = new LinkedHashSet<>(fromFile);
     CandidateSweep sweep = new CandidateSweep(graph, recognitionInstitutionClass);
 
-    List<List<Reading>> byFold = new ArrayList<>();
-    for (int setting = 0; setting < Setting.GRID.size(); setting++) {
-      byFold.add(new ArrayList<>());
+    List<List<Reading>> bySetting = new ArrayList<>();
+    for (int settingIndex = 0; settingIndex < Setting.GRID.size(); settingIndex++) {
+      bySetting.add(new ArrayList<>());
     }
 
     int eligible = 0;
@@ -120,11 +120,11 @@ public final class EvaluateRun {
         // held-out reading.
         Sweep swept =
             sweep.over(knownList, merges.merged(), setting.scorer(), setting.floor(), regard);
-        byFold.get(i).add(Scoring.read(swept, setting, heldOut, negatives, top));
+        bySetting.get(i).add(Scoring.read(swept, setting, heldOut, negatives, top));
       }
     }
 
-    List<Reading> readings = byFold.stream().map(Reading::summed).toList();
+    List<Reading> readings = bySetting.stream().map(Reading::summed).toList();
     EvaluationReport.lines(eligible, HeldOut.EVERY, heldOutTotal, leastLeft, top, readings)
         .forEach(lines);
     return List.copyOf(readings);

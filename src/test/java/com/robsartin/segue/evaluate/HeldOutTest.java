@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.robsartin.segue.domain.KnownList;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,6 +46,21 @@ class HeldOutTest {
   private static Map<String, Integer> tenEligible() {
     Map<String, Integer> ratings = new LinkedHashMap<>();
     for (String qid : TEN) {
+      ratings.put(qid, KnownList.PROMOTION_RATING);
+    }
+    return ratings;
+  }
+
+  /**
+   * Seven eligible entities against an interval of five: not a multiple, so fold sizes are not all
+   * equal.
+   */
+  private static final List<String> SEVEN =
+      List.of("Q0900411", "Q0900412", "Q0900413", "Q0900414", "Q0900415", "Q0900416", "Q0900417");
+
+  private static Map<String, Integer> sevenEligible() {
+    Map<String, Integer> ratings = new LinkedHashMap<>();
+    for (String qid : SEVEN) {
       ratings.put(qid, KnownList.PROMOTION_RATING);
     }
     return ratings;
@@ -99,6 +115,33 @@ class HeldOutTest {
         .as("each eligible entity is held out in exactly one fold, and every one of them is")
         .doesNotHaveDuplicates()
         .containsExactlyInAnyOrderElementsOf(TEN);
+  }
+
+  @Test
+  @DisplayName(
+      "a population that is not a multiple of the interval still partitions, fold sizes differing"
+          + " by at most one")
+  void shouldPartitionThePopulationWhenItsSizeIsNotAMultipleOfTheInterval() {
+    List<String> overEveryFold = new ArrayList<>();
+    List<Integer> foldSizes = new ArrayList<>();
+
+    for (int fold = 0; fold < HeldOut.EVERY; fold++) {
+      HeldOut split =
+          HeldOut.every(HeldOut.EVERY, fold, sevenEligible(), NOTHING_ON_FILE, ANYTHING);
+      assertThat(split.eligible())
+          .as("fold %d: every fold shares one denominator, which is what lets the rows sum", fold)
+          .isEqualTo(7);
+      overEveryFold.addAll(split.heldOut());
+      foldSizes.add(split.heldOut().size());
+    }
+
+    assertThat(overEveryFold)
+        .as("each eligible entity is held out in exactly one fold, and every one of them is")
+        .doesNotHaveDuplicates()
+        .containsExactlyInAnyOrderElementsOf(SEVEN);
+    assertThat(Collections.max(foldSizes) - Collections.min(foldSizes))
+        .as("fold sizes differ by at most one, which is what leastLeft exists to state")
+        .isLessThanOrEqualTo(1);
   }
 
   @Test
