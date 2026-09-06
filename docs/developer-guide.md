@@ -414,9 +414,10 @@ has a different relationship with the data and a different fence to match.
   what comes out. It writes nothing, and `--db` is required
   ([ADR 63](adr/0063-a-read-only-census-of-the-graph.md)).
 - **`evaluate` reaches `sqlite`, `tinker`, `ingest`, `wikidata`, `support` and `recommend`, and is
-  the only dev-side tool that measures another one.** It replays the log once, hides a deterministic
-  fifth of what you rated highly, and runs `recommend`'s own `CandidateSweep` from what is left,
-  once per setting on a fixed grid — the third dependency between dev tools, after `rate → recommend`
+  the only dev-side tool that measures another one.** It replays the log once, splits what you rated
+  highly into deterministic fifths, and for each fifth in turn hides it and runs `recommend`'s own
+  `CandidateSweep` from what is left, once per setting on a fixed grid, summing the folds into one
+  row per setting — the third dependency between dev tools, after `rate → recommend`
   and `census → export`, and deliberate for the same reason: a harness with a sweep of its own would
   answer a question about itself. It writes nothing, and `--db` is required ([ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md)).
 

@@ -24,8 +24,8 @@ import java.util.Set;
  * evidence, and no other candidate's evidence is built from it, so no survivor's score or relative
  * order moves. That is what ADR 50 measured on the real graph, and {@code
  * SuppressionIsPurelySubtractiveTest} pins it here against a real second sweep — without which this
- * paragraph would be reasoning rather than a guarantee, and sixteen sweeps would have to be
- * thirty-two.
+ * paragraph would be reasoning rather than a guarantee, and every sweep the run makes — one per
+ * setting per fold — would have to be made twice.
  *
  * <p><b>It reports rank sums rather than rank means</b> (issue #268). One row of the report is a
  * sum over the folds of the split, and sums add exactly where means do not: combining per-fold
