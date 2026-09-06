@@ -270,3 +270,64 @@ Landing either half alone puts the build through a red it cannot be argued out o
   identifier carries [ADR 58](0058-stand-in-identifiers-cannot-be-allocatable.md)'s leading zero.
   What the tool says about the owner's own taste layer is a reading he takes and chooses whether to
   publish — which is the whole reason `--db` is typed per invocation.
+
+**Amendment (2026-09-06, issue #268): the split is read on every fold, not on one.**
+
+Nothing above is withdrawn and no decision above is edited. The eligible population, the interval,
+the grid, the command line, the fences and the output contract's shape are exactly as decided. What
+changes is how many times the split is taken.
+
+**What was wrong with reading one fold.** `HeldOut.every` held out the eligible entities at positions
+`0, EVERY, 2·EVERY, …` and the harness read that one slice, so four fifths of the eligible population
+was never held out and every hit count was the size a single fold gives.
+[ADR 45](0045-recommend-by-normalised-lift-with-routes.md)'s two readings both ended on the same
+sentence: a null result on that split cannot tell "the setting is right" from "the split is too small
+to say".
+
+**The change.** `HeldOut.every` takes an offset as well as an interval; fold *k* holds out positions
+`k, k + interval, …`, and `HeldOut` is the authority on it. `EvaluateRun` runs folds `0 … EVERY − 1`,
+one sweep per setting per fold. Every eligible entity is held out exactly once over a run, and every
+fold leaves a known-list the size a single fold left — which is why this rather than a wider split:
+holding out more would shrink the known-list the recommender learns from, and that is an input to the
+thing being measured. Fold zero is the old behaviour unchanged.
+
+**The number of folds is `HeldOut.EVERY`, and it is not on the command line**, for the reason this
+ADR keeps the grid off it: the value of the tool is one comparable block, and a flag would produce a
+stack of runs nobody could line up beside each other.
+
+**One row per setting, still sixteen rows.** Counts are totals over the folds; means are over every
+hit in the run. The arithmetic is exact rather than nearly so: `Reading` carries the *sum* of the
+ranks as an integer and the report divides once. Combining per-fold means instead would divide once
+per fold and multiply back, and a value a hair either side of a rounding boundary would render a
+different tenth — which an instrument whose whole value is that two readings diff row by row cannot
+afford. The rendered contract is unchanged: every cell is still an integer, a fixed one-decimal or
+the dash, and a mean over nothing is still the dash, now because its count is zero.
+`EvaluationReport.lines` takes five plain counts where it took three, and the type-level fence above
+is untouched by that: every one is an `int`, none is a `HeldOut`, and there is still nowhere in the
+signature to put an identifier. The split line states the folds; `EvaluationReport` is the authority
+on its text.
+
+**What it costs.** `HeldOut.EVERY` times the sweeps — five times today's run. The replay, the
+projection and the sweep's memoised degrees are still paid once, because none of them depends on the
+known-list. There is no wall-clock assertion anywhere in the harness and none was added.
+
+**What it does not change.** Not the rule that judges a reading, not the grid, not the eligible
+population, not the interval, not the promotion threshold, not the suppression boundary, not the
+scorer default, not the floor. No line of `recommend`'s output moves.
+
+**The readings already on the record stay exactly as they are.** ADR 45's amendments of 2026-09-04
+and 2026-09-06 quote two blocks taken by the unfolded harness. They remain comparable **to each
+other** — same instrument, same split — and are **not** comparable row for row to a folded reading:
+every count in a folded row is a total over five folds and every mean is taken over a different
+population of hits. Neither block is edited, and no figure from either is restated here.
+
+Alternatives rejected: lowering `HeldOut.EVERY` (shrinks the known-list, so two things move at once);
+a `--folds` flag (the grid's reason, restated); a fold column or sixteen rows per fold (eighty rows of
+five-times-smaller counts is a less legible table saying less); and weighting the per-fold means
+(rounds twice, and the second rounding can move a rendered tenth).
+
+**Nothing here is unit-testable, and that is said out loud rather than left implied.** This entry
+records a decision whose code landed with its own tests — the partition of the folds, the sum over
+them and both of that sum's guards, each with a planted control. The verification of the *document*
+is the full gate over an otherwise unchanged tree: `AdrIndexTest`, `DocumentationLinksTest` for the
+relative link above, and `javadoc -Werror` inside `./gradlew check`.
