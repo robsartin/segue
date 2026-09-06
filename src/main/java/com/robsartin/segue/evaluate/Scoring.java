@@ -6,7 +6,6 @@ import com.robsartin.segue.recommend.Sweep;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.OptionalDouble;
 import java.util.Set;
 
 /**
@@ -25,8 +24,14 @@ import java.util.Set;
  * evidence, and no other candidate's evidence is built from it, so no survivor's score or relative
  * order moves. That is what ADR 50 measured on the real graph, and {@code
  * SuppressionIsPurelySubtractiveTest} pins it here against a real second sweep — without which this
- * paragraph would be reasoning rather than a guarantee, and sixteen sweeps would have to be
- * thirty-two.
+ * paragraph would be reasoning rather than a guarantee, and every sweep the run makes — one per
+ * setting per fold — would have to be made twice.
+ *
+ * <p><b>It reports rank sums rather than rank means</b> (issue #268). One row of the report is a
+ * sum over the folds of the split, and sums add exactly where means do not: combining per-fold
+ * means would divide once per fold and multiply back, and a value a hair either side of a rounding
+ * boundary would render a different tenth. {@code EvaluationReport} divides, once, over every hit
+ * in the run.
  */
 public final class Scoring {
 
@@ -59,9 +64,9 @@ public final class Scoring {
         shipped.size(),
         (int) shipped.stream().filter(in(heldOut)).count(),
         hitRanks.size(),
-        mean(hitRanks),
+        sum(hitRanks),
         negativeRanks.size(),
-        mean(negativeRanks));
+        sum(negativeRanks));
   }
 
   private static java.util.function.Predicate<Recommendation> in(Set<String> wanted) {
@@ -78,7 +83,7 @@ public final class Scoring {
     return List.copyOf(ranks);
   }
 
-  private static OptionalDouble mean(List<Integer> ranks) {
-    return ranks.stream().mapToInt(Integer::intValue).average();
+  private static int sum(List<Integer> ranks) {
+    return ranks.stream().mapToInt(Integer::intValue).sum();
   }
 }

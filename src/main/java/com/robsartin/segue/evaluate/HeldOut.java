@@ -28,6 +28,14 @@ import java.util.function.Predicate;
  * random split would be reproducible only against a seed somebody remembered to record, and ADR
  * 57's finding is that a number nobody re-derives stops being re-derived.
  *
+ * <p><b>Every offset of one interval is a fold, and the harness reads all of them</b> (issue #268).
+ * Fold {@code k} holds out positions {@code k, k + interval, …}, so the folds partition the
+ * eligible population — each entity held out exactly once over a run — while every fold leaves a
+ * known-list of the same size a single fold leaves, to within the one entity by which fold sizes
+ * differ. Widening the split instead would have shrunk that known-list, which is an input to the
+ * thing being measured. The eligibility rule does not read the offset, so every fold reports the
+ * same {@link #eligible}.
+ *
  * <p><b>A rating at or below {@link KnownList#SUPPRESSION_RATING} is never held out</b>: it is the
  * negative signal the harness reads separately, and it stays in {@link #ratingsWithout} so {@code
  * KnownList.suppressed} can still name it.
@@ -51,13 +59,18 @@ public record HeldOut(List<String> heldOut, Map<String, Integer> ratingsWithout,
   /**
    * Split one ratings map.
    *
-   * @param interval hold out every {@code interval}-th eligible entity, counting from the first
+   * @param interval hold out every {@code interval}-th eligible entity
+   * @param offset which fold to take: hold out the eligible entities at positions {@code offset,
+   *     offset + interval, …}. Fold zero is the split as it was before folding; the harness reads
+   *     every fold of the interval, so each eligible entity is held out exactly once over a run
+   *     (issue #268).
    * @param ratings the note-free bulk read, already resolved through {@code Equivalences.resolve}
    * @param onFile the qids the {@code --known} file names
    * @param couldBeOffered whether the sweep could return this entity as a candidate at all
    */
   public static HeldOut every(
       int interval,
+      int offset,
       Map<String, Integer> ratings,
       Set<String> onFile,
       Predicate<String> couldBeOffered) {
@@ -70,6 +83,15 @@ public record HeldOut(List<String> heldOut, Map<String, Integer> ratingsWithout,
               + interval
               + " would leave nothing to recommend from: the interval must be at least 2");
     }
+    if (offset < 0 || offset >= interval) {
+      throw new IllegalArgumentException(
+          "fold "
+              + offset
+              + " is not one of the "
+              + interval
+              + " folds of this split: the offset is at least 0 and less than the interval, and a"
+              + " fold outside that range would duplicate one inside it");
+    }
 
     List<String> eligible = new ArrayList<>();
     for (String qid : new TreeSet<>(ratings.keySet())) {
@@ -81,7 +103,7 @@ public record HeldOut(List<String> heldOut, Map<String, Integer> ratingsWithout,
     }
 
     List<String> heldOut = new ArrayList<>();
-    for (int i = 0; i < eligible.size(); i += interval) {
+    for (int i = offset; i < eligible.size(); i += interval) {
       heldOut.add(eligible.get(i));
     }
 

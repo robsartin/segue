@@ -78,12 +78,13 @@ class SuppressionIsPurelySubtractiveTest {
       assertThat(reading.pool())
           .as("the pool the report states is the one the recommender would have ranked")
           .isEqualTo(2);
-      assertThat(reading.meanHitRank())
-          .as("rank 2 of the two survivors, not rank 3 of the three the sweep returned")
-          .hasValue(2.0);
-      assertThat(reading.meanNegativeRank())
+      assertThat(reading.hitRankSum())
+          .as(
+              "one hit, at rank 2 of the two survivors — not rank 3 of the three the sweep returned")
+          .isEqualTo(2);
+      assertThat(reading.negativeRankSum())
           .as("the rated-down entity is still read over the whole pool — that is its whole point")
-          .hasValue(1.0);
+          .isEqualTo(1);
     }
   }
 

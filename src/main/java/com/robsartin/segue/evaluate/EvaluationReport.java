@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.OptionalDouble;
 
 /**
  * Readings in, one aligned block of text out. A pure function, and the only class here that decides
@@ -15,18 +14,27 @@ import java.util.OptionalDouble;
  * output safe to paste and what {@code EvaluationIsSafeToPasteTest} asserts — the same property
  * {@code CensusReport} has and ADR 63 argues for. No qid, label, note or rating value reaches this
  * method at all — and that is true of the whole signature, not just {@link Reading}'s shape: {@link
- * #lines} takes two plain counts and a top instead of the {@code HeldOut} that produced them,
+ * #lines} takes four plain counts and a top instead of the {@code HeldOut} that produced them,
  * deliberately narrower than the plan first drafted, because a type that carries a qid list and a
  * qid-keyed map has somewhere to put one even when this method never reads it.
  *
  * <p><b>A mean over nothing is a dash rather than zero.</b> No hits and a mean rank of zero are
  * different facts, and a table that renders them the same is a table that misleads. One decimal
  * rather than a whole number because the point of the block is comparing its rows: at a top of 25 a
- * mean of 8 and a mean of 8.4 are a real difference.
+ * mean of 8 and a mean of 8.4 are a real difference. The division happens here and nowhere else:
+ * {@link Reading} carries the rank sum and the count, so a row summed over the folds of the split
+ * is meaned over every hit in the run rather than over a mean of means (issue #268).
  *
  * <p><b>The widths are derived from the cells</b>, exactly as {@code CensusReport} derives its
  * column, so a five-figure pool moves the column rather than jutting out of it and no number here
  * is a constant somebody has to keep.
+ *
+ * <p><b>The split line states folds</b> (issue #268). The folds partition the eligible population,
+ * so the total held out equals the denominator beside it and a reader can see the two agree; what
+ * each fold leaves on the known-list differs by one between folds, so the line states the smallest
+ * — the worst case for what the recommender had to learn from — rather than a number that is right
+ * for some folds only. The fold count is passed rather than read off {@code HeldOut.EVERY}, because
+ * how many folds were read is a fact about the run rather than an assumption this class may make.
  */
 public final class EvaluationReport {
 
@@ -49,14 +57,15 @@ public final class EvaluationReport {
   /**
    * Render the whole block, header included.
    *
-   * @param eligible how many entities could have been held out — the split's denominator, the only
-   *     fact about the split this method needs
-   * @param heldOutCount how many of those were actually held out
+   * @param eligible how many entities could have been held out — the split's denominator
+   * @param folds how many folds of that split were read
+   * @param heldOutTotal how many entities were held out over all of them
+   * @param leastLeft the fewest left on the known-list in any one fold
    * @param top how many candidates each setting was read over
    * @param readings one per setting, in the order they should be read
    */
   public static List<String> lines(
-      int eligible, int heldOutCount, int top, List<Reading> readings) {
+      int eligible, int folds, int heldOutTotal, int leastLeft, int top, List<Reading> readings) {
     Objects.requireNonNull(readings, "readings");
 
     List<List<String>> rows = new ArrayList<>();
@@ -71,11 +80,13 @@ public final class EvaluationReport {
             + HeldOut.EVERY
             + " of "
             + eligible
-            + " eligible entity(ies): "
-            + heldOutCount
-            + " held out, "
-            + (eligible - heldOutCount)
-            + " left on the known-list.");
+            + " eligible entity(ies), in "
+            + folds
+            + " fold(s): "
+            + heldOutTotal
+            + " held out over all folds, at least "
+            + leastLeft
+            + " left on the known-list in each.");
     rendered.add("# top " + top + " per setting, over " + readings.size() + " setting(s).");
     rows.forEach(row -> rendered.add(render(row, widths)));
     return List.copyOf(rendered);
@@ -88,13 +99,14 @@ public final class EvaluationReport {
         String.valueOf(reading.pool()),
         String.valueOf(reading.heldOutInPool()),
         String.valueOf(reading.hits()),
-        mean(reading.meanHitRank()),
+        mean(reading.hitRankSum(), reading.hits()),
         String.valueOf(reading.negativesOffered()),
-        mean(reading.meanNegativeRank()));
+        mean(reading.negativeRankSum(), reading.negativesOffered()));
   }
 
-  private static String mean(OptionalDouble value) {
-    return value.isPresent() ? String.format(Locale.ROOT, "%.1f", value.getAsDouble()) : NO_MEAN;
+  /** A mean over nothing is the dash rather than zero, and the count is what says which. */
+  private static String mean(int rankSum, int count) {
+    return count == 0 ? NO_MEAN : String.format(Locale.ROOT, "%.1f", (double) rankSum / count);
   }
 
   private static int[] widths(List<List<String>> rows) {

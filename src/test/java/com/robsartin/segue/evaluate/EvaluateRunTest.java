@@ -46,8 +46,38 @@ class EvaluateRunTest {
           .as("the one eligible entity was held out, so it is a candidate the sweep can return")
           .anyMatch(reading -> reading.hits() == 1);
       assertThat(readings)
-          .as("the rated-down entity is in the pool, because suppression is withheld")
-          .anyMatch(reading -> reading.negativesOffered() == 1);
+          .as("the rated-down entity is in the pool in every fold, because suppression is withheld")
+          .anyMatch(reading -> reading.negativesOffered() == HeldOut.EVERY);
+    }
+  }
+
+  @Test
+  @DisplayName("every fold is read, so an entity held out only in a later fold is a hit too")
+  void shouldCountAHitFromEveryFoldWhenTwoEligibleEntitiesFallInDifferentFolds()
+      throws IOException {
+    try (TinkerGraphStore graph = InventedEvaluation.graph()) {
+      List<String> lines = new ArrayList<>();
+
+      List<Reading> readings =
+          new EvaluateRun(
+                  graph,
+                  qid -> false,
+                  Map.of(
+                      InventedEvaluation.STRANGER, 5,
+                      InventedEvaluation.HIDDEN, 5,
+                      InventedEvaluation.REJECTED, 1),
+                  Equivalences.NONE)
+              .run(knownList(), 25, lines::add);
+
+      assertThat(lines.get(1))
+          .as("two eligible entities, one in fold zero and one in fold one, and both are read")
+          .contains("2 eligible entity(ies)")
+          .contains("in " + HeldOut.EVERY + " fold(s)")
+          .contains("2 held out over all folds")
+          .contains("at least 1 left on the known-list");
+      assertThat(readings)
+          .as("one hit in fold zero and one in fold one — a single-fold run reports one")
+          .anyMatch(reading -> reading.hits() == 2);
     }
   }
 
