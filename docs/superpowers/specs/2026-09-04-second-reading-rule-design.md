@@ -259,3 +259,22 @@ population, not about the instrument.
 **The two single-fold readings are not row-for-row comparable to this one.** The observation the
 amendment records, deciding nothing, is the shipped setting's hit rate here beside its rate in each
 earlier reading. This reading is the folded baseline every later folded reading is compared to.
+
+## Note added 2026-09-06, before the reading taken after the ratings moved (issue #272)
+
+This is the trigger the rule above was written for: the owner's ratings moved, in a session of the
+rating deck (ADR 46) on 2026-09-06. The note is committed before the reading exists, so the rule's
+ordering property survives a fourth time.
+
+**No clause changes**, and the note above on reading a folded table applies as written.
+
+**What moved is the taste layer, and with it the population.** The eligible population is what is
+rated at or above the promotion threshold and absent from the `--known` file, so a session of the
+deck changes it; the split, the folds and every row's `in pool` are over that changed population.
+The graph, the grid, the fold count and every constant are as they were at the folded baseline.
+
+**Comparisons to the folded baseline are observations, not rulings.** The amendment records the
+shipped setting's hit rate here beside its rate on the baseline, and the split line's eligible count
+beside the baseline's, as the measure of how far the taste layer moved. Neither decides anything, and
+non-shipped rows are still not compared across readings. How many ratings moved is read from the
+census's `taste` section before the harness runs and recorded on the issue, not in the amendment.
