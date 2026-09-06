@@ -236,3 +236,26 @@ nothing and moving nothing: the shipped setting's hit rate in this reading besid
 reading's, read from the two amendments side by side, and whether the difference is inside or
 outside clause 2's margin. That is the before-and-after on the kind changes; a difference outside
 the margin, in either direction, is a finding to file, not a constant to move.
+
+## Note added 2026-09-06, before the first folded reading (issue #270)
+
+Issue #268 made the harness read every fold of its split, and this note is committed before the first
+reading that instrument produces exists, so the rule's ordering property survives a third time.
+
+**No clause changes.** Every comparison is still a rate over the row's own `in pool`; the margin is
+still fifteen points; the dominance range is still derived from the floors at which the shipped scorer
+has hits; the negatives decide nothing; at most one constant moves; a near miss stands.
+
+**What a summed row counts.** `in pool` and `hits` are entity counts, because each held-out entity
+is in exactly one fold. `pool` and `negatives` are entity-fold counts, because a rated-down entity
+is offered once per fold. The rule reads only the first two. The amendment quotes every cell and says
+which scale each column is on.
+
+**Clause 2's void check is near-vacuous here, not invalid.** It tests the smallest `in pool` among
+the rows a clause compares, and on a folded table that cell is a total over the folds. The check is
+run and recorded and is expected not to fire; if it does, that is a finding about the eligible
+population, not about the instrument.
+
+**The two single-fold readings are not row-for-row comparable to this one.** The observation the
+amendment records, deciding nothing, is the shipped setting's hit rate here beside its rate in each
+earlier reading. This reading is the folded baseline every later folded reading is compared to.
