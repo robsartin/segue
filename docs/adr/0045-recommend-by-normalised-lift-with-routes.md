@@ -835,3 +835,126 @@ is for the issue that takes the next reading to weigh.
   full gate over an otherwise unchanged tree — `AdrIndexTest` for the index this amendment does not
   touch, `DocumentationLinksTest` for the four relative links above, and `javadoc -Werror` inside
   `./gradlew check` — together with the ruling that applied the rule cell by cell.
+
+
+**Amendment (2026-09-06, issue #245): a second reading, taken after the graph moved under unchanged
+ratings and judged by a rule written to answer the first, moved nothing either — and it was the
+first reading, cell for cell.**
+
+Nothing above is withdrawn and no decision above is edited, including the amendment immediately
+above this one: that entry's reading, its ruling and its four observations stand exactly as written.
+No constant changed and no code changed. What changed is that the shipped scorer and floor have now
+been measured twice, the second time by a rule built to answer the first reading's own criticisms of
+itself, and on a graph whose routes had been reshaped in between.
+
+**The rule was fixed before the number existed, and it was written to answer the previous reading
+rather than this one.** Commit `33a0dd63c5fca13efc5cfdd38ecac6dab67df4ba`, authored 2026-09-04,
+committed `docs/superpowers/specs/2026-09-04-second-reading-rule-design.md`, which states the
+decision rule in full — rates over the `in pool` cell, the margin that replaced a hit count and the
+arithmetic that voids it on a split too small to carry it, the dominance range that excludes the
+floors where the shipped scorer has no hits, the dropped negatives clause and why it was dropped, the
+one-constant limit, and the clause that says a near miss stands. The same rule text was first pushed to the
+remote on the evening of 2026-09-04 as commit `74e757f`; on the morning of 2026-09-06 it was rebased
+onto main, which is the commit named above and carries that authorship date, and pushed again
+together with a dated note appended to the same document, before the owner ran the harness later
+that morning. The note changes no clause; it records that the
+trigger for this reading was not the one the rule anticipated. The rule was written for a reading
+taken after the owner's ratings moved. The ratings did not move. The graph did: issues #261 and #265
+(merged 2026-09-05) re-kinded roughly a tenth of the graph's nodes out of `CONCEPT` and therefore out
+of the `CONCEPT`-gated hub demotion in `PathRanking` and the hub exclusion in `CandidateSweep`. No
+`PERSON` or `GROUP` changed kind, so the candidate pool is the same; the ratings are the same, so the
+held-out set is the same. This reading is the same instrument on the same population with only the
+routes changed, and the note asked that its result be set beside the first as an observation. The
+rule is the authority on what would have counted and is not restated here.
+
+**The reading.** One run of `./gradlew evaluate` ([ADR 65](0065-an-offline-evaluation-harness-for-the-recommender.md))
+on the owner's database on 2026-09-06, quoted whole and unedited. Aggregates only, per
+[ADR 51](0051-what-an-adr-may-quote.md): every cell is a count, a one-decimal mean or a dash, and
+every label is a column name or a `Scorer` spelling.
+
+```
+# segue recommender evaluation — aggregates only: no labels, no ids, no notes, no ratings (ADR 51, ADR 63, ADR 65).
+# held out every 5 of 152 eligible entity(ies): 31 held out, 121 left on the known-list.
+# top 25 per setting, over 16 setting(s).
+scorer               floor  pool  in pool  hits  mean rank  negatives  neg mean rank
+raw                      2  3426       31     3        9.3          3           18.0
+raw                      5  1634       31     3        9.3          3           18.0
+raw                      8  1239       22     3        9.3          3           18.0
+raw                     12  1030       19     3        9.3          3           18.0
+adamic-adar              2  3426       31     3        4.0          2           18.5
+adamic-adar              5  1634       31     3        4.0          2           18.5
+adamic-adar              8  1239       22     3        4.0          2           18.5
+adamic-adar             12  1030       19     3        4.0          2           18.5
+resource-allocation      2  3426       31     4       10.3          2            9.5
+resource-allocation      5  1634       31     4       10.3          2            9.5
+resource-allocation      8  1239       22     4       10.3          2            9.5
+resource-allocation     12  1030       19     4       10.3          2            9.5
+lift                     2  3426       31     0          -          2           13.5
+lift                     5  1634       31     8       11.4         14           12.2
+lift                     8  1239       22     6       10.7         10           11.1
+lift                    12  1030       19     4       13.8          6            8.2
+```
+
+**What the rule made of it.** Clause 2's void check was run first and did not fire: the smallest
+`in pool` cell among the rows any clause compared is above the bound at which one entity is worth
+the whole margin. Clause 3(a) compared every non-shipped scorer's `hits` over its own `in pool` at
+the shipped floor with `lift`'s row there, and each is below `lift`'s rate, not merely short of the
+fifteen points. Clause 3(b) derived the dominance range from the table as the floors other than the
+shipped one at which `lift`'s `hits` cell is non-zero — floors eight and twelve — and every
+challenger fails there as well; `resource-allocation`'s rate at floor twelve exactly equals `lift`'s,
+which is a tie, and clause 7 is why a tie stands. No scorer moved, so clause 4 compared `lift`'s rate
+at every other floor with its rate at the shipped floor: floor eight is the closest and is short of
+the margin by an order of magnitude, and floor two, where `lift` records no hits, is the observation
+the previous amendment already made. The `negatives` and `neg mean rank` cells were read for every
+row and, per clause 5, decided nothing. Outcome: the shipped setting stands.
+
+**The observation the note asked for.** The block above is identical, byte for byte, to the block in
+the amendment immediately above this one: every `pool`, `in pool`, `hits`, `mean rank`, `negatives`
+and `neg mean rank` cell in all sixteen rows, and the three header lines. The shipped setting's hit
+rate therefore differs between the two readings by nothing at all, inside clause 2's margin by the
+whole of it. Re-kinding a tenth of the graph changed no aggregate the harness reports, at any setting.
+That is an aggregate statement and no more: a held-out entity swapped for another at the same rank
+inside one list would leave every cell as it is, and ADR 65's first consequence governs. As
+explanation, cited rather than restated: the hub demotion that the re-kinded nodes left is gated on
+`PathRanking.HUB_DEGREE`, an absolute in-graph degree, and the census readings on issues #261 and
+#265 show that no concert tour on this graph reaches it — the `EVENT` maximum did not move when the
+tours joined it — so ADR 42's consequence that two acts sharing only a tour can now route to each
+other is, on this graph today, a property of the code and not yet of any route. Of the editions the
+census says only that they were the low-degree mass that thinned `CONCEPT`'s own tail, not that
+none reaches the hub degree. The identical table is the evidence; the explanation is the best the
+aggregates allow.
+
+### What this does and does not establish
+
+- **It does not establish that the shipped setting is the best one.** It establishes that on this
+  reading, by this rule, nothing displaced it. ADR 65's first consequence is the governing one: no
+  row of that table means anything on its own.
+- **It does not establish that the harness can tell these settings apart, and a second null result
+  makes that the live question.** The held-out set is small, so a null result is also what an
+  instrument too blunt for the question would produce. Two readings that move nothing do not
+  distinguish "the setting is right" from "the split is too small to say", and enlarging the split
+  (`HeldOut.EVERY`) is the only thing that would.
+- **It establishes that the kind changes of #261 and #265 reached no route the harness watches**,
+  which is narrower than "reached no route": the harness sees only the held-out entities' top
+  twenty-five at each setting, and a route between two entities it does not hold out is invisible to
+  it. The `recommend` deck is the place a changed route would show, and nothing here reads it.
+- **The negatives condition was dropped rather than satisfied**, so nothing here is a finding about
+  the negatives column; the cells are quoted above and decided nothing.
+- **It says nothing about the entities ingest cannot reach.** Rates are read over the reachable
+  (ADR 65's consequence), so this is not a verdict on expansion coverage.
+
+### Consequences of this amendment
+
+- **Nothing in the tool moves**, so no ranking, no deck and no output line changes.
+- **`Setting.GRID` is unchanged**, so a third reading is comparable to both of these row by row —
+  the property #239 fixed the grid for.
+- **The question is re-asked, not closed, and what the next issue should change is the split rather
+  than the rule.** Two identical null readings on the same held-out split say the instrument has
+  been asked the same question twice; the next reading that can say something new is
+  one taken after the ratings move, or on a wider split, and the rule above applies to it unchanged.
+- **Nothing here is unit-testable, and that is said out loud rather than left implied.** No
+  behaviour changed, so there is no test to write and nothing to see red. The verification is the
+  full gate over an otherwise unchanged tree — `AdrIndexTest`, `DocumentationLinksTest` for the
+  relative links above, and `javadoc -Werror` inside `./gradlew check` — together with the ruling
+  that applied the rule cell by cell, and a byte comparison of the block above against the owner's
+  paste and against the previous amendment's block.
