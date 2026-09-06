@@ -83,7 +83,7 @@ public final class EvaluateRun {
     CandidateSweep sweep = new CandidateSweep(graph, recognitionInstitutionClass);
     HeldOut split =
         HeldOut.every(
-            HeldOut.EVERY, ratings, new LinkedHashSet<>(fromFile), sweep::couldBeExplored);
+            HeldOut.EVERY, 0, ratings, new LinkedHashSet<>(fromFile), sweep::couldBeExplored);
 
     List<String> knownList = KnownList.promoted(fromFile, split.ratingsWithout());
     ToDoubleFunction<String> regard = Recommendations.regardFor(split.ratingsWithout());
