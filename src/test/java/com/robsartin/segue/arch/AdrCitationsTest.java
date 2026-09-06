@@ -22,9 +22,8 @@ import org.junit.jupiter.api.Test;
  * <p>This repository squash-merges. A branch commit is rewritten into a single commit on {@code
  * main} and the original object is never in {@code main}'s history, so a hash an amendment cited as
  * evidence of ordering — "the rule was committed as … before the reading existed" — resolves to
- * nothing in a fresh clone. Read on 2026-09-06 against {@code main} at {@code 7e2651c}, seven of
- * the thirteen hashes then cited were unreachable, and one of the seven had never been pushed at
- * all: it is on GitHub nowhere and on {@code main} nowhere.
+ * nothing in a fresh clone. ADR 1's 2026-09-06 amendment records the reading that found this and
+ * resolves every hash it found unreachable; this class does not restate that reading.
  *
  * <p><b>The list is (file, hash) pairs, and the assertion is exact in both directions.</b> A new
  * citation reds, which is the guard. A pair that is allowlisted but no longer in the tree reds too,
@@ -153,7 +152,14 @@ class AdrCitationsTest {
   @Test
   @DisplayName("every commit hash cited in docs/adr is allowlisted, in the file it is cited in")
   void shouldAllowlistEveryCitationWhenTheAdrsAreScanned() {
-    assertThat(citedInTheAdrs()).containsExactlyElementsOf(allowlist());
+    assertThat(citedInTheAdrs())
+        .as(
+            "every backticked hex run of 7-40 characters in docs/adr/*.md must be allowlisted here"
+                + " as (file, hash), in both directions. A new bare commit hash is not an ordering"
+                + " witness under a squash merge: cite the pull request and the push time, and add"
+                + " the hash here only alongside them (ADR 1, amendment of 2026-09-06). A pair"
+                + " listed here but no longer in the tree is a stale entry to remove")
+        .containsExactlyElementsOf(allowlist());
   }
 
   /**

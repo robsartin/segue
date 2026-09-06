@@ -87,11 +87,11 @@ hashes may appear in `docs/adr/` at all.**
 This repository squash-merges. A branch commit is rewritten into one commit on `main` and the
 original object is never in `main`'s history, so a hash an amendment cited as evidence of ordering —
 "the rule was committed as … before the reading existed" — resolves to nothing in a fresh clone.
-Read on 2026-09-06 against `main` at `7e2651c` (a merge commit on `main`, and therefore permanent in
-a way a branch commit is not), seven of the thirteen hashes cited across `docs/adr/` were
-unreachable. They are resolved here, once, so a reader of any of those ADRs has one place to look.
+Read on 2026-09-06 against `main` at `7e2651c` (the squash-merge commit of pull request #273, a
+commit on `main` and therefore permanent in a way a branch commit is not), seven of the thirteen
+hashes cited across `docs/adr/` were unreachable. They are resolved here, once, so a reader of any of those ADRs has one place to look.
 
-| Hash | What it witnessed | Pull request | Push time (UTC) |
+| Hash | What it witnessed | Pull request | Committer date (UTC), as GitHub records it |
 |---|---|---|---|
 | `0a29f45` | ADR 41's index row regaining the backticks its heading carries (issue #170) — cited in this ADR's 2026-09-01 amendment | PR #191 | 2026-09-01 22:21:25 |
 | `9937f86` | the calibration rule, written before the first reading was taken (issue #242) — ADR 45 | PR #243 | 2026-09-04 23:56:02 |
@@ -109,7 +109,7 @@ in full in ADR 59's own prose, which is the part that survives; the hash is not,
 clearest possible statement of why the rule below exists.
 
 **The rule from here on.** An amendment that needs to prove *when* something was decided cites **the
-pull request number and the push time**. Both survive the squash, both are readable by anyone with
+pull request number and the push time** (the committer date GitHub records for the commit). Both survive the squash, both are readable by anyone with
 the repository, and together they order an amendment against anything else dated. A commit hash may
 appear **only alongside them**, as a convenience for a reader who has the object — never alone, and
 never as the sole witness.

@@ -2941,7 +2941,7 @@ Because this repository squash-merges, a bare commit hash cited in an amendment 
 in a fresh clone, so an amendment proves ordering with the pull request number and the push time and
 carries a hash only alongside them — `AdrCitationsTest` holds the allowlist of the hashes already
 cited, and [ADR 1](adr/0001-record-architecture-decisions.md)'s 2026-09-06 amendment resolves the
-seven of them `main` cannot reach.
+ones `main` cannot reach.
 
 ## Where to look next
 
