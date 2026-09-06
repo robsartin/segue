@@ -2937,6 +2937,12 @@ corrects — or to change the code, whichever one is wrong. This guide used to e
 such items; it was emptied by issues #44 and #46, and if it is ever needed again the table belongs
 in an issue rather than here, where it reads as permission to leave the ADRs untrue.
 
+Because this repository squash-merges, a bare commit hash cited in an amendment resolves to nothing
+in a fresh clone, so an amendment proves ordering with the pull request number and the push time and
+carries a hash only alongside them — `AdrCitationsTest` holds the allowlist of the hashes already
+cited, and [ADR 1](adr/0001-record-architecture-decisions.md)'s 2026-09-06 amendment resolves the
+seven of them `main` cannot reach.
+
 ## Where to look next
 
 - [The ADR index](adr/README.md) — all decisions, grouped, each with a one-line summary.

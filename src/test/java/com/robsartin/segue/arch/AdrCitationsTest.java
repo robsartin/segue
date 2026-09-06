@@ -120,6 +120,36 @@ class AdrCitationsTest {
           new Citation("0045-recommend-by-normalised-lift-with-routes.md", "e0e398b"),
           new Citation("0059-owner-claims-as-a-third-layer.md", "fdd420d"));
 
+  /**
+   * The citations the 2026-09-06 amendment to ADR 1 makes while resolving the others. Six of the
+   * table's seven hashes are new here — {@code 0a29f45} is not, since this ADR already cited it in
+   * the 2026-09-01 amendment and it stays in {@link #UNREACHABLE_RESOLVED_BY_ADR_1}, uncounted
+   * twice. {@code 0783492} is where {@code fdd420d}'s work actually landed on {@code main}, and
+   * {@code 7e2651c} is the commit the survey was read against — both on {@code main}, both cited
+   * beside a pull request number and a time, the shape the amendment's own rule asks for. The
+   * remaining five ({@code a7c3455}, {@code 2e01341}, {@code a79c6ca}, {@code fd88813}, {@code
+   * cd1d8dc}) are restated in the "why the earlier citations are left as they are" paragraph as
+   * evidence they are still reachable from {@code main} today; each is already allowlisted above
+   * for the ADR it was originally cited in, but citing it again in THIS file is a distinct (file,
+   * hash) pair the exact-both-directions assertion requires listed here too.
+   */
+  private static final List<Citation> IN_THE_ADR_1_AMENDMENT =
+      List.of(
+          new Citation("0001-record-architecture-decisions.md", "0783492"),
+          new Citation("0001-record-architecture-decisions.md", "2e01341"),
+          new Citation(
+              "0001-record-architecture-decisions.md", "33a0dd63c5fca13efc5cfdd38ecac6dab67df4ba"),
+          new Citation("0001-record-architecture-decisions.md", "3c2171e"),
+          new Citation("0001-record-architecture-decisions.md", "74e757f"),
+          new Citation("0001-record-architecture-decisions.md", "7e2651c"),
+          new Citation("0001-record-architecture-decisions.md", "9937f86"),
+          new Citation("0001-record-architecture-decisions.md", "a79c6ca"),
+          new Citation("0001-record-architecture-decisions.md", "a7c3455"),
+          new Citation("0001-record-architecture-decisions.md", "cd1d8dc"),
+          new Citation("0001-record-architecture-decisions.md", "e0e398b"),
+          new Citation("0001-record-architecture-decisions.md", "fd88813"),
+          new Citation("0001-record-architecture-decisions.md", "fdd420d"));
+
   @Test
   @DisplayName("every commit hash cited in docs/adr is allowlisted, in the file it is cited in")
   void shouldAllowlistEveryCitationWhenTheAdrsAreScanned() {
@@ -134,6 +164,7 @@ class AdrCitationsTest {
   private static List<Citation> allowlist() {
     List<Citation> all = new ArrayList<>(REACHABLE_FROM_MAIN);
     all.addAll(UNREACHABLE_RESOLVED_BY_ADR_1);
+    all.addAll(IN_THE_ADR_1_AMENDMENT);
     all.sort(BY_FILE_THEN_HASH);
     return all;
   }
