@@ -307,3 +307,32 @@ bounds how many ratings changed, not how many are new.
 **Cross-reading observations allowed, deciding nothing:** the shipped setting's whole-population hit
 rate beside the fourth reading's and the folded baseline's, and the eligible count beside both.
 Non-shipped rows are not compared across readings.
+
+## Note added 2026-09-07, before the sixth reading (issue #280)
+
+The sixth reading follows the owner's third deck session, and it is taken with the same instant as
+the fifth, `2026-09-06T18:56:00Z`, so the old half is the same population as the fifth reading's old
+half and the new half is what three sessions promoted. This note is committed before the reading
+exists, so the rule's ordering property survives a sixth time.
+
+**No clause changes**, and the notes above apply as written. The rule reads the whole-population
+`in pool` and `hits` cells; the half cells decide nothing.
+
+**What this reading is read for, fixed before the number.** The fifth reading left open whether the
+shipped scorer's whole-population rate falls with each session the deck deals from it while the
+challengers' hold. This reading is read against the fifth on: the shipped row's whole-population
+rate; the shipped row's old-half and new-half rates; and each challenger's whole-population rate at
+the shipped floor. Those are the cross-reading observations allowed, and they decide nothing.
+
+**The two sentences, written before the table is seen.** If the shipped rate fell again against the
+fifth reading while the challengers' rates held, the amendment says the bias the fifth reading
+raised as a question is measured over two sessions, and the deck's candidate order is the next
+issue. If the shipped rate held, the amendment says the fifth reading's fall is consistent with a
+one-time exhaustion of the shipped ranking's top and nothing needs changing yet. "Held" and "fell"
+are read against clause 2's margin scaled to what one session can move: a change inside a few
+points is "held", and the amendment says which side the table landed on and by roughly how much of
+the margin.
+
+**The limit, as before.** The halves are drawn on the last write, so an old promotion re-rated in a
+session is in the new half; the census's `taste` section, read before the harness, bounds how many
+ratings changed.
