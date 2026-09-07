@@ -92,12 +92,12 @@ class ExpansionReportTest {
 
   @Test
   @DisplayName("the dry run block states what would be visited, headed differently")
-  void shouldRenderTheDryRunBlockWhenNothingWasWritten() {
+  void shouldRenderTheDryRunBlockWhenNothingIsAppended() {
     List<String> lines = ExpansionReport.dryRunLines(new Preflight(4, 2, 1));
 
     assertThat(lines)
         .containsExactly(
-            "# segue promotion expansion — dry run: nothing was written. Aggregates only"
+            "# segue promotion expansion — dry run: appends nothing. Aggregates only"
                 + " (ADR 51, ADR 63).",
             "",
             "promotions",

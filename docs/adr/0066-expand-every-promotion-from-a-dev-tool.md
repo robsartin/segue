@@ -210,12 +210,15 @@ forgeable authority for who a source was, and this report does not either.
 "aggregates only", and the reason is the run's shape rather than any field's sensitivity: a progress
 line per entity, over every promotion, in qid order, is the owner's whole promoted population
 enumerated down a terminal — the bulk read [ADR 39](0039-affinity-capture-and-read.md) refused,
-arriving by another route. So a progress line is a position and a count. It takes one of three
-forms: what the expansion added, why it was refused, or — when a source was unreachable, an adapter
-truncated, the shared budget bit, or an endpoint was refused — that it was **partial** and in which
-of those ways, counted and never named. A qid on a refusal line would be genuinely useful and is not
-worth that; `--dry-run` answers the same question in aggregate and `listRatings`
-([ADR 43](0043-listing-your-own-ratings.md)) answers it precisely, offline, for the owner alone.
+arriving by another route. So a progress line is a position and a count. **A completed expansion**
+takes one of three forms: what the expansion added, why it was refused, or — when a source was
+unreachable, an adapter truncated, the shared budget bit, or an endpoint was refused — that it was
+**partial** and in which of those ways, counted and never named. A qid on a refusal line would be
+genuinely useful and is not worth that; `--dry-run` answers the same question in aggregate and
+`listRatings` ([ADR 43](0043-listing-your-own-ratings.md)) answers it precisely, offline, for the
+owner alone. **A fourth form, `failed`, is not one of those three**, because it is not a completed
+expansion's outcome at all: one entity's `expand` throwing, caught by the loop and never retried,
+counted and named by nothing but its position.
 
 Two things hold it, and the second is the stronger. `ExpansionIsSafeToPasteTest` captures the root
 logger at `TRACE` — so the sqlite driver's own statement logging is included — over a scratch

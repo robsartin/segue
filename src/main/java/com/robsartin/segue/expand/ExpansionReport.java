@@ -31,9 +31,15 @@ public final class ExpansionReport {
       "# segue promotion expansion — aggregates only: no labels, no notes, no entity ids (ADR 51,"
           + " ADR 63).";
 
-  /** Said on the first line of a dry run — nothing below it was written. */
+  /**
+   * Said on the first line of a dry run — nothing below it was appended. Not "nothing was written":
+   * both {@code SqliteAssertionLog} and {@code SqliteAffinityStore} run {@code CREATE TABLE IF NOT
+   * EXISTS} on open, dry run or not, so a database missing a table gets one and the file's journal
+   * is touched either way (ADR 66). What a dry run guarantees is the append — no assertion, no
+   * rating — and that is what this line says.
+   */
   public static final String DRY_RUN_HEADER =
-      "# segue promotion expansion — dry run: nothing was written. Aggregates only"
+      "# segue promotion expansion — dry run: appends nothing. Aggregates only"
           + " (ADR 51, ADR 63).";
 
   private static final String GAP = "  ";

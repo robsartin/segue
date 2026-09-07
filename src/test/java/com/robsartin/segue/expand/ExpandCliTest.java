@@ -246,7 +246,7 @@ class ExpandCliTest {
 
   @Test
   @DisplayName("an unknown option is refused with a usage error")
-  void shouldRefuseAnUnknownOption() {
+  void shouldRefuseAnUnknownOptionWhenOneIsGiven() {
     assertThatThrownBy(
             () ->
                 ExpandCli.parse(

@@ -3096,10 +3096,13 @@ for, and how many are entities you minted yourself
 
 **What you will see.** One progress line per promotion, carrying its position in the run and what
 that expansion did — `[17/431] 12 edge(s), 4 new node(s)`, `[18/431] refused: LOCAL_ENTITY`,
-`[19/431] partial: 1 source(s) unavailable, 2 endpoint(s) refused`. **An expansion that fell short
-says so on its own line** rather than reading as a clean one and being visible only in the aggregate
-block tens of minutes later; the shortfall is counted, never named, and the bound cut is attributed
-to nobody because every adapter was handed one budget. **No line carries an entity id**, and that is deliberate rather than incidental: a line per promotion,
+`[19/431] partial: 1 source(s) unavailable, 2 endpoint(s) refused`, `[20/431] failed`. **An expansion
+that fell short says so on its own line** rather than reading as a clean one and being visible only
+in the aggregate block tens of minutes later; the shortfall is counted, never named, and the bound
+cut is attributed to nobody because every adapter was handed one budget. The fourth form, `failed`,
+is not an outcome the expansion reported — it is one entity's expansion throwing, caught, counted and
+named by nothing but its position; see "How long it takes" below for what happens next. **No line
+carries an entity id**, and that is deliberate rather than incidental: a line per promotion,
 over every promotion, in qid order, would be your whole promoted population enumerated down a
 terminal, which is the bulk read [ADR 39](adr/0039-affinity-capture-and-read.md) declined by another
 route. `ExpansionIsSafeToPasteTest` is what holds it. Then one aggregate block at the end, in
