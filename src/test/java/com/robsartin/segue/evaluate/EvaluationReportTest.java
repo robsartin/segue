@@ -28,6 +28,26 @@ class EvaluationReportTest {
 
   private static final Instant SINCE = Instant.parse("2026-09-06T15:00:00Z");
 
+  /**
+   * Today's block, character for character (issue #276). The age split appends columns and inserts
+   * one line, and this is what says the block is untouched when no instant is given — the property
+   * every reading already on the record depends on.
+   *
+   * <p>The header is a string literal here, not {@link EvaluationReport#HEADER} — the whole point
+   * of this pin is to catch the header's own text moving, and reading it off the constant it is
+   * meant to pin would let a reworded header carry the pin along with it and prove nothing.
+   */
+  private static final List<String> UNSPLIT_BLOCK =
+      List.of(
+          "# segue recommender evaluation — aggregates only: no labels, no ids, no notes, no"
+              + " ratings (ADR 51, ADR 63, ADR 65).",
+          "# held out every 5 of 10 eligible entity(ies), in 5 fold(s): 10 held out over all"
+              + " folds, at least 8 left on the known-list in each.",
+          "# top 25 per setting, over 2 setting(s).",
+          "scorer  floor  pool  in pool  hits  mean rank  negatives  neg mean rank",
+          "lift        5   900       40     4        7.5          2            4.0",
+          "raw        12    40        3     0          -          0              -");
+
   @Test
   @DisplayName("the header names the split and the top, and the table has one row per reading")
   void shouldStateTheSplitAndOneRowPerReadingWhenTheReportIsRendered() {
@@ -119,21 +139,6 @@ class EvaluationReportTest {
                 List.of(reading())))
         .noneMatch(line -> A_QID.matcher(line).find());
   }
-
-  /**
-   * Today's block, character for character (issue #276). The age split appends columns and inserts
-   * one line, and this is what says the block is untouched when no instant is given — the property
-   * every reading already on the record depends on.
-   */
-  private static final List<String> UNSPLIT_BLOCK =
-      List.of(
-          EvaluationReport.HEADER,
-          "# held out every 5 of 10 eligible entity(ies), in 5 fold(s): 10 held out over all"
-              + " folds, at least 8 left on the known-list in each.",
-          "# top 25 per setting, over 2 setting(s).",
-          "scorer  floor  pool  in pool  hits  mean rank  negatives  neg mean rank",
-          "lift        5   900       40     4        7.5          2            4.0",
-          "raw        12    40        3     0          -          0              -");
 
   @Test
   @DisplayName("the whole block renders exactly as it does today, character for character")
