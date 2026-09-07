@@ -416,6 +416,29 @@ tasks.register<JavaExec>("evaluate") {
     outputs.upToDateWhen { false }
 }
 
+tasks.register<JavaExec>("expandPromotions") {
+    group = "application"
+    description =
+        "Expands every entity you rated at or above KnownList.PROMOTION_RATING, one at a time, " +
+            "through the same expansion the MCP tool runs, and reports what the whole batch did: " +
+            "promotions considered, expanded, refused and failed, nodes and edges added, edges by " +
+            "source, and every shortfall. Aggregates only — no labels, no ids, no notes, no " +
+            "ratings — so the output is safe to paste. WRITES: it appends what the sources return " +
+            "through IngestService, and it CALLS THE NETWORK — the live Wikidata API, the " +
+            "Wikidata Query Service and MusicBrainz. Run --dry-run first: it counts what would be " +
+            "visited and writes nothing. See ADR 66. --db is required, and SEGUE_DB does not " +
+            "satisfy it. Write \$HOME and not ~ — a tilde does not expand inside double quotes. " +
+            "Example: ./gradlew expandPromotions --args=\"--db \$HOME/.segue/segue.db --dry-run\""
+    mainClass.set("com.robsartin.segue.expand.ExpandCli")
+    classpath = sourceSets["main"].runtimeClasspath
+    // sqlite-jdbc loads a native library, the same grant tasks.test makes.
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
+    // The whole graph is replayed into memory, and a real one is six figures of assertions.
+    maxHeapSize = "4g"
+    // Never up-to-date: the graph changes under it, and the point is to expand it now.
+    outputs.upToDateWhen { false }
+}
+
 spotless {
     java {
         googleJavaFormat(libs.versions.googleJavaFormat.get())
