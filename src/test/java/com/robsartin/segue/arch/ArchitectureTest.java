@@ -226,8 +226,13 @@ class ArchitectureTest {
    * one SPARQL query would bridge them in an afternoon. It would also mean the third source's cost
    * depends on which of the first two it happens to need, and the question ADR 54 exists to answer
    * could never be asked again. {@code musicbrainz} declares {@code MusicBrainzIdentity} and
-   * something outside supplies it; {@code app} is the only package ADR 32 lets see two adapters at
-   * once.
+   * something outside supplies it — {@code expansion}, which holds the bridge and the wiring the
+   * two entry points share, and is therefore the package that sees both adapters at once (#284, ADR
+   * 66). It was {@code app} until then. ADR 32 is untouched by that move and is not amended: its
+   * sentence is about depending on <em>everything</em>, {@code expansion} depends on two adapters
+   * and four other packages, and ADR 32 itself says "{@code ArchitectureTest} is the list, not this
+   * table." This rule is unchanged in every respect — {@code expansion} is not an adapter package,
+   * so the slice assignment never compared it.
    */
   @ArchTest
   static final ArchRule adaptersDoNotDependOnEachOther =

@@ -1,4 +1,4 @@
-package com.robsartin.segue.app;
+package com.robsartin.segue.expansion;
 
 import com.robsartin.segue.domain.Qid;
 import com.robsartin.segue.musicbrainz.BridgedIdentity;
@@ -28,16 +28,26 @@ import tools.jackson.databind.JsonNode;
  * Wikidata's {@code P434} — read back from the Action API on 2026-08-30 as "MusicBrainz artist ID",
  * datatype {@code external-id}, rather than recalled.
  *
- * <p><b>Why it lives in {@code app}.</b> It has to see both {@link MusicBrainzIdentity} and {@link
- * WikidataClient}, and ADR 32 says in one sentence which package may do that: "{@code app} is the
- * only package permitted to depend on everything, because wiring is its job." Neither adapter
- * package is a candidate — {@code ArchitectureTest.adaptersDoNotDependOnEachOther} forbids both
- * directions, and every one of the twenty ordered pairs five adapters make was watched red against
- * a scratch field placed in each package in turn (issue #140; before it, two of the pairs this
- * sentence relies on were the only ones covered, by two pairwise rules that no longer exist). So
- * the seam is a real seam: {@code musicbrainz} names what it needs, {@code app} supplies it, and a
- * third source resolving identities some other way is the same shape of work rather than a change
- * to either.
+ * <p><b>Why it lives in {@code expansion}.</b> It has to see both {@link MusicBrainzIdentity} and
+ * {@link WikidataClient}, and neither adapter package is a candidate — {@code
+ * ArchitectureTest.adaptersDoNotDependOnEachOther} forbids both directions, and every one of the
+ * twenty ordered pairs five adapters make was watched red against a scratch field placed in each
+ * package in turn (issue #140; before it, two of the pairs this sentence relies on were the only
+ * ones covered, by two pairwise rules that no longer exist). So the seam is a real seam: {@code
+ * musicbrainz} names what it needs, something outside supplies it, and a third source resolving
+ * identities some other way is the same shape of work rather than a change to either.
+ *
+ * <p><b>It lived in {@code app} until #284, and what changed is the number of callers.</b> ADR 32
+ * says in one sentence which package may see everything — "{@code app} is the only package
+ * permitted to depend on everything, because wiring is its job" — and with one entry point that
+ * settled it. There are two now: the MCP server, and a plain-Java dev tool whose own fence bans
+ * {@code ..app..}, as every sibling tool's does and rightly, because {@code app} is Spring and
+ * reaches {@code mcp} through {@code SegueConfiguration}. A bridge the second caller cannot reach
+ * is a bridge only one source crosses. So it sits beside {@link ExpansionSources}, in the package
+ * both entry points already share. ADR 32 is untouched: {@code expansion} depends on two adapters
+ * and four other packages, which is not everything, and ADR 32 itself says "{@code
+ * ArchitectureTest} is the list, not this table." ADR 66, and ADR 54's 2026-09-07 amendment, which
+ * is where the placement this paragraph reverses was recorded.
  *
  * <p><b>It reports its failures, and no longer swallows them</b> (<a
  * href="https://github.com/robsartin/segue/issues/148">issue #148</a>). It used to. {@link

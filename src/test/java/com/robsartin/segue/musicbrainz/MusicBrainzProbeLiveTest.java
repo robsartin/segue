@@ -1,10 +1,10 @@
 package com.robsartin.segue.musicbrainz;
 
-import com.robsartin.segue.app.WikidataMusicBrainzIdentity;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
+import com.robsartin.segue.expansion.WikidataMusicBrainzIdentity;
 import com.robsartin.segue.ingest.GraphProjector;
 import com.robsartin.segue.musicbrainz.MusicBrainzProbe.ProbeInputs;
 import com.robsartin.segue.musicbrainz.MusicBrainzProbe.ProbeReport;
