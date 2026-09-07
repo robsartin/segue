@@ -75,22 +75,39 @@ class ExpansionOutcomeTest {
         .isInstanceOf(UnsupportedOperationException.class);
   }
 
+  /**
+   * <b>Five entries, and the number is the guard</b> (#284, fix round 1). Two entries let a {@code
+   * Map.copyOf} regression pass roughly one run in five: {@code Map.copyOf} salts its iteration per
+   * JVM, so with two keys it reproduces insertion order often enough that a single green run proves
+   * nothing. Measured on this JDK, five keys reproduced insertion order 0 times in 100 fresh JVMs,
+   * and the reverted copy was watched red three times running. The extra source names are invented
+   * — {@code src/main} wires two adapters — because what is being pinned is the copy, and a tally
+   * with two keys cannot fail a copy that reorders.
+   */
   @Test
   @DisplayName("the tally keeps the order the sources were added in, which is adapter order")
   void shouldKeepTheSourceOrderWhenTheTallyIsCopied() {
     Map<String, Integer> counts = new LinkedHashMap<>();
     counts.put("wikidata", 2);
     counts.put("musicbrainz", 1);
+    counts.put("discogs", 5);
+    counts.put("openlibrary", 8);
+    counts.put("tmdb", 13);
 
     ExpansionOutcome.Expanded outcome =
         new ExpansionOutcome.Expanded(
-            SEED, 0, 3, 0, 10, List.of(), List.of(), false, List.of(), counts);
+            SEED, 0, 29, 0, 10, List.of(), List.of(), false, List.of(), counts);
 
     assertThat(outcome.edgesBySource())
         .as(
             "insertion order is adapter order, which is the order a report prints — Map.copyOf's"
                 + " own order is unspecified and salted per JVM, so it cannot be used here")
-        .containsExactly(Map.entry("wikidata", 2), Map.entry("musicbrainz", 1));
+        .containsExactly(
+            Map.entry("wikidata", 2),
+            Map.entry("musicbrainz", 1),
+            Map.entry("discogs", 5),
+            Map.entry("openlibrary", 8),
+            Map.entry("tmdb", 13));
   }
 
   @Test

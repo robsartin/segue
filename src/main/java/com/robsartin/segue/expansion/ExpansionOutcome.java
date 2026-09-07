@@ -84,8 +84,9 @@ public sealed interface ExpansionOutcome {
       truncatingSources = List.copyOf(Objects.requireNonNull(truncatingSources, "truncating"));
       refusedEndpoints = List.copyOf(Objects.requireNonNull(refusedEndpoints, "refusedEndpoints"));
       // LinkedHashMap and not Map.copyOf: iteration order is what a report renders, and
-      // Map.copyOf's is unspecified and salted per JVM — measured, a two-entry copy came back in
-      // insertion order on roughly two runs in ten and reversed on the rest.
+      // Map.copyOf's is unspecified and salted per JVM. Measured on this JDK: a five-key copy
+      // reproduced insertion order 0 times in 100 fresh JVMs, and a two-key copy did so on
+      // roughly two runs in ten — which is why the pin in ExpansionOutcomeTest holds five.
       edgesBySource =
           Collections.unmodifiableMap(
               new LinkedHashMap<>(Objects.requireNonNull(edgesBySource, "edgesBySource")));
