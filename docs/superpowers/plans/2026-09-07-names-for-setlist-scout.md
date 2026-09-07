@@ -555,11 +555,12 @@ import java.util.Objects;
  * log claimed as null is the same "the graph cannot name this" as a qid the log never mentioned,
  * and the listing and this file must not disagree about which rows those are.
  *
- * <p><b>The one header line is a comment by convention only.</b> Nothing here knows whether the
- * uploader on the far side ignores a leading {@code #}; the runbook says to drop the line if it
- * comes back as an artist nobody has heard of. It stays because {@code *.txt} being gitignored is
- * the second lock and this is the third (ADR 43), and a file of names with no provenance is exactly
- * the one that gets attached to an issue.
+ * <p><b>The one header line is a comment by convention only, and it stays.</b> Setlist Scout's bulk
+ * uploader skips lines beginning with {@code #} ({@code ArtistImportService} and {@code
+ * ArtistSeedService}, issue #177 there), so the runbook documents that the upload ignores it rather
+ * than telling the owner to strip it. It stays because {@code *.txt} being gitignored is the second
+ * lock and this is the third (ADR 43), and a file of names with no provenance is exactly the one
+ * that gets attached to an issue.
  *
  * <p><b>{@code CensusIsSafeToPasteTest}'s discipline does not apply here and must not be added by
  * analogy.</b> That property exists because the census and the evaluation report are meant to be
@@ -792,9 +793,11 @@ with, beside `note`:
 
 Add the imports `java.util.stream.Collectors` and `java.util.stream.Stream`.
 
-**Honest exception:** the `outputs` message is not unit-tested. Reaching it needs a real `Writer`
-failure against a real database, which this suite has no seam for; the behaviour it replaced was
-untested for the same reason. Say so in the report rather than letting it pass unremarked.
+The `outputs` message was left unit-untested here on the premise that reaching it needs a real
+`Writer` failure against a real database with no seam for that in this suite — wrong:
+`RatingsAreNeverLoggedTest` already drives `RatingsCli.main` against a real temp-dir database, and
+pointing `--names` into a missing directory reaches this exact catch clause. The fix round for issue
+#285 added that test; there is no honest exception left to state here.
 
 Run the fast loop; green. The guard added here gets its positive control in step 5.5, where the test
 that needs it exists.
@@ -1478,9 +1481,10 @@ One name per line, the label the graph holds, sorted. A promotion the graph has 
 written as its **qid** rather than dropped: losing something you said yes to out of the file that
 exists to carry it would leave a count as the only trace. The log says how many there were.
 
-The first line is a `#` comment naming the file as personal data and counting the names. Whether the
-uploader on the far side ignores it is not known here — drop that line before you paste if it comes
-back as an artist nobody has heard of. Then upload it on Setlist Scout's artists page.
+The first line is a `#` comment naming the file as personal data and counting the names. Setlist
+Scout's bulk uploader skips lines beginning with `#` (its `ArtistImportService` and
+`ArtistSeedService`, issue #177 there), so the header is ignored on upload rather than something you
+need to strip before pasting. Then upload it on Setlist Scout's artists page.
 ````
 
 Run the fast loop; green. Then plant the control on the parse check: change the example's

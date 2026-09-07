@@ -127,6 +127,16 @@ heard of. The alternative — no header — was rejected: the third lock is wort
 line of paste discipline, and a file of names with no provenance is exactly the file that gets
 attached to an issue.
 
+**2026-09-07 — the runbook paragraph above was superseded during implementation, and this
+paragraph was not, which is the defect.** Task 3's implementer checked the far side rather than
+leaving it unknown: Setlist Scout's bulk uploader (`ArtistImportService`, `ArtistSeedService`) skips
+lines beginning with `#`, issue #177 there. The runbook (`docs/developer-guide.md`) and
+`NamesFile`'s javadoc were corrected on this branch to say the upload ignores the header rather than
+telling the owner to strip it first — dropping it is no longer necessary and the paragraph above
+must not be read as current instruction. This note records the resolution rather than rewriting the
+paragraph it corrects, the way an ADR would; a design document gets a dated amendment for the same
+reason.
+
 ## The command line
 
 | flag | before | after |
