@@ -17,9 +17,9 @@ import java.util.stream.Stream;
  * output safe to paste and what {@code EvaluationIsSafeToPasteTest} asserts — the same property
  * {@code CensusReport} has and ADR 63 argues for. No qid, label, note or rating value reaches this
  * method at all — and that is true of the whole signature, not just {@link Reading}'s shape: {@link
- * #lines} takes four plain counts and a top instead of the {@code HeldOut} that produced them,
- * deliberately narrower than the plan first drafted, because a type that carries a qid list and a
- * qid-keyed map has somewhere to put one even when this method never reads it.
+ * #lines} takes plain counts, a top and an optional instant instead of the {@code HeldOut} that
+ * produced them, deliberately narrower than the plan first drafted, because a type that carries a
+ * qid list and a qid-keyed map has somewhere to put one even when this method never reads it.
  *
  * <p><b>A mean over nothing is a dash rather than zero.</b> No hits and a mean rank of zero are
  * different facts, and a table that renders them the same is a table that misleads. One decimal
@@ -109,8 +109,8 @@ public final class EvaluationReport {
           "no instant was given, so there are no halves to state: a split line naming a division"
               + " nothing made is a line a reader would believe");
     }
-    // Both guards above read readings.stream(), so an EMPTY readings list makes anyMatch vacuously
-    // false and neither can fire: a present since would then render a split header over zero data
+    // The guard below reads readings.stream(), so an EMPTY readings list makes anyMatch vacuously
+    // false and it cannot fire: a present since would then render a split header over zero data
     // rows, with nothing to disagree with it. Left alone rather than guarded, because it is
     // unreachable from either caller — EvaluateRun always passes one Reading per Setting.GRID
     // entry, and GRID is a fixed, non-empty cross product (Scorer.values() x Setting.FLOORS) — and

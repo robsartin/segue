@@ -61,9 +61,9 @@ class RateServerTest {
     }
 
     /**
-     * Deliberately unusable. The timestamps belong to the evaluation harness (issue #276), and a
-     * fake that answered this read would let the rating deck quietly start making it without
-     * failing anything — the discipline the other bulk reads here already keep.
+     * Deliberately unusable, unlike this fake's other bulk reads, which answer empty. The
+     * timestamps belong to the evaluation harness (issue #276), and a fake that answered this read
+     * would let the rating deck quietly start making it without failing anything.
      */
     @Override
     public Map<String, Instant> readUpdatedAt() {

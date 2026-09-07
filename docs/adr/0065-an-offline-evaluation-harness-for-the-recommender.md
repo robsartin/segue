@@ -374,7 +374,9 @@ window in which the read existed unfenced, and in the same commit as its row in 
 table, which the guide's own test compares against the declared rules exactly.
 
 **`evaluate --rated-since <ISO-8601 instant>`, optional.** Given, the eligible population is
-partitioned by whether its rating's timestamp falls before the instant, every row gains four cells —
+partitioned by whether its rating's timestamp falls before the instant (a rated entity with no
+timestamp is refused rather than counted as old, since the column is `NOT NULL` and its absence would
+mean a store this code does not know), every row gains four cells —
 `in pool` and `hits` for each half — and the header names the instant and the size of each half. Not
 given, **the block is byte-identical to today's**, which is what keeps every reading on record
 comparable; a golden test pins the unsplit block character for character and was seen failing against
