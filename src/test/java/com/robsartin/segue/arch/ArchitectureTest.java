@@ -17,6 +17,7 @@ import com.robsartin.segue.domain.OwnerEdge;
 import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.domain.Retractions;
 import com.robsartin.segue.domain.SameAs;
+import com.robsartin.segue.expansion.EntityExpansion;
 import com.robsartin.segue.export.LogProjection;
 import com.robsartin.segue.ingest.GraphProjector;
 import com.robsartin.segue.ingest.IngestService;
@@ -579,6 +580,35 @@ class ArchitectureTest {
                   + " expansion, because MusicBrainzSourceAdapter catches only"
                   + " MusicBrainzIdentityUnavailableException and SegueService.expandEntity wraps"
                   + " nothing");
+
+  /**
+   * #284: an expansion has two callers, and everything else in this project is fenced not to write.
+   *
+   * <p><b>This is the rule that lets the expansion leave {@code mcp} at all.</b> {@link
+   * EntityExpansion} runs every adapter and appends what they return through {@link IngestService},
+   * so a package that can reach it can turn its own read-only fence into a bulk write and a network
+   * connection at once. The census, the exporter, the harness, the recommender, the ratings tool,
+   * the rating deck, the seed tool and both claim tools are each fenced against exactly that, and
+   * none of those fences would have caught this: they name {@code ingest}, {@code java.net} and
+   * sibling packages, and a class in a package none of them has heard of is outside all of them.
+   * That is ADR 54's finding restated — "a new adapter package inherits none of them: nothing fails
+   * to compile, no test goes red".
+   *
+   * <p>{@code app} is permitted because wiring is its job (ADR 32) and it wires {@code
+   * ExpansionSources}. {@code mcp} and {@code expand} are the two callers the decision names.
+   */
+  @ArchTest
+  static final ArchRule onlyTheClientAndTheExpanderExpandAnEntity =
+      noClasses()
+          .that()
+          .resideOutsideOfPackages("..mcp..", "..expand..", "..app..", "..expansion..")
+          .should()
+          .dependOnClassesThat()
+          .resideInAPackage("..expansion..")
+          .because(
+              "#284: one expansion, two callers — the MCP tool and the promotion expander. Anything"
+                  + " else reaching it would gain a bulk write and a network connection past its"
+                  + " own fence");
 
   /**
    * ADR 41: the graph exporter reads. It has no way to write, and that is the point.

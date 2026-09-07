@@ -39,8 +39,8 @@ import org.slf4j.LoggerFactory;
  *
  * <p><b>It writes, and that is why it is fenced.</b> It runs the adapters and appends what they
  * return, so a package that can reach it gains a bulk write and a network connection at once, past
- * whatever its own fence says. An ArchUnit rule therefore bars every package but the two callers,
- * {@code app} — which wires them — and this one.
+ * whatever its own fence says. {@code ArchitectureTest.onlyTheClientAndTheExpanderExpandAnEntity}
+ * therefore bars every package but the two callers, {@code app} — which wires them — and this one.
  *
  * <p>What did NOT move here: {@code ToolResult}, the {@code ok}/{@code partial} shaping, the reason
  * sentences and {@code SegueService.ExpansionSummary}. Those are the tool layer's, and the outcome
