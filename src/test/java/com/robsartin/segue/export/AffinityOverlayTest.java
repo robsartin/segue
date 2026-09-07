@@ -61,6 +61,16 @@ class AffinityOverlayTest {
       throw new UnsupportedOperationException("the exporter never reads the whole taste layer");
     }
 
+    /**
+     * Deliberately unusable. The timestamps belong to the evaluation harness (issue #276), and a
+     * fake that answered this read would let the exporter quietly start making it without failing
+     * anything — the discipline the other bulk reads here already keep.
+     */
+    @Override
+    public Map<String, Instant> readUpdatedAt() {
+      throw new UnsupportedOperationException("the exporter never reads the whole taste layer");
+    }
+
     @Override
     public void close() {}
   }

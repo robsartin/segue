@@ -120,6 +120,31 @@ public interface AffinityStore extends AutoCloseable {
    */
   Map<String, Integer> readRatings();
 
+  /**
+   * When each rating was last written, keyed by qid — and nothing else (issue #276).
+   *
+   * <p><b>A third bulk read, one field narrower than {@link #readAll()} in the direction that
+   * matters.</b> {@code readAll} carries this column already and carries the note with it, and
+   * {@code ArchitectureTest.onlyTheRatingsToolReadsANote} is where that line lives — it does not
+   * move. The evaluation harness reads its held-out population in two halves by rating age (ADR 65
+   * as amended for issue #276), which needs this column and nothing beside it, so the return type
+   * is the fence exactly as {@link #readRatings()}'s is: a {@code Map<String, Instant>} has nowhere
+   * to put a note or a score, and an implementation must not select either column to build it.
+   *
+   * <p><b>The keys are every rated entity, which is why this read is fenced at all.</b> An instant
+   * is not a note and not a score, but the keyset is the whole taste layer enumerated — the single
+   * call ADR 39 refused to put in front of a model, whatever is on the other side of the arrow.
+   * {@code ArchitectureTest.onlyTheEvaluationHarnessReadsWhenARatingChanged} keeps it to the one
+   * dev-side tool that asked for it.
+   *
+   * <p><b>It is the last write, not the first.</b> ADR 39 keeps one row per entity and lets the
+   * later rating win, so an opinion held for years and re-rated today reads as today. {@link
+   * com.robsartin.segue.domain.AffinityRecord} says the same of the field this reads.
+   *
+   * <p>Unordered, for {@link #readRatings()}'s reason: a lookup table rather than a listing.
+   */
+  Map<String, Instant> readUpdatedAt();
+
   @Override
   void close();
 }

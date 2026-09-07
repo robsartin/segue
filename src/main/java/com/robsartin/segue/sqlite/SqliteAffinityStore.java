@@ -96,6 +96,13 @@ public final class SqliteAffinityStore implements AffinityStore {
    */
   private static final String SELECT_SCORES = "SELECT qid, rating FROM affinity";
 
+  /**
+   * The timestamp-only bulk read (issue #276). <b>The column list is the fence in SQL</b>: neither
+   * the note nor the rating is named, so a caller of {@code readUpdatedAt} cannot be handed either
+   * however carelessly it is written. Unordered, for {@link #SELECT_SCORES}'s reason.
+   */
+  private static final String SELECT_UPDATED = "SELECT qid, updated_at FROM affinity";
+
   private final Connection conn;
 
   /**
@@ -210,6 +217,22 @@ public final class SqliteAffinityStore implements AffinityStore {
       }
       return Map.copyOf(ratings);
     } catch (SQLException e) {
+      throw new IllegalStateException("cannot read the affinity table", e);
+    }
+  }
+
+  @Override
+  public Map<String, Instant> readUpdatedAt() {
+    Map<String, Instant> updated = new HashMap<>();
+    try (PreparedStatement ps = conn.prepareStatement(SELECT_UPDATED);
+        ResultSet rs = ps.executeQuery()) {
+      while (rs.next()) {
+        updated.put(rs.getString("qid"), Instant.parse(rs.getString("updated_at")));
+      }
+      return Map.copyOf(updated);
+    } catch (SQLException e) {
+      // No qid and no count, for readAll's reason: how much the owner has rated is itself a fact
+      // about him, and this string is the likeliest on this path to be logged upstream (ADR 33).
       throw new IllegalStateException("cannot read the affinity table", e);
     }
   }

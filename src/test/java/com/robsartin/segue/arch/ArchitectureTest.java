@@ -1090,6 +1090,35 @@ class ArchitectureTest {
                   + " tool");
 
   /**
+   * Issue #276: the timestamp read is the evaluation harness's alone.
+   *
+   * <p>The third rule of this shape, and it is here for {@link
+   * #onlyTheRatingsToolReadsEveryRating}'s reason rather than {@link
+   * #onlyTheRecommenderReadsEveryRating}'s. What it protects is not a value — an instant is not a
+   * note and not a score — but the <b>keyset</b>: a {@code Map<String, Instant>} over the affinity
+   * table enumerates every entity the owner has rated, which is the single call ADR 39 refused to
+   * put in front of a model, whatever is on the other side of the arrow. A method with no rule on
+   * it is reachable from {@code mcp} the moment somebody writes the line, and {@code
+   * ToolSurfaceTest} counts tools rather than fields.
+   *
+   * <p><b>A new rule rather than a widening of either sibling</b>, for ADR 63's reason that ADR 65
+   * restates: a rule named for one tool and quoted in an immutable ADR does not get stretched to
+   * cover a second. It names {@code evaluate} because the harness splits its held-out population by
+   * rating age, and nothing else has asked.
+   */
+  @ArchTest
+  static final ArchRule onlyTheEvaluationHarnessReadsWhenARatingChanged =
+      noClasses()
+          .that()
+          .resideOutsideOfPackage("..evaluate..")
+          .should()
+          .accessTargetWhere(callTo("readUpdatedAt", AffinityStore.class))
+          .because(
+              "ADR 39 and issue #276: a bulk read keyed by qid enumerates the whole taste layer"
+                  + " whatever its values are — when a rating last changed belongs to the one"
+                  + " dev-side tool that splits its held-out population by rating age");
+
+  /**
    * Issue #101: the deck writes the taste layer and nothing else.
    *
    * <p>The mirror image of {@code theRatingsToolOnlyReads}. That tool may read every rating and

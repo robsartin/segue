@@ -179,6 +179,16 @@ final class InventedRatings {
       throw new UnsupportedOperationException("the ratings tool reads whole rows, notes included");
     }
 
+    /**
+     * Deliberately unusable. The timestamps belong to the evaluation harness (issue #276), and a
+     * fake that answered this read would let this tool quietly start making it without failing
+     * anything — the discipline the other bulk read here already keeps.
+     */
+    @Override
+    public Map<String, Instant> readUpdatedAt() {
+      throw new UnsupportedOperationException("the ratings tool never reads when a rating changed");
+    }
+
     @Override
     public void close() {}
   }

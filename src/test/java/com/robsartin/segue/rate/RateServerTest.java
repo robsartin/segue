@@ -60,6 +60,16 @@ class RateServerTest {
       return Map.of();
     }
 
+    /**
+     * Deliberately unusable. The timestamps belong to the evaluation harness (issue #276), and a
+     * fake that answered this read would let the rating deck quietly start making it without
+     * failing anything — the discipline the other bulk reads here already keep.
+     */
+    @Override
+    public Map<String, Instant> readUpdatedAt() {
+      throw new UnsupportedOperationException("the rating deck never reads when a rating changed");
+    }
+
     @Override
     public void close() {}
   }
