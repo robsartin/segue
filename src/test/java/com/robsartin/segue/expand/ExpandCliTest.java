@@ -12,7 +12,6 @@ import com.robsartin.segue.domain.KnownList;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.Provenance;
-import com.robsartin.segue.port.ExpandContext;
 import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import java.nio.file.Path;
@@ -102,7 +101,15 @@ class ExpandCliTest {
     assertThat(
             ExpandCli.parse(new String[] {"--db", "db.sqlite"}, null, home.toString())
                 .maxNewEdges())
-        .isEqualTo(ExpandContext.defaults().maxNewEdges());
+        .as(
+            "the literal, not ExpandContext.defaults().maxNewEdges() — reading the same constant"
+                + " the parser reads makes this assertion true by construction and blind to the"
+                + " one thing worth seeing. The default bound is stated in THREE places that"
+                + " nothing reconciles: ExpandContext.defaults(), SegueProperties' fallback and"
+                + " application.yaml's segue.max-new-edges, the last of which is the MCP server's"
+                + " actual runtime default. Set the yaml to 50 and expand_entity moves while this"
+                + " tool does not; with the literal here, that drift is at least visible")
+        .isEqualTo(200);
   }
 
   @Test

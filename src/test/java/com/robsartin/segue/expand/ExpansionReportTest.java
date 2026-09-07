@@ -139,7 +139,7 @@ class ExpansionReportTest {
 
   @Test
   @DisplayName("an empty section still prints its heading, with no rows under it")
-  void shouldOmitASectionWhenItHasNothingToSay() {
+  void shouldStillPrintTheHeadingWhenASectionHasNoRows() {
     ExpansionTally tally =
         new ExpansionTally(
             1, 1, 0, 0, 0, 0, 0, 0, 0, Map.of(), Map.of("musicbrainz", 1), Map.of(), Map.of());
