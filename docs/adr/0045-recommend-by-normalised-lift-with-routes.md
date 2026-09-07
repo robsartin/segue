@@ -1406,3 +1406,112 @@ nothing needs changing yet.
   `DocumentationLinksTest` for the relative link above, and `javadoc -Werror` inside
   `./gradlew check` — together with the ruling that applied the rule cell by cell and a byte
   comparison of the block above against the owner's paste.
+
+
+**Amendment (2026-09-07, issue #282): the seventh reading, read against the sixth by the sentence
+written before it was taken, held again — the shipped setting stands, and the question the fifth
+reading raised rests until a larger session has been rated.**
+
+Nothing above is withdrawn and no decision above is edited, including the six amendments
+immediately above this one. No constant changed and no code changed. The reading was taken after the
+owner's fourth deck session, with the same instant as the fifth and sixth readings, so the old half
+is the same population as theirs; how many ratings the session moved is on issue #282 from the
+census's `taste` section, read before the harness ran.
+
+**The rule was fixed before the number existed, for the seventh time, and so were both verdicts.**
+The rule is the one described five amendments above and it was not changed. A dated note was
+committed and pushed at midday on 2026-09-07, before the reading the owner pasted carrying a 12:21
+timestamp, appended to `docs/superpowers/specs/2026-09-04-second-reading-rule-design.md`; pull
+request #283 carries it. The note kept the instant, named the same four cross-reading observations
+as the sixth reading's note — the shipped row's whole-population rate, its two half rates, and each
+challenger's whole-population rate at the shipped floor, now against the sixth — and wrote both
+sentences this amendment could end with, with "held" meaning a change inside a few points. The rule
+is the authority on what would have counted and is not restated here.
+
+**The reading.** One run of `./gradlew evaluate` with `--rated-since` on the owner's database on
+2026-09-07, on the folded harness, quoted whole and unedited. Aggregates only, per
+[ADR 51](0051-what-an-adr-may-quote.md): every cell is a count, a one-decimal mean or a dash, every
+label is a column name or a `Scorer` spelling, and the header names the folds and the instant.
+`in pool`, `hits` and the four half cells count entities; `pool` and `negatives` count entity-folds.
+On every row the two halves sum to the whole-population cell. For the first time on a real reading,
+the header's eligible count and the split line's new-half count each exceed the rows' `in pool` at
+the lowest floors: an eligible entity the sweep does not reach even at the lowest floor, and so —
+since `CandidateSweep.over`'s pool only shrinks as the floor rises — at no floor in the grid. That is
+the consequence ADR 65 wrote for, and clause 1 already reads the row's own `in pool` as the
+denominator rather than the eligible count.
+
+```
+# segue recommender evaluation — aggregates only: no labels, no ids, no notes, no ratings (ADR 51, ADR 63, ADR 65).
+# held out every 5 of 299 eligible entity(ies), in 5 fold(s): 299 held out over all folds, at least 239 left on the known-list in each.
+# split by rating age at 2026-09-06T18:56:00Z: 152 old (rated before it), 147 new (rated on or after it) — a rating's timestamp is its last write, so a re-rated old promotion counts as new.
+# top 25 per setting, over 16 setting(s).
+scorer               floor   pool  in pool  hits  mean rank  negatives  neg mean rank  old in pool  old hits  new in pool  new hits
+raw                      2  16102      298    26       10.2         17           18.5          152        17          146         9
+raw                      5   7059      298    27       10.7         17           18.5          152        17          146        10
+raw                      8   5512      220    27       10.7         17           18.5          115        17          105        10
+raw                     12   4621      175    26       10.4         18           18.8           93        16           82        10
+adamic-adar              2  16102      298    33        9.5         16           18.9          152        18          146        15
+adamic-adar              5   7059      298    33        9.5         16           18.9          152        18          146        15
+adamic-adar              8   5512      220    33        9.5         16           18.9          115        18          105        15
+adamic-adar             12   4621      175    33        9.5         16           18.9           93        18           82        15
+resource-allocation      2  16102      298    35        9.4         15            8.3          152        18          146        17
+resource-allocation      5   7059      298    35        9.4         15            8.3          152        18          146        17
+resource-allocation      8   5512      220    35        9.4         15            8.3          115        18          105        17
+resource-allocation     12   4621      175    35        9.4         15            8.3           93        18           82        17
+lift                     2  16102      298     0          -          6           19.7          152         0          146         0
+lift                     5   7059      298    43       10.7         66           12.3          152        39          146         4
+lift                     8   5512      220    38       11.5         45           11.2          115        32          105         6
+lift                    12   4621      175    23       11.2         34           10.7           93        18           82         5
+```
+
+**What the rule made of it.** Clause 2's void check was run first and did not fire. Clause 3(a)
+compared every non-shipped scorer's rate at the shipped floor with `lift`'s row there, and each is
+below `lift`'s. Clause 3(b) derived the dominance range as floors eight and twelve; at floor eight
+every challenger's rate is below `lift`'s; at floor twelve all three are above it, which the rule
+saw and which changed nothing, because a scorer moves only on both conditions and none cleared the
+first. No scorer moved, so clause 4 compared `lift`'s rate at every other floor with its rate at the
+shipped floor: floor eight is the closest and clears under a fifth of the margin, which clause 7
+says is a stand; floor twelve is below the shipped floor's rate; floor two is where `lift` records
+no hits. The `negatives` and `neg mean rank` cells were read for every row and, per clause 5,
+decided nothing. Outcome: the shipped setting stands.
+
+**The observations the note allowed, and the sentence they select.** Against the sixth reading, the
+shipped row's whole-population rate moved by a fraction of a point, well inside the few points the
+note defined as "held"; its old half moved by about a point and its new half by a fraction of one,
+and stays a few points above zero; each challenger's whole-population rate at the shipped floor
+moved by less than a point. So the note's second sentence applies, and it is written here as the
+note wrote it: after two consecutive holds the question rests until a session large enough to move
+a whole-row rate by more than a few points has been rated — the census's `taste` deltas say when
+that has happened — and no further reading is worth taking on a smaller one.
+
+### What this does and does not establish
+
+- **It does not establish that the shipped setting is the best one.** It establishes that on this
+  reading, by this rule, nothing displaced it. ADR 65's first consequence is the governing one: no
+  row of that table means anything on its own.
+- **It rests the question the fifth reading raised, by the criterion fixed in advance, and does not
+  answer it.** This is the second consecutive hold; the amendment for issue #280 recorded the first.
+  The new half has stayed a few points above zero through both. A larger session is the reading
+  that can say, and the note says what "larger" means.
+- **The negatives condition was dropped rather than satisfied**, so nothing here is a finding about
+  the negatives column; the cells are quoted above, on the entity-fold scale, and decided nothing.
+- **The halves are drawn on the last write**, so an old promotion re-rated in a session is in the
+  new half; the census deltas on issue #282 bound how many ratings changed, not how many are new.
+- **It says nothing about the entities ingest cannot reach**, and this reading has one: the
+  eligible entity no floor reaches is a miss for a reason no knob the harness sweeps can change,
+  exactly as ADR 65's consequence says.
+
+### Consequences of this amendment
+
+- **Nothing in the tool moves**, so no ranking, no deck and no output line changes, and the deck's
+  candidate order is not the next issue.
+- **`Setting.GRID` and `HeldOut.EVERY` are unchanged.**
+- **The next reading worth taking follows a deck session the census shows to be large enough**, by
+  the note's own definition, with the same instant, read against this one by the same criterion.
+  A reading on a smaller session is not worth taking, as the note says.
+- **Nothing here is unit-testable, and that is said out loud rather than left implied.** No
+  behaviour changed, so there is no test to write and nothing to see red. The verification is the
+  full gate over an otherwise unchanged tree — `AdrIndexTest`, `AdrCitationsTest`,
+  `DocumentationLinksTest` for the relative link above, and `javadoc -Werror` inside
+  `./gradlew check` — together with the ruling that applied the rule cell by cell and a byte
+  comparison of the block above against the owner's paste.
