@@ -335,6 +335,77 @@ class ExpandRunTest {
   }
 
   @Test
+  @DisplayName("a partial expansion says what fell short, and still names nothing")
+  void shouldSayWhatFellShortWhenAnExpansionWasPartial() {
+    String seedShortfall = "Q0900941";
+    String seedBoundCut = "Q0900942";
+    String neighbourOne = "Q0900943";
+    String neighbourTwo = "Q0900944";
+    String nobodyDescribed = "Q0900945";
+
+    try (AssertionLog scriptLog = new SqliteAssertionLog(dir.resolve("partial.db"));
+        GraphStore scriptGraph = new TinkerGraphStore()) {
+      IngestService ingest = new IngestService(scriptLog, scriptGraph, IdentityMerge.NONE);
+      ingest.record(
+          new NodeAssertion(seedShortfall, NodeKind.PERSON, "an act nobody signed", WIKIDATA));
+      ingest.record(
+          new NodeAssertion(seedBoundCut, NodeKind.PERSON, "an act nobody booked", WIKIDATA));
+      ScriptedResolver resolver =
+          new ScriptedResolver()
+              .withEntity(
+                  new NodeAssertion(neighbourOne, NodeKind.GROUP, "a band nobody named", WIKIDATA))
+              .withEntity(
+                  new NodeAssertion(
+                      neighbourTwo, NodeKind.GROUP, "a band nobody covered", WIKIDATA));
+
+      // An edge naming the seed at NEITHER end: the near end resolves, the far end is an entity
+      // the graph holds no node for, so IngestService refuses it and the expansion reports the
+      // endpoint (#233).
+      SourceAdapter unavailable =
+          new FixedAdapter("unavailable-source", ExpandResult.unavailable());
+      SourceAdapter refusedEndpoint =
+          new FixedAdapter(
+              "wikidata", ExpandResult.of(List.of(memberOf(neighbourOne, nobodyDescribed))));
+      ExpandRun shortfallRun =
+          new ExpandRun(
+              new EntityExpansion(
+                  resolver,
+                  scriptGraph,
+                  ingest,
+                  new SourceAdapters(List.of(unavailable, refusedEndpoint))),
+              scriptGraph);
+      List<String> shortfallLines = new ArrayList<>();
+
+      shortfallRun.run(List.of(seedShortfall), 10, shortfallLines::add);
+
+      assertThat(shortfallLines)
+          .as("the spec's third progress-line form, which a clean expansion never prints")
+          .contains("[1/1] partial: 1 source(s) unavailable, 1 endpoint(s) refused");
+
+      SourceAdapter truncating =
+          new FixedAdapter(
+              "truncating-source",
+              new ExpandResult(
+                  List.of(
+                      memberOf(seedBoundCut, neighbourOne), memberOf(seedBoundCut, neighbourTwo)),
+                  false,
+                  true));
+      ExpandRun boundRun =
+          new ExpandRun(
+              new EntityExpansion(
+                  resolver, scriptGraph, ingest, new SourceAdapters(List.of(truncating))),
+              scriptGraph);
+      List<String> boundLines = new ArrayList<>();
+
+      boundRun.run(List.of(seedBoundCut), 1, boundLines::add);
+
+      assertThat(boundLines)
+          .as("a bound cut is attributable to no adapter, so the clause names none")
+          .contains("[1/1] partial: 1 source(s) truncated, the bound cut the result");
+    }
+  }
+
+  @Test
   @DisplayName("the report's header reaches the consumer once the run is done")
   void shouldEmitTheReportsHeaderWhenTheRunFinishes() {
     String seed = "Q0900921";

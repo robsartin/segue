@@ -4,6 +4,7 @@ import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.expansion.EntityExpansion;
 import com.robsartin.segue.expansion.ExpansionOutcome;
 import com.robsartin.segue.port.GraphStore;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -150,11 +151,7 @@ public final class ExpandRun {
           if (one.boundCutTheConcatenation()) {
             boundCut++;
           }
-          lines.accept(
-              progress(
-                  i,
-                  promotions.size(),
-                  one.edgesAdded() + " edge(s), " + one.nodesAdded() + " new node(s)"));
+          lines.accept(progress(i, promotions.size(), detail(one)));
         }
       }
     }
@@ -176,6 +173,41 @@ public final class ExpandRun {
             refusalsByReason);
     ExpansionReport.lines(tally).forEach(lines);
     return tally;
+  }
+
+  /**
+   * What an expansion that ran is worth saying about it: its yield, or what fell short.
+   *
+   * <p><b>An expansion that fell short says so while the run is going</b>, which is the design
+   * note's third progress-line form. Without it a promotion whose MusicBrainz call failed, whose
+   * result an adapter truncated, whose shared budget bit, or whose edge {@code IngestService}
+   * refused reads as an ordinary success, and the operator learns about it only from the aggregate
+   * block after the last entity — many minutes later on a run of a few hundred.
+   *
+   * <p>The two shortfalls a source can be named for are counted rather than named, and the bound
+   * cut is attributed to nobody, because every adapter was handed one {@link
+   * com.robsartin.segue.port.ExpandContext} and none of them made that cut. {@link
+   * ExpansionOutcome.Expanded#refusedEndpoints()} carries the ids themselves and <b>only its size
+   * is read here</b> — those ids are entities, and this class writes none.
+   */
+  private static String detail(ExpansionOutcome.Expanded one) {
+    List<String> shortfalls = new ArrayList<>();
+    if (!one.unavailableSources().isEmpty()) {
+      shortfalls.add(one.unavailableSources().size() + " source(s) unavailable");
+    }
+    if (!one.truncatingSources().isEmpty()) {
+      shortfalls.add(one.truncatingSources().size() + " source(s) truncated");
+    }
+    if (one.boundCutTheConcatenation()) {
+      shortfalls.add("the bound cut the result");
+    }
+    if (!one.refusedEndpoints().isEmpty()) {
+      shortfalls.add(one.refusedEndpoints().size() + " endpoint(s) refused");
+    }
+    if (shortfalls.isEmpty()) {
+      return one.edgesAdded() + " edge(s), " + one.nodesAdded() + " new node(s)";
+    }
+    return "partial: " + String.join(", ", shortfalls);
   }
 
   /** A position and a detail — never a qid or a label. See the class javadoc. */
