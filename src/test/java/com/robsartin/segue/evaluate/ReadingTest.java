@@ -67,12 +67,14 @@ class ReadingTest {
   @Test
   @DisplayName("the age split's four cells add over the folds, like the counts beside them")
   void shouldAddTheHalvesWhenTheFoldsOfOneSplitSettingAreSummed() {
-    // second's hits is 2, not the 3 every other Reading fixture in this class reuses: it must
-    // equal its own halves' oldHits + newHits (2 + 0) for the identity below to be a fact about
-    // the fixture rather than an arithmetic error in it (task 4 report: deviation from the brief,
-    // which set this fixture's hits to 3, inconsistent with its own Halves).
+    // second's hits is 2, not the 3 every other Reading fixture in this class reuses, and its
+    // heldOutInPool is 37, not 38: both must equal its own halves' sums (oldHits + newHits = 2 + 0,
+    // oldInPool + newInPool = 28 + 9 = 37) for the identities below to be facts about the fixture
+    // rather than arithmetic errors in it. The hits mismatch was the task 4 report's deviation from
+    // the brief; the heldOutInPool mismatch was the fix-round-1 review's Important finding 1 — the
+    // same error, one field to the left, because only the hits identity was asserted before.
     Reading first = new Reading(SETTING, 900, 40, 4, 30, 2, 8, new Halves(true, 30, 3, 10, 1));
-    Reading second = new Reading(SETTING, 880, 38, 2, 21, 1, 5, new Halves(true, 28, 2, 9, 0));
+    Reading second = new Reading(SETTING, 880, 37, 2, 21, 1, 5, new Halves(true, 28, 2, 9, 0));
 
     Reading summed = Reading.summed(List.of(first, second));
 
@@ -80,6 +82,9 @@ class ReadingTest {
     assertThat(summed.halves().oldHits() + summed.halves().newHits())
         .as("the halves partition the hits, because the folds partition the held-out set")
         .isEqualTo(summed.hits());
+    assertThat(summed.halves().oldInPool() + summed.halves().newInPool())
+        .as("the halves partition the in-pool count too, on the same terms as the hits above")
+        .isEqualTo(summed.heldOutInPool());
   }
 
   @Test

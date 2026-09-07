@@ -129,6 +129,11 @@ class EvaluateRunTest {
                   Optional.of(age))
               .run(knownList(), 25, lines::add);
 
+      assertThat(lines.get(1))
+          .as(
+              "the header's own identity: old plus new equals the total the line above already"
+                  + " states, so a reader can cross-check the two lines against each other")
+          .contains("2 held out over all folds");
       assertThat(lines.get(2))
           .as("two eligible entities, one each side of the instant")
           .contains("1 old (rated before it)")
