@@ -500,7 +500,7 @@ line is drawn there.
 | `musicbrainz` | The second source ([ADR 54](adr/0054-musicbrainz-as-the-second-source.md)): `MusicBrainzClient` over `ws/2`, `MusicBrainzSourceAdapter`, and `MusicBrainzIdentity` — the MBID-to-QID seam it declares and may not implement, because an adapter may not import another adapter. Expansion only; no `EntityResolver`. Plain Java, no Spring. | `port`, `domain` |
 | `ingest` | `IngestService` (the only write path) and `GraphProjector` (boot replay). | `port`, `domain`, `wikidata` (`KindMapper` only, [ADR 42](adr/0042-store-p31-and-rederive-kind-at-projection.md)) |
 | `support` | Cross-cutting plain-Java helpers with no project dependencies — `UuidV7` (request correlation), `QidList` (the QID-file reader `export`, `ratings`, `recommend`, `evaluate` and `rate` share), `ClassLabels` (the offline `P31` label table `export` and `rate` share; it moved here from `export` when `rate` needed it), `DefaultDatabase` (the one `--db`/`SEGUE_DB`/`${user.home}` resolution `export`, `ratings`, `recommend` and `rate` share — issue #179; the live list is whoever calls `resolve`, so grep rather than trust these four names), and `RequiredDatabase` (the refusal `retract` and `own` give when `--db` was not typed; it calls `DefaultDatabase` for the path it quotes back and hands out a `String`, never a `Path`, so neither claim tool can take a default from it). | nothing |
-| `expansion` | One expansion: the source adapters, the bounds of ADR 49, the refusals of ADR 55 and ADR 59, and the partial-result facts both callers report in their own words. Also `ExpansionSources`, the one statement of the order the two sources are asked in, and `WikidataMusicBrainzIdentity`, the P434 bridge — the package that sees two adapters at once, since two entry points need it and only one of them may see Spring. Reached by `mcp` and by `expand`, and by nothing else — `onlyTheClientAndTheExpanderExpandAnEntity`. | `port`, `domain`, `ingest`, `wikidata`, `musicbrainz` |
+| `expansion` | One expansion: the source adapters, the bounds of ADR 49, the refusals of ADR 55 and ADR 59, and the partial-result facts both callers report in their own words. Also `ExpansionSources`, the one statement of the order the two sources are asked in, and `WikidataMusicBrainzIdentity`, the P434 bridge — the package that sees two adapters at once, since two entry points need it and only one of them may see Spring. Reached by `mcp`, by `expand` and by `app`, which wires all three, and by nothing else — `onlyTheClientAndTheExpanderExpandAnEntity`. | `port`, `domain`, `ingest`, `wikidata`, `musicbrainz` |
 | `mcp` | The tool classes, `SegueService`, the view records, `CorrelationId`. Spring-aware. | `ingest`, `port`, `domain`, `support` |
 | `app` | Entry point, all bean wiring, `application.yaml`, transport profiles. Spring-aware. Its `sourceAdapters` bean is one line calling `ExpansionSources.both`, and the P434 bridge it used to hold moved to `expansion` in #284, because a plain-Java dev tool needs the bridge and may not depend on Spring. | everything it wires |
 | `seed` | The bulk seeding tool ([ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)): a name list to `name → QID`, run as `./gradlew resolveNames`. Plain Java, never opens a store. | `port`, `domain`, `wikidata` |
@@ -562,7 +562,7 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `theEvaluationHarnessHasNoDefaultDatabase` | `evaluate` depending on `support.DefaultDatabase` at all. A fourth rule rather than a wider one, for the census rule's reason: ADR 60 names the two claim tools and is immutable | [ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md), [ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md) |
 | `theEvaluationHarnessTakesItsDatabaseFromTheFlagAlone` | `evaluate` calling any `support` method that returns a `java.nio.file.Path`, or reading any `support` field of that type — the capability, where the rule above forbids the name | [ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md), [ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md) |
 | `ownerClaimsAreMadeThroughTheirFactories` | calling — or referencing — the constructor of `LocalEntity`, `OwnerEdge` or `SameAs` from outside `domain` and `sqlite`. Those constructors enforce only what Wikidata's grammar fixes, so that an append-only row stays decodable after a convention moves; the conventions themselves (two leading zeros, the controlled relation vocabulary) live in `minted()`, `claimed()` and `declared()`. This rule is what makes every *maker* of a claim go through them, with no second copy of a rule to fall out of date. `sqlite` is exempt because `readRow` reconstructs rather than claims | [ADR 22](adr/0022-wikidata-identity-and-vocabulary.md), [ADR 19](adr/0019-assertion-log-source-of-truth.md), [ADR 58](adr/0058-stand-in-identifiers-cannot-be-allocatable.md) |
-| `bridgedIdentitiesAreBuiltThroughTheirFactory` | calling — or referencing — the constructor of `BridgedIdentity` from anywhere but the record itself. `BridgedIdentity.describing` *drops* a row whose class id is not a QID, answering `undescribed`; the constructor *throws*. The two are not interchangeable in a bridge: `MusicBrainzSourceAdapter` catches only `MusicBrainzIdentityUnavailableException` and `SegueService.expandEntity` wraps `adapter.expand` in no `try`, so an `IllegalArgumentException` from a producer aborts a whole expansion across every adapter — and `NodeRecord` refuses the same value only from inside `IngestService.apply`, after the claim has been appended. Rules run over `src/main` only, so the test doubles that build rows directly are outside the import rather than exempted | [ADR 19](adr/0019-assertion-log-source-of-truth.md), [ADR 58](adr/0058-stand-in-identifiers-cannot-be-allocatable.md), issue [#163](https://github.com/robsartin/segue/issues/163) |
+| `bridgedIdentitiesAreBuiltThroughTheirFactory` | calling — or referencing — the constructor of `BridgedIdentity` from anywhere but the record itself. `BridgedIdentity.describing` *drops* a row whose class id is not a QID, answering `undescribed`; the constructor *throws*. The two are not interchangeable in a bridge: `MusicBrainzSourceAdapter` catches only `MusicBrainzIdentityUnavailableException` and `EntityExpansion.expand` wraps `adapter.expand` in no `try`, so an `IllegalArgumentException` from a producer aborts a whole expansion across every adapter — and `NodeRecord` refuses the same value only from inside `IngestService.apply`, after the claim has been appended. Rules run over `src/main` only, so the test doubles that build rows directly are outside the import rather than exempted | [ADR 19](adr/0019-assertion-log-source-of-truth.md), [ADR 58](adr/0058-stand-in-identifiers-cannot-be-allocatable.md), issue [#163](https://github.com/robsartin/segue/issues/163) |
 | `nothingWritesToStandardOut` | reading `System.out` anywhere except the one named exception, `SegueApplication` | [ADR 28](adr/0028-mcp-transports.md) |
 | `nothingWritesToStandardError`, `noPrintStackTrace`, `noJavaUtilLogging` | bypassing SLF4J | [ADR 30](adr/0030-structured-logging.md) |
 | `affinityNeverTouchesTheWorldFactLayer` | a taste-layer type depending on the log, the graph, `IngestService` or the claim records | [ADR 33](adr/0033-taste-layer-separation.md) |
@@ -798,6 +798,7 @@ sequenceDiagram
     participant Client as MCP client
     participant Tools as GraphTools
     participant Svc as SegueService
+    participant Exp as EntityExpansion
     participant Adapter as WikidataSourceAdapter
     participant Fwd as ClaimMapper
     participant Rev as ReverseClaims
@@ -807,12 +808,13 @@ sequenceDiagram
 
     Client->>Tools: expand_entity(qid, maxNewEdges?)
     Tools->>Svc: expandEntity(qid, bound)
-    Svc->>Graph: node(qid)
-    Graph-->>Svc: NodeRecord, else "unknown entity" error result
-    Svc->>Svc: ExpansionBounds.effective — a CONCEPT seed is capped (ADR 49)
+    Svc->>Exp: expand(qid, bound)
+    Exp->>Graph: node(qid)
+    Graph-->>Exp: NodeRecord, else a Refused outcome the caller words
+    Exp->>Exp: ExpansionBounds.effective — a CONCEPT seed is capped (ADR 49)
 
     loop every SourceAdapter that supports the seed's kind
-        Svc->>Adapter: expand(seed, ExpandContext)
+        Exp->>Adapter: expand(seed, ExpandContext)
         Note over Adapter,Fwd: PASS 1 (forward): claims stated ON the seed
         Adapter->>Adapter: resolver.entity(qid) over the Action API
         Adapter->>Fwd: map(qid, entity, assertedAt)
@@ -821,44 +823,53 @@ sequenceDiagram
         Adapter->>Rev: lookup(qid, maxNewEdges, assertedAt)
         Rev-->>Adapter: assertions + neighbour identity + truncated flag
         Adapter->>Adapter: reverse pass ran, so drop fallbackOnly forward claims
-        Adapter-->>Svc: ExpandResult(assertions, neighbors, unavailable, truncated)
+        Adapter-->>Exp: ExpandResult(assertions, neighbors, unavailable, truncated)
     end
 
     loop every assertion inside the bound
         alt neighbour is new to the graph
-            Svc->>Svc: identity from ExpandResult.neighbors, else resolver.fetch
-            Svc->>Ingest: record(NodeAssertion), counted in nodesAdded
+            Exp->>Exp: identity from ExpandResult.neighbors, else resolver.fetch
+            Exp->>Ingest: record(NodeAssertion), counted in nodesAdded
             Ingest->>Log: append
             Ingest->>Graph: upsertNode
         else neighbour exists and the adapter described it
-            Svc->>Ingest: record(NodeAssertion), refreshes a stale kind, not counted
+            Exp->>Ingest: record(NodeAssertion), refreshes a stale kind, not counted
             Ingest->>Log: append
             Ingest->>Graph: upsertNode
         end
-        Svc->>Ingest: record(AssertionRecord)
+        Exp->>Ingest: record(AssertionRecord)
         Ingest->>Log: append
         Ingest->>Graph: record
     end
 
+    Exp-->>Svc: ExpansionOutcome — Expanded, carrying the facts
     Svc-->>Tools: ToolResult ok / partial + ExpansionSummary
     Tools-->>Client: CallToolResult
 ```
 
-**What the diagram shows.** An `expand_entity` tool call reaches `SegueService`, which refuses
-immediately if the seed is not already in the graph. For each source adapter supporting the seed's
-kind, the Wikidata adapter runs the forward pass (`ClaimMapper` over the entity fetched from the
-Action API) and then the reverse pass (`ReverseClaims`, one SPARQL query to the Query Service),
-dropping fallback-only forward claims once the reverse pass has succeeded. `SegueService` then walks
-the bounded assertion list; for each assertion naming a neighbour the graph has never seen it takes
-identity from the adapter if the adapter supplied it and otherwise fetches it, records the node
-through `IngestService`, and only then records the edge. Every write is log-then-graph. The call
-returns a single `ToolResult` whose outcome is `ok` or `partial`, never a thrown exception.
+**What the diagram shows.** An `expand_entity` tool call reaches `SegueService`, which hands the
+whole expansion to `EntityExpansion` — the shared body the promotion expander runs too (#284) — and
+words whatever comes back. The expansion refuses immediately if the seed is not already in the graph.
+For each source adapter supporting the seed's kind, the Wikidata adapter runs the forward pass
+(`ClaimMapper` over the entity fetched from the Action API) and then the reverse pass
+(`ReverseClaims`, one SPARQL query to the Query Service), dropping fallback-only forward claims once
+the reverse pass has succeeded. `EntityExpansion` then walks the bounded assertion list; for each
+assertion naming a neighbour the graph has never seen it takes identity from the adapter if the
+adapter supplied it and otherwise fetches it, records the node through `IngestService`, and only then
+records the edge. Every write is log-then-graph. What it returns is an `ExpansionOutcome` carrying
+facts and no sentences; `SegueService` turns that into a single `ToolResult` whose outcome is `ok` or
+`partial`, never a thrown exception.
+
+**The split is where the two callers part, not a second expansion.** `EntityExpansion` counts and
+`SegueService` words — the `ok`/`partial` shaping, the three refusal sentences and the reason list
+are the tool layer's and did not move, which is why the diagram shows one arrow back and the wording
+after it.
 
 That was not true for one case until issue #233: an edge naming the seed at neither end had its
 second endpoint resolved by nobody, and the store's exception escaped the facade after some rows were
-already committed. `IngestService` now refuses such an edge before the append and `expandEntity`
-catches the refusal, skips the assertion and names the endpoint in `detail` — the same treatment an
-unresolvable neighbour already got.
+already committed. `IngestService` now refuses such an edge before the append and `EntityExpansion`
+catches the refusal, skips the assertion and names the endpoint, which `expandEntity` renders into
+`detail` — the same treatment an unresolvable neighbour already got.
 
 **The requested bound is resolved through `ExpansionBounds.effective` before anything else sees it**
 (issue #112, [ADR 49](adr/0049-a-kind-scoped-ceiling-on-concept-expansion.md)). A `CONCEPT` seed is
@@ -958,7 +969,7 @@ a sign of a mechanism being merged that was never shared.
 - **The bound is spent server-side** in the reverse query, as `ORDER BY DESC(?sitelinks) LIMIT n+1`.
   The extra row is what makes `truncated` an observation rather than a guess.
 - **A `CONCEPT` seed's bound is lowered before the adapter is called at all**
-  ([ADR 49](adr/0049-a-kind-scoped-ceiling-on-concept-expansion.md)). `SegueService.expandEntity`
+  ([ADR 49](adr/0049-a-kind-scoped-ceiling-on-concept-expansion.md)). `EntityExpansion.expand`
   resolves the request through `ExpansionBounds.effective` and builds the `ExpandContext` from the
   result, so the ceiling reaches `ReverseClaims` as the SPARQL `LIMIT` like any other bound. The
   measurement behind the number is in the ADR; the short version is that expanding a broad subject

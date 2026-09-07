@@ -83,6 +83,13 @@ import org.junit.jupiter.api.Test;
  * <p><b>GAP 7 is untouched.</b> The last test still holds the half of #143 that was always safe: an
  * empty {@code instanceOf} does not throw, it erases. Nothing here makes an empty list illegal — it
  * makes it a reason not to emit.
+ *
+ * <p><b>The body those failures escaped is named {@code EntityExpansion.expand} below, and it was
+ * {@code SegueService.expandEntity}'s own body when each of them was watched red</b> (#284). The
+ * code did not change when it moved — the adapter loop, the neighbour resolution and the absence of
+ * a {@code try} around {@code adapter.expand} are the same lines — so the failures quoted below
+ * would arrive identically today; what changed is which class holds them. The MCP path still runs
+ * through {@code SegueService.expandEntity}, which now delegates.
  */
 class MusicBrainzNeighbourIdentityTest {
 
@@ -173,8 +180,8 @@ class MusicBrainzNeighbourIdentityTest {
    *
    * <p><b>Watched red against the same plant</b> (see the test above), and it did exactly that:
    * {@code java.lang.NullPointerException: label} out of {@code NodeAssertion.<init>}, thrown
-   * through {@code MusicBrainzSourceAdapter.expand} and up through {@code
-   * SegueService.expandEntity}, which wraps nothing.
+   * through {@code MusicBrainzSourceAdapter.expand} and up through {@code EntityExpansion.expand},
+   * which wraps nothing.
    */
   @Test
   @DisplayName("should leave an existing neighbour alone when the bridge has no label to believe")
@@ -277,8 +284,8 @@ class MusicBrainzNeighbourIdentityTest {
    * constructor is what rejects a class id that is not a QID — so a bridge that named one produced
    * a claim that was <b>already appended</b> when the throw happened. Three things went wrong at
    * once and all three are asserted here: the expansion aborted unwrapped out of {@code
-   * SegueService.expandEntity}, the neighbour got nothing, and the append-only log (ADR 19) was
-   * left holding a row that {@code GraphProjector} re-throws on at every boot.
+   * EntityExpansion.expand}, the neighbour got nothing, and the append-only log (ADR 19) was left
+   * holding a row that {@code GraphProjector} re-throws on at every boot.
    *
    * <p>The fix is in two halves and this test only sees the second. {@link BridgedIdentity} refuses
    * to hold a malformed class at all, and a <b>producer</b> therefore may not construct one from a
@@ -289,7 +296,7 @@ class MusicBrainzNeighbourIdentityTest {
    * <p><b>Watched red, and the replay control watched red separately.</b> Before the fix this test
    * failed with {@code java.lang.IllegalArgumentException: instanceOf must look like Q12345, got:
    * human} at {@code NodeRecord.<init>}, through {@code IngestService.record} — <i>after</i> the
-   * append — and out of {@code SegueService.expandEntity}, which wraps nothing. It never reached
+   * append — and out of {@code EntityExpansion.expand}, which wraps nothing. It never reached
    * assertion (iii), so that assertion had never been seen to fail: a poisoned row was then
    * appended to the log by hand, and the replay said {@code java.lang.IllegalStateException: replay
    * failed at sequence 4}. A "the log still replays" assertion that has not been shown to notice a

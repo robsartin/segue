@@ -8,11 +8,11 @@ import java.util.List;
  * row names (#233).
  *
  * <p><b>Named rather than a plain {@link IllegalStateException}, for one caller's sake.</b> {@code
- * SegueService.expandEntity} has to tell this condition apart from a genuine store failure, a log
- * that cannot be written and a programmer error; catching {@code IllegalStateException} around
- * {@code IngestService.record} would swallow all three and report them as a refused edge. It
- * extends {@code IllegalStateException} anyway so that a caller which does not know about it — and
- * every existing one — sees exactly what {@code TinkerGraphStore.requireVertex} used to throw.
+ * EntityExpansion.expand} has to tell this condition apart from a genuine store failure, a log that
+ * cannot be written and a programmer error; catching {@code IllegalStateException} around {@code
+ * IngestService.record} would swallow all three and report them as a refused edge. It extends
+ * {@code IllegalStateException} anyway so that a caller which does not know about it — and every
+ * existing one — sees exactly what {@code TinkerGraphStore.requireVertex} used to throw.
  *
  * <p><b>Both endpoints are checked before this is thrown, and both are named</b> (#233 final
  * review, minor 2). The first version stopped at the first missing endpoint, so an edge naming two

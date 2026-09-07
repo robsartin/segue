@@ -547,8 +547,8 @@ class ArchitectureTest {
    * the factory <b>drops</b>, answering {@link BridgedIdentity#undescribed}. Both are correct and
    * they are not interchangeable, because of where a producer sits: {@code
    * MusicBrainzSourceAdapter} catches {@code MusicBrainzIdentityUnavailableException} and nothing
-   * else, and {@code SegueService.expandEntity} wraps {@code adapter.expand} in no {@code try} at
-   * all. So an {@code IllegalArgumentException} out of the constructor, inside a real {@code
+   * else, and {@code EntityExpansion.expand} wraps {@code adapter.expand} in no {@code try} at all.
+   * So an {@code IllegalArgumentException} out of the constructor, inside a real {@code
    * identitiesFor}, aborts a whole expansion across every adapter on one contributor-entered value
    * — which is exactly the failure GAP 9 and issue #147 exist to prevent, and exactly what issue
    * #163's fix round 1 found in the log: {@code NodeRecord} refuses such a class id from inside
@@ -578,7 +578,7 @@ class ArchitectureTest {
               "#163: BridgedIdentity.describing drops a row whose class id cannot be read, where"
                   + " the constructor throws — and a throw out of a producer aborts the whole"
                   + " expansion, because MusicBrainzSourceAdapter catches only"
-                  + " MusicBrainzIdentityUnavailableException and SegueService.expandEntity wraps"
+                  + " MusicBrainzIdentityUnavailableException and EntityExpansion.expand wraps"
                   + " nothing");
 
   /**

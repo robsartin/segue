@@ -15,7 +15,7 @@ import java.util.Objects;
  * <p>{@code neighbors} is an optimisation the port has to know about, because only the adapter can
  * supply it. An expansion names entities the graph has never seen, and the caller cannot record an
  * edge before both endpoints exist; without this field it resolves each one with its own round trip
- * (see {@code SegueService.expandEntity}). That was affordable when expanding a person found four
+ * (see {@code EntityExpansion.expand}). That was affordable when expanding a person found four
  * neighbours. Once the reverse lookup finds seventy-odd (ADR 36), a source that already knows a
  * neighbour's label and kind should say so rather than let the caller ask again. An adapter that
  * does not know is not obliged to guess: an absent neighbour simply falls back to the fetch.

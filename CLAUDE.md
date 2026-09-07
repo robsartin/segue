@@ -146,11 +146,20 @@ support/  Plain-Java cross-cutting helpers with no project dependencies of their
 mcp/      The six MCP tools (EntityTools, GraphTools, TasteTools), SegueService
           (the facade they call), CorrelationId. Spring-only package (ADR 32) —
           annotated with the starter's @McpTool, but plain enough to unit test.
+expansion/
+          EntityExpansion — one expansion, shared by the two callers that run one: the
+          MCP tool layer and the `expandPromotions` dev tool (#284). It runs every
+          adapter that supports the seed's kind and appends what they return through
+          IngestService, and reports FACTS (ExpansionOutcome) rather than sentences,
+          so each caller words them for its own reader. Also ExpansionSources (the one
+          statement of the order the sources are asked in) and WikidataMusicBrainzIdentity
+          — the P434 bridge implementing musicbrainz's seam, here rather than in app
+          because two entry points need it and only one of them may see Spring.
+          Fenced to its callers by onlyTheClientAndTheExpanderExpandAnEntity: it is a
+          bulk write and a network connection in one object.
 app/      SegueApplication, SegueConfiguration (all wiring lives here),
-          SegueProperties, application.yaml, and WikidataMusicBrainzIdentity — the
-          P434 bridge implementing musicbrainz's seam, here because ADR 32 lets only
-          app see two adapters at once. The other Spring-only package; owns the
-          stdio/HTTP transport profiles.
+          SegueProperties and application.yaml. The other Spring-only package; owns
+          the stdio/HTTP transport profiles.
 ```
 
 Tests mirror this, plus `fixture/` (the Nick Cave neighbourhood, test-only) and
@@ -316,7 +325,7 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   the ceiling bounds the damage rather than expressing the policy. ADR 47.
 - **A CONCEPT expansion is capped by a ceiling on the REQUEST, not by a smaller default** (issue
   #112, ADR 49). `ExpansionBounds.effective(kind, requested)` in `domain` is the whole rule and is
-  the authority on the number; `SegueService.expandEntity` resolves the request through it before
+  the authority on the number; `EntityExpansion.expand` resolves the request through it before
   building the `ExpandContext`. **The direction is the point**: a caller asking for 200 gets the
   ceiling, a caller asking for 5 gets 5. A default would be bypassed by exactly the call the guard
   exists to stop. Consequences worth knowing: the ceiling reaches `ReverseClaims` as the SPARQL

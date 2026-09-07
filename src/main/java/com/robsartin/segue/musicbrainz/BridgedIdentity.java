@@ -78,7 +78,7 @@ public record BridgedIdentity(String qid, NodeKind kind, String label, List<Stri
    *
    * <p><b>Why a producer may not simply construct one.</b> {@code MusicBrainzSourceAdapter} catches
    * {@link MusicBrainzIdentityUnavailableException} and nothing else, and {@code
-   * SegueService.expandEntity} wraps {@code adapter.expand} in no {@code try} at all — so an {@code
+   * EntityExpansion.expand} wraps {@code adapter.expand} in no {@code try} at all — so an {@code
    * IllegalArgumentException} out of the constructor, inside a real {@code identitiesFor}, would
    * abort a whole expansion across every adapter. That is the aborted-expansion failure GAP 9 and
    * issue #147 exist to prevent, merely relocated. Dropping is the answer {@link

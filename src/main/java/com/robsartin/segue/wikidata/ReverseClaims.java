@@ -72,11 +72,11 @@ final class ReverseClaims {
    * that is Nick Cave, Blixa Bargeld, Mick Harvey and Warren Ellis ahead of a 2024 album track —
    * and the one extra row makes truncation an observation rather than a guess.
    *
-   * <p>{@code ?otherLabel} and {@code ?type} ride along so {@code SegueService.expandEntity} does
-   * not need a {@code wbgetentities} round trip per neighbour: 73 discovered works would otherwise
-   * mean 73 further calls before a single edge could be recorded. A description is NOT selected —
-   * {@link NodeAssertion} has nowhere to put one, and fetching a field that is thrown away is just
-   * someone else's bandwidth.
+   * <p>{@code ?otherLabel} and {@code ?type} ride along so {@code EntityExpansion.expand} does not
+   * need a {@code wbgetentities} round trip per neighbour: 73 discovered works would otherwise mean
+   * 73 further calls before a single edge could be recorded. A description is NOT selected — {@link
+   * NodeAssertion} has nowhere to put one, and fetching a field that is thrown away is just someone
+   * else's bandwidth.
    *
    * <p>The {@code OPTIONAL} P31 and the label service both multiply rows, so a row is not an
    * assertion; the parser keys on (property, entity) instead.

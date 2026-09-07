@@ -20,7 +20,7 @@ import org.slf4j.LoggerFactory;
  * adapter, so the count is exact without paying for a single HTTP round trip.
  *
  * <p><b>{@code run} catches a {@code RuntimeException} out of one entity's expansion, and that
- * catch belongs here rather than in {@link EntityExpansion}.</b> {@code SegueService.expandEntity}
+ * catch belongs here rather than in {@link EntityExpansion}.</b> {@link EntityExpansion#expand}
  * wraps {@code adapter.expand} in no {@code try} — right for one interactive call, where the MCP
  * layer turns a throw into a protocol error, and wrong for a batch that has already written most of
  * what it came for by the time one bad row throws. Nothing is retried: a refused endpoint, an
@@ -100,7 +100,7 @@ public final class ExpandRun {
       try {
         outcome = expansion.expand(qid, maxNewEdges);
       } catch (RuntimeException thrown) {
-        // #284. One entity is not the run. SegueService.expandEntity wraps adapter.expand in no
+        // #284. One entity is not the run. EntityExpansion.expand wraps adapter.expand in no
         // try — right for one interactive call, where the MCP layer turns a throw into a
         // protocol error, and wrong for a batch that has already written most of what it came
         // for. Named without the qid: a line per entity naming the entity would enumerate the

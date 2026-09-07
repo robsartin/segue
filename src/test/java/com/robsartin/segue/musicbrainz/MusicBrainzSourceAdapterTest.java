@@ -398,7 +398,7 @@ class MusicBrainzSourceAdapterTest {
     // Issue #147. The GAP 9 guard below validates targetQid and argues that it must not depend on
     // which bridge is wired — and seedMbid, from the same interface, went straight into sourceRef,
     // where Provenance's compact constructor throws on a tab or a newline. That
-    // IllegalArgumentException escapes expand(), and SegueService.expandEntity has no try around
+    // IllegalArgumentException escapes expand(), and EntityExpansion.expand has no try around
     // adapter.expand, so one malformed string aborted the whole expansion across every adapter
     // instead of costing this one its result.
     MusicBrainzSourceAdapter adapter =

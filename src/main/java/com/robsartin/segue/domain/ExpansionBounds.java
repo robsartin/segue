@@ -35,7 +35,7 @@ package com.robsartin.segue.domain;
  * and 20x below the 500-row flood.
  *
  * <p>Nothing here knows what a source adapter is or what {@code maxNewEdges} means to one — see
- * {@code SegueService.expandEntity}, which is the only caller and feeds the result into the same
+ * {@code EntityExpansion.expand}, which is the only caller and feeds the result into the same
  * {@code truncated} reporting {@code find_paths} already uses (issue #65): a bound that can bite
  * must be reported by the result that hit it.
  */

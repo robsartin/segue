@@ -51,7 +51,7 @@ import tools.jackson.databind.JsonNode;
  *
  * <p><b>It reports its failures, and no longer swallows them</b> (<a
  * href="https://github.com/robsartin/segue/issues/148">issue #148</a>). It used to. {@link
- * MusicBrainzIdentity} declared no failure type and {@code SegueService.expandEntity} calls {@code
+ * MusicBrainzIdentity} declared no failure type and {@code EntityExpansion.expand} calls {@code
  * adapter.expand} with no {@code try}, so a {@link WikidataUnavailableException} escaping either
  * method below would have left the SPI's "failures degrade rather than propagate" contract through
  * the back door — and swallowing was the only other option available.
