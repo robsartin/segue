@@ -278,3 +278,32 @@ shipped setting's hit rate here beside its rate on the baseline, and the split l
 beside the baseline's, as the measure of how far the taste layer moved. Neither decides anything, and
 non-shipped rows are still not compared across readings. How many ratings moved is read from the
 census's `taste` section before the harness runs and recorded on the issue, not in the amendment.
+
+## Note added 2026-09-07, before the reading taken in two halves by rating age (issue #278)
+
+The fifth reading follows the owner's second deck session, and it is the first taken with the
+rating-age split (ADR 65's second 2026-09-06 amendment, issue #276). This note is committed before the
+reading exists, so the rule's ordering property survives a fifth time.
+
+**No clause changes**, and the notes above on folded tables and on a population the deck has moved
+apply as written. The rule reads the whole-population `in pool` and `hits` cells; the four half cells
+decide nothing.
+
+**The instant is fixed here, not after the table is seen:** `2026-09-06T18:56:00Z`. The fourth
+reading's harness began reading ratings at 18:55:37Z on 2026-09-06 and saw the count from before any
+deck session, so every rating written after that instant belongs to one of the two sessions. The old
+half is what was rated before either session; the new half is what the two sessions promoted.
+
+**What the halves are read for.** Under the first explanation issue #272 left open — the deck deals
+what the same ranking already passed over — the new half's rate sits near zero while the old half's
+holds near the folded baseline's shipped rate. Under the second — the taste layer widened into ground
+the routes serve less well — the halves land near each other. The amendment says which of the two
+the table is consistent with, or that it cannot say, and files nothing on its own.
+
+**The limit, stated before the number.** The halves are drawn on the last write, so an old promotion
+re-rated in a session lands in the new half. The census's `taste` section, read before the harness,
+bounds how many ratings changed, not how many are new.
+
+**Cross-reading observations allowed, deciding nothing:** the shipped setting's whole-population hit
+rate beside the fourth reading's and the folded baseline's, and the eligible count beside both.
+Non-shipped rows are not compared across readings.
