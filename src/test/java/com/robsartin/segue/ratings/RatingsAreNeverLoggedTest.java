@@ -43,6 +43,10 @@ import org.junit.jupiter.api.io.TempDir;
  *
  * <p>The label and note below are invented and deliberately unlike anything else in the repository,
  * so a match in the captured log is unambiguous.
+ *
+ * <p><b>The names export is held to the same rule (#285).</b> A promotion's label is a rating
+ * attributed to an entity exactly as a listing row is, so no line about it may carry the label or
+ * the qid either.
  */
 class RatingsAreNeverLoggedTest {
 
@@ -117,5 +121,37 @@ class RatingsAreNeverLoggedTest {
         .filteredOn(event -> event.getLevel() == Level.WARN)
         .extracting(ILoggingEvent::getFormattedMessage)
         .contains(RatingsRun.PERSONAL_DATA_WARNING);
+  }
+
+  @Test
+  @DisplayName("the names export reaches the file; not one name of it reaches a log")
+  void shouldKeepEveryNameOutOfTheLogWhenTheNamesExportRuns() throws IOException {
+    Path db = dir.resolve("scratch.db");
+    Path names = dir.resolve("promotions.txt");
+    Path known = InventedRatings.knownFile(dir, InventedRatings.SEEN_LIVE);
+    try (SqliteAssertionLog log = new SqliteAssertionLog(db);
+        SqliteAffinityStore affinity = new SqliteAffinityStore(db)) {
+      log.append(node(QUARTET, QUARTET_LABEL));
+      affinity.put(new AffinityRecord(QUARTET, 5, QUARTET_NOTE, EARLY));
+    }
+    captured.list.clear();
+
+    RatingsCli.main(
+        new String[] {
+          "--db", db.toString(),
+          "--promotions-off", known.toString(),
+          "--names", names.toString()
+        });
+
+    assertThat(Files.readString(names)).contains(QUARTET_LABEL);
+
+    List<String> everyLine =
+        List.copyOf(captured.list).stream().map(ILoggingEvent::getFormattedMessage).toList();
+    assertThat(everyLine)
+        .as("a promotion's label is a rating attributed to an entity, and ADR 33 keeps it out")
+        .noneMatch(line -> line.contains(QUARTET_LABEL));
+    assertThat(everyLine)
+        .as("no log line names the entity, so no line can attribute a promotion to one (ADR 33)")
+        .noneMatch(line -> line.contains(QUARTET));
   }
 }
