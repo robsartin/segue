@@ -84,10 +84,10 @@ public final class EvaluationReport {
    * @param leastLeft the fewest left on the known-list in any one fold
    * @param top how many candidates each setting was read over
    * @param since the instant the halves were drawn at, or empty when none was given
-   * @param oldHeldOut how many of the eligible population fell each side of it, summed over the
+   * @param oldHeldOut how many of the eligible population were rated before it, summed over the
    *     folds
-   * @param newHeldOut how many of the eligible population fell each side of it, summed over the
-   *     folds
+   * @param newHeldOut how many of the eligible population were rated on or after it, summed over
+   *     the folds
    * @param readings one per setting, in the order they should be read
    */
   public static List<String> lines(
@@ -109,6 +109,13 @@ public final class EvaluationReport {
           "no instant was given, so there are no halves to state: a split line naming a division"
               + " nothing made is a line a reader would believe");
     }
+    // Both guards above read readings.stream(), so an EMPTY readings list makes anyMatch vacuously
+    // false and neither can fire: a present since would then render a split header over zero data
+    // rows, with nothing to disagree with it. Left alone rather than guarded, because it is
+    // unreachable from either caller — EvaluateRun always passes one Reading per Setting.GRID
+    // entry, and GRID is a fixed, non-empty cross product (Scorer.values() x Setting.FLOORS) — and
+    // because reaching it renders a valid-looking, merely rowless block rather than crashing, which
+    // is no worse than this method's pre-existing empty-readings behaviour on the unsplit path.
     if (readings.stream().anyMatch(reading -> reading.halves().split() != split)) {
       throw new IllegalArgumentException(
           "the instant and the readings disagree about whether this run was split by rating age:"

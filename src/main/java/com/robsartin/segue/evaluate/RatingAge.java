@@ -1,7 +1,7 @@
 package com.robsartin.segue.evaluate;
 
 import java.time.Instant;
-import java.util.LinkedHashSet;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -53,7 +53,9 @@ public record RatingAge(Instant since, Set<String> newer) {
     Objects.requireNonNull(updatedAt, "updatedAt");
     Objects.requireNonNull(rated, "rated");
 
-    Set<String> newer = new LinkedHashSet<>();
+    // Plain HashSet, not LinkedHashSet: the compact constructor immediately discards insertion
+    // order (Set.copyOf), and isNew is a pure membership lookup no caller reads in order.
+    Set<String> newer = new HashSet<>();
     for (String qid : rated) {
       Instant when = updatedAt.get(qid);
       if (when == null) {

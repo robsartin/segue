@@ -237,7 +237,13 @@ public final class SqliteAffinityStore implements AffinityStore {
     }
   }
 
-  /** One row, read the same way by both readers so the two cannot disagree about a column. */
+  /**
+   * One row, read the same way by both callers that build a whole {@link AffinityRecord} — {@link
+   * #find} and {@link #readAll} — so the two cannot disagree about a column. {@link #readRatings}
+   * and {@link #readUpdatedAt} deliberately do NOT go through this method: each must leave out a
+   * column {@link AffinityRecord} would carry (the note, or the note and the rating), so each
+   * parses {@code updated_at} inline instead.
+   */
   private static AffinityRecord read(ResultSet rs) throws SQLException {
     return new AffinityRecord(
         rs.getString("qid"),
