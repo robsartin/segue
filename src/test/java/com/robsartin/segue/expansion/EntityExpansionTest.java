@@ -43,10 +43,16 @@ class EntityExpansionTest {
   private static final String SEED = "Q0900601";
   private static final String NEIGHBOUR = "Q0900602";
   private static final String MINTED = "Q00900603";
+  private static final String OTHER_NEIGHBOUR = "Q0900604";
+  private static final String THIRD_PARTY = "Q0900605";
+  private static final String NOBODY_DESCRIBED = "Q0900606";
 
   /** Invented, like every label in this file — see the class Javadoc. */
   private static final Provenance WIKIDATA =
       new Provenance("wikidata", "S-1", Instant.parse("2026-09-07T09:00:00Z"), 1.0);
+
+  private static final Provenance MUSICBRAINZ =
+      new Provenance("musicbrainz", "S-2", Instant.parse("2026-09-07T09:00:00Z"), 1.0);
 
   private static final Instant MINTED_AT = Instant.parse("2026-09-07T10:00:00Z");
 
@@ -76,7 +82,11 @@ class EntityExpansionTest {
   }
 
   private static AssertionRecord memberOf(String from, String to) {
-    return new AssertionRecord(from, to, EdgeTypes.MEMBER_OF.code(), null, null, WIKIDATA);
+    return memberOf(from, to, WIKIDATA);
+  }
+
+  private static AssertionRecord memberOf(String from, String to, Provenance provenance) {
+    return new AssertionRecord(from, to, EdgeTypes.MEMBER_OF.code(), null, null, provenance);
   }
 
   @Test
@@ -167,6 +177,44 @@ class EntityExpansionTest {
                 assertThat(expanded.effectiveMax())
                     .as("issue #112: the ceiling is applied before the bound reaches an adapter")
                     .isEqualTo(ExpansionBounds.CONCEPT_CEILING));
+  }
+
+  @Test
+  @DisplayName("recorded edges are tallied by the source their provenance names")
+  void shouldTallyEdgesBySourceWhenTwoAdaptersEachRecordSome() {
+    // Two adapters, two assertions each, one of the four naming an endpoint the graph holds no
+    // node for — so the tally counts what was RECORDED and not what was returned.
+    ingest.record(new NodeAssertion(SEED, NodeKind.PERSON, "a singer nobody signed", WIKIDATA));
+    resolver
+        .withEntity(new NodeAssertion(NEIGHBOUR, NodeKind.GROUP, "a band nobody booked", WIKIDATA))
+        .withEntity(
+            new NodeAssertion(OTHER_NEIGHBOUR, NodeKind.WORK, "a song nobody covered", WIKIDATA))
+        .withEntity(
+            new NodeAssertion(THIRD_PARTY, NodeKind.PERSON, "a drummer nobody hired", MUSICBRAINZ));
+    EntityExpansion expansion =
+        expansion(
+            new StubAdapter(
+                "wikidata",
+                ExpandResult.of(
+                    List.of(memberOf(SEED, NEIGHBOUR), memberOf(SEED, OTHER_NEIGHBOUR)))),
+            new StubAdapter(
+                "musicbrainz",
+                ExpandResult.of(
+                    List.of(
+                        memberOf(THIRD_PARTY, SEED, MUSICBRAINZ),
+                        // Names the seed at neither end, so its far endpoint is resolved by
+                        // nobody and IngestService refuses the edge (#233).
+                        memberOf(THIRD_PARTY, NOBODY_DESCRIBED, MUSICBRAINZ)))));
+
+    ExpansionOutcome.Expanded expanded = (ExpansionOutcome.Expanded) expansion.expand(SEED, 10);
+
+    assertThat(expanded.edgesBySource())
+        .as("recorded assertions, keyed by Provenance.sourceId")
+        .containsExactly(Map.entry("wikidata", 2), Map.entry("musicbrainz", 1));
+    assertThat(expanded.edgesAdded())
+        .as("the tally sums to edgesAdded, or one of the two numbers is lying")
+        .isEqualTo(3);
+    assertThat(expanded.refusedEndpoints()).containsExactly(NOBODY_DESCRIBED);
   }
 
   /** Answers for whatever it has been handed, and nothing else. Opens no socket. */

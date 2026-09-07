@@ -17,6 +17,7 @@ import com.robsartin.segue.wikidata.WikidataUnavailableException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -230,6 +231,10 @@ public final class EntityExpansion {
 
     int nodesAdded = 0;
     int edgesAdded = 0;
+    // Keyed by Provenance.sourceId and insertion-ordered, which is adapter order, which is the
+    // order a report prints. Counts what was RECORDED, so an edge IngestService refuses below is
+    // absent from it — the tally has to sum to edgesAdded or one of the two numbers is lying.
+    Map<String, Integer> edgesBySource = new LinkedHashMap<>();
     // Does double duty, deliberately: it is the memo that stops one neighbour being fetched twice
     // in a single call, and it is also the number reported as skippedNeighbors. Keeping a separate
     // counter is what made the two disagree — the counter incremented per dropped assertion while
@@ -316,6 +321,7 @@ public final class EntityExpansion {
         continue;
       }
       edgesAdded++;
+      edgesBySource.merge(assertion.provenance().sourceId(), 1, Integer::sum);
     }
 
     int skippedNeighbors = unresolvableNeighbors.size();
@@ -329,7 +335,7 @@ public final class EntityExpansion {
         truncatingSources,
         boundCutTheConcatenation,
         List.copyOf(refusedEndpoints),
-        Map.of());
+        edgesBySource);
   }
 
   /** The other end of an assertion from the seed's point of view, or null if both ends are it. */

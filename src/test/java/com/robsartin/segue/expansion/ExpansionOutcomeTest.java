@@ -76,6 +76,24 @@ class ExpansionOutcomeTest {
   }
 
   @Test
+  @DisplayName("the tally keeps the order the sources were added in, which is adapter order")
+  void shouldKeepTheSourceOrderWhenTheTallyIsCopied() {
+    Map<String, Integer> counts = new LinkedHashMap<>();
+    counts.put("wikidata", 2);
+    counts.put("musicbrainz", 1);
+
+    ExpansionOutcome.Expanded outcome =
+        new ExpansionOutcome.Expanded(
+            SEED, 0, 3, 0, 10, List.of(), List.of(), false, List.of(), counts);
+
+    assertThat(outcome.edgesBySource())
+        .as(
+            "insertion order is adapter order, which is the order a report prints — Map.copyOf's"
+                + " own order is unspecified and salted per JVM, so it cannot be used here")
+        .containsExactly(Map.entry("wikidata", 2), Map.entry("musicbrainz", 1));
+  }
+
+  @Test
   @DisplayName("a refusal carries the entity and the reason, and no sentence for either caller")
   void shouldCarryTheReasonWhenAnExpansionIsRefused() {
     ExpansionOutcome.Refused refused =

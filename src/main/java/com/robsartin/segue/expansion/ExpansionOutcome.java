@@ -1,5 +1,6 @@
 package com.robsartin.segue.expansion;
 
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -82,10 +83,12 @@ public sealed interface ExpansionOutcome {
       unavailableSources = List.copyOf(Objects.requireNonNull(unavailableSources, "unavailable"));
       truncatingSources = List.copyOf(Objects.requireNonNull(truncatingSources, "truncating"));
       refusedEndpoints = List.copyOf(Objects.requireNonNull(refusedEndpoints, "refusedEndpoints"));
-      // LinkedHashMap and not Map.copyOf: iteration order is what the report renders, and
-      // Map.copyOf's is unspecified and salted per JVM.
+      // LinkedHashMap and not Map.copyOf: iteration order is what a report renders, and
+      // Map.copyOf's is unspecified and salted per JVM — measured, a two-entry copy came back in
+      // insertion order on roughly two runs in ten and reversed on the rest.
       edgesBySource =
-          Map.copyOf(new LinkedHashMap<>(Objects.requireNonNull(edgesBySource, "edgesBySource")));
+          Collections.unmodifiableMap(
+              new LinkedHashMap<>(Objects.requireNonNull(edgesBySource, "edgesBySource")));
     }
 
     /** At least one source could not be reached at all. Aggregate on purpose (ADR 56). */
