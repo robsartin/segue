@@ -248,7 +248,7 @@ ADRs describe.
 graph TD
   app["app<br/>SegueApplication, SegueConfiguration, WikidataMusicBrainzIdentity"]
   mcp["mcp<br/>EntityTools, GraphTools, TasteTools, SegueService"]
-  expansion["expansion<br/>EntityExpansion, ExpansionOutcome, ExpansionSources"]
+  expansion["expansion<br/>EntityExpansion, ExpansionOutcome"]
   ingest["ingest<br/>IngestService, GraphProjector"]
   tinker["tinker<br/>TinkerGraphStore"]
   jena["jena<br/>JenaGraphStore"]
@@ -276,11 +276,16 @@ graph TD
   app --> wikidata
   app --> musicbrainz
   app --> domain
+  mcp --> expansion
   mcp --> ingest
   mcp --> port
   mcp --> domain
   mcp --> support
   mcp -.->|"one class only"| wikidata
+  expansion --> ingest
+  expansion --> port
+  expansion --> domain
+  expansion --> wikidata
   ingest --> port
   ingest --> domain
   ingest -.->|"KindMapper only"| wikidata
