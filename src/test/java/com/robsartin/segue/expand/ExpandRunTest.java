@@ -2,13 +2,16 @@ package com.robsartin.segue.expand;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.Candidate;
+import com.robsartin.segue.domain.EdgeTypes;
 import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.expansion.EntityExpansion;
+import com.robsartin.segue.expansion.ExpansionOutcome;
 import com.robsartin.segue.ingest.IngestService;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.EntityResolver;
@@ -23,9 +26,12 @@ import com.robsartin.segue.tinker.TinkerGraphStore;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -123,6 +129,407 @@ class ExpandRunTest {
     run.dryRun(PROMOTIONS, line -> {});
 
     assertThat(log.readAll()).hasSize(before);
+  }
+
+  @Test
+  @DisplayName("every promotion is visited in the order given, ascending by qid")
+  void shouldVisitEveryPromotionInQidOrderWhenTheRunIsNotADryRun() {
+    String seedOne = "Q0900821";
+    String seedTwo = "Q0900822";
+    String seedThree = "Q0900823";
+    List<String> promotions = List.of(seedOne, seedTwo, seedThree);
+
+    try (AssertionLog scriptLog = new SqliteAssertionLog(dir.resolve("order.db"));
+        GraphStore scriptGraph = new TinkerGraphStore()) {
+      IngestService ingest = new IngestService(scriptLog, scriptGraph, IdentityMerge.NONE);
+      for (String qid : promotions) {
+        ingest.record(new NodeAssertion(qid, NodeKind.PERSON, "an act nobody signed", WIKIDATA));
+      }
+      RecordingAdapter recorder = new RecordingAdapter("wikidata");
+      EntityExpansion expansion =
+          new EntityExpansion(
+              new NeverCalledResolver(),
+              scriptGraph,
+              ingest,
+              new SourceAdapters(List.of(recorder)));
+      ExpandRun scriptedRun = new ExpandRun(expansion, scriptGraph);
+
+      scriptedRun.run(promotions, 10, line -> {});
+
+      assertThat(recorder.seenQids()).containsExactly(seedOne, seedTwo, seedThree);
+    }
+  }
+
+  @Test
+  @DisplayName("the counts sum across every successful expansion")
+  void shouldTallyTheCountsWhenEveryExpansionSucceeds() {
+    String seedOne = "Q0900831";
+    String seedTwo = "Q0900832";
+    String neighbourOne = "Q0900841";
+    String neighbourTwo = "Q0900842";
+
+    try (AssertionLog scriptLog = new SqliteAssertionLog(dir.resolve("sums.db"));
+        GraphStore scriptGraph = new TinkerGraphStore()) {
+      IngestService ingest = new IngestService(scriptLog, scriptGraph, IdentityMerge.NONE);
+      ingest.record(new NodeAssertion(seedOne, NodeKind.PERSON, "an act nobody signed", WIKIDATA));
+      ingest.record(new NodeAssertion(seedTwo, NodeKind.PERSON, "an act nobody booked", WIKIDATA));
+      ScriptedResolver resolver =
+          new ScriptedResolver()
+              .withEntity(
+                  new NodeAssertion(neighbourOne, NodeKind.GROUP, "a band nobody named", WIKIDATA))
+              .withEntity(
+                  new NodeAssertion(
+                      neighbourTwo, NodeKind.GROUP, "a band nobody covered", WIKIDATA));
+      Map<String, ExpandResult> bySeed =
+          Map.of(
+              seedOne, ExpandResult.of(List.of(memberOf(seedOne, neighbourOne))),
+              seedTwo, ExpandResult.of(List.of(memberOf(seedTwo, neighbourTwo))));
+      ScriptedAdapter adapter = new ScriptedAdapter("wikidata", bySeed);
+      EntityExpansion expansion =
+          new EntityExpansion(resolver, scriptGraph, ingest, new SourceAdapters(List.of(adapter)));
+      ExpandRun scriptedRun = new ExpandRun(expansion, scriptGraph);
+
+      ExpansionTally tally = scriptedRun.run(List.of(seedOne, seedTwo), 10, line -> {});
+
+      assertThat(tally.expanded()).isEqualTo(2);
+      assertThat(tally.nodesAdded()).isEqualTo(2);
+      assertThat(tally.edgesAdded()).isEqualTo(2);
+      assertThat(tally.edgesBySource()).containsExactly(Map.entry("wikidata", 2));
+    }
+  }
+
+  @Test
+  @DisplayName("an expansion that adds nothing is still counted as expanded")
+  void shouldCountAnExpansionThatAddedNothingWhenNeitherCountMoved() {
+    String seed = "Q0900851";
+
+    try (AssertionLog scriptLog = new SqliteAssertionLog(dir.resolve("nothing.db"));
+        GraphStore scriptGraph = new TinkerGraphStore()) {
+      IngestService ingest = new IngestService(scriptLog, scriptGraph, IdentityMerge.NONE);
+      ingest.record(new NodeAssertion(seed, NodeKind.PERSON, "an act nobody signed", WIKIDATA));
+      ScriptedAdapter adapter = new ScriptedAdapter("wikidata", Map.of());
+      EntityExpansion expansion =
+          new EntityExpansion(
+              new NeverCalledResolver(), scriptGraph, ingest, new SourceAdapters(List.of(adapter)));
+      ExpandRun scriptedRun = new ExpandRun(expansion, scriptGraph);
+
+      ExpansionTally tally = scriptedRun.run(List.of(seed), 10, line -> {});
+
+      assertThat(tally.expanded()).isEqualTo(1);
+      assertThat(tally.addedNothing()).isEqualTo(1);
+    }
+  }
+
+  @Test
+  @DisplayName("a refusal is tallied by its reason")
+  void shouldTallyARefusalByItsReasonWhenAnEntityCannotBeExpanded() {
+    String minted = "Q00900861";
+
+    try (AssertionLog scriptLog = new SqliteAssertionLog(dir.resolve("refusal.db"));
+        GraphStore scriptGraph = new TinkerGraphStore()) {
+      IngestService ingest = new IngestService(scriptLog, scriptGraph, IdentityMerge.NONE);
+      ingest.record(
+          LocalEntity.minted(minted, NodeKind.WORK, "a pamphlet no source indexes", MINTED_AT));
+      ScriptedAdapter adapter = new ScriptedAdapter("wikidata", Map.of());
+      EntityExpansion expansion =
+          new EntityExpansion(
+              new NeverCalledResolver(), scriptGraph, ingest, new SourceAdapters(List.of(adapter)));
+      ExpandRun scriptedRun = new ExpandRun(expansion, scriptGraph);
+
+      ExpansionTally tally = scriptedRun.run(List.of(minted), 10, line -> {});
+
+      assertThat(tally.refusalsByReason())
+          .containsExactly(Map.entry(ExpansionOutcome.Reason.LOCAL_ENTITY, 1));
+      assertThat(tally.expanded()).isZero();
+    }
+  }
+
+  @Test
+  @DisplayName("a shortfall is tallied to its source, and a bound cut is tallied by entity")
+  void shouldTallyAShortfallToItsSourceWhenAnAdapterCouldNotBeReached() {
+    String seedShortfall = "Q0900871";
+    String seedBoundCut = "Q0900872";
+    String neighbourOne = "Q0900881";
+    String neighbourTwo = "Q0900882";
+
+    try (AssertionLog scriptLog = new SqliteAssertionLog(dir.resolve("shortfall.db"));
+        GraphStore scriptGraph = new TinkerGraphStore()) {
+      IngestService ingest = new IngestService(scriptLog, scriptGraph, IdentityMerge.NONE);
+      ingest.record(
+          new NodeAssertion(seedShortfall, NodeKind.PERSON, "an act nobody signed", WIKIDATA));
+      ingest.record(
+          new NodeAssertion(seedBoundCut, NodeKind.PERSON, "an act nobody booked", WIKIDATA));
+      ScriptedResolver resolver =
+          new ScriptedResolver()
+              .withEntity(
+                  new NodeAssertion(neighbourOne, NodeKind.GROUP, "a band nobody named", WIKIDATA))
+              .withEntity(
+                  new NodeAssertion(
+                      neighbourTwo, NodeKind.GROUP, "a band nobody covered", WIKIDATA));
+
+      SourceAdapter unavailable =
+          new FixedAdapter("unavailable-source", ExpandResult.unavailable());
+      SourceAdapter truncating =
+          new FixedAdapter(
+              "truncating-source",
+              new ExpandResult(List.of(memberOf(seedShortfall, neighbourOne)), false, true));
+      EntityExpansion shortfallExpansion =
+          new EntityExpansion(
+              resolver, scriptGraph, ingest, new SourceAdapters(List.of(unavailable, truncating)));
+      ExpandRun shortfallRun = new ExpandRun(shortfallExpansion, scriptGraph);
+
+      ExpansionTally shortfallTally = shortfallRun.run(List.of(seedShortfall), 10, line -> {});
+
+      assertThat(shortfallTally.unavailableBySource())
+          .containsExactly(Map.entry("unavailable-source", 1));
+      assertThat(shortfallTally.truncatedBySource())
+          .containsExactly(Map.entry("truncating-source", 1));
+
+      SourceAdapter twoAssertions =
+          new FixedAdapter(
+              "wikidata",
+              ExpandResult.of(
+                  List.of(
+                      memberOf(seedBoundCut, neighbourOne), memberOf(seedBoundCut, neighbourTwo))));
+      EntityExpansion boundExpansion =
+          new EntityExpansion(
+              resolver, scriptGraph, ingest, new SourceAdapters(List.of(twoAssertions)));
+      ExpandRun boundRun = new ExpandRun(boundExpansion, scriptGraph);
+
+      ExpansionTally boundTally = boundRun.run(List.of(seedBoundCut), 1, line -> {});
+
+      assertThat(boundTally.boundCut())
+          .as("the cut is attributable to no single adapter, so it is counted by entity")
+          .isEqualTo(1);
+    }
+  }
+
+  @Test
+  @DisplayName("an adapter that throws counts as failed, and the run carries on")
+  void shouldCountTheFailureAndCarryOnWhenAnAdapterThrows() {
+    String seedOne = "Q0900891";
+    String seedTwo = "Q0900892";
+    String seedThree = "Q0900893";
+    List<String> promotions = List.of(seedOne, seedTwo, seedThree);
+
+    try (AssertionLog scriptLog = new SqliteAssertionLog(dir.resolve("throws.db"));
+        GraphStore scriptGraph = new TinkerGraphStore()) {
+      IngestService ingest = new IngestService(scriptLog, scriptGraph, IdentityMerge.NONE);
+      for (String qid : promotions) {
+        ingest.record(new NodeAssertion(qid, NodeKind.PERSON, "an act nobody signed", WIKIDATA));
+      }
+      ThrowingOnSecondAdapter adapter = new ThrowingOnSecondAdapter("wikidata");
+      EntityExpansion expansion =
+          new EntityExpansion(
+              new NeverCalledResolver(), scriptGraph, ingest, new SourceAdapters(List.of(adapter)));
+      ExpandRun scriptedRun = new ExpandRun(expansion, scriptGraph);
+
+      ExpansionTally tally = scriptedRun.run(promotions, 10, line -> {});
+
+      assertThat(tally.failed()).isEqualTo(1);
+      assertThat(tally.expanded()).isEqualTo(2);
+      assertThat(adapter.seenQids())
+          .as("the third entity is still visited after the second one throws")
+          .containsExactly(seedOne, seedTwo, seedThree);
+    }
+  }
+
+  @Test
+  @DisplayName("no progress line names an entity, whatever the outcome")
+  void shouldNameNoEntityWhenAProgressLineIsWritten() {
+    String succeeds = "Q0900901";
+    String refused = "Q00900902";
+    String fails = "Q0900903";
+    String neighbour = "Q0900911";
+
+    try (AssertionLog scriptLog = new SqliteAssertionLog(dir.resolve("naming.db"));
+        GraphStore scriptGraph = new TinkerGraphStore()) {
+      IngestService ingest = new IngestService(scriptLog, scriptGraph, IdentityMerge.NONE);
+      ingest.record(new NodeAssertion(succeeds, NodeKind.PERSON, "an act nobody signed", WIKIDATA));
+      ingest.record(
+          LocalEntity.minted(refused, NodeKind.WORK, "a pamphlet no source indexes", MINTED_AT));
+      ingest.record(new NodeAssertion(fails, NodeKind.PERSON, "an act nobody booked", WIKIDATA));
+      ScriptedResolver resolver =
+          new ScriptedResolver()
+              .withEntity(
+                  new NodeAssertion(neighbour, NodeKind.GROUP, "a band nobody named", WIKIDATA));
+      Map<String, ExpandResult> bySeed =
+          Map.of(succeeds, ExpandResult.of(List.of(memberOf(succeeds, neighbour))));
+      SourceAdapter adapter =
+          new SourceAdapter() {
+            @Override
+            public String id() {
+              return "wikidata";
+            }
+
+            @Override
+            public boolean supports(NodeKind kind) {
+              return true;
+            }
+
+            @Override
+            public ExpandResult expand(NodeRecord seed, ExpandContext ctx) {
+              if (seed.qid().equals(fails)) {
+                throw new IllegalStateException("a source went sideways");
+              }
+              return bySeed.getOrDefault(seed.qid(), ExpandResult.of(List.of()));
+            }
+          };
+      EntityExpansion expansion =
+          new EntityExpansion(resolver, scriptGraph, ingest, new SourceAdapters(List.of(adapter)));
+      ExpandRun scriptedRun = new ExpandRun(expansion, scriptGraph);
+      List<String> lines = new ArrayList<>();
+
+      scriptedRun.run(List.of(succeeds, refused, fails), 10, lines::add);
+
+      assertThat(lines).isNotEmpty();
+      Pattern qidLike = Pattern.compile("\\bQ\\d+\\b");
+      assertThat(lines).noneMatch(line -> qidLike.matcher(line).find());
+    }
+  }
+
+  private static AssertionRecord memberOf(String from, String to) {
+    return new AssertionRecord(from, to, EdgeTypes.MEMBER_OF.code(), null, null, WIKIDATA);
+  }
+
+  /** Records the qids it is asked about, in the order it is asked, and adds nothing. */
+  private static final class RecordingAdapter implements SourceAdapter {
+    private final String id;
+    private final List<String> seenQids = new ArrayList<>();
+
+    RecordingAdapter(String id) {
+      this.id = id;
+    }
+
+    List<String> seenQids() {
+      return List.copyOf(seenQids);
+    }
+
+    @Override
+    public String id() {
+      return id;
+    }
+
+    @Override
+    public boolean supports(NodeKind kind) {
+      return true;
+    }
+
+    @Override
+    public ExpandResult expand(NodeRecord seed, ExpandContext ctx) {
+      seenQids.add(seed.qid());
+      return ExpandResult.of(List.of());
+    }
+  }
+
+  /** Answers a fixed result, whichever seed it is asked about. */
+  private static final class FixedAdapter implements SourceAdapter {
+    private final String id;
+    private final ExpandResult result;
+
+    FixedAdapter(String id, ExpandResult result) {
+      this.id = id;
+      this.result = result;
+    }
+
+    @Override
+    public String id() {
+      return id;
+    }
+
+    @Override
+    public boolean supports(NodeKind kind) {
+      return true;
+    }
+
+    @Override
+    public ExpandResult expand(NodeRecord seed, ExpandContext ctx) {
+      return result;
+    }
+  }
+
+  /** Answers a scripted result per seed qid, or an empty one for any seed not scripted. */
+  private static final class ScriptedAdapter implements SourceAdapter {
+    private final String id;
+    private final Map<String, ExpandResult> bySeed;
+
+    ScriptedAdapter(String id, Map<String, ExpandResult> bySeed) {
+      this.id = id;
+      this.bySeed = bySeed;
+    }
+
+    @Override
+    public String id() {
+      return id;
+    }
+
+    @Override
+    public boolean supports(NodeKind kind) {
+      return true;
+    }
+
+    @Override
+    public ExpandResult expand(NodeRecord seed, ExpandContext ctx) {
+      return bySeed.getOrDefault(seed.qid(), ExpandResult.of(List.of()));
+    }
+  }
+
+  /** Throws on the second call and records every qid it was asked about, in order. */
+  private static final class ThrowingOnSecondAdapter implements SourceAdapter {
+    private final String id;
+    private final List<String> seenQids = new ArrayList<>();
+
+    ThrowingOnSecondAdapter(String id) {
+      this.id = id;
+    }
+
+    List<String> seenQids() {
+      return List.copyOf(seenQids);
+    }
+
+    @Override
+    public String id() {
+      return id;
+    }
+
+    @Override
+    public boolean supports(NodeKind kind) {
+      return true;
+    }
+
+    @Override
+    public ExpandResult expand(NodeRecord seed, ExpandContext ctx) {
+      seenQids.add(seed.qid());
+      if (seenQids.size() == 2) {
+        throw new IllegalStateException("the second adapter call always throws");
+      }
+      return ExpandResult.of(List.of());
+    }
+  }
+
+  /** Answers for whatever it has been handed, and nothing else. Opens no socket. */
+  private static final class ScriptedResolver implements EntityResolver {
+    private final Map<String, NodeAssertion> byQid = new HashMap<>();
+
+    @Override
+    public String id() {
+      return "scripted";
+    }
+
+    @Override
+    public List<Candidate> search(String query, NodeKind kind, int limit) {
+      return List.of();
+    }
+
+    @Override
+    public Optional<NodeAssertion> fetch(String qid) {
+      return Optional.ofNullable(byQid.get(qid));
+    }
+
+    ScriptedResolver withEntity(NodeAssertion assertion) {
+      byQid.put(assertion.qid(), assertion);
+      return this;
+    }
   }
 
   /** Answers for nothing — a dry run must never reach it. */
