@@ -1,6 +1,7 @@
 package com.robsartin.segue.ratings;
 
 import com.robsartin.segue.domain.AffinityRecord;
+import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.ratings.RatingsCli.Options;
@@ -75,9 +76,13 @@ public final class RatingsRun {
 
     List<AffinityRecord> recorded = ratings.readAll();
     // Skipped entirely when nothing is rated: a real log is a quarter of a million assertions, and
-    // there is no name to look up.
+    // there is no name to look up. The skip is here rather than in Labels because this is the class
+    // that knows there is nothing to name, and because the names export folds the merges out of
+    // this same list — one read per run (#285).
+    List<LoggedAssertion> logged = recorded.isEmpty() ? List.of() : log.readAll();
     Map<String, String> labels =
-        Labels.forQids(log, recorded.stream().map(AffinityRecord::qid).collect(Collectors.toSet()));
+        Labels.forQids(
+            logged, recorded.stream().map(AffinityRecord::qid).collect(Collectors.toSet()));
 
     List<AffinityRow> rows =
         recorded.stream()

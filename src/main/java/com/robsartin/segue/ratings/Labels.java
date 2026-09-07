@@ -6,7 +6,6 @@ import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.Retractions;
 import com.robsartin.segue.domain.SameAs;
-import com.robsartin.segue.port.AssertionLog;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -66,13 +65,19 @@ final class Labels {
    * <p>Filtered to the qids asked for rather than returning the whole map: a real log holds tens of
    * thousands of node claims and a person has rated a few dozen things. Data minimisation (ADR 16)
    * is the reason to prefer it, and the memory is a bonus.
+   *
+   * <p><b>Handed the log rather than reading it</b> (#285). {@code RatingsRun} needs the merges out
+   * of the same list for the names export, and a method that reads for itself would have made that
+   * a second {@code readAll} of a quarter of a million rows. It is also the class that knows when
+   * there is nothing to name, which is where the "do not read at all" skip now lives. One read per
+   * run, in every path — ADR 63 states the same principle for the census: one fold of the log
+   * rather than two.
    */
-  static Map<String, String> forQids(AssertionLog log, Set<String> qids) {
+  static Map<String, String> forQids(List<LoggedAssertion> logged, Set<String> qids) {
     Map<String, String> labels = new HashMap<>();
     if (qids.isEmpty()) {
       return labels;
     }
-    List<LoggedAssertion> logged = log.readAll();
     Retractions retractions = Retractions.in(logged);
     // The qids asked for, plus every local id merged into one of them. A canonical id can be rated
     // while the entity merged into it never was - the owner mints, merges, then rates the real
