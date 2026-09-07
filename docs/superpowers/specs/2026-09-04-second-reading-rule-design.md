@@ -336,3 +336,28 @@ the margin.
 **The limit, as before.** The halves are drawn on the last write, so an old promotion re-rated in a
 session is in the new half; the census's `taste` section, read before the harness, bounds how many
 ratings changed.
+
+## Note added 2026-09-07, before the seventh reading (issue #282)
+
+The seventh reading follows the owner's fourth deck session, and it is taken with the same instant as
+the fifth and sixth, `2026-09-06T18:56:00Z`, so the old half is the same population as theirs. This
+note is committed before the reading exists, so the rule's ordering property survives a seventh time.
+
+**No clause changes**, and the notes above apply as written. The rule reads the whole-population
+`in pool` and `hits` cells; the half cells decide nothing.
+
+**What this reading is read for, fixed before the number.** The same four observations the sixth
+reading's note allowed, now against the sixth reading: the shipped row's whole-population rate; its
+old-half and new-half rates; each challenger's whole-population rate at the shipped floor. They
+decide nothing. "Held" and "fell" mean what the sixth reading's note said: a change inside a few
+points is "held".
+
+**The two sentences, written before the table is seen.** If the shipped rate fell against the sixth
+while the challengers' held, the amendment says the bias the fifth reading raised is measured over
+two sessions and the deck's candidate order is the next issue. If the shipped rate held, the
+amendment says that after two consecutive holds the question rests until a session large enough to
+move a whole-row rate by more than a few points has been rated — the census's `taste` deltas say
+when that has happened — and that no further reading is worth taking on a smaller one.
+
+**The limit, as before.** The halves are drawn on the last write; the census's `taste` section,
+read before the harness, bounds how many ratings changed.
