@@ -170,15 +170,18 @@ Per promotion:
   `MusicBrainzClient.DEFAULT_MIN_REQUEST_INTERVAL`, reserved **before** sending rather than in
   response to a rejection. Every other kind costs nothing, because the adapter is skipped.
 - **Wikidata**: two calls for the adapter (the entity, then the reverse-claims query,
-  [ADR 36](0036-reverse-lookup-via-sparql.md)), two for the bridge (the seed's MBID, then one
-  batched lookup per hundred neighbours), and one `EntityResolver.fetch` for each neighbour no source
-  described. None is proactively throttled; each costs a round trip, and a rejection costs a backoff.
+  [ADR 36](0036-reverse-lookup-via-sparql.md)), **plus two more for the bridge (the seed's MBID,
+  then one batched lookup per hundred neighbours) when the seed is a `PERSON` or `GROUP` that
+  reaches MusicBrainz** — the same gate the MusicBrainz bullet above describes — and one
+  `EntityResolver.fetch` for each neighbour no source described. None is proactively throttled; each
+  costs a round trip, and a rejection costs a backoff.
 
 So the floor is **`P` × the MusicBrainz interval**, and the realistic cost is
-**`P × (one interval + (4 + u) × t)`**, where `t` is a Wikidata round trip and `u` is the number of
-neighbours per expansion neither adapter could describe. At a `P` in the hundreds that is tens of
-minutes — which is why the tool is supervised, why the dry run comes first, and why every progress
-line reports a position.
+**`P × (one interval + (4 + u) × t)`** for a `PERSON` or `GROUP` promotion that reaches MusicBrainz;
+every other promotion pays only **`P × (2 + u) × t`**, where `t` is a Wikidata round trip and `u` is
+the number of neighbours per expansion neither adapter could describe. At a `P` in the hundreds that
+is tens of minutes — which is why the tool is supervised, why the dry run comes first, and why every
+progress line reports a position.
 
 **There is no sleep in this tool and no wall-clock assertion anywhere in its tests.** The pacing is
 the adapters' own, and it is correct only because every entity shares one client instance: the

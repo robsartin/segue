@@ -268,7 +268,7 @@ graph TD
   own["own<br/>OwnCli, OwnRun"]
   census["census<br/>CensusCli, CensusRun, Census, CensusReport"]
   evaluate["evaluate<br/>EvaluateCli, HeldOut, Scoring, EvaluationReport"]
-  expand["expand<br/>ExpandCli, ExpandRun, Preflight"]
+  expand["expand<br/>ExpandCli, ExpandRun, Preflight, ExpansionTally, ExpansionReport"]
 
   app --> mcp
   app --> ingest
@@ -3024,8 +3024,8 @@ This run changes no code. What it produces is issues, and these are the ones to 
 
 ## Expanding every promotion
 
-Of 123,752 nodes in the real graph, [ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)'s
-own note records that 13.6% are the subject of a stored edge — so the thing that bounds what the
+[ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)'s own note records what share of
+the real graph's nodes are the subject of a stored edge — so the thing that bounds what the
 recommender can see is expansion coverage, not any rule in its arithmetic. The entities you rated at
 or above `KnownList.PROMOTION_RATING` are the ones you said you have, and until this chapter existed
 there was no way to expand them except one `expand_entity` call at a time through the client. This
@@ -3111,9 +3111,12 @@ The arithmetic, so the number is yours rather than a figure quoted here:
 - Every `PERSON` or `GROUP` promotion costs **at least one second of MusicBrainz's own pacing** —
   `MusicBrainzClient` reserves its request slots against a minimum interval, one client for the whole
   run, which is what keeps a batch honest against a public API.
-- Every promotion costs **about four Wikidata round trips**: the Action API fetch of the claims
-  stated on it, the Query Service reverse lookup, and the bridge's own lookups
-  ([ADR 36](adr/0036-reverse-lookup-via-sparql.md), [ADR 54](adr/0054-musicbrainz-as-the-second-source.md)).
+- Every promotion costs **two Wikidata round trips** for the adapter — the Action API fetch of the
+  claims stated on it, then the Query Service reverse lookup
+  ([ADR 36](adr/0036-reverse-lookup-via-sparql.md)) — **plus two more for a `PERSON` or `GROUP`
+  promotion**, the bridge's own lookups, where MusicBrainz runs at all
+  ([ADR 54](adr/0054-musicbrainz-as-the-second-source.md)). A `WORK`, `PLACE`, `EVENT` or `CONCEPT`
+  promotion pays only the first two.
 - Plus **one more round trip per neighbour no source described**. Wikidata's reverse pass returns
   identity inline for the neighbours it discovers, so this is the remainder rather than the count —
   but a promotion whose neighbours arrive from MusicBrainz alone pays it for each of them.
@@ -3138,25 +3141,30 @@ carries no figures, because a figure here would be a number nothing regenerates.
 
 | line | direction | why |
 | --- | --- | --- |
+| `nodes` / total | up | every neighbour no claim described before is a new node |
 | `nodes` by kind | up | every neighbour no claim described before is a new node |
+| `edges` / total | up | the assertions the adapters returned |
 | `edges` by type | up | the assertions the adapters returned |
 | `edges` by source | up, **and `musicbrainz` up for the first time in bulk** | the second source has only ever been reached one interactive call at a time |
 | `edges` by corroboration | up at two sources | where both sources state one relationship |
+| `edges` / dangling | **unchanged** | `IngestService.record` refuses an edge before it appends unless both folded endpoints already have a node — issue #233's pre-flight is what makes this line stay at whatever it read before |
+| `edges` / withdrawn | **unchanged** | that count is a merge's canonical side emptied by a retraction, and this run makes no retraction |
 | `claims` / log rows | up by at least the edges added | every recorded assertion is a row ([ADR 19](adr/0019-assertion-log-source-of-truth.md)) |
-| `degree` quantiles | up | the promotions are the seeds, so the low quantiles move most |
+| `degree` / max | up | a promotion's own degree, or a shared neighbour's, can push past the previous highest, and nothing in a run with no retraction ever lowers it |
+| `degree` / p50, p90, p99 | may move either way, and probably down | every neighbour no claim described before enters the population at degree 1 (`DegreeCensus`); against a six-figure population, a flood of new degree-1 arrivals more plausibly drags the middle and upper quantiles down than the promotions' own rising degree drags them up — read whichever way your own before/after actually moved, and do not expect the intuitive direction |
+| `degree` / at or below the floor, at or below the floor % | up | every new node enters at degree 1, and `Recommendations.MIN_CANDIDATE_DEGREE` is never zero, so a degree-1 arrival always lands at or below it |
 | `bridge` / entities MusicBrainz reached | up | one bridge lookup per `PERSON` or `GROUP` promotion |
 | `concept classes` | may move | new nodes arrive whose classes `KindMapper` may not yet place |
 | `taste` by score | **unchanged** | this tool writes no rating, and its fence forbids one |
-| `claims` / withdrawn | **unchanged** | nothing is retracted |
 
-The last two are the ones worth checking hardest: they are what a fence being wrong would show up
-as.
+`taste` and `edges` / withdrawn are the ones worth checking hardest: they are what a fence being
+wrong would show up as.
 
 ### What to file from what you saw
 
 This run changes no code. What it produces is issues, and these are the ones to watch for:
 
-- **A line that moved when the table above says it should not** — `taste` or `claims / withdrawn`.
+- **A line that moved when the table above says it should not** — `taste` or `edges / withdrawn`.
   Either one means a fence reaches less far than
   `ArchitectureTest.theExpanderWritesThroughIngestAlone` says it does, and that is the most serious
   thing this run can find.
