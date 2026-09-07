@@ -54,6 +54,12 @@ import org.junit.jupiter.api.io.TempDir;
  * would.
  *
  * <p>It is a guard rather than a behaviour, so its evidence is a planted leak seen to fire.
+ *
+ * <p><b>The split line adds one operator-supplied fact, and it is safe for the same reason the
+ * table is</b> (issue #276): the instant that reaches the log is rendered from the parsed {@code
+ * Instant}, never from the {@code --rated-since} argument string, so however the flag was spelled
+ * only digits, {@code -}, {@code :}, {@code .}, {@code T} and {@code Z} can reach the line. Those
+ * are not what {@link #A_QID} looks at — there is no {@code Q} in an instant at all.
  */
 class EvaluationIsSafeToPasteTest {
 
@@ -93,6 +99,71 @@ class EvaluationIsSafeToPasteTest {
       throws IOException {
     Path db = dir.resolve("scratch.db");
     Path known = dir.resolve("known.csv");
+    writeTheFixture(db, known);
+    captured.list.clear();
+
+    EvaluateCli.main(new String[] {"--db", db.toString(), "--known", known.toString()});
+
+    List<String> everyLine =
+        List.copyOf(captured.list).stream().map(ILoggingEvent::getFormattedMessage).toList();
+
+    assertThat(everyLine)
+        .as("the table was actually printed — without this the assertions below are vacuous")
+        .contains(EvaluationReport.HEADER)
+        .anyMatch(line -> line.startsWith("raw"));
+    assertThat(everyLine)
+        .as("no line carries a label (ADR 51, ADR 63, ADR 65)")
+        .noneMatch(line -> line.contains(LABEL));
+    assertThat(everyLine)
+        .as("no line carries a note (ADR 33, ADR 51)")
+        .noneMatch(line -> line.contains(NOTE));
+    assertThat(everyLine)
+        .as(
+            "no line carries anything qid-shaped, wherever it came from — a label, a note, or an"
+                + " edge type code that turned out to look like an entity")
+        .noneMatch(line -> A_QID.matcher(line).find());
+  }
+
+  @Test
+  @DisplayName(
+      "the split line reaches the log with the instant on it, and no label, note or id with it")
+  void shouldEmitTheSplitLineAndNothingElseWhenTheRunIsSplitByRatingAge() throws IOException {
+    Path db = dir.resolve("scratch.db");
+    Path known = dir.resolve("known.csv");
+    writeTheFixture(db, known);
+    captured.list.clear();
+
+    EvaluateCli.main(
+        new String[] {
+          "--db", db.toString(),
+          "--known", known.toString(),
+          "--rated-since", "2026-01-01T00:00:00Z"
+        });
+
+    List<String> everyLine =
+        List.copyOf(captured.list).stream().map(ILoggingEvent::getFormattedMessage).toList();
+
+    assertThat(everyLine)
+        .as("the split line was actually printed — without this the assertions below are vacuous")
+        .anyMatch(line -> line.startsWith("# split by rating age at 2026-01-01T00:00:00Z"));
+    assertThat(everyLine)
+        .as("no line carries a label (ADR 51, ADR 63, ADR 65)")
+        .noneMatch(line -> line.contains(LABEL));
+    assertThat(everyLine)
+        .as("no line carries a note (ADR 33, ADR 51)")
+        .noneMatch(line -> line.contains(NOTE));
+    assertThat(everyLine)
+        .as("no line carries anything qid-shaped — the instant is rendered from the parsed value")
+        .noneMatch(line -> A_QID.matcher(line).find());
+  }
+
+  /**
+   * The fixture every test in this class shares: a label, a note, a {@code Q} id inside that note
+   * and a rating, all reached through the exact same read path (issue #276) — the fixture rates
+   * {@code HIDDEN} at {@code 2026-02-01T08:00:00Z}, so an instant of {@code 2026-01-01T00:00:00Z}
+   * puts it in the new half.
+   */
+  private void writeTheFixture(Path db, Path known) throws IOException {
     Files.writeString(known, InventedEvaluation.KNOWN_ONE + "\n");
     try (SqliteAssertionLog log = new SqliteAssertionLog(db);
         SqliteAffinityStore affinity = new SqliteAffinityStore(db)) {
@@ -125,27 +196,5 @@ class EvaluationIsSafeToPasteTest {
           new AffinityRecord(
               InventedEvaluation.HIDDEN, 5, NOTE, Instant.parse("2026-02-01T08:00:00Z")));
     }
-    captured.list.clear();
-
-    EvaluateCli.main(new String[] {"--db", db.toString(), "--known", known.toString()});
-
-    List<String> everyLine =
-        List.copyOf(captured.list).stream().map(ILoggingEvent::getFormattedMessage).toList();
-
-    assertThat(everyLine)
-        .as("the table was actually printed — without this the assertions below are vacuous")
-        .contains(EvaluationReport.HEADER)
-        .anyMatch(line -> line.startsWith("raw"));
-    assertThat(everyLine)
-        .as("no line carries a label (ADR 51, ADR 63, ADR 65)")
-        .noneMatch(line -> line.contains(LABEL));
-    assertThat(everyLine)
-        .as("no line carries a note (ADR 33, ADR 51)")
-        .noneMatch(line -> line.contains(NOTE));
-    assertThat(everyLine)
-        .as(
-            "no line carries anything qid-shaped, wherever it came from — a label, a note, or an"
-                + " edge type code that turned out to look like an entity")
-        .noneMatch(line -> A_QID.matcher(line).find());
   }
 }

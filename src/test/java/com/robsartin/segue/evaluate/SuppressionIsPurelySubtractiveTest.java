@@ -8,6 +8,7 @@ import com.robsartin.segue.recommend.CandidateSweep;
 import com.robsartin.segue.recommend.Sweep;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -73,7 +74,8 @@ class SuppressionIsPurelySubtractiveTest {
               SETTING,
               Set.of(InventedEvaluation.HIDDEN),
               Set.of(InventedEvaluation.REJECTED),
-              TOP);
+              TOP,
+              Optional.empty());
 
       assertThat(reading.pool())
           .as("the pool the report states is the one the recommender would have ranked")

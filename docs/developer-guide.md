@@ -531,6 +531,7 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `theRecommenderReadsRatingsAndNeverNotes` | `recommend` depending on `AffinityRecord` **as a type**, or calling `AffinityStore.find` or `readAll` — it may hold the store and call the note-free `readRatings`, and nothing that carries free text | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 39](adr/0039-affinity-capture-and-read.md), [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
 | `onlyTheRatingsToolReadsANote` | calling `AffinityRecord.note()` from outside `ratings` and `sqlite` — the score is ordinary data, the note is the owner's and is read on their own machine | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 43](adr/0043-listing-your-own-ratings.md) |
 | `onlyTheRecommenderReadsEveryRating` | calling `AffinityStore.readRatings` from outside `recommend`, `rate`, `census` **and `evaluate`** — the note-free bulk read belongs to the four dev-side tools that weight, deal, count or evaluate by it, and ADR 26 still pins the surface at six tools | [ADR 26](adr/0026-mcp-tool-surface.md), [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md), [ADR 63](adr/0063-a-read-only-census-of-the-graph.md), [ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md) |
+| `onlyTheEvaluationHarnessReadsWhenARatingChanged` | calling `AffinityStore.readUpdatedAt` from outside `evaluate` — a bulk read keyed by qid enumerates the whole taste layer whatever its values are, so when a rating last changed belongs to the one tool that splits its held-out population by rating age | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 39](adr/0039-affinity-capture-and-read.md), [ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md) |
 | `theRecommenderOpensNothingElse` | `recommend` depending on `jena`, `mcp`, `app`, `java.net`, `javax.net` or every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`, so a new tool joins every fence at once) — `rate` depends on `recommend` by design, and this is what keeps that trip one-way | [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
 | `theRatingDeckWritesOnlyAffinity` | `rate` calling the three world-fact writes, or depending on `IngestService` **as a type** — the deck records what the owner thinks, never what the world says, and cannot route a claim through the one class allowed to write one | [ADR 46](adr/0046-the-rating-deck.md) |
 | `theRatingDeckNeverReadsANote` | `rate` calling `AffinityRecord.note()` — it writes the score and must not be able to display the note | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 46](adr/0046-the-rating-deck.md) |
@@ -2186,6 +2187,23 @@ its counts totalled over the folds and its means taken over every hit in the run
 `HeldOut.EVERY` times the sweeps** — the replay and the sweep's memoised degrees are still paid once,
 but budget five times a single-fold run.
 
+**Two halves by rating age, when you ask for one.** `--rated-since <ISO-8601 instant>` is optional.
+Given, the eligible population is split by whether each rating was last written before that instant
+or on or after it, every row gains `old in pool`, `old hits`, `new in pool` and `new hits`, and the
+header names the instant and the size of each half. Not given, the block is **byte-identical** to
+every one already on record, which is what keeps two runs diffable row by row. The whole-population
+`in pool` and `hits` are the cells a reading is judged on; the halves are an observation.
+
+```bash
+./gradlew evaluate --args="--db $HOME/.segue/segue.db --known $HOME/known.csv --rated-since 2026-09-06T15:00:00Z"
+```
+
+**The timestamp is the last write, not the first.** One row per entity
+([ADR 39](adr/0039-affinity-capture-and-read.md)), so a promotion you rated years ago and re-rated
+after the instant counts as new. The report's split line says so on its own line, because the numbers
+beside it are misread without it. `graphCensus`'s `taste` deltas bound how many ratings *changed*,
+not how many are new.
+
 **One sweep per setting per fold, with suppression withheld.** Each setting's candidate pool is
 swept once per fold with nothing suppressed, so the entities you rated down are in it and can be
 ranked — that ranking is the negative reading. The same sweep's result, with the suppressed
@@ -2231,7 +2249,9 @@ tool's.
   taste-layer writes, and depending on `IngestService` at all — a tool that could write could change
   what it is reporting on.
 - **See a note.** `theEvaluationHarnessReadsRatingsAndNeverNotes` bans `AffinityRecord` as a type
-  and `find`/`readAll` as calls; it may read every score through `readRatings` and nothing more.
+  and `find`/`readAll` as calls; it may read every score through `readRatings` and nothing more. It
+  reads when a rating last changed through `readUpdatedAt`, which carries neither the note nor the
+  score, and `onlyTheEvaluationHarnessReadsWhenARatingChanged` keeps that read inside this package.
 - **Reach a network, an engine, or a sibling tool but one.** `theEvaluationHarnessOpensNothingElse`
   bans every dev tool but `recommend` — the harness measures the shipped sweep rather than a second
   copy of it, so that one dependency is deliberate, the third between dev tools after

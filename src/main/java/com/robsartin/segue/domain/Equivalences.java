@@ -1,5 +1,6 @@
 package com.robsartin.segue.domain;
 
+import java.time.Instant;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -1129,12 +1130,42 @@ public record Equivalences(
    */
   public Map<String, Integer> resolve(Map<String, Integer> ratings) {
     Objects.requireNonNull(ratings, "ratings");
+    return collapse(ratings);
+  }
+
+  /**
+   * The rating timestamps as they read through the equivalences: one row per thing, not one per id
+   * (issue #276).
+   *
+   * <p><b>The same rule {@link #resolve} applies to the ratings, applied to the other column of the
+   * same rows</b> — a merged local id leaves the map and its instant lands on the canonical id only
+   * where the canonical id has none. The two maps come from one table and have one keyset, so the
+   * same key survives in both and a rating cannot end up beside another row's timestamp. Two
+   * readers with their own idea of what a merge reaches is the defect this class exists to prevent,
+   * so the harness asks here rather than resolving a second time of its own.
+   *
+   * @param updatedAt qid to when that rating was last written — {@code
+   *     AffinityStore.readUpdatedAt}, note-free and score-free by construction, which is what keeps
+   *     this method in {@code domain}
+   */
+  public Map<String, Instant> resolveUpdatedAt(Map<String, Instant> updatedAt) {
+    Objects.requireNonNull(updatedAt, "updatedAt");
+    return collapse(updatedAt);
+  }
+
+  /**
+   * One merge rule, whatever is on the other side of the arrow. The ratings and the timestamps are
+   * two views of one table and its one keyset, so a second copy of this loop is the second copy of
+   * a rule that a future editor changes in one place only — {@link Retractions}' own reason for
+   * existing, and this class's.
+   */
+  private <V> Map<String, V> collapse(Map<String, V> byQid) {
     if (canonicalByLocal.isEmpty()) {
-      return Map.copyOf(ratings);
+      return Map.copyOf(byQid);
     }
-    Map<String, Integer> resolved = new LinkedHashMap<>(ratings);
+    Map<String, V> resolved = new LinkedHashMap<>(byQid);
     for (Map.Entry<String, String> merge : canonicalByLocal.entrySet()) {
-      Integer local = resolved.remove(merge.getKey());
+      V local = resolved.remove(merge.getKey());
       if (local != null) {
         resolved.putIfAbsent(merge.getValue(), local);
       }

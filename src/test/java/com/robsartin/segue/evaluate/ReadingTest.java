@@ -19,9 +19,9 @@ class ReadingTest {
   @Test
   @DisplayName("every count and every rank sum adds, and the setting is carried through")
   void shouldAddEveryFieldWhenTheFoldsOfOneSettingAreSummed() {
-    Reading first = new Reading(SETTING, 900, 40, 4, 30, 2, 8);
-    Reading second = new Reading(SETTING, 880, 38, 3, 21, 1, 5);
-    Reading third = new Reading(SETTING, 870, 37, 0, 0, 0, 0);
+    Reading first = new Reading(SETTING, 900, 40, 4, 30, 2, 8, Halves.UNSPLIT);
+    Reading second = new Reading(SETTING, 880, 38, 3, 21, 1, 5, Halves.UNSPLIT);
+    Reading third = new Reading(SETTING, 870, 37, 0, 0, 0, 0, Halves.UNSPLIT);
 
     Reading summed = Reading.summed(List.of(first, second, third));
 
@@ -39,7 +39,7 @@ class ReadingTest {
   @Test
   @DisplayName("one fold sums to itself")
   void shouldReturnTheSameNumbersWhenThereIsOnlyOneFold() {
-    Reading only = new Reading(SETTING, 900, 40, 4, 30, 2, 8);
+    Reading only = new Reading(SETTING, 900, 40, 4, 30, 2, 8, Halves.UNSPLIT);
 
     assertThat(Reading.summed(List.of(only))).isEqualTo(only);
   }
@@ -47,8 +47,8 @@ class ReadingTest {
   @Test
   @DisplayName("readings of two different settings are refused, because one row is one setting")
   void shouldRefuseTheFoldsWhenTheyAreNotAllOfOneSetting() {
-    Reading lift = new Reading(SETTING, 900, 40, 4, 30, 2, 8);
-    Reading raw = new Reading(new Setting(Scorer.RAW, 5), 900, 40, 4, 30, 2, 8);
+    Reading lift = new Reading(SETTING, 900, 40, 4, 30, 2, 8, Halves.UNSPLIT);
+    Reading raw = new Reading(new Setting(Scorer.RAW, 5), 900, 40, 4, 30, 2, 8, Halves.UNSPLIT);
 
     assertThatThrownBy(() -> Reading.summed(List.of(lift, raw)))
         .as("summing across settings instead of across folds is the transposition this catches")
@@ -62,5 +62,39 @@ class ReadingTest {
     assertThatThrownBy(() -> Reading.summed(List.of()))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("no folds");
+  }
+
+  @Test
+  @DisplayName("the age split's four cells add over the folds, like the counts beside them")
+  void shouldAddTheHalvesWhenTheFoldsOfOneSplitSettingAreSummed() {
+    // second's hits is 2, not the 3 every other Reading fixture in this class reuses, and its
+    // heldOutInPool is 37, not 38: both must equal its own halves' sums (oldHits + newHits = 2 + 0,
+    // oldInPool + newInPool = 28 + 9 = 37) for the identities below to be facts about the fixture
+    // rather than arithmetic errors in it. The hits mismatch was the task 4 report's deviation from
+    // the brief; the heldOutInPool mismatch was the fix-round-1 review's Important finding 1 — the
+    // same error, one field to the left, because only the hits identity was asserted before.
+    Reading first = new Reading(SETTING, 900, 40, 4, 30, 2, 8, new Halves(true, 30, 3, 10, 1));
+    Reading second = new Reading(SETTING, 880, 37, 2, 21, 1, 5, new Halves(true, 28, 2, 9, 0));
+
+    Reading summed = Reading.summed(List.of(first, second));
+
+    assertThat(summed.halves()).isEqualTo(new Halves(true, 58, 5, 19, 1));
+    assertThat(summed.halves().oldHits() + summed.halves().newHits())
+        .as("the halves partition the hits, because the folds partition the held-out set")
+        .isEqualTo(summed.hits());
+    assertThat(summed.halves().oldInPool() + summed.halves().newInPool())
+        .as("the halves partition the in-pool count too, on the same terms as the hits above")
+        .isEqualTo(summed.heldOutInPool());
+  }
+
+  @Test
+  @DisplayName("a split fold and an unsplit one cannot be summed into one row")
+  void shouldRefuseTheFoldsWhenOneIsSplitByRatingAgeAndAnotherIsNot() {
+    Reading split = new Reading(SETTING, 900, 40, 4, 30, 2, 8, new Halves(true, 30, 3, 10, 1));
+    Reading unsplit = new Reading(SETTING, 880, 38, 3, 21, 1, 5, Halves.UNSPLIT);
+
+    assertThatThrownBy(() -> Reading.summed(List.of(split, unsplit)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("one run is split");
   }
 }

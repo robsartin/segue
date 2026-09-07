@@ -13,6 +13,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -52,6 +53,13 @@ import java.util.function.ToDoubleFunction;
  * <p><b>It reads and cannot write.</b> {@code ArchitectureTest.theEvaluationHarnessOnlyReads}
  * forbids this package the three world-fact writes, both taste-layer writes and {@code
  * IngestService}.
+ *
+ * <p><b>The rating-age halves are an observation, not a second split.</b> {@link RatingAge} never
+ * reaches {@link EvaluationReport} — this class tallies {@code oldHeldOut}/{@code newHeldOut} over
+ * the same fold loop that already builds {@code heldOut}, and passes {@code age} through to {@link
+ * Scoring#read} so each setting's row tallies its own halves in the passes it already makes (issue
+ * #276). A run given no instant is unchanged: {@code age} is empty, the two counts stay zero, and
+ * {@link EvaluationReport#lines} renders exactly as it did before this issue.
  */
 public final class EvaluateRun {
 
@@ -59,23 +67,27 @@ public final class EvaluateRun {
   private final Predicate<String> recognitionInstitutionClass;
   private final Map<String, Integer> ratings;
   private final Equivalences merges;
+  private final Optional<RatingAge> age;
 
   /**
    * @param ratings the note-free bulk read, already resolved through {@code Equivalences.resolve}
    * @param merges what the owner has merged — passed to the sweep as the only exclusion, because
    *     withholding {@code KnownList.suppressed} is the whole point and a retired local id is not a
    *     judgement the harness is measuring
+   * @param age the instant to split the held-out population by, or empty for no split
    */
   public EvaluateRun(
       GraphStore graph,
       Predicate<String> recognitionInstitutionClass,
       Map<String, Integer> ratings,
-      Equivalences merges) {
+      Equivalences merges,
+      Optional<RatingAge> age) {
     this.graph = Objects.requireNonNull(graph, "graph");
     this.recognitionInstitutionClass =
         Objects.requireNonNull(recognitionInstitutionClass, "recognitionInstitutionClass");
     this.ratings = Objects.requireNonNull(ratings, "ratings");
     this.merges = Objects.requireNonNull(merges, "merges");
+    this.age = Objects.requireNonNull(age, "age");
   }
 
   /**
@@ -100,6 +112,8 @@ public final class EvaluateRun {
     int eligible = 0;
     int heldOutTotal = 0;
     int leastLeft = 0;
+    int oldHeldOut = 0;
+    int newHeldOut = 0;
     for (int fold = 0; fold < HeldOut.EVERY; fold++) {
       HeldOut split = HeldOut.every(HeldOut.EVERY, fold, ratings, onFile, sweep::couldBeExplored);
       List<String> knownList = KnownList.promoted(fromFile, split.ratingsWithout());
@@ -113,6 +127,20 @@ public final class EvaluateRun {
       int left = split.eligible() - split.heldOut().size();
       leastLeft = fold == 0 ? left : Math.min(leastLeft, left);
 
+      // The folds partition the eligible population, so summing each fold's held-out entities by
+      // half over the run IS the eligible population's two halves — the same identity the header
+      // already shows by printing "held out over all folds" beside "eligible" (issue #276). It
+      // needs no second accessor on HeldOut, and HeldOut.every keeps the signature it has.
+      if (age.isPresent()) {
+        for (String qid : split.heldOut()) {
+          if (age.get().isNew(qid)) {
+            newHeldOut++;
+          } else {
+            oldHeldOut++;
+          }
+        }
+      }
+
       for (int i = 0; i < Setting.GRID.size(); i++) {
         Setting setting = Setting.GRID.get(i);
         // Suppression withheld on purpose: merges.merged() and nothing else, so the rated-down
@@ -120,12 +148,21 @@ public final class EvaluateRun {
         // held-out reading.
         Sweep swept =
             sweep.over(knownList, merges.merged(), setting.scorer(), setting.floor(), regard);
-        bySetting.get(i).add(Scoring.read(swept, setting, heldOut, negatives, top));
+        bySetting.get(i).add(Scoring.read(swept, setting, heldOut, negatives, top, age));
       }
     }
 
     List<Reading> readings = bySetting.stream().map(Reading::summed).toList();
-    EvaluationReport.lines(eligible, HeldOut.EVERY, heldOutTotal, leastLeft, top, readings)
+    EvaluationReport.lines(
+            eligible,
+            HeldOut.EVERY,
+            heldOutTotal,
+            leastLeft,
+            top,
+            age.map(RatingAge::since),
+            oldHeldOut,
+            newHeldOut,
+            readings)
         .forEach(lines);
     return List.copyOf(readings);
   }

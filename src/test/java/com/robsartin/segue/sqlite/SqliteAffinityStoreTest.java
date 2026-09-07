@@ -191,6 +191,51 @@ class SqliteAffinityStoreTest {
   }
 
   @Test
+  @DisplayName("readUpdatedAt returns when each rating last changed, by qid, and nothing else")
+  void shouldReturnEveryTimestampByQidWhenTheTableHoldsRatings() {
+    try (SqliteAffinityStore store = SqliteAffinityStore.inMemory()) {
+      store.put(new AffinityRecord("Q0900001", 2, "an invented note", FIRST));
+      store.put(new AffinityRecord("Q0900002", 4, null, LATER));
+
+      // A Map<String, Instant> has nowhere to put a note or a score, and the SQL behind it selects
+      // neither column. That is the fence readRatings already sets, one field over (issue #276).
+      assertThat(store.readUpdatedAt())
+          .containsExactlyInAnyOrderEntriesOf(Map.of("Q0900001", FIRST, "Q0900002", LATER));
+    }
+  }
+
+  @Test
+  @DisplayName("readUpdatedAt keeps the sub-second precision the column stores")
+  void shouldKeepTheSubSecondPrecisionWhenARatingCarriesIt() {
+    try (SqliteAffinityStore store = SqliteAffinityStore.inMemory()) {
+      store.put(new AffinityRecord("Q0900001", 3, null, FIRST));
+
+      assertThat(store.readUpdatedAt().get("Q0900001")).isEqualTo(FIRST);
+    }
+  }
+
+  @Test
+  @DisplayName("readUpdatedAt reports the later write after a re-rating, because there is one row")
+  void shouldReportTheLaterInstantWhenAnEntityIsReRated() {
+    // ADR 39's overwrite decision, read back: this column is the last write and never the first,
+    // which is the limit the harness's report states in its own header (issue #276).
+    try (SqliteAffinityStore store = SqliteAffinityStore.inMemory()) {
+      store.put(new AffinityRecord("Q0900001", 2, "an invented note", FIRST));
+      store.updateRating("Q0900001", 5, LATER);
+
+      assertThat(store.readUpdatedAt()).containsExactly(Map.entry("Q0900001", LATER));
+    }
+  }
+
+  @Test
+  @DisplayName("readUpdatedAt on an unrated store is empty, not an error")
+  void shouldReturnNoTimestampsWhenNothingIsRated() {
+    try (SqliteAffinityStore store = SqliteAffinityStore.inMemory()) {
+      assertThat(store.readUpdatedAt()).isEmpty();
+    }
+  }
+
+  @Test
   @DisplayName("updateRating changes the rating and leaves an existing note exactly as it was")
   void updateRatingKeepsTheNote() {
     try (SqliteAffinityStore store = SqliteAffinityStore.inMemory()) {

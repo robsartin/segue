@@ -11,6 +11,7 @@ import static com.robsartin.segue.domain.FoldFixture.edge;
 import static com.robsartin.segue.domain.FoldFixture.foldedLog;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -53,6 +54,27 @@ class EquivalencesTest {
     // and readRatings carries no timestamps — so re-deciding it here could only decide it worse.
     assertThat(merges.resolve(Map.of(MINTED, 5, CANONICAL, 2)))
         .containsExactly(Map.entry(CANONICAL, 2));
+  }
+
+  @Test
+  @DisplayName("a merged local id's timestamp lands on the canonical id, like its rating")
+  void shouldCarryTheTimestampToTheCanonicalIdWhenTheLocalIdIsMerged() {
+    Equivalences merges = Equivalences.in(List.of(SameAs.declared(MINTED, CANONICAL, WHEN)));
+    Instant when = Instant.parse("2026-03-04T05:06:07Z");
+
+    assertThat(merges.resolveUpdatedAt(Map.of(MINTED, when)))
+        .containsExactly(Map.entry(CANONICAL, when));
+  }
+
+  @Test
+  @DisplayName("the canonical id's own timestamp wins, because its own rating does")
+  void shouldKeepTheCanonicalTimestampWhenBothIdsAreRated() {
+    Equivalences merges = Equivalences.in(List.of(SameAs.declared(MINTED, CANONICAL, WHEN)));
+    Instant local = Instant.parse("2026-03-04T05:06:07Z");
+    Instant canonical = Instant.parse("2026-04-05T06:07:08Z");
+
+    assertThat(merges.resolveUpdatedAt(Map.of(MINTED, local, CANONICAL, canonical)))
+        .containsExactly(Map.entry(CANONICAL, canonical));
   }
 
   @Test

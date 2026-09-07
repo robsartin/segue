@@ -96,6 +96,13 @@ public final class SqliteAffinityStore implements AffinityStore {
    */
   private static final String SELECT_SCORES = "SELECT qid, rating FROM affinity";
 
+  /**
+   * The timestamp-only bulk read (issue #276). <b>The column list is the fence in SQL</b>: neither
+   * the note nor the rating is named, so a caller of {@code readUpdatedAt} cannot be handed either
+   * however carelessly it is written. Unordered, for {@link #SELECT_SCORES}'s reason.
+   */
+  private static final String SELECT_UPDATED = "SELECT qid, updated_at FROM affinity";
+
   private final Connection conn;
 
   /**
@@ -214,7 +221,29 @@ public final class SqliteAffinityStore implements AffinityStore {
     }
   }
 
-  /** One row, read the same way by both readers so the two cannot disagree about a column. */
+  @Override
+  public Map<String, Instant> readUpdatedAt() {
+    Map<String, Instant> updated = new HashMap<>();
+    try (PreparedStatement ps = conn.prepareStatement(SELECT_UPDATED);
+        ResultSet rs = ps.executeQuery()) {
+      while (rs.next()) {
+        updated.put(rs.getString("qid"), Instant.parse(rs.getString("updated_at")));
+      }
+      return Map.copyOf(updated);
+    } catch (SQLException e) {
+      // No qid and no count, for readAll's reason: how much the owner has rated is itself a fact
+      // about him, and this string is the likeliest on this path to be logged upstream (ADR 33).
+      throw new IllegalStateException("cannot read the affinity table", e);
+    }
+  }
+
+  /**
+   * One row, read the same way by both callers that build a whole {@link AffinityRecord} — {@link
+   * #find} and {@link #readAll} — so the two cannot disagree about a column. {@link #readRatings}
+   * and {@link #readUpdatedAt} deliberately do NOT go through this method: each must leave out a
+   * column {@link AffinityRecord} would carry (the note, or the note and the rating), so each
+   * parses {@code updated_at} inline instead.
+   */
   private static AffinityRecord read(ResultSet rs) throws SQLException {
     return new AffinityRecord(
         rs.getString("qid"),

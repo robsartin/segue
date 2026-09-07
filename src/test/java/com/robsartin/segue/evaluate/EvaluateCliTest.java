@@ -107,6 +107,51 @@ class EvaluateCliTest {
   }
 
   @Test
+  @DisplayName("--rated-since is optional, and parses an ISO-8601 instant when it is given")
+  void shouldParseTheInstantWhenTheRatedSinceFlagIsGiven() {
+    Path db = dir.resolve("scratch.db");
+
+    assertThat(
+            EvaluateCli.parse(
+                    new String[] {"--db", db.toString(), "--known", "/nowhere/known.csv"},
+                    null,
+                    INVENTED_HOME)
+                .ratedSince())
+        .isEmpty();
+    assertThat(
+            EvaluateCli.parse(
+                    new String[] {
+                      "--db", db.toString(),
+                      "--known", "/nowhere/known.csv",
+                      "--rated-since", "2026-09-06T15:00:00Z"
+                    },
+                    null,
+                    INVENTED_HOME)
+                .ratedSince())
+        .contains(Instant.parse("2026-09-06T15:00:00Z"));
+  }
+
+  @Test
+  @DisplayName("a --rated-since that is not an instant is refused with a usage error")
+  void shouldRefuseTheRunWhenTheInstantIsMalformed() {
+    Path db = dir.resolve("scratch.db");
+
+    assertThatThrownBy(
+            () ->
+                EvaluateCli.parse(
+                    new String[] {
+                      "--db", db.toString(),
+                      "--known", "/nowhere/known.csv",
+                      "--rated-since", "2026-09-06"
+                    },
+                    null,
+                    INVENTED_HOME))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("--rated-since")
+        .hasMessageContaining("ISO-8601");
+  }
+
+  @Test
   @DisplayName("the whole tool runs against a real database end to end, without throwing")
   void shouldRunEndToEndWithoutThrowingWhenTheToolIsRunAgainstARealDatabase() throws IOException {
     Path db = graphOnDisk();
