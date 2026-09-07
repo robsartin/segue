@@ -64,7 +64,7 @@ class RatingsRunTest {
   private List<AffinityRow> run(FakeAffinityStore ratings, FakeAssertionLog log, SortOrder sort)
       throws IOException {
     return new RatingsRun(ratings, log)
-        .run(new Options(dir.resolve("segue.db"), out, sort), this::note);
+        .run(new Options(dir.resolve("segue.db"), out, sort, null, null), this::note);
   }
 
   @Test

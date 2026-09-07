@@ -96,20 +96,21 @@ public final class RatingsRun {
                         rating.updatedAt()))
             .toList();
 
-    notes.accept(rows.size() + " rating(s), sorted by " + options.sort().describe());
-    long unlabelled = rows.stream().filter(row -> row.label() == null).count();
-    if (unlabelled > 0) {
-      notes.accept(
-          unlabelled
-              + " rating(s) name an entity the graph has no claim about, and are listed as \""
-              + AffinityRow.NO_LABEL
-              + "\" — a rating outlives the graph it was made against");
+    if (options.out() != null) {
+      notes.accept(rows.size() + " rating(s), sorted by " + options.sort().describe());
+      long unlabelled = rows.stream().filter(row -> row.label() == null).count();
+      if (unlabelled > 0) {
+        notes.accept(
+            unlabelled
+                + " rating(s) name an entity the graph has no claim about, and are listed as \""
+                + AffinityRow.NO_LABEL
+                + "\" — a rating outlives the graph it was made against");
+      }
+      try (Writer out = Files.newBufferedWriter(options.out(), StandardCharsets.UTF_8)) {
+        RatingsTable.write(rows, options.sort(), out);
+      }
+      notes.accept("wrote " + options.out());
     }
-
-    try (Writer out = Files.newBufferedWriter(options.out(), StandardCharsets.UTF_8)) {
-      RatingsTable.write(rows, options.sort(), out);
-    }
-    notes.accept("wrote " + options.out());
     return rows;
   }
 }
