@@ -1515,3 +1515,124 @@ that has happened — and no further reading is worth taking on a smaller one.
   `DocumentationLinksTest` for the relative link above, and `javadoc -Werror` inside
   `./gradlew check` — together with the ruling that applied the rule cell by cell and a byte
   comparison of the block above against the owner's paste.
+
+
+**Amendment (2026-09-07, issue #289): the eighth reading, the first after every promotion was
+expanded, stood the shipped setting by less than a point on the graph it now runs on.**
+
+Nothing above is withdrawn and no decision above is edited, including the seven amendments
+immediately above this one. No constant changed and no code changed. What changed is the graph: the
+promotion expander ([ADR 66](0066-expand-every-promotion-from-a-dev-tool.md)) ran for the first time
+on 2026-09-07, on every promotion, and the census before and after is on issue #284. The ratings did
+not move, so the eligible population is the seventh reading's exactly, and this is the first reading
+since the folded baseline whose rows can be set beside the previous reading's row for row.
+
+**The rule was fixed before the number existed, for the eighth time.** The rule is the one described
+six amendments above and it was not changed. A dated note was committed and pushed at 18:49 on
+2026-09-07, before the reading the owner pasted carrying an 18:52 timestamp, appended to
+`docs/superpowers/specs/2026-09-04-second-reading-rule-design.md`; pull request #290 carries it. The
+note kept the instant, named the observations this amendment may make against the seventh reading —
+`in pool` and `hits` on every row, the shipped setting's rate, the halves — and wrote three sentences
+in advance for the cases it foresaw: the shipped rate rising by more than a few points, reach rising
+while the rate held, and reach not rising. The rule is the authority on what would have counted and
+is not restated here.
+
+**The reading.** One run of `./gradlew evaluate` with `--rated-since` on the owner's database on
+2026-09-07, on the folded harness, quoted whole and unedited. Aggregates only, per
+[ADR 51](0051-what-an-adr-may-quote.md): every cell is a count, a one-decimal mean or a dash, every
+label is a column name or a `Scorer` spelling, and the header names the folds and the instant.
+`in pool`, `hits` and the four half cells count entities; `pool` and `negatives` count entity-folds.
+
+```
+# segue recommender evaluation — aggregates only: no labels, no ids, no notes, no ratings (ADR 51, ADR 63, ADR 65).
+# held out every 5 of 299 eligible entity(ies), in 5 fold(s): 299 held out over all folds, at least 239 left on the known-list in each.
+# split by rating age at 2026-09-06T18:56:00Z: 152 old (rated before it), 147 new (rated on or after it) — a rating's timestamp is its last write, so a re-rated old promotion counts as new.
+# top 25 per setting, over 16 setting(s).
+scorer               floor   pool  in pool  hits  mean rank  negatives  neg mean rank  old in pool  old hits  new in pool  new hits
+raw                      2  18004      298    35       10.7         16           19.8          152        21          146        14
+raw                      5   7586      298    35       10.7         16           19.8          152        21          146        14
+raw                      8   5717      277    35       10.7         16           19.8          149        21          128        14
+raw                     12   4751      255    35       10.7         16           19.8          145        21          110        14
+adamic-adar              2  18004      298    39        9.1          8           20.0          152        24          146        15
+adamic-adar              5   7586      298    39        9.1          8           20.0          152        24          146        15
+adamic-adar              8   5717      277    39        9.1          8           20.0          149        24          128        15
+adamic-adar             12   4751      255    39        9.1          8           20.0          145        24          110        15
+resource-allocation      2  18004      298    44       10.8         14           10.7          152        25          146        19
+resource-allocation      5   7586      298    44       10.8         14           10.7          152        25          146        19
+resource-allocation      8   5717      277    44       10.8         14           10.7          149        25          128        19
+resource-allocation     12   4751      255    44       10.8         14           10.7          145        25          110        19
+lift                     2  18004      298     0          -          7           18.1          152         0          146         0
+lift                     5   7586      298     2       17.5         48           12.7          152         1          146         1
+lift                     8   5717      277    21       14.4         46           11.2          149        16          128         5
+lift                    12   4751      255    31       13.8         32           11.1          145        23          110         8
+```
+
+**What the rule made of it.** Clause 2's void check was run first and did not fire. Clause 3(a)
+compared every non-shipped scorer's rate at the shipped floor with `lift`'s row there, and for the
+first time every one of them is above it: the weakest by some eleven points, the strongest,
+`resource-allocation`, by fourteen — under a point short of the fifteen the clause demands. Clause
+3(b) derived the dominance range as floors eight and twelve, and every challenger's rate is above
+`lift`'s at both — with the repetition the rule asks to be recorded: every challenger's `hits` cell
+is the same at every floor in the grid, so the two floors are one comparison read at two
+denominators. So every challenger cleared the dominance condition and none cleared the margin, and a
+scorer moves only on both. No scorer moved, so clause 4 compared `lift`'s rate at every other
+floor with its rate at the shipped floor: floor twelve is the closest, clearing about three quarters
+of the margin; floor eight clears about half; floor two is where `lift` records no hits. The
+`negatives` and `neg mean rank` cells were read for every row and, per clause 5, decided nothing.
+Clause 7 says a near miss stands, and this is the nearest miss the rule has seen. Outcome: the
+shipped setting stands.
+
+**The observations the note allowed.** Reach rose where the run could raise it: `in pool` is
+unchanged at the two lowest floors, where every eligible entity the sweep reaches was already
+reached, and rose at floors eight and twelve by about a quarter and nearly a half. Every challenger's
+`hits` cell rose against the seventh reading at every floor. The shipped setting's `hits` cell fell
+at the shipped floor to a few, its rate falling by about fourteen points against the seventh —
+nearly the whole of the margin. On the halves, the shipped row now misses both halves nearly alike, where before it held
+the old half and missed the new.
+
+**None of the note's three sentences applies, and this amendment says so rather than stretch one.**
+The note foresaw the rate rising, the rate holding while reach rose, and reach not rising. The table
+is the fourth case: reach rose and the shipped rate fell, by more than the note's "few points" many
+times over. What the aggregates support is this. The run added neighbours to every promotion, and
+the census on issue #284 shows the additions are, in the main, low-degree nodes. The javadoc on `Scorer`
+says of lift that it "rewards a thin entity whose whole presence in the graph is a list of influences",
+which is why ADR 45 paired it with a degree floor, and why floor two is where `lift` records no
+hits. The expansion put thin entities adjacent to exactly the entities the owner rates highly, most of
+them at degrees the shipped floor admits, and the shipped setting's top twenty-five is consistent
+with being filled by them. The other three scorers, which do not divide by the candidate's degree, are
+consistent with being helped by the same additions. That is an explanation the table is consistent
+with; it is not a ruling, and this amendment moves nothing.
+
+### What this does and does not establish
+
+- **It does not establish that the shipped setting is the best one**, and for the first time it
+  does not suggest it either. It establishes that on this reading, by this rule, nothing displaced
+  it, by a margin under a point. ADR 65's first consequence is the governing one: no row of that
+  table means anything on its own — and the rule was written so that no single reading could move a
+  constant on a near miss, which is what it has just refused to do.
+- **The shipped setting was decided on a graph that no longer exists**, which ADR 66 and the census
+  on issue #284 establish rather than this table. ADR 45 chose `lift` at a floor of five on the
+  graph as ingest had left it; the expander changed that graph's shape around the owner's
+  promotions, and what this table adds is how the setting reads on the new one. Whether to re-decide the setting is a decision, not a reading, and it is the next issue:
+  a rule written now cannot be blind to this table, and the issue that writes one must say so.
+- **The rating deck deals its candidate cards from the shipped setting** (ADR 46, `RateRun`), so
+  what this table says about the shipped setting's top twenty-five is what the deck will deal until
+  that decision is taken. Recorded so the owner does not rate through it unknowing.
+- **The negatives condition was dropped rather than satisfied**, so nothing here is a finding about
+  the negatives column; the cells are quoted above, on the entity-fold scale, and decided nothing.
+- **It says nothing about the entities ingest cannot reach.** Rates are read over the reachable
+  (ADR 65's consequence); reach rose, and this amendment records that the rule did not.
+
+### Consequences of this amendment
+
+- **Nothing in the tool moves**, so no ranking, no deck and no output line changes.
+- **`Setting.GRID` and `HeldOut.EVERY` are unchanged.**
+- **Whether to re-decide the shipped setting on the expanded graph is the next issue's decision**,
+  with this table as its evidence. A further reading on an unchanged database would print this
+  block again, since the split and the sweep are deterministic (`HeldOut`).
+- **Nothing here is unit-testable, and that is said out loud rather than left implied.** No
+  behaviour changed, so there is no test to write and nothing to see red. The verification is the
+  full gate over an otherwise unchanged tree — `AdrIndexTest`, `AdrCitationsTest`,
+  `DocumentationLinksTest` for the relative links above, and `javadoc -Werror` inside
+  `./gradlew check` — together with the ruling that applied the rule cell by cell and a byte
+  comparison of the block above against the owner's paste.
