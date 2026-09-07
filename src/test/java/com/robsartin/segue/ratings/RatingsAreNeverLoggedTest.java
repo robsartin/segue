@@ -6,6 +6,7 @@ import static com.robsartin.segue.ratings.InventedRatings.QUARTET_LABEL;
 import static com.robsartin.segue.ratings.InventedRatings.QUARTET_NOTE;
 import static com.robsartin.segue.ratings.InventedRatings.node;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
@@ -15,6 +16,7 @@ import com.robsartin.segue.domain.AffinityRecord;
 import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -153,5 +155,32 @@ class RatingsAreNeverLoggedTest {
     assertThat(everyLine)
         .as("no log line names the entity, so no line can attribute a promotion to one (ADR 33)")
         .noneMatch(line -> line.contains(QUARTET));
+  }
+
+  @Test
+  @DisplayName("a write failure to the names file names every output path in the wrapped message")
+  void shouldNameEveryOutputPathWhenWritingTheNamesFileFails() throws IOException {
+    Path db = dir.resolve("scratch.db");
+    try (SqliteAssertionLog log = new SqliteAssertionLog(db);
+        SqliteAffinityStore affinity = new SqliteAffinityStore(db)) {
+      log.append(node(QUARTET, QUARTET_LABEL));
+      affinity.put(new AffinityRecord(QUARTET, 5, null, EARLY));
+    }
+    Path known = InventedRatings.knownFile(dir, InventedRatings.SEEN_LIVE);
+    // No parent directory: Files.newBufferedWriter throws, which is what reaches RatingsCli's catch
+    // clause - the one seam RatingsAreNeverLoggedTest already opens by driving main against a real
+    // database.
+    Path names = dir.resolve("missing-directory").resolve("promotions.txt");
+
+    assertThatThrownBy(
+            () ->
+                RatingsCli.main(
+                    new String[] {
+                      "--db", db.toString(),
+                      "--promotions-off", known.toString(),
+                      "--names", names.toString()
+                    }))
+        .isInstanceOf(UncheckedIOException.class)
+        .hasMessageContaining("could not write " + names);
   }
 }

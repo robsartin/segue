@@ -25,6 +25,7 @@ import static com.robsartin.segue.ratings.InventedRatings.node;
 import static com.robsartin.segue.ratings.InventedRatings.owned;
 import static com.robsartin.segue.ratings.InventedRatings.retract;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.robsartin.segue.ratings.InventedRatings.FakeAffinityStore;
 import com.robsartin.segue.ratings.InventedRatings.FakeAssertionLog;
@@ -527,5 +528,29 @@ class RatingsRunTest {
 
     assertThat(Files.readString(out)).contains(QUARTET_NOTE);
     assertThat(Files.readString(names)).contains(QUARTET_LABEL).doesNotContain(QUARTET_NOTE);
+  }
+
+  @Test
+  @DisplayName("no output file exists when the known file cannot be read")
+  void shouldWriteNoOutputFileWhenTheKnownFileCannotBeRead() {
+    Path missingKnown = dir.resolve("missing-known.csv");
+    Path names = dir.resolve("promotions.txt");
+
+    assertThatThrownBy(
+            () ->
+                runNames(
+                    new FakeAffinityStore().rated(QUARTET, 5, null, EARLY),
+                    new FakeAssertionLog().with(node(QUARTET, QUARTET_LABEL)),
+                    missingKnown,
+                    names,
+                    out))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("no entity list at");
+
+    assertThat(out)
+        .as(
+            "the known file is read before either output file is written, so a bad path fails"
+                + " before anything lands on disk")
+        .doesNotExist();
   }
 }

@@ -166,9 +166,12 @@ public final class RatingsRun {
    *
    * <p>Built from the rows this run already holds rather than by calling {@code
    * AffinityStore.readRatings}: that is the note-free bulk read the recommender uses (issue #85),
-   * and making a second query for a column already in memory would be a second read of one table.
-   * Insertion order is kept because {@code Equivalences.resolve} resolves two rated local ids onto
-   * one canonical id by log order, and a run that shuffled the input would shuffle that answer.
+   * and making a second query for a column already in memory would be a second read of one table. A
+   * {@link LinkedHashMap}, though nothing downstream relies on its order: {@code
+   * Equivalences.collapse} returns {@code Map.copyOf}, which is unordered, and {@code
+   * KnownList.promoted} sorts its promoted half regardless. It costs nothing and matches {@code
+   * recorded}'s own order for anyone reading this map while debugging, which is the only reason
+   * left to keep it.
    */
   private static Map<String, Integer> scores(List<AffinityRecord> recorded) {
     Map<String, Integer> scores = new LinkedHashMap<>();
