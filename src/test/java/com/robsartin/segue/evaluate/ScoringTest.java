@@ -7,8 +7,10 @@ import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.Recommendation;
 import com.robsartin.segue.domain.Scorer;
 import com.robsartin.segue.recommend.Sweep;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,7 +28,8 @@ class ScoringTest {
   void shouldReportTheHitAndItsRankWhenAHeldOutEntityIsRankedHighly() {
     Sweep sweep = pool(List.of("Q0900401", "Q0900402", "Q0900403", "Q0900404"));
 
-    Reading reading = Scoring.read(sweep, SETTING, Set.of("Q0900402"), Set.of(), 4);
+    Reading reading =
+        Scoring.read(sweep, SETTING, Set.of("Q0900402"), Set.of(), 4, Optional.empty());
 
     assertThat(reading.pool()).isEqualTo(4);
     assertThat(reading.heldOutInPool()).isEqualTo(1);
@@ -39,7 +42,8 @@ class ScoringTest {
   void shouldCountItInThePoolAndNotAsAHitWhenAHeldOutEntityFallsOutsideTheTop() {
     Sweep sweep = pool(List.of("Q0900401", "Q0900402", "Q0900403", "Q0900404"));
 
-    Reading reading = Scoring.read(sweep, SETTING, Set.of("Q0900404"), Set.of(), 2);
+    Reading reading =
+        Scoring.read(sweep, SETTING, Set.of("Q0900404"), Set.of(), 2, Optional.empty());
 
     assertThat(reading.heldOutInPool()).isEqualTo(1);
     assertThat(reading.hits()).isZero();
@@ -53,7 +57,8 @@ class ScoringTest {
   void shouldAverageTheRanksWhenMoreThanOneHeldOutEntityIsAHit() {
     Sweep sweep = pool(List.of("Q0900401", "Q0900402", "Q0900403", "Q0900404"));
 
-    Reading reading = Scoring.read(sweep, SETTING, Set.of("Q0900401", "Q0900404"), Set.of(), 4);
+    Reading reading =
+        Scoring.read(sweep, SETTING, Set.of("Q0900401", "Q0900404"), Set.of(), 4, Optional.empty());
 
     assertThat(reading.hits()).isEqualTo(2);
     assertThat(reading.hitRankSum())
@@ -66,7 +71,8 @@ class ScoringTest {
   void shouldReportTheNegativeAndItsRankWhenTheRankingWouldHaveOfferedIt() {
     Sweep sweep = pool(List.of("Q0900401", "Q0900402", "Q0900403", "Q0900404"));
 
-    Reading reading = Scoring.read(sweep, SETTING, Set.of(), Set.of("Q0900403"), 4);
+    Reading reading =
+        Scoring.read(sweep, SETTING, Set.of(), Set.of("Q0900403"), 4, Optional.empty());
 
     assertThat(reading.negativesOffered()).isEqualTo(1);
     assertThat(reading.negativeRankSum()).isEqualTo(3);
@@ -77,9 +83,44 @@ class ScoringTest {
   void shouldReportThePoolWithNegativesRemovedWhenTheSweepIncludesARatedDownEntity() {
     Sweep sweep = pool(List.of("Q0900401", "Q0900402", "Q0900403", "Q0900404"));
 
-    Reading reading = Scoring.read(sweep, SETTING, Set.of(), Set.of("Q0900403"), 4);
+    Reading reading =
+        Scoring.read(sweep, SETTING, Set.of(), Set.of("Q0900403"), 4, Optional.empty());
 
     assertThat(reading.pool()).isEqualTo(3);
+  }
+
+  @Test
+  @DisplayName("the hits and the pool split into halves when the run is given an age")
+  void shouldCountEachHalfSeparatelyWhenTheRunIsSplitByRatingAge() {
+    Sweep sweep = pool(List.of("Q0900401", "Q0900402", "Q0900403", "Q0900404"));
+    RatingAge age =
+        new RatingAge(Instant.parse("2026-09-06T15:00:00Z"), Set.of("Q0900402", "Q0900404"));
+
+    Reading reading =
+        Scoring.read(
+            sweep,
+            SETTING,
+            Set.of("Q0900401", "Q0900402", "Q0900404"),
+            Set.of(),
+            2,
+            Optional.of(age));
+
+    // Ranks 1 and 2 are inside the top 2; rank 4 is in the pool and is not a hit.
+    assertThat(reading.halves()).isEqualTo(new Halves(true, 1, 1, 2, 1));
+    assertThat(reading.halves().oldInPool() + reading.halves().newInPool())
+        .isEqualTo(reading.heldOutInPool());
+    assertThat(reading.halves().oldHits() + reading.halves().newHits()).isEqualTo(reading.hits());
+  }
+
+  @Test
+  @DisplayName("a run with no age carries no halves at all, not four zeroes it could render")
+  void shouldCarryNoHalvesWhenTheRunIsNotSplitByRatingAge() {
+    Sweep sweep = pool(List.of("Q0900401", "Q0900402"));
+
+    Reading reading =
+        Scoring.read(sweep, SETTING, Set.of("Q0900401"), Set.of(), 2, Optional.empty());
+
+    assertThat(reading.halves()).isEqualTo(Halves.UNSPLIT);
   }
 
   /** Descending scores, so the qid order below is the ranked order. */

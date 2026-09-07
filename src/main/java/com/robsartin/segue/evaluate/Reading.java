@@ -36,6 +36,9 @@ import java.util.Objects;
  *     Summed over folds this is an entity-fold count (see above): a rated-down entity is never held
  *     out, so it is offered once in every fold
  * @param negativeRankSum the sum of those 1-based ranks, on the same terms
+ * @param halves the age split's four cells, or {@link Halves#UNSPLIT} when no instant was given.
+ *     {@link Halves} is the authority on what these cells mean and how they add; this record only
+ *     carries one
  */
 public record Reading(
     Setting setting,
@@ -44,10 +47,12 @@ public record Reading(
     int hits,
     int hitRankSum,
     int negativesOffered,
-    int negativeRankSum) {
+    int negativeRankSum,
+    Halves halves) {
 
   public Reading {
     Objects.requireNonNull(setting, "setting");
+    Objects.requireNonNull(halves, "halves");
   }
 
   /**
@@ -72,6 +77,7 @@ public record Reading(
     }
 
     Setting setting = folds.get(0).setting();
+    Halves halves = new Halves(folds.get(0).halves().split(), 0, 0, 0, 0);
     int pool = 0;
     int heldOutInPool = 0;
     int hits = 0;
@@ -90,8 +96,9 @@ public record Reading(
       hitRankSum += fold.hitRankSum();
       negativesOffered += fold.negativesOffered();
       negativeRankSum += fold.negativeRankSum();
+      halves = halves.plus(fold.halves());
     }
     return new Reading(
-        setting, pool, heldOutInPool, hits, hitRankSum, negativesOffered, negativeRankSum);
+        setting, pool, heldOutInPool, hits, hitRankSum, negativesOffered, negativeRankSum, halves);
   }
 }

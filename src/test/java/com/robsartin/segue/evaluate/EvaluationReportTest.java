@@ -61,7 +61,8 @@ class EvaluationReportTest {
   @Test
   @DisplayName("every column lines up, because the widths come from the cells")
   void shouldAlignTheColumnsWhenACountIsWiderThanItsHeading() {
-    Reading wide = new Reading(new Setting(Scorer.RAW, 2), 123456, 40, 12, 111, 0, 0);
+    Reading wide =
+        new Reading(new Setting(Scorer.RAW, 2), 123456, 40, 12, 111, 0, 0, Halves.UNSPLIT);
 
     List<String> lines =
         EvaluationReport.lines(
@@ -112,10 +113,10 @@ class EvaluationReportTest {
   }
 
   private static Reading reading() {
-    return new Reading(new Setting(Scorer.LIFT, 5), 900, 40, 4, 30, 2, 8);
+    return new Reading(new Setting(Scorer.LIFT, 5), 900, 40, 4, 30, 2, 8, Halves.UNSPLIT);
   }
 
   private static Reading sparse() {
-    return new Reading(new Setting(Scorer.RAW, 12), 40, 3, 0, 0, 0, 0);
+    return new Reading(new Setting(Scorer.RAW, 12), 40, 3, 0, 0, 0, 0, Halves.UNSPLIT);
   }
 }

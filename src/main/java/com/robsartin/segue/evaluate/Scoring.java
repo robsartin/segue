@@ -6,6 +6,7 @@ import com.robsartin.segue.recommend.Sweep;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -32,6 +33,12 @@ import java.util.Set;
  * means would divide once per fold and multiply back, and a value a hair either side of a rounding
  * boundary would render a different tenth. {@code EvaluationReport} divides, once, over every hit
  * in the run.
+ *
+ * <p><b>The age split's four cells are tallied in the two passes this class already makes</b>
+ * (issue #276): the pool pass counts a held-out entity's half the same membership test already
+ * counts it in the pool with, and the ranked pass counts a hit's half the same walk already ranks
+ * it with. Nothing is swept, ranked or walked a second time to learn it. The negatives are read
+ * unsplit, because a rated-down entity is never held out and so never belongs to either half.
  */
 public final class Scoring {
 
@@ -44,33 +51,82 @@ public final class Scoring {
    * @param heldOut the entities hidden from the known-list for this run
    * @param negatives the entities rated at or below {@code KnownList.SUPPRESSION_RATING}
    * @param top how many candidates a run would have shown
+   * @param age the instant to split the held-out population by, or empty for no split
    */
   public static Reading read(
-      Sweep sweep, Setting setting, Set<String> heldOut, Set<String> negatives, int top) {
+      Sweep sweep,
+      Setting setting,
+      Set<String> heldOut,
+      Set<String> negatives,
+      int top,
+      Optional<RatingAge> age) {
     Objects.requireNonNull(sweep, "sweep");
     Objects.requireNonNull(setting, "setting");
     Objects.requireNonNull(heldOut, "heldOut");
     Objects.requireNonNull(negatives, "negatives");
+    Objects.requireNonNull(age, "age");
 
-    List<Recommendation> shipped =
-        sweep.candidates().stream().filter(in(negatives).negate()).toList();
+    // One pass, where there were two streams: the pool is built, the held-out entities in it are
+    // counted, and each one's half is tallied in the same membership test. The half is a property
+    // of the entity, so nothing is swept, ranked or walked a second time to learn it (issue #276).
+    List<Recommendation> shipped = new ArrayList<>();
+    int heldOutInPool = 0;
+    int oldInPool = 0;
+    int newInPool = 0;
+    for (Recommendation candidate : sweep.candidates()) {
+      String qid = candidate.entity().qid();
+      if (negatives.contains(qid)) {
+        continue;
+      }
+      shipped.add(candidate);
+      if (heldOut.contains(qid)) {
+        heldOutInPool++;
+        if (age.isPresent()) {
+          if (age.get().isNew(qid)) {
+            newInPool++;
+          } else {
+            oldInPool++;
+          }
+        }
+      }
+    }
+
+    // The same again over the ranked top: one walk, the ranks and the halves out of it.
     List<Recommendation> shippedTop = Recommendations.rank(shipped, top);
+    int hits = 0;
+    int hitRankSum = 0;
+    int oldHits = 0;
+    int newHits = 0;
+    for (int rank = 1; rank <= shippedTop.size(); rank++) {
+      String qid = shippedTop.get(rank - 1).entity().qid();
+      if (!heldOut.contains(qid)) {
+        continue;
+      }
+      hits++;
+      hitRankSum += rank;
+      if (age.isPresent()) {
+        if (age.get().isNew(qid)) {
+          newHits++;
+        } else {
+          oldHits++;
+        }
+      }
+    }
+
     List<Recommendation> withheldTop = Recommendations.rank(sweep.candidates(), top);
-    List<Integer> hitRanks = ranksOf(shippedTop, heldOut);
     List<Integer> negativeRanks = ranksOf(withheldTop, negatives);
 
     return new Reading(
         setting,
         shipped.size(),
-        (int) shipped.stream().filter(in(heldOut)).count(),
-        hitRanks.size(),
-        sum(hitRanks),
+        heldOutInPool,
+        hits,
+        hitRankSum,
         negativeRanks.size(),
-        sum(negativeRanks));
-  }
-
-  private static java.util.function.Predicate<Recommendation> in(Set<String> wanted) {
-    return candidate -> wanted.contains(candidate.entity().qid());
+        sum(negativeRanks),
+        age.isPresent()
+            ? new Halves(true, oldInPool, oldHits, newInPool, newHits)
+            : Halves.UNSPLIT);
   }
 
   private static List<Integer> ranksOf(List<Recommendation> ranked, Set<String> wanted) {

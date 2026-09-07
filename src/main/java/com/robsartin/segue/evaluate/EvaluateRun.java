@@ -13,6 +13,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -120,7 +121,9 @@ public final class EvaluateRun {
         // held-out reading.
         Sweep swept =
             sweep.over(knownList, merges.merged(), setting.scorer(), setting.floor(), regard);
-        bySetting.get(i).add(Scoring.read(swept, setting, heldOut, negatives, top));
+        bySetting
+            .get(i)
+            .add(Scoring.read(swept, setting, heldOut, negatives, top, Optional.empty()));
       }
     }
 
