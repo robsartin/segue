@@ -12,8 +12,11 @@ import com.robsartin.segue.tinker.TinkerGraphStore;
 import com.robsartin.segue.wikidata.RecognitionInstitutions;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,8 +44,11 @@ import org.slf4j.LoggerFactory;
  *
  * <p><b>It reads ratings and cannot read a note</b>, exactly as {@code RecommendCli} does and under
  * a fence of the same shape: {@code
- * ArchitectureTest.theEvaluationHarnessReadsRatingsAndNeverNotes}. This is the only class in the
- * package that touches the store.
+ * ArchitectureTest.theEvaluationHarnessReadsRatingsAndNeverNotes}. It also reads when a rating last
+ * changed, when {@code --rated-since} asks for the age split, through {@link
+ * com.robsartin.segue.port.AffinityStore#readUpdatedAt} — the read that carries neither the note
+ * nor the score, so the note fence is unchanged (issue #276). This is the only class in the package
+ * that touches the store.
  */
 public final class EvaluateCli {
 
@@ -51,7 +57,7 @@ public final class EvaluateCli {
   private static final String USAGE =
       "usage: --db <segue.db> --known <file of QIDs> [--top <n>, default "
           + RecommendCli.DEFAULT_TOP
-          + "]";
+          + "] [--rated-since <ISO-8601 instant, e.g. 2026-09-06T15:00:00Z>]";
 
   private EvaluateCli() {}
 
@@ -64,12 +70,14 @@ public final class EvaluateCli {
    * @param top how many candidates each setting is read over. Defaults to {@code
    *     RecommendCli.DEFAULT_TOP} by reference, so the harness measures the list length the tool
    *     actually shows
+   * @param ratedSince the instant to split the held-out population by, or empty for no split
    */
-  public record Options(Path database, Path known, int top) {
+  public record Options(Path database, Path known, int top, Optional<Instant> ratedSince) {
 
     public Options {
       Objects.requireNonNull(database, "database");
       Objects.requireNonNull(known, "known");
+      Objects.requireNonNull(ratedSince, "ratedSince");
     }
   }
 
@@ -78,6 +86,7 @@ public final class EvaluateCli {
     Path database = null;
     Path known = null;
     int top = RecommendCli.DEFAULT_TOP;
+    Instant ratedSince = null;
 
     for (int i = 0; i < args.length; i++) {
       String flag = args[i];
@@ -87,6 +96,7 @@ public final class EvaluateCli {
         case "--db" -> database = Path.of(value);
         case "--known" -> known = Path.of(value);
         case "--top" -> top = number(flag, value);
+        case "--rated-since" -> ratedSince = instant(flag, value);
         default -> throw usage("unknown option " + flag);
       }
     }
@@ -100,7 +110,7 @@ public final class EvaluateCli {
     if (top < 1) {
       throw usage("--top must be at least 1");
     }
-    return new Options(database, known, top);
+    return new Options(database, known, top, Optional.ofNullable(ratedSince));
   }
 
   private static int number(String flag, String value) {
@@ -108,6 +118,14 @@ public final class EvaluateCli {
       return Integer.parseInt(value);
     } catch (NumberFormatException e) {
       throw usage(flag + " takes a whole number, got " + value);
+    }
+  }
+
+  private static Instant instant(String flag, String value) {
+    try {
+      return Instant.parse(value);
+    } catch (DateTimeParseException e) {
+      throw usage(flag + " takes an ISO-8601 instant like 2026-09-06T15:00:00Z, got " + value);
     }
   }
 
@@ -160,7 +178,22 @@ public final class EvaluateCli {
       // A count, never a qid and never a score.
       log.info("read {} rating(s)", ratings.size());
 
-      new EvaluateRun(graph, RecognitionInstitutions::isRecognitionInstitution, ratings, merges)
+      // Read only when asked: a run with no --rated-since reads no timestamp at all, which is
+      // ADR 16's data minimisation falling out of the shape rather than being argued for. The
+      // timestamps are resolved through the same merges the ratings were, so the two maps are
+      // keyed alike and the halves cannot be read off another row (issue #276).
+      Optional<RatingAge> age =
+          options
+              .ratedSince()
+              .map(
+                  since ->
+                      RatingAge.of(
+                          since,
+                          merges.resolveUpdatedAt(affinity.readUpdatedAt()),
+                          ratings.keySet()));
+
+      new EvaluateRun(
+              graph, RecognitionInstitutions::isRecognitionInstitution, ratings, merges, age)
           .run(options.known(), options.top(), log::info);
     }
   }

@@ -9,9 +9,12 @@ import com.robsartin.segue.tinker.TinkerGraphStore;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -36,7 +39,8 @@ class EvaluateRunTest {
                   graph,
                   qid -> false,
                   Map.of(InventedEvaluation.HIDDEN, 5, InventedEvaluation.REJECTED, 1),
-                  Equivalences.NONE)
+                  Equivalences.NONE,
+                  Optional.empty())
               .run(knownList(), 25, lines::add);
 
       assertThat(readings).hasSameSizeAs(Setting.GRID);
@@ -66,7 +70,8 @@ class EvaluateRunTest {
                       InventedEvaluation.STRANGER, 5,
                       InventedEvaluation.HIDDEN, 5,
                       InventedEvaluation.REJECTED, 1),
-                  Equivalences.NONE)
+                  Equivalences.NONE,
+                  Optional.empty())
               .run(knownList(), 25, lines::add);
 
       assertThat(lines.get(1))
@@ -94,12 +99,45 @@ class EvaluateRunTest {
               graph,
               "Q0900801"::equals,
               Map.of(InventedEvaluation.HIDDEN, 5, "Q0900441", 5),
-              Equivalences.NONE)
+              Equivalences.NONE,
+              Optional.empty())
           .run(knownList(), 25, lines::add);
 
       assertThat(lines.get(1))
           .as("one eligible entity, not two — an institution is never a candidate")
           .contains("1 eligible entity(ies)");
+    }
+  }
+
+  @Test
+  @DisplayName("the header states both halves and every row splits when an instant is given")
+  void shouldReportBothHalvesWhenTheRunIsSplitByRatingAge() throws IOException {
+    try (TinkerGraphStore graph = InventedEvaluation.graph()) {
+      List<String> lines = new ArrayList<>();
+      RatingAge age =
+          new RatingAge(Instant.parse("2026-09-06T15:00:00Z"), Set.of(InventedEvaluation.STRANGER));
+
+      List<Reading> readings =
+          new EvaluateRun(
+                  graph,
+                  qid -> false,
+                  Map.of(
+                      InventedEvaluation.STRANGER, 5,
+                      InventedEvaluation.HIDDEN, 5,
+                      InventedEvaluation.REJECTED, 1),
+                  Equivalences.NONE,
+                  Optional.of(age))
+              .run(knownList(), 25, lines::add);
+
+      assertThat(lines.get(2))
+          .as("two eligible entities, one each side of the instant")
+          .contains("1 old (rated before it)")
+          .contains("1 new (rated on or after it)");
+      assertThat(readings)
+          .as("every row carries the halves, and they partition the whole-population cells")
+          .allMatch(reading -> reading.halves().split())
+          .allMatch(
+              reading -> reading.halves().oldHits() + reading.halves().newHits() == reading.hits());
     }
   }
 
