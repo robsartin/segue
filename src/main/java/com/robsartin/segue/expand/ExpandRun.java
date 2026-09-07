@@ -31,7 +31,18 @@ import org.slf4j.LoggerFactory;
  * <p><b>No progress line and no log line this class writes ever carries a qid.</b> A line per
  * promotion, over every promotion, in qid order, is the owner's whole promoted population
  * enumerated down a terminal — the bulk read ADR 39 refused, by another route. {@code log.warn} on
- * a caught throw is deliberately position-only ("expansion 2 of 431 threw"), never qid-bearing.
+ * a caught throw carries the position and the exception's own class name and <b>nothing out of its
+ * message</b> ("expansion 2 of 431 threw: IllegalArgumentException"). That last clause is the whole
+ * of the guard rather than a nicety: an adapter's message is uncontrolled text, and the two
+ * upstream classes this loop reaches through {@code EntityExpansion} both build one out of the id
+ * they were handed — {@code ReverseClaims} and {@code WikidataEntityResolver} each throw "not a
+ * QID: " plus a qid, and for the first of them that qid is the promotion itself. Interpolating
+ * {@code getMessage} put the owner's promoted entity on a line this class calls safe to paste,
+ * which is exactly the ADR 39 disclosure the tool exists to avoid; {@code
+ * ExpansionIsSafeToPasteTest.shouldNameNoEntityWhenAnAdaptersExceptionMessageCarriesOne} drives an
+ * adapter that throws that shape and holds it. The type is what an operator needs to tell a network
+ * failure from a bad row; the stack trace is not logged either, because a frame can carry an id as
+ * readily as a message can.
  */
 public final class ExpandRun {
 
@@ -104,9 +115,16 @@ public final class ExpandRun {
         // try — right for one interactive call, where the MCP layer turns a throw into a
         // protocol error, and wrong for a batch that has already written most of what it came
         // for. Named without the qid: a line per entity naming the entity would enumerate the
-        // owner's promotions down a terminal, which is the bulk read ADR 39 refused.
+        // owner's promotions down a terminal, which is the bulk read ADR 39 refused. The
+        // exception's TYPE and never its message, for the same reason one level out — an
+        // adapter's message is uncontrolled text and upstream demonstrably puts the seed's own
+        // qid in one. See the class javadoc.
         failed++;
-        log.warn("expansion {} of {} threw: {}", i + 1, promotions.size(), thrown.getMessage());
+        log.warn(
+            "expansion {} of {} threw: {}",
+            i + 1,
+            promotions.size(),
+            thrown.getClass().getSimpleName());
         lines.accept(progress(i, promotions.size(), "failed"));
         continue;
       }

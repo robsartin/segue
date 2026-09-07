@@ -8,15 +8,27 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.classic.spi.LoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.robsartin.segue.domain.AffinityRecord;
+import com.robsartin.segue.domain.Candidate;
 import com.robsartin.segue.domain.KnownList;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.Provenance;
+import com.robsartin.segue.expansion.EntityExpansion;
+import com.robsartin.segue.ingest.IngestService;
+import com.robsartin.segue.port.EntityResolver;
+import com.robsartin.segue.port.ExpandContext;
+import com.robsartin.segue.port.ExpandResult;
+import com.robsartin.segue.port.IdentityMerge;
+import com.robsartin.segue.port.SourceAdapter;
+import com.robsartin.segue.port.SourceAdapters;
 import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
+import com.robsartin.segue.tinker.TinkerGraphStore;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -73,6 +85,13 @@ class ExpansionIsSafeToPasteTest {
 
   /** Rated at the threshold, so it is a promotion, and deliberately given no node. */
   private static final String NEVER_SEEN = "Q0900902";
+
+  /**
+   * The seed an adapter's own exception message names. Upstream throws exactly this shape — {@code
+   * ReverseClaims} and {@code WikidataEntityResolver} both build "not a QID: " plus the id they
+   * were handed, and that id is the promotion itself.
+   */
+  private static final String THROWN_ABOUT = "Q0900903";
 
   private static final Instant WHEN = Instant.parse("2026-02-01T08:00:00Z");
 
@@ -145,6 +164,40 @@ class ExpansionIsSafeToPasteTest {
   }
 
   @Test
+  @DisplayName("an adapter throws naming an entity, and no line this tool writes repeats it")
+  void shouldNameNoEntityWhenAnAdaptersExceptionMessageCarriesOne() {
+    Path db = home.resolve("threw.db");
+    Provenance sourced = new Provenance("invented", "invented:2", WHEN, 1.0);
+    try (SqliteAssertionLog assertions = new SqliteAssertionLog(db);
+        TinkerGraphStore graph = new TinkerGraphStore()) {
+      IngestService ingest = new IngestService(assertions, graph, IdentityMerge.NONE);
+      ingest.record(new NodeAssertion(THROWN_ABOUT, NodeKind.PERSON, LABEL, sourced));
+      EntityExpansion expansion =
+          new EntityExpansion(
+              new NeverCalledResolver(),
+              graph,
+              ingest,
+              new SourceAdapters(List.of(new ThrowsNamingTheSeed())));
+      captured.list.clear();
+
+      ExpansionTally tally =
+          new ExpandRun(expansion, graph).run(List.of(THROWN_ABOUT), 10, l -> {});
+
+      assertThat(tally.failed())
+          .as("the run really did reach the catch, or every assertion below is vacuous")
+          .isEqualTo(1);
+      assertThat(lines())
+          .as("no line carries a label, not even one an adapter put in an exception message")
+          .noneMatch(line -> line.contains(LABEL));
+      assertThat(List.copyOf(captured.list))
+          .as(
+              "no line this tool writes carries anything qid-shaped, not even one an adapter put in"
+                  + " an exception message — see the class javadoc")
+          .noneMatch(ExpansionIsSafeToPasteTest::carriesAnIdItMayNot);
+    }
+  }
+
+  @Test
   @DisplayName("the carve-out is one logger wide, matched exactly and never by substring")
   void shouldFireWhenAQidComesFromAnyLoggerButTheSharedExpansion() {
     assertThat(carriesAnIdItMayNot(from(ExpandRun.class.getName(), "[1/3] refused: " + RATED)))
@@ -194,5 +247,43 @@ class ExpansionIsSafeToPasteTest {
                 + " exception is a diagnostic from the shared expansion, which the MCP server emits"
                 + " identically — see the class javadoc")
         .noneMatch(ExpansionIsSafeToPasteTest::carriesAnIdItMayNot);
+  }
+
+  /** Throws the way the two upstream classes do: a message naming the seed, and its label. */
+  private static final class ThrowsNamingTheSeed implements SourceAdapter {
+
+    @Override
+    public String id() {
+      return "throws-naming-the-seed";
+    }
+
+    @Override
+    public boolean supports(NodeKind kind) {
+      return true;
+    }
+
+    @Override
+    public ExpandResult expand(NodeRecord seed, ExpandContext ctx) {
+      throw new IllegalArgumentException("not a QID: " + THROWN_ABOUT + " (" + LABEL + ")");
+    }
+  }
+
+  /** Answers for nothing — this run throws before any neighbour needs identifying. */
+  private static final class NeverCalledResolver implements EntityResolver {
+
+    @Override
+    public String id() {
+      return "never-called";
+    }
+
+    @Override
+    public List<Candidate> search(String query, NodeKind kind, int limit) {
+      throw new AssertionError("this run must not ask the resolver anything");
+    }
+
+    @Override
+    public Optional<NodeAssertion> fetch(String qid) {
+      throw new AssertionError("this run must not ask the resolver anything");
+    }
   }
 }
