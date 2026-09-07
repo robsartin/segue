@@ -60,7 +60,7 @@ final class StubIdentity implements MusicBrainzIdentity {
       // line the retired default used to carry. A BridgedIdentity refuses to hold a non-QID (ADR
       // 58), so constructing one from a mapping the caller wrote would turn a malformed value into
       // an IllegalArgumentException out of MusicBrainzSourceAdapter.expand — and
-      // SegueService.expandEntity wraps nothing, so one bad value would abort a whole expansion
+      // EntityExpansion.expand wraps nothing, so one bad value would abort a whole expansion
       // across every adapter. That is what GAP 9 and issue #147 exist to prevent; identitiesFor's
       // javadoc promises the other answer, and this double owes callers the same promise the real
       // bridge makes.

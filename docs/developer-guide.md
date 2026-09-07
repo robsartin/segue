@@ -32,6 +32,7 @@ Everything here was checked against the source in `src/main/java/com/robsartin/s
 - [Rating one card at a time](#rating-one-card-at-a-time)
 - [Claiming something no source has](#claiming-something-no-source-has)
 - [A supervised first run](#a-supervised-first-run)
+- [Expanding every promotion](#expanding-every-promotion)
 - [How to read an ADR against the code](#how-to-read-an-adr-against-the-code)
 
 ## What segue is, in one pass
@@ -246,8 +247,9 @@ ADRs describe.
 
 ```mermaid
 graph TD
-  app["app<br/>SegueApplication, SegueConfiguration, WikidataMusicBrainzIdentity"]
+  app["app<br/>SegueApplication, SegueConfiguration, SegueProperties"]
   mcp["mcp<br/>EntityTools, GraphTools, TasteTools, SegueService"]
+  expansion["expansion<br/>EntityExpansion, ExpansionOutcome, ExpansionSources, WikidataMusicBrainzIdentity"]
   ingest["ingest<br/>IngestService, GraphProjector"]
   tinker["tinker<br/>TinkerGraphStore"]
   jena["jena<br/>JenaGraphStore"]
@@ -266,6 +268,7 @@ graph TD
   own["own<br/>OwnCli, OwnRun"]
   census["census<br/>CensusCli, CensusRun, Census, CensusReport"]
   evaluate["evaluate<br/>EvaluateCli, HeldOut, Scoring, EvaluationReport"]
+  expand["expand<br/>ExpandCli, ExpandRun, Preflight, ExpansionTally, ExpansionReport"]
 
   app --> mcp
   app --> ingest
@@ -273,13 +276,18 @@ graph TD
   app --> tinker
   app --> sqlite
   app --> wikidata
-  app --> musicbrainz
-  app --> domain
+  app --> expansion
+  mcp --> expansion
   mcp --> ingest
   mcp --> port
   mcp --> domain
   mcp --> support
   mcp -.->|"one class only"| wikidata
+  expansion --> ingest
+  expansion --> port
+  expansion --> domain
+  expansion --> wikidata
+  expansion --> musicbrainz
   ingest --> port
   ingest --> domain
   ingest -.->|"KindMapper only"| wikidata
@@ -347,6 +355,14 @@ graph TD
   evaluate --> sqlite
   evaluate --> tinker
   evaluate --> wikidata
+  expand --> port
+  expand --> support
+  expand --> domain
+  expand --> expansion
+  expand --> sqlite
+  expand --> tinker
+  expand --> ingest
+  expand --> wikidata
 ```
 
 **What the diagram shows.** Dependencies point downward and never back up. `domain` sits at the
@@ -367,8 +383,8 @@ are the ones the diagram below draws an edge to it from — that half is derivat
 the edges rather than a count in this sentence, which nothing checks. Today they are:
 `mcp` (`UuidV7`), `export` and `rate` (`ClassLabels`), `export`, `ratings`, `recommend`, `evaluate`
 and `rate` (`QidList`), `export`, `ratings`, `recommend` and `rate` (`DefaultDatabase` — issue #179's
-one resolution for the four dev tools that keep a default), and `retract` and `own`
-(`RequiredDatabase` — the sentence those two refuse with, since #179 gave them no default at all;
+one resolution for the four dev tools that keep a default), and `retract`, `own` and `expand`
+(`RequiredDatabase` — the sentence those three refuse with, since #179 gave the first two no default at all;
 it resolves the path it quotes back by calling `DefaultDatabase` itself, so the rule has one home
 and the two claim tools depend on neither a default nor the class that computes one). One thing a reader might expect and will
 not find: `app` does not import `jena` at
@@ -377,7 +393,7 @@ that `app` imports nothing from `domain`; that stopped being true in ADR 54**, b
 `WikidataMusicBrainzIdentity` validates a seed QID with `Qid.looksLikeAQid` before putting it in a
 SPARQL query, so the bridge in `app` holds one `domain` type.
 
-`seed`, `export`, `ratings`, `retract`, `recommend`, `rate`, `own`, `census` and `evaluate` are the nine dev-side tools. None is
+`seed`, `export`, `ratings`, `retract`, `recommend`, `rate`, `own`, `census`, `evaluate` and `expand` are the ten dev-side tools. None is
 reachable from the application — nothing imports any of them, and each is entered through its own
 `main` behind a Gradle `JavaExec` task — and their arrows are the interesting part, because each
 has a different relationship with the data and a different fence to match.
@@ -420,6 +436,18 @@ has a different relationship with the data and a different fence to match.
   row per setting — the third dependency between dev tools, after `rate → recommend`
   and `census → export`, and deliberate for the same reason: a harness with a sweep of its own would
   answer a question about itself. It writes nothing, and `--db` is required ([ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md)).
+- **`expand` reaches `sqlite`, `tinker`, `ingest`, `wikidata`, `expansion` and `support`, and it is
+  the first dev-side tool that both writes *and* fetches.** It replays the log into a throwaway
+  `TinkerGraphStore`, resolves the affinity rows through the merges that replay already derived,
+  asks `KnownList.promoted` which entities are promotions, and expands each one through the same
+  `expansion.EntityExpansion` the MCP tool runs — appending what the adapters return through
+  `IngestService`, and reaching the live Wikidata API, the Wikidata Query Service and MusicBrainz to
+  get it. **Both halves are new here.** `retract` and `own` write and hold no graph, because neither
+  has a projection to apply a claim to; this one does, so its write is fenced at the call
+  (`theExpanderWritesThroughIngestAlone`) rather than by denying it a `GraphStore`. And every other
+  dev tool bans `java.net`, because its job is a pure function of one local file; this tool exists
+  to fetch, so `theExpanderOpensNothingElse` deliberately does not. `--db` is required, and
+  `--dry-run` counts what a real run would visit while writing nothing ([ADR 66](adr/0066-expand-every-promotion-from-a-dev-tool.md), #284).
 
 Tools with opposite relationships to the store cannot share a package and keep any fence
 meaningful, which is why ADR 41 made the first two siblings, ADR 43 added a third rather than a
@@ -489,8 +517,9 @@ line is drawn there.
 | `musicbrainz` | The second source ([ADR 54](adr/0054-musicbrainz-as-the-second-source.md)): `MusicBrainzClient` over `ws/2`, `MusicBrainzSourceAdapter`, and `MusicBrainzIdentity` — the MBID-to-QID seam it declares and may not implement, because an adapter may not import another adapter. Expansion only; no `EntityResolver`. Plain Java, no Spring. | `port`, `domain` |
 | `ingest` | `IngestService` (the only write path) and `GraphProjector` (boot replay). | `port`, `domain`, `wikidata` (`KindMapper` only, [ADR 42](adr/0042-store-p31-and-rederive-kind-at-projection.md)) |
 | `support` | Cross-cutting plain-Java helpers with no project dependencies — `UuidV7` (request correlation), `QidList` (the QID-file reader `export`, `ratings`, `recommend`, `evaluate` and `rate` share), `ClassLabels` (the offline `P31` label table `export` and `rate` share; it moved here from `export` when `rate` needed it), `DefaultDatabase` (the one `--db`/`SEGUE_DB`/`${user.home}` resolution `export`, `ratings`, `recommend` and `rate` share — issue #179; the live list is whoever calls `resolve`, so grep rather than trust these four names), and `RequiredDatabase` (the refusal `retract` and `own` give when `--db` was not typed; it calls `DefaultDatabase` for the path it quotes back and hands out a `String`, never a `Path`, so neither claim tool can take a default from it). | nothing |
+| `expansion` | One expansion: the source adapters, the bounds of ADR 49, the refusals of ADR 55 and ADR 59, and the partial-result facts both callers report in their own words. Also `ExpansionSources`, the one statement of the order the two sources are asked in, and `WikidataMusicBrainzIdentity`, the P434 bridge — the package that sees two adapters at once, since two entry points need it and only one of them may see Spring. Reached by `mcp`, by `expand` and by `app`, which wires all three, and by nothing else — `onlyTheClientAndTheExpanderExpandAnEntity`. | `port`, `domain`, `ingest`, `wikidata`, `musicbrainz` |
 | `mcp` | The tool classes, `SegueService`, the view records, `CorrelationId`. Spring-aware. | `ingest`, `port`, `domain`, `support` |
-| `app` | Entry point, all bean wiring, `application.yaml`, transport profiles, and `WikidataMusicBrainzIdentity` — the P434 bridge that implements `musicbrainz`'s identity seam, placed here because it is the only package ADR 32 lets see two adapters at once. Spring-aware. | everything it wires |
+| `app` | Entry point, all bean wiring, `application.yaml`, transport profiles. Spring-aware. Its `sourceAdapters` bean is one line calling `ExpansionSources.both`, and the P434 bridge it used to hold moved to `expansion` in #284, because a plain-Java dev tool needs the bridge and may not depend on Spring. | everything it wires |
 | `seed` | The bulk seeding tool ([ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)): a name list to `name → QID`, run as `./gradlew resolveNames`. Plain Java, never opens a store. | `port`, `domain`, `wikidata` |
 | `export` | The graph exporter ([ADR 41](adr/0041-graph-exporter-views-and-formats.md)): `ViewSelector` and the two writers, run as `./gradlew exportGraph`. Plain Java, read-only. | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `support` |
 | `ratings` | The taste-layer reader ([ADR 43](adr/0043-listing-your-own-ratings.md)): every rating with its label, note and `updated_at`, run as `./gradlew listRatings`. Plain Java, read-only, offline. | `port`, `domain`, `sqlite`, `support` |
@@ -500,6 +529,7 @@ line is drawn there.
 | `rate` | The rating deck ([ADR 46](adr/0046-the-rating-deck.md)): a loopback page on 127.0.0.1:8090 dealing one unrated entity per keystroke, run as `./gradlew rate`. Plain Java, offline, and the only dev tool that writes a rating. Composes its known list through the same `KnownList.promoted` `recommend` does ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)), passes the same `KnownList.suppressed` to its sweep, and deals revisions over `KnownList.revisitable` ([ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md)). | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `recommend`, `support` |
 | `census` | The graph census: nodes by kind, edges by type, source and corroboration, the claim rows and what retraction and merge did to them, the taste layer by score, degree quantiles against `Recommendations.MIN_CANDIDATE_DEGREE`, what MusicBrainz reached, and the classes its `CONCEPT` nodes state. Run as `./gradlew graphCensus`. Plain Java, read-only, offline, and the whole output is aggregates and class ids — no label, no note, no entity id — so it is safe to paste. `--db` is required, and `SEGUE_DB` does not satisfy it. | `port`, `domain`, `sqlite`, `support`, `export`, `wikidata` |
 | `evaluate` | The recommender's evaluation harness ([ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md)): holds out a deterministic slice of the entities you rated highly, reads every fold of that split, runs the shipped candidate sweep from what is left over a fixed grid of scorers and degree floors, and reports where the held-out entities and the ones you rated down land. Run as `./gradlew evaluate`. Plain Java, read-only, offline, and the whole output is aggregates — no label, no id, no note, no rating — so it is safe to paste. `--db` is required, and `SEGUE_DB` does not satisfy it. | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `recommend`, `support` |
+| `expand` | The promotion expander ([ADR 66](adr/0066-expand-every-promotion-from-a-dev-tool.md), #284), run as `./gradlew expandPromotions`: expands the neighbourhood of every entity rated at or above `KnownList.PROMOTION_RATING`, one at a time, through the shared `expansion.EntityExpansion`, and reports what happened as one block of aggregates safe to paste — no label, no note, no entity id, on any line. `ExpandRun.dryRun` counts what a real run would visit — entities the projection holds a node for, and entities `LocalEntity.isLocal` answers true for — without touching an adapter or the log. The tenth dev tool, and the only one that both WRITES and FETCHES: it replays the log into a throwaway `TinkerGraphStore`, appends through `IngestService`, and reaches the live Wikidata API, the Query Service and MusicBrainz. `--db` is required, and `SEGUE_DB` does not satisfy it. | `port`, `support`, `domain`, `expansion`, `sqlite`, `tinker`, `ingest`, `wikidata` |
 
 ### Which rules a machine enforces
 
@@ -517,6 +547,7 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `noPackageCycles` | any dependency cycle between slices of `com.robsartin.segue` | [ADR 32](adr/0032-layering-and-archunit.md) |
 | `springOnlyInAppAndMcp` | `org.springframework.*` anywhere outside `app` and `mcp` | [ADR 25](adr/0025-source-adapter-spi.md), [ADR 32](adr/0032-layering-and-archunit.md) |
 | `onlyIngestAppliesClaimsToTheGraph` | calling `GraphStore.record`, `GraphStore.upsertNode` or `AssertionLog.append` from outside `ingest` | [ADR 19](adr/0019-assertion-log-source-of-truth.md) |
+| `onlyTheClientAndTheExpanderExpandAnEntity` | any package but `mcp`, `expand`, `app` and `expansion` itself depending on `expansion` — the class that runs every adapter and appends what they return is a bulk write and a network connection in one object, and every other package's fence was written before it existed | [ADR 66](adr/0066-expand-every-promotion-from-a-dev-tool.md) |
 | `seedNeverOpensAStore` | `seed` depending on `sqlite`, `tinker`, `jena`, `ingest`, `mcp`, `app` or every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`, so a new tool joins every fence at once) — it resolves names and must not open the database even to read it | [ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md) |
 | `theExporterOnlyReads` | `export` calling `GraphStore.record`/`upsertNode` or `AssertionLog.append`, or depending on `IngestService`, or on every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`, so a new tool joins every fence at once), at all | [ADR 41](adr/0041-graph-exporter-views-and-formats.md) |
 | `theExporterNeverSpeaksToANetwork` | `export` depending on `java.net`, `javax.net`, the whole `musicbrainz` package, or any class of this project's that reaches a network API itself or through a chain of other classes here — so no HTTP client is named and none has to be remembered. The last clause replaced a `..wikidata.WikidataClient` argument that was a class name passed to a package predicate and matched nothing (issue #139) | [ADR 41](adr/0041-graph-exporter-views-and-formats.md) |
@@ -530,7 +561,7 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `theRecommenderOnlyReads` | `recommend` calling the three world-fact writes or either taste-layer write (`AffinityStore.put`, `updateRating`), or depending on `IngestService` at all | [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
 | `theRecommenderReadsRatingsAndNeverNotes` | `recommend` depending on `AffinityRecord` **as a type**, or calling `AffinityStore.find` or `readAll` — it may hold the store and call the note-free `readRatings`, and nothing that carries free text | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 39](adr/0039-affinity-capture-and-read.md), [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
 | `onlyTheRatingsToolReadsANote` | calling `AffinityRecord.note()` from outside `ratings` and `sqlite` — the score is ordinary data, the note is the owner's and is read on their own machine | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 43](adr/0043-listing-your-own-ratings.md) |
-| `onlyTheRecommenderReadsEveryRating` | calling `AffinityStore.readRatings` from outside `recommend`, `rate`, `census` **and `evaluate`** — the note-free bulk read belongs to the four dev-side tools that weight, deal, count or evaluate by it, and ADR 26 still pins the surface at six tools | [ADR 26](adr/0026-mcp-tool-surface.md), [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md), [ADR 63](adr/0063-a-read-only-census-of-the-graph.md), [ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md) |
+| `onlyTheRecommenderReadsEveryRating` | calling `AffinityStore.readRatings` from outside `recommend`, `rate`, `census`, `evaluate` **and `expand`** — the note-free bulk read belongs to the five dev-side tools that weight, deal, count, evaluate or expand by it, and ADR 26 still pins the surface at six tools. A widening rather than a fifth rule: nothing varies between the readers, and the expander's promotions ARE the entities rated at or above the threshold, which this is the only read that can find | [ADR 26](adr/0026-mcp-tool-surface.md), [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md), [ADR 63](adr/0063-a-read-only-census-of-the-graph.md), [ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md), [ADR 66](adr/0066-expand-every-promotion-from-a-dev-tool.md) |
 | `onlyTheEvaluationHarnessReadsWhenARatingChanged` | calling `AffinityStore.readUpdatedAt` from outside `evaluate` — a bulk read keyed by qid enumerates the whole taste layer whatever its values are, so when a rating last changed belongs to the one tool that splits its held-out population by rating age | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 39](adr/0039-affinity-capture-and-read.md), [ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md) |
 | `theRecommenderOpensNothingElse` | `recommend` depending on `jena`, `mcp`, `app`, `java.net`, `javax.net` or every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`, so a new tool joins every fence at once) — `rate` depends on `recommend` by design, and this is what keeps that trip one-way | [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
 | `theRatingDeckWritesOnlyAffinity` | `rate` calling the three world-fact writes, or depending on `IngestService` **as a type** — the deck records what the owner thinks, never what the world says, and cannot route a claim through the one class allowed to write one | [ADR 46](adr/0046-the-rating-deck.md) |
@@ -547,8 +578,13 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `theEvaluationHarnessReadsRatingsAndNeverNotes` | `evaluate` depending on `AffinityRecord` **as a type**, or calling `AffinityStore.find` or `readAll` — it may hold the store and call the note-free `readRatings`, and nothing that carries free text | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md) |
 | `theEvaluationHarnessHasNoDefaultDatabase` | `evaluate` depending on `support.DefaultDatabase` at all. A fourth rule rather than a wider one, for the census rule's reason: ADR 60 names the two claim tools and is immutable | [ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md), [ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md) |
 | `theEvaluationHarnessTakesItsDatabaseFromTheFlagAlone` | `evaluate` calling any `support` method that returns a `java.nio.file.Path`, or reading any `support` field of that type — the capability, where the rule above forbids the name | [ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md), [ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md) |
+| `theExpanderWritesThroughIngestAlone` | `expand` calling the three world-fact writes or either taste-layer write (`AffinityStore.put`, `updateRating`). Fenced at the CALLS rather than by denying the package a `GraphStore`, because unlike `retract` and `own` this tool genuinely holds a running graph — the expansion reads the seed's node, resolves each neighbour against the projection and records edges into it. The taste-layer clause is the one to read twice: this is the only writer in the project that also holds an `AffinityStore`, and a rating is the one thing nothing can regenerate | [ADR 66](adr/0066-expand-every-promotion-from-a-dev-tool.md), [ADR 33](adr/0033-taste-layer-separation.md), [ADR 19](adr/0019-assertion-log-source-of-truth.md) |
+| `theExpanderReadsScoresAndNeverNotes` | `expand` depending on `AffinityRecord` **as a type**, or calling `AffinityStore.find` or `readAll` — it may hold the store and call the note-free `readRatings`, and nothing that carries free text | [ADR 66](adr/0066-expand-every-promotion-from-a-dev-tool.md), [ADR 33](adr/0033-taste-layer-separation.md) |
+| `theExpanderOpensNothingElse` | `expand` depending on `jena`, `mcp`, `app` or any other dev tool — no permitted sibling at all, because there is no sweep or view it reuses. **`java.net` is deliberately NOT banned**, where every sibling bans it: each of those is a pure function of one local file, and this tool is the batch form of `expand_entity` and exists to fetch. `tinker`, `sqlite`, `ingest`, `wikidata` and `musicbrainz` are not banned either — the throwaway projection, the two connections to one file, the one write path, and the shipped adapter wiring | [ADR 66](adr/0066-expand-every-promotion-from-a-dev-tool.md), [ADR 32](adr/0032-layering-and-archunit.md) |
+| `theExpanderHasNoDefaultDatabase` | `expand` depending on `support.DefaultDatabase` at all. A fifth rule rather than a wider one, for the census rule's reason: ADR 60 names the two claim tools and is immutable | [ADR 66](adr/0066-expand-every-promotion-from-a-dev-tool.md), [ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md) |
+| `theExpanderTakesItsDatabaseFromTheFlagAlone` | `expand` calling any `support` method that returns a `java.nio.file.Path`, or reading any `support` field of that type — the capability, where the rule above forbids the name. Planted both ways for #284: a direct `DefaultDatabase.resolve` fires both rules, and a `Path`-returning method added to `support.RequiredDatabase` fires only this one, which is ADR 60's measured gap seen a fifth time | [ADR 66](adr/0066-expand-every-promotion-from-a-dev-tool.md), [ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md) |
 | `ownerClaimsAreMadeThroughTheirFactories` | calling — or referencing — the constructor of `LocalEntity`, `OwnerEdge` or `SameAs` from outside `domain` and `sqlite`. Those constructors enforce only what Wikidata's grammar fixes, so that an append-only row stays decodable after a convention moves; the conventions themselves (two leading zeros, the controlled relation vocabulary) live in `minted()`, `claimed()` and `declared()`. This rule is what makes every *maker* of a claim go through them, with no second copy of a rule to fall out of date. `sqlite` is exempt because `readRow` reconstructs rather than claims | [ADR 22](adr/0022-wikidata-identity-and-vocabulary.md), [ADR 19](adr/0019-assertion-log-source-of-truth.md), [ADR 58](adr/0058-stand-in-identifiers-cannot-be-allocatable.md) |
-| `bridgedIdentitiesAreBuiltThroughTheirFactory` | calling — or referencing — the constructor of `BridgedIdentity` from anywhere but the record itself. `BridgedIdentity.describing` *drops* a row whose class id is not a QID, answering `undescribed`; the constructor *throws*. The two are not interchangeable in a bridge: `MusicBrainzSourceAdapter` catches only `MusicBrainzIdentityUnavailableException` and `SegueService.expandEntity` wraps `adapter.expand` in no `try`, so an `IllegalArgumentException` from a producer aborts a whole expansion across every adapter — and `NodeRecord` refuses the same value only from inside `IngestService.apply`, after the claim has been appended. Rules run over `src/main` only, so the test doubles that build rows directly are outside the import rather than exempted | [ADR 19](adr/0019-assertion-log-source-of-truth.md), [ADR 58](adr/0058-stand-in-identifiers-cannot-be-allocatable.md), issue [#163](https://github.com/robsartin/segue/issues/163) |
+| `bridgedIdentitiesAreBuiltThroughTheirFactory` | calling — or referencing — the constructor of `BridgedIdentity` from anywhere but the record itself. `BridgedIdentity.describing` *drops* a row whose class id is not a QID, answering `undescribed`; the constructor *throws*. The two are not interchangeable in a bridge: `MusicBrainzSourceAdapter` catches only `MusicBrainzIdentityUnavailableException` and `EntityExpansion.expand` wraps `adapter.expand` in no `try`, so an `IllegalArgumentException` from a producer aborts a whole expansion across every adapter — and `NodeRecord` refuses the same value only from inside `IngestService.apply`, after the claim has been appended. Rules run over `src/main` only, so the test doubles that build rows directly are outside the import rather than exempted | [ADR 19](adr/0019-assertion-log-source-of-truth.md), [ADR 58](adr/0058-stand-in-identifiers-cannot-be-allocatable.md), issue [#163](https://github.com/robsartin/segue/issues/163) |
 | `nothingWritesToStandardOut` | reading `System.out` anywhere except the one named exception, `SegueApplication` | [ADR 28](adr/0028-mcp-transports.md) |
 | `nothingWritesToStandardError`, `noPrintStackTrace`, `noJavaUtilLogging` | bypassing SLF4J | [ADR 30](adr/0030-structured-logging.md) |
 | `affinityNeverTouchesTheWorldFactLayer` | a taste-layer type depending on the log, the graph, `IngestService` or the claim records | [ADR 33](adr/0033-taste-layer-separation.md) |
@@ -557,7 +593,7 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `theBootFoldsOnce` | any ingest class but `IngestService` calling `Equivalences.in`, `folding`, `standIns`, `nodesTheFoldHolds`, `retractedStandIns` or `localsOfMerges`, or `Retractions.in` — the boot builds one `Fold` and every reader takes what it holds. The package rather than `GraphProjector` alone, because a fence naming one class cannot see a package-private helper that folds and is called from the replay. `IngestService` is the single exception: `claim`'s pre-append gate folds on the live path, where there is no boot fold to reuse | [ADR 64](adr/0064-fold-the-log-once-per-boot.md) |
 | `theExportFoldsOnce` | any `export` class but `LogProjection` calling the seven log-taking fold statics or `Fold.of` — the export folds in one place and every other class takes what it holds. `Fold.of` is forbidden too, unlike in `theBootFoldsOnce`, because here it is the second class's route to a second fold rather than the sanctioned one | [ADR 64](adr/0064-fold-the-log-once-per-boot.md) |
 | `theCensusFoldsOnce` | any `census` class but `Census` calling the seven log-taking fold statics or `Fold.of` — `Census.of` builds the one fold and `ClaimCensus` and `TasteCensus` take what it holds instead of folding the rows again | [ADR 64](adr/0064-fold-the-log-once-per-boot.md) |
-| `theReplayingToolsTakeTheBootsFold` | any class in `recommend`, `rate` or `evaluate` calling the seven log-taking fold statics or `Fold.of` — each replays through `GraphProjector`, which folds the log, so each takes that fold back from `Replay` rather than reading the log a second time. No exempt class, because the one home of these tools' fold is not in these packages | [ADR 64](adr/0064-fold-the-log-once-per-boot.md) |
+| `theReplayingToolsTakeTheBootsFold` | any class in `recommend`, `rate`, `evaluate` **or `expand`** calling the seven log-taking fold statics or `Fold.of` — each replays through `GraphProjector`, which folds the log, so each takes that fold back from `Replay` rather than reading the log a second time. No exempt class, because the one home of these tools' fold is not in these packages. `expand` joins the list rather than getting a rule of its own, because the property is one property and a copy under a new name is how `evaluate` grew the defect after ADR 64 was written | [ADR 64](adr/0064-fold-the-log-once-per-boot.md), [ADR 66](adr/0066-expand-every-promotion-from-a-dev-tool.md) |
 
 ### Which rules are only convention
 
@@ -784,6 +820,7 @@ sequenceDiagram
     participant Client as MCP client
     participant Tools as GraphTools
     participant Svc as SegueService
+    participant Exp as EntityExpansion
     participant Adapter as WikidataSourceAdapter
     participant Fwd as ClaimMapper
     participant Rev as ReverseClaims
@@ -793,12 +830,13 @@ sequenceDiagram
 
     Client->>Tools: expand_entity(qid, maxNewEdges?)
     Tools->>Svc: expandEntity(qid, bound)
-    Svc->>Graph: node(qid)
-    Graph-->>Svc: NodeRecord, else "unknown entity" error result
-    Svc->>Svc: ExpansionBounds.effective — a CONCEPT seed is capped (ADR 49)
+    Svc->>Exp: expand(qid, bound)
+    Exp->>Graph: node(qid)
+    Graph-->>Exp: NodeRecord, else a Refused outcome the caller words
+    Exp->>Exp: ExpansionBounds.effective — a CONCEPT seed is capped (ADR 49)
 
     loop every SourceAdapter that supports the seed's kind
-        Svc->>Adapter: expand(seed, ExpandContext)
+        Exp->>Adapter: expand(seed, ExpandContext)
         Note over Adapter,Fwd: PASS 1 (forward): claims stated ON the seed
         Adapter->>Adapter: resolver.entity(qid) over the Action API
         Adapter->>Fwd: map(qid, entity, assertedAt)
@@ -807,44 +845,53 @@ sequenceDiagram
         Adapter->>Rev: lookup(qid, maxNewEdges, assertedAt)
         Rev-->>Adapter: assertions + neighbour identity + truncated flag
         Adapter->>Adapter: reverse pass ran, so drop fallbackOnly forward claims
-        Adapter-->>Svc: ExpandResult(assertions, neighbors, unavailable, truncated)
+        Adapter-->>Exp: ExpandResult(assertions, neighbors, unavailable, truncated)
     end
 
     loop every assertion inside the bound
         alt neighbour is new to the graph
-            Svc->>Svc: identity from ExpandResult.neighbors, else resolver.fetch
-            Svc->>Ingest: record(NodeAssertion), counted in nodesAdded
+            Exp->>Exp: identity from ExpandResult.neighbors, else resolver.fetch
+            Exp->>Ingest: record(NodeAssertion), counted in nodesAdded
             Ingest->>Log: append
             Ingest->>Graph: upsertNode
         else neighbour exists and the adapter described it
-            Svc->>Ingest: record(NodeAssertion), refreshes a stale kind, not counted
+            Exp->>Ingest: record(NodeAssertion), refreshes a stale kind, not counted
             Ingest->>Log: append
             Ingest->>Graph: upsertNode
         end
-        Svc->>Ingest: record(AssertionRecord)
+        Exp->>Ingest: record(AssertionRecord)
         Ingest->>Log: append
         Ingest->>Graph: record
     end
 
+    Exp-->>Svc: ExpansionOutcome — Expanded, carrying the facts
     Svc-->>Tools: ToolResult ok / partial + ExpansionSummary
     Tools-->>Client: CallToolResult
 ```
 
-**What the diagram shows.** An `expand_entity` tool call reaches `SegueService`, which refuses
-immediately if the seed is not already in the graph. For each source adapter supporting the seed's
-kind, the Wikidata adapter runs the forward pass (`ClaimMapper` over the entity fetched from the
-Action API) and then the reverse pass (`ReverseClaims`, one SPARQL query to the Query Service),
-dropping fallback-only forward claims once the reverse pass has succeeded. `SegueService` then walks
-the bounded assertion list; for each assertion naming a neighbour the graph has never seen it takes
-identity from the adapter if the adapter supplied it and otherwise fetches it, records the node
-through `IngestService`, and only then records the edge. Every write is log-then-graph. The call
-returns a single `ToolResult` whose outcome is `ok` or `partial`, never a thrown exception.
+**What the diagram shows.** An `expand_entity` tool call reaches `SegueService`, which hands the
+whole expansion to `EntityExpansion` — the shared body the promotion expander runs too (#284) — and
+words whatever comes back. The expansion refuses immediately if the seed is not already in the graph.
+For each source adapter supporting the seed's kind, the Wikidata adapter runs the forward pass
+(`ClaimMapper` over the entity fetched from the Action API) and then the reverse pass
+(`ReverseClaims`, one SPARQL query to the Query Service), dropping fallback-only forward claims once
+the reverse pass has succeeded. `EntityExpansion` then walks the bounded assertion list; for each
+assertion naming a neighbour the graph has never seen it takes identity from the adapter if the
+adapter supplied it and otherwise fetches it, records the node through `IngestService`, and only then
+records the edge. Every write is log-then-graph. What it returns is an `ExpansionOutcome` carrying
+facts and no sentences; `SegueService` turns that into a single `ToolResult` whose outcome is `ok` or
+`partial`, never a thrown exception.
+
+**The split is where the two callers part, not a second expansion.** `EntityExpansion` counts and
+`SegueService` words — the `ok`/`partial` shaping, the three refusal sentences and the reason list
+are the tool layer's and did not move, which is why the diagram shows one arrow back and the wording
+after it.
 
 That was not true for one case until issue #233: an edge naming the seed at neither end had its
 second endpoint resolved by nobody, and the store's exception escaped the facade after some rows were
-already committed. `IngestService` now refuses such an edge before the append and `expandEntity`
-catches the refusal, skips the assertion and names the endpoint in `detail` — the same treatment an
-unresolvable neighbour already got.
+already committed. `IngestService` now refuses such an edge before the append and `EntityExpansion`
+catches the refusal, skips the assertion and names the endpoint, which `expandEntity` renders into
+`detail` — the same treatment an unresolvable neighbour already got.
 
 **The requested bound is resolved through `ExpansionBounds.effective` before anything else sees it**
 (issue #112, [ADR 49](adr/0049-a-kind-scoped-ceiling-on-concept-expansion.md)). A `CONCEPT` seed is
@@ -944,7 +991,7 @@ a sign of a mechanism being merged that was never shared.
 - **The bound is spent server-side** in the reverse query, as `ORDER BY DESC(?sitelinks) LIMIT n+1`.
   The extra row is what makes `truncated` an observation rather than a guess.
 - **A `CONCEPT` seed's bound is lowered before the adapter is called at all**
-  ([ADR 49](adr/0049-a-kind-scoped-ceiling-on-concept-expansion.md)). `SegueService.expandEntity`
+  ([ADR 49](adr/0049-a-kind-scoped-ceiling-on-concept-expansion.md)). `EntityExpansion.expand`
   resolves the request through `ExpansionBounds.effective` and builds the `ExpandContext` from the
   result, so the ceiling reaches `ReverseClaims` as the SPARQL `LIMIT` like any other bound. The
   measurement behind the number is in the ADR; the short version is that expanding a broad subject
@@ -2936,11 +2983,15 @@ with. Minting `--kind CONCEPT` instead would not add a class row either, but it 
 
 ### 9. Optional: reach MusicBrainz once
 
-**There is no dev-side bridge tool, deliberately.** MusicBrainz is reached only by `expand_entity`
-running inside the server, and the adapter describes `PERSON` and `GROUP` and nothing else
+**There is no dev-side bridge tool, deliberately, and that is a narrower claim than it used to
+be.** MusicBrainz is also reached by the promotion expander — see
+[Expanding every promotion](#expanding-every-promotion) — which runs the *same* expansion through
+the *same* adapters, one promotion at a time. The tool that does not exist is one that reaches
+MusicBrainz **differently**: a second bridge, a second client, a second copy of the identity walk.
+The adapter describes `PERSON` and `GROUP` and nothing else
 ([ADR 54](adr/0054-musicbrainz-as-the-second-source.md),
-[ADR 61](adr/0061-the-bridge-returns-classes.md)). So this step is one you do through the client;
-there is no command for it in this chapter.
+[ADR 61](adr/0061-the-bridge-returns-classes.md)). This step stays one you do through the client,
+because what it is checking is one interactive call: there is no command for it in this chapter.
 
 Start the client, pick one person or one band already in your graph, and call `expand_entity` on
 it. Then quit — step 0's rule has not stopped applying — and take a third census:
@@ -2970,6 +3021,171 @@ This run changes no code. What it produces is issues, and these are the ones to 
   what to type next is a defect in the sentence, not in you.
 - **Anything this chapter got wrong.** It was written against the code and checked against the
   parsers, and it has never been run. The first run is what makes it true.
+
+## Expanding every promotion
+
+[ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)'s own note records what share of
+the real graph's nodes are the subject of a stored edge — so the thing that bounds what the
+recommender can see is expansion coverage, not any rule in its arithmetic. The entities you rated at
+or above `KnownList.PROMOTION_RATING` are the ones you said you have, and until this chapter existed
+there was no way to expand them except one `expand_entity` call at a time through the client. This
+chapter is that run, done in bulk and supervised ([ADR 66](adr/0066-expand-every-promotion-from-a-dev-tool.md), #284).
+
+**The owner types every command here.** Nothing in this repository runs against the real database,
+and an agent reading this chapter is reading a description of what the owner will do, not a script
+it may execute — `--db` is required and `SEGUE_DB` does not satisfy it precisely so that an agent
+inheriting the owner's shell cannot stand in for him
+([ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md)). This is the sharpest case of
+that rule in the project: `expandPromotions` is the only dev-side tool that both **writes the log**
+and **calls a public API**.
+
+Read [Looking at the shape of your graph](#looking-at-the-shape-of-your-graph) first — this chapter
+takes two censuses and compares them, and it does not restate what that one says about any line it
+prints.
+
+Every `./gradlew` line below that carries `--args` is executed by a test before you ever paste it.
+`DeveloperGuideExpandPromotionsExamplesTest` splits each `--args` string the way a shell would and
+hands it to `ExpandCli.parse`, and it checks this chapter in particular: that it is here, that its
+commands are these commands in this order, and that no line of it writes a tilde where `$HOME`
+belongs. `DeveloperGuideCensusExamplesTest` does the same for the two `graphCensus` lines. A flag
+renamed in either tool reds this chapter, and so does a step written out of order.
+
+### 0. Quit the client, and confirm nothing is holding the database
+
+[ADR 24](adr/0024-sqlite-assertion-log.md) assumes a single writer, and **nothing detects a second
+one** — that is [convention, not a check](#which-rules-are-only-convention). This tool appends, and
+a server running through it is a second writer on one file. Quit the MCP client, then confirm no
+JVM is left holding the file, exactly as
+[A supervised first run](#a-supervised-first-run)'s step 0 describes; that step is the authority on
+how to check, and this one does not restate it.
+
+### 1. The census before
+
+```bash
+./gradlew graphCensus --args="--db $HOME/.segue/segue.db"
+```
+
+Keep the whole block. It is the thing step 4's census is compared against, and it is safe to paste
+into an issue ([ADR 63](adr/0063-a-read-only-census-of-the-graph.md)).
+
+### 2. The dry run
+
+```bash
+./gradlew expandPromotions --args="--db $HOME/.segue/segue.db --dry-run"
+```
+
+Nothing is written and no source is asked anything: the dry run reads the projection alone. It
+prints three counts — how many promotions were considered, how many the graph already holds a node
+for, and how many are entities you minted yourself
+([ADR 59](adr/0059-owner-claims-as-a-third-layer.md)). Read them before going further:
+
+- **`minted`** are refused by the run, and correctly: the owner minted them because no source models
+  them, so there is nothing to expand from.
+- **`considered` minus `in the graph` minus `minted`** is how many promotions the run will refuse as
+  unknown entities. A rating can sit on an entity the graph has no node for — the taste layer and the
+  world-fact layer are separate tables ([ADR 33](adr/0033-taste-layer-separation.md)) — so this
+  number being non-zero is information, not a fault.
+- **`considered`** is what sets your expectations for how long step 3 takes. See the arithmetic
+  below.
+
+### 3. The run
+
+```bash
+./gradlew expandPromotions --args="--db $HOME/.segue/segue.db"
+```
+
+**What you will see.** One progress line per promotion, carrying its position in the run and what
+that expansion did — `[17/431] 12 edge(s), 4 new node(s)`, `[18/431] refused: LOCAL_ENTITY`,
+`[19/431] partial: 1 source(s) unavailable, 2 endpoint(s) refused`, `[20/431] failed`. **An expansion
+that fell short says so on its own line** rather than reading as a clean one and being visible only
+in the aggregate block tens of minutes later; the shortfall is counted, never named, and the bound
+cut is attributed to nobody because every adapter was handed one budget. The fourth form, `failed`,
+is not an outcome the expansion reported — it is one entity's expansion throwing, caught, counted and
+named by nothing but its position; see "How long it takes" below for what happens next. **No line
+carries an entity id**, and that is deliberate rather than incidental: a line per promotion,
+over every promotion, in qid order, would be your whole promoted population enumerated down a
+terminal, which is the bulk read [ADR 39](adr/0039-affinity-capture-and-read.md) declined by another
+route. `ExpansionIsSafeToPasteTest` is what holds it. Then one aggregate block at the end, in
+`graphCensus`'s shape and safe to paste for the same reason.
+
+**How long it takes, and why.** At a promotion count in the hundreds, expect **tens of minutes**.
+The arithmetic, so the number is yours rather than a figure quoted here:
+
+- Every `PERSON` or `GROUP` promotion costs **at least one second of MusicBrainz's own pacing** —
+  `MusicBrainzClient` reserves its request slots against a minimum interval, one client for the whole
+  run, which is what keeps a batch honest against a public API.
+- Every promotion costs **two Wikidata round trips** for the adapter — the Action API fetch of the
+  claims stated on it, then the Query Service reverse lookup
+  ([ADR 36](adr/0036-reverse-lookup-via-sparql.md)) — **plus two more for a `PERSON` or `GROUP`
+  promotion**, the bridge's own lookups, where MusicBrainz runs at all
+  ([ADR 54](adr/0054-musicbrainz-as-the-second-source.md)). A `WORK`, `PLACE`, `EVENT` or `CONCEPT`
+  promotion pays only the first two.
+- Plus **one more round trip per neighbour no source described**. Wikidata's reverse pass returns
+  identity inline for the neighbours it discovers, so this is the remainder rather than the count —
+  but a promotion whose neighbours arrive from MusicBrainz alone pays it for each of them.
+
+Nothing is retried by this tool: a refused endpoint, an unreachable source and a truncation are all
+reported outcomes of an expansion that *completed*, and the adapters' own clients already retry with
+backoff. One entity whose expansion throws is caught, counted as `failed`, and the run continues —
+one entity is not the run.
+
+**Leave it alone while it runs.** It is a single writer on one file, and step 0 is still in force.
+
+### 4. The census after
+
+```bash
+./gradlew graphCensus --args="--db $HOME/.segue/segue.db"
+```
+
+### 5. What should have moved, and what should not
+
+`CensusReport` is the authority on the labels below; this table names directions, and deliberately
+carries no figures, because a figure here would be a number nothing regenerates.
+
+| line | direction | why |
+| --- | --- | --- |
+| `nodes` / total | up | every neighbour no claim described before is a new node |
+| `nodes` by kind | up | every neighbour no claim described before is a new node |
+| `edges` / total | up | the assertions the adapters returned |
+| `edges` by type | up | the assertions the adapters returned |
+| `edges` by source | up, **and `musicbrainz` up for the first time in bulk** | the second source has only ever been reached one interactive call at a time |
+| `edges` by corroboration | up at two sources | where both sources state one relationship |
+| `edges` / dangling | **unchanged** | `IngestService.record` refuses an edge before it appends unless both folded endpoints already have a node — issue #233's pre-flight is what makes this line stay at whatever it read before |
+| `edges` / withdrawn | **unchanged** | that count is a merge's canonical side emptied by a retraction, and this run makes no retraction |
+| `claims` / log rows | up by at least the edges added | every recorded assertion is a row ([ADR 19](adr/0019-assertion-log-source-of-truth.md)) |
+| `degree` / max | up | a promotion's own degree, or a shared neighbour's, can push past the previous highest, and nothing in a run with no retraction ever lowers it |
+| `degree` / p50, p90, p99 | may move either way, and probably down | every neighbour no claim described before enters the population at degree 1 (`DegreeCensus`); against a six-figure population, a flood of new degree-1 arrivals more plausibly drags the middle and upper quantiles down than the promotions' own rising degree drags them up — read whichever way your own before/after actually moved, and do not expect the intuitive direction |
+| `degree` / at or below the floor, at or below the floor % | up | every new node enters at degree 1, and `Recommendations.MIN_CANDIDATE_DEGREE` is never zero, so a degree-1 arrival always lands at or below it |
+| `bridge` / entities MusicBrainz reached | up | one bridge lookup per `PERSON` or `GROUP` promotion |
+| `concept classes` | may move | new nodes arrive whose classes `KindMapper` may not yet place |
+| `taste` by score | **unchanged** | this tool writes no rating, and its fence forbids one |
+
+`taste` and `edges` / withdrawn are the ones worth checking hardest: they are what a fence being
+wrong would show up as.
+
+### What to file from what you saw
+
+This run changes no code. What it produces is issues, and these are the ones to watch for:
+
+- **A line that moved when the table above says it should not** — `taste` or `edges / withdrawn`.
+  Either one means a fence reaches less far than
+  `ArchitectureTest.theExpanderWritesThroughIngestAlone` says it does, and that is the most serious
+  thing this run can find.
+- **A boot that refused afterwards.** File the `replay refused:` block verbatim, sequence numbers
+  and all. An expansion appends edges, and issue #233's pre-flight is what stands between a bad one
+  and a log that cannot boot.
+- **`failed` above zero.** Each of those is one entity whose expansion threw. The count is in the
+  block and the positions are in the progress lines; neither names the entity, so reproducing one
+  means calling `expand_entity` on a promotion through the client.
+- **A `refused` count you did not expect** from step 2's arithmetic. The dry run predicts it exactly;
+  a disagreement between the two is a defect in one of them.
+- **`bridge / entities MusicBrainz reached` that did not move at all.** With hundreds of `PERSON` and
+  `GROUP` promotions the bridge should have been asked hundreds of times, and a flat line means
+  something declined before it was reached rather than that MusicBrainz holds nothing.
+- **Anything a tool printed that you had to stop and think about.** A refusal that did not tell you
+  what to type next is a defect in the sentence, not in you.
+- **Anything this chapter got wrong.** It was written against the code and checked against the
+  parser, and it has never been run. The first run is what makes it true.
 
 ## How to read an ADR against the code
 

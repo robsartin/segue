@@ -158,7 +158,7 @@ import java.util.regex.Pattern;
  * one is guarded</b> (<a href="https://github.com/robsartin/segue/issues/147">issue #147</a>).
  * {@code Provenance}'s compact constructor throws on a tab or a newline in {@code sourceId} or
  * {@code sourceRef}, and that {@code IllegalArgumentException} would escape {@link #expand} —
- * {@code SegueService.expandEntity} has no {@code try} around {@code adapter.expand} — so one
+ * {@code EntityExpansion.expand} has no {@code try} around {@code adapter.expand} — so one
  * malformed character would abort a whole expansion, across every adapter, instead of costing this
  * one its result. Its four components, all of them:
  *
@@ -270,7 +270,7 @@ public final class MusicBrainzSourceAdapter implements SourceAdapter {
       bridged = identity.mbidFor(seed.qid());
     } catch (MusicBrainzIdentityUnavailableException e) {
       // Issue #148. Caught here and turned into the flag, not allowed past expand(): the SPI says
-      // failures degrade rather than propagate, and SegueService.expandEntity wraps nothing. The
+      // failures degrade rather than propagate, and EntityExpansion.expand wraps nothing. The
       // reason this catch exists at all is that the empty answer below already means something —
       // "no MusicBrainz record is bridged to this seed" — so before the seam had a failure type,
       // an outage had no way to say anything other than that.

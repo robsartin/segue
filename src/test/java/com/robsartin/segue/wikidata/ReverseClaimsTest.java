@@ -140,7 +140,7 @@ class ReverseClaimsTest {
   @DisplayName("neighbour identity comes back inline, so no extra round trip is needed")
   void neighboursArriveInline() throws IOException {
     // This is what makes the reverse lookup affordable. Without it, 73 discovered works mean
-    // 73 wbgetentities calls before a single edge can be recorded (see SegueService.expandEntity).
+    // 73 wbgetentities calls before a single edge can be recorded (see EntityExpansion.expand).
     try (StubWikidataServer stub = new StubWikidataServer()) {
       stub.enqueueBody(resource("/wikidata/cave-reverse.json"));
 
@@ -338,7 +338,7 @@ class ReverseClaimsTest {
   @DisplayName("an entity that points at itself does not become a self-loop")
   void selfReferencesAreSkipped() {
     // Wikidata does hold reflexive statements (an item influenced by itself, a work part of
-    // itself). A self-loop adds no route, and SegueService.neighborOf reports "no neighbour"
+    // itself). A self-loop adds no route, and EntityExpansion.neighborOf reports "no neighbour"
     // when both ends are the seed, so the edge would be recorded with nothing to connect.
     try (StubWikidataServer stub = new StubWikidataServer()) {
       stub.enqueueBody(

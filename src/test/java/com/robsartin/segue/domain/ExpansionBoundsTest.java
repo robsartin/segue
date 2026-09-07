@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
  * Issue #112: a single {@code expand_entity} call on a broad {@code CONCEPT} can flood the graph —
  * religion and accounting both hit the Wikidata reverse-lookup's 501-row cap, landing at in-graph
  * degree 500 from one call. {@link ExpansionBounds} is the ceiling that stops that, applied by
- * {@code SegueService.expandEntity}.
+ * {@code EntityExpansion.expand}.
  */
 class ExpansionBoundsTest {
 

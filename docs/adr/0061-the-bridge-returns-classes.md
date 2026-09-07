@@ -197,3 +197,24 @@ smaller batch and a measurement, not a silent fall back to the truthy form.
   against a second time.
 - **Nothing in `./gradlew check` needs the network, and nothing in it reads `~/.segue/segue.db`.**
   The measurement is fixture-driven and offline, and the `@Tag("live")` tests stay excluded.
+
+**Amendment (2026-09-07, issue #284): the Decision bullet's placement is corrected.**
+
+Nothing above is withdrawn, no decision above is edited, and this ADR keeps `Accepted`.
+
+The bullet headed *"The widened query lives in `app`"* stated two things that are no longer true:
+`WikidataMusicBrainzIdentity` no longer lives in `app`, and `app` is no longer the only package
+permitted to see two adapters at once. [ADR 66](0066-expand-every-promotion-from-a-dev-tool.md)
+records the decision that moved it — a second, Spring-free entry point (issue #284's dev tool) needed
+the same bridge and could not reach `app`, so the class moved to `expansion`, the package the two
+entry points share. [ADR 54](0054-musicbrainz-as-the-second-source.md)'s dated amendment of the same
+day tells the same story from the adapter's side.
+
+The same bullet's last sentence — *"`SegueService` prefers an adapter's neighbour to a fetch and
+records it whether or not the node already exists (issue #55)"* — now names the wrong class for the
+same reason: that logic is in `EntityExpansion.expand`, which both `SegueService` and the dev tool
+call.
+
+`WikidataMusicBrainzIdentity` is still the only implementation of `MusicBrainzIdentity` there is, and
+every other clause of the Decision — the described-identity shape, the guard, the label check, the
+factory-only construction, the stamped source ids — is unchanged and unamended.

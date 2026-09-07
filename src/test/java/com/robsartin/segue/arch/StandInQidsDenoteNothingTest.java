@@ -203,7 +203,7 @@ class StandInQidsDenoteNothingTest {
               real(
                   "class id — mapped by ClassLabels and KindMapper",
                   code(
-                      "src/test/java/com/robsartin/segue/app/WikidataMusicBrainzIdentityTest.java"),
+                      "src/test/java/com/robsartin/segue/expansion/WikidataMusicBrainzIdentityTest.java"),
                   code("src/test/java/com/robsartin/segue/census/ConceptClassCensusTest.java"),
                   code("src/test/java/com/robsartin/segue/domain/LoggedAssertionTest.java"),
                   code("src/test/java/com/robsartin/segue/domain/RecordInvariantsTest.java"),
@@ -479,7 +479,7 @@ class StandInQidsDenoteNothingTest {
               real(
                   "class id — mapped by ClassLabels and KindMapper",
                   code(
-                      "src/test/java/com/robsartin/segue/app/WikidataMusicBrainzIdentityTest.java"),
+                      "src/test/java/com/robsartin/segue/expansion/WikidataMusicBrainzIdentityTest.java"),
                   code("src/test/java/com/robsartin/segue/export/ImagemapRecipeTest.java"),
                   code("src/test/java/com/robsartin/segue/export/WhatAHoverShowsTest.java"),
                   code("src/test/java/com/robsartin/segue/musicbrainz/BridgedIdentityTest.java"),

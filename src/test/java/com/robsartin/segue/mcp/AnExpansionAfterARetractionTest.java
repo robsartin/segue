@@ -41,10 +41,10 @@ import org.junit.jupiter.api.io.TempDir;
  *
  * <p>{@code WikidataSourceAdapter.expand} fills {@link ExpandResult#neighbors()} from the REVERSE
  * pass alone (ADR 36); the forward pass, {@code ClaimMapper.map}, carries no identity. When a
- * neighbour's identity rides along, {@code SegueService.expandEntity} re-records it whether or not
- * the graph holds the node (issue #55) — that claim lands after the retraction, survives it, and
- * the boot is fine. When it does not, the stale graph makes {@code isNew} false so nothing is
- * fetched either, and the edge is appended alone.
+ * neighbour's identity rides along, {@code EntityExpansion.expand} re-records it whether or not the
+ * graph holds the node (issue #55) — that claim lands after the retraction, survives it, and the
+ * boot is fine. When it does not, the stale graph makes {@code isNew} false so nothing is fetched
+ * either, and the edge is appended alone.
  *
  * <p><b>Reaching either needs two writers on one database</b>, which is not the single writer ADR
  * 24 assumes: no retraction can be appended from inside the server ({@code
@@ -117,13 +117,13 @@ class AnExpansionAfterARetractionTest {
    * #KETTLES} as its <em>neighbour</em>. Here the call is {@code service.expandEntity(KETTLES,
    * 10)}: the seed itself is the retracted entity.
    *
-   * <p>{@code SegueService.expandEntity}'s seed check is {@code graph.node(qid)}, the same stale,
+   * <p>{@code EntityExpansion.expand}'s seed check is {@code graph.node(qid)}, the same stale,
    * unretracted graph the two tests above already rely on being stale — so it still finds a node
    * for {@code KETTLES} and the call proceeds. {@link #SEED_EDGE} then names {@code KETTLES} at one
    * end and the invented {@link #SPARROW} at the other, and {@code
-   * SegueService.neighborOf(assertion, KETTLES)} resolves the FAR end — {@code SPARROW} — for every
-   * edge this adapter can return, by construction: it returns {@code null} only when BOTH ends
-   * equal the seed, and otherwise always the end that is not the seed. {@code KETTLES} can
+   * EntityExpansion.neighborOf(assertion, KETTLES)} resolves the FAR end — {@code SPARROW} — for
+   * every edge this adapter can return, by construction: it returns {@code null} only when BOTH
+   * ends equal the seed, and otherwise always the end that is not the seed. {@code KETTLES} can
    * therefore never be the {@code neighbor} variable {@code expandEntity}'s loop re-records
    * identity for.
    *

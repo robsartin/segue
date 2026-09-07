@@ -1,4 +1,4 @@
-package com.robsartin.segue.app;
+package com.robsartin.segue.expansion;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

@@ -17,6 +17,7 @@ import com.robsartin.segue.domain.OwnerEdge;
 import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.domain.Retractions;
 import com.robsartin.segue.domain.SameAs;
+import com.robsartin.segue.expansion.EntityExpansion;
 import com.robsartin.segue.export.LogProjection;
 import com.robsartin.segue.ingest.GraphProjector;
 import com.robsartin.segue.ingest.IngestService;
@@ -152,7 +153,16 @@ class ArchitectureTest {
    */
   static final List<String> DEV_TOOL_PACKAGES =
       List.of(
-          "census", "evaluate", "export", "own", "rate", "ratings", "recommend", "retract", "seed");
+          "census",
+          "evaluate",
+          "expand",
+          "export",
+          "own",
+          "rate",
+          "ratings",
+          "recommend",
+          "retract",
+          "seed");
 
   /**
    * Every dev-tool package except the ones named, as {@code ..x..} patterns, then {@code
@@ -226,8 +236,13 @@ class ArchitectureTest {
    * one SPARQL query would bridge them in an afternoon. It would also mean the third source's cost
    * depends on which of the first two it happens to need, and the question ADR 54 exists to answer
    * could never be asked again. {@code musicbrainz} declares {@code MusicBrainzIdentity} and
-   * something outside supplies it; {@code app} is the only package ADR 32 lets see two adapters at
-   * once.
+   * something outside supplies it — {@code expansion}, which holds the bridge and the wiring the
+   * two entry points share, and is therefore the package that sees both adapters at once (#284, ADR
+   * 66). It was {@code app} until then. ADR 32 is untouched by that move and is not amended: its
+   * sentence is about depending on <em>everything</em>, {@code expansion} depends on two adapters
+   * and three other packages, and ADR 32 itself says "{@code ArchitectureTest} is the list, not
+   * this table." This rule is unchanged in every respect — {@code expansion} is not an adapter
+   * package, so the slice assignment never compared it.
    */
   @ArchTest
   static final ArchRule adaptersDoNotDependOnEachOther =
@@ -541,8 +556,8 @@ class ArchitectureTest {
    * the factory <b>drops</b>, answering {@link BridgedIdentity#undescribed}. Both are correct and
    * they are not interchangeable, because of where a producer sits: {@code
    * MusicBrainzSourceAdapter} catches {@code MusicBrainzIdentityUnavailableException} and nothing
-   * else, and {@code SegueService.expandEntity} wraps {@code adapter.expand} in no {@code try} at
-   * all. So an {@code IllegalArgumentException} out of the constructor, inside a real {@code
+   * else, and {@code EntityExpansion.expand} wraps {@code adapter.expand} in no {@code try} at all.
+   * So an {@code IllegalArgumentException} out of the constructor, inside a real {@code
    * identitiesFor}, aborts a whole expansion across every adapter on one contributor-entered value
    * — which is exactly the failure GAP 9 and issue #147 exist to prevent, and exactly what issue
    * #163's fix round 1 found in the log: {@code NodeRecord} refuses such a class id from inside
@@ -572,8 +587,37 @@ class ArchitectureTest {
               "#163: BridgedIdentity.describing drops a row whose class id cannot be read, where"
                   + " the constructor throws — and a throw out of a producer aborts the whole"
                   + " expansion, because MusicBrainzSourceAdapter catches only"
-                  + " MusicBrainzIdentityUnavailableException and SegueService.expandEntity wraps"
+                  + " MusicBrainzIdentityUnavailableException and EntityExpansion.expand wraps"
                   + " nothing");
+
+  /**
+   * #284: an expansion has two callers, and everything else in this project is fenced not to write.
+   *
+   * <p><b>This is the rule that lets the expansion leave {@code mcp} at all.</b> {@link
+   * EntityExpansion} runs every adapter and appends what they return through {@link IngestService},
+   * so a package that can reach it can turn its own read-only fence into a bulk write and a network
+   * connection at once. The census, the exporter, the harness, the recommender, the ratings tool,
+   * the rating deck, the seed tool and both claim tools are each fenced against exactly that, and
+   * none of those fences would have caught this: they name {@code ingest}, {@code java.net} and
+   * sibling packages, and a class in a package none of them has heard of is outside all of them.
+   * That is ADR 54's finding restated — "a new adapter package inherits none of them: nothing fails
+   * to compile, no test goes red".
+   *
+   * <p>{@code app} is permitted because wiring is its job (ADR 32) and it wires {@code
+   * ExpansionSources}. {@code mcp} and {@code expand} are the two callers the decision names.
+   */
+  @ArchTest
+  static final ArchRule onlyTheClientAndTheExpanderExpandAnEntity =
+      noClasses()
+          .that()
+          .resideOutsideOfPackages("..mcp..", "..expand..", "..app..", "..expansion..")
+          .should()
+          .dependOnClassesThat()
+          .resideInAPackage("..expansion..")
+          .because(
+              "#284: one expansion, two callers — the MCP tool and the promotion expander. Anything"
+                  + " else reaching it would gain a bulk write and a network connection past its"
+                  + " own fence");
 
   /**
    * ADR 41: the graph exporter reads. It has no way to write, and that is the point.
@@ -1075,19 +1119,36 @@ class ArchitectureTest {
    * the same note-free map, and holding it off {@code readRatings} would mean re-deriving the
    * owner's ratings from somewhere else. All four readers are dev-side tools off the MCP surface,
    * so the thing this rule actually protects — ADR 26's six tools — is unchanged.
+   *
+   * <p><b>Widened a fourth time by #284 (ADR 66), and this one is a widening rather than a new rule
+   * for a reason worth writing out.</b> The promotion expander's whole input is this map: a
+   * promotion IS an entity rated at or above {@code KnownList.PROMOTION_RATING}, and there is no
+   * other way to learn which those are — {@code find} is one qid at a time and the tool does not
+   * know the qids, and {@code readAll} carries the note. A separate rule named for the expander
+   * would state the same property a fifth time and would have to be kept in step with this one by
+   * hand; what actually varies between the readers is nothing at all, which is the test for whether
+   * a fence is one rule or several. Contrast {@link #theCensusHasNoDefaultDatabase}, which IS a
+   * separate rule, because ADR 60 names two tools in an immutable text and its consequences say a
+   * third joins by hand — there the rule's own NAME would become false if widened, and here it does
+   * not: "only the recommender" has been shorthand for "a dev-side tool and nothing on the MCP
+   * surface" since #101. <b>What the expander does differently is write</b>, and that is fenced
+   * where writing is fenced ({@link #theExpanderWritesThroughIngestAlone}), not here. All five
+   * readers are dev-side tools off the MCP surface, so the thing this rule protects — ADR 26's six
+   * tools — is unchanged again.
    */
   @ArchTest
   static final ArchRule onlyTheRecommenderReadsEveryRating =
       noClasses()
           .that()
-          .resideOutsideOfPackages("..recommend..", "..rate..", "..census..", "..evaluate..")
+          .resideOutsideOfPackages(
+              "..recommend..", "..rate..", "..census..", "..evaluate..", "..expand..")
           .should()
           .accessTargetWhere(callTo("readRatings", AffinityStore.class))
           .because(
-              "ADR 26 and issues #85, #101, #227 and #239: the score is ordinary data, and reading"
-                  + " every score at once is a dev-side tool's job — the recommender, the rating"
-                  + " deck, the census or the evaluation harness — rather than a field on an MCP"
-                  + " tool");
+              "ADR 26 and issues #85, #101, #227, #239 and #284: the score is ordinary data, and"
+                  + " reading every score at once is a dev-side tool's job — the recommender, the"
+                  + " rating deck, the census, the evaluation harness or the promotion expander —"
+                  + " rather than a field on an MCP tool");
 
   /**
    * Issue #276: the timestamp read is the evaluation harness's alone.
@@ -1240,13 +1301,14 @@ class ArchitectureTest {
    * reader create it by accident. It runs one way only: {@link #theRecommenderOpensNothingElse}
    * bans the return trip.
    *
-   * <p><b>{@code java.net} is deliberately NOT banned either</b>, and this is the one dev tool that
-   * could not carry that clause. Its whole shape is an HTTP server: {@code RateServer} binds an
-   * {@code InetSocketAddress} on {@link java.net.InetAddress#getLoopbackAddress()} and parses the
-   * {@code Origin} header with {@link java.net.URI}. What the siblings' {@code java.net} ban buys
-   * them — nothing leaves the machine — is bought here by the bind address and the Origin allowlist
-   * instead, which is ADR 46's own argument and is tested over a real socket in {@code
-   * RateServerTest} rather than asserted here.
+   * <p><b>{@code java.net} is deliberately NOT banned either</b>, and this was the one dev tool
+   * that could not carry that clause until issue #284's {@link #theExpanderOpensNothingElse} joined
+   * it — for the opposite reason. This tool's whole shape is an HTTP server: {@code RateServer}
+   * binds an {@code InetSocketAddress} on {@link java.net.InetAddress#getLoopbackAddress()} and
+   * parses the {@code Origin} header with {@link java.net.URI} — it serves, and never fetches. What
+   * the other siblings' {@code java.net} ban buys them — nothing leaves the machine — is bought
+   * here by the bind address and the Origin allowlist instead, which is ADR 46's own argument and
+   * is tested over a real socket in {@code RateServerTest} rather than asserted here.
    */
   @ArchTest
   static final ArchRule theRatingDeckOpensNothingElse =
@@ -1972,6 +2034,18 @@ class ArchitectureTest {
    * <p>{@code evaluate} is in the list although issue #246 does not name it: it grew the same shape
    * in #242, after ADR 64 was written, and a fence that skipped it would be green over a third copy
    * of the defect.
+   *
+   * <p><b>{@code expand} joins it in #284, and joining is right where a fourth rule would be
+   * wrong.</b> This rule states ONE property — a tool that calls {@code GraphProjector.replay}
+   * takes the fold that call already built — and the expander calls exactly that, for exactly the
+   * same reason its siblings do: it needs the merges to resolve the affinity rows before the
+   * promotion threshold is applied. A rule of its own would be this rule's body copied under a new
+   * name, and the copy is the failure mode: {@code evaluate} grew the defect this rule exists to
+   * catch <em>after</em> ADR 64 was written, and what made that catchable was one rule over a list
+   * rather than a rule per tool. The list is a package list rather than {@link #DEV_TOOL_PACKAGES},
+   * deliberately — {@code export} and {@code census} fold on purpose and have their own single-fold
+   * rules, so the population here is "replays and does not fold", which is narrower than "is a dev
+   * tool".
    */
   @ArchTest
   static final ArchRule theReplayingToolsTakeTheBootsFold =
@@ -1980,7 +2054,8 @@ class ArchitectureTest {
           .resideInAnyPackage(
               "com.robsartin.segue.recommend..",
               "com.robsartin.segue.rate..",
-              "com.robsartin.segue.evaluate..")
+              "com.robsartin.segue.evaluate..",
+              "com.robsartin.segue.expand..")
           .should()
           .accessTargetWhere(
               callTo("in", Equivalences.class)
@@ -1995,4 +2070,145 @@ class ArchitectureTest {
               "issue #246: these tools replay the log through GraphProjector, which folds it —"
                   + " they take that fold back from Replay rather than reading the log a second"
                   + " time and folding it again");
+
+  /**
+   * #284 (ADR 66): the promotion expander appends through {@link IngestService} and writes nothing
+   * else.
+   *
+   * <p><b>The first dev-side tool that holds a running {@link GraphStore} while writing</b>, which
+   * is why its fence cannot be {@link #theRetractionToolOpensNothingElse}'s or {@link
+   * #theOwnerClaimToolOpensNothingElse}'s. Those two hold no graph at all, deliberately: a
+   * retraction has no graph half, and an owner claim's is applied at the next boot. This tool
+   * genuinely needs one — {@code EntityExpansion} reads the seed's node, resolves each neighbour
+   * against the projection and records edges into it — so the write it may make cannot be fenced by
+   * denying it the object. It is fenced at the calls instead: {@link #APPLIES_A_CLAIM} covers the
+   * three world-fact writes, so the graph and the log may only be reached through the one class
+   * allowed to reach them.
+   *
+   * <p><b>And never the taste layer it reads its promotions from</b>, which is the clause worth
+   * reading twice. This tool holds an {@link AffinityStore} — it has to, since a promotion IS a
+   * rating at or above the threshold — and it is the only writer in this project that holds one
+   * while also holding a write path. A rating is the one thing in segue nothing can regenerate (ADR
+   * 33, ADR 42's amendment), so both taste-layer writes are named here rather than left to the type
+   * ban {@code own} gets, which this tool cannot have.
+   */
+  @ArchTest
+  static final ArchRule theExpanderWritesThroughIngestAlone =
+      noClasses()
+          .that()
+          .resideInAPackage("..expand..")
+          .should(
+              ArchConditions.accessTargetWhere(
+                  APPLIES_A_CLAIM
+                      .or(callTo("put", AffinityStore.class))
+                      .or(callTo("updateRating", AffinityStore.class))))
+          .because(
+              "#284: the expander appends through IngestService and writes nothing else — not the"
+                  + " graph directly, not the log directly, and never the taste layer it reads its"
+                  + " promotions from");
+
+  /**
+   * ADR 33 as amended by issue #85, on the tool whose input is the bulk map: the expander reads the
+   * score and cannot read the note.
+   *
+   * <p>The same shape as {@link #theRecommenderReadsRatingsAndNeverNotes} and {@link
+   * #theEvaluationHarnessReadsRatingsAndNeverNotes}: {@code AffinityRecord} unnameable, {@code
+   * find} and {@code readAll} unreachable, {@code readRatings} allowed. {@link
+   * #onlyTheRecommenderReadsEveryRating} is the other half and points the other way — that one says
+   * who may call {@code readRatings}, this one says what else this package may not.
+   */
+  @ArchTest
+  static final ArchRule theExpanderReadsScoresAndNeverNotes =
+      noClasses()
+          .that()
+          .resideInAPackage("..expand..")
+          .should(
+              ArchConditions.dependOnClassesThat(
+                      JavaClass.Predicates.equivalentTo(AffinityRecord.class))
+                  .or(
+                      ArchConditions.accessTargetWhere(
+                          callTo("find", AffinityStore.class)
+                              .or(callTo("readAll", AffinityStore.class)))))
+          .because(
+              "ADR 33 as amended by issue #85: the expander reads the note-free bulk map to find"
+                  + " the promotions, and the three reads that carry free text stay out");
+
+  /**
+   * #284: the expander replays one log, runs the shipped expansion and appends what it returns.
+   *
+   * <p><b>{@code java.net} is deliberately NOT banned.</b> {@link #theRatingDeckOpensNothingElse}
+   * is the only other dev-tool fence that omits the clause, and for the opposite reason: {@code
+   * rate} serves on loopback and never fetches, where this tool exists to fetch and never serves.
+   * Every other sibling carries the clause because its job is a pure function of one local file — a
+   * recommendation, a census, a measurement, a retraction. This tool is the batch form of {@code
+   * expand_entity}, and an expansion that reached no network would return nothing. Banning {@code
+   * java.net} here would ban the tool.
+   *
+   * <p><b>{@code tinker}, {@code sqlite}, {@code ingest}, {@code wikidata} and {@code musicbrainz}
+   * are not banned either</b>, and each for the reason a sibling already establishes: the throwaway
+   * projection is a {@code TinkerGraphStore} exactly as the exporter's and the recommender's are;
+   * the log and the affinity table are two connections to one file; {@code ingest} is the one write
+   * path, which this tool must reach because it writes; and the two adapter packages arrive through
+   * {@code ExpansionSources.both}, which is the shipped wiring rather than a second copy of it.
+   *
+   * <p><b>What IS banned: every sibling dev tool, {@code mcp}, {@code app} and {@code jena}.</b>
+   * The siblings come from {@link #DEV_TOOL_PACKAGES} with no exception at all — this tool borrows
+   * nobody's fence, and unlike {@code rate → recommend}, {@code census → export} and {@code
+   * evaluate → recommend} there is no sweep or view it reuses. {@code mcp} and {@code app} because
+   * a dev tool that could reach the facade could become a seventh MCP tool by accident, and {@code
+   * app} is Spring. {@code jena} as the reference adapter nothing outside the bake-off reaches.
+   */
+  @ArchTest
+  static final ArchRule theExpanderOpensNothingElse =
+      noClasses()
+          .that()
+          .resideInAPackage("..expand..")
+          .should()
+          .dependOnClassesThat()
+          .resideInAnyPackage(otherDevToolsAnd(List.of("expand"), "..jena..", "..mcp..", "..app.."))
+          .because(
+              "#284: the expander replays one log, runs the shipped expansion and appends what it"
+                  + " returns — it borrows no sibling's fence and cannot become an MCP tool by"
+                  + " accident. java.net is deliberately NOT banned: unlike every sibling but"
+                  + " rate, this tool exists to fetch");
+
+  /**
+   * ADR 66 on ADR 60's clause: the expander names its database on the command line.
+   *
+   * <p>A fifth rule rather than a wider one, for {@link #theCensusHasNoDefaultDatabase}'s reason:
+   * ADR 60's two are named for the claim tools, ADR 60 is immutable, and its consequences say a
+   * further tool joins by hand. The argument for requiring the flag is ADR 60's central clause at
+   * its strongest here — an agent's shell inherits {@code SEGUE_DB} from the owner's profile, and
+   * this is the one dev tool that both writes the log and reaches the network.
+   */
+  @ArchTest
+  static final ArchRule theExpanderHasNoDefaultDatabase =
+      noClasses()
+          .that()
+          .resideInAPackage("..expand..")
+          .should()
+          .dependOnClassesThat(JavaClass.Predicates.equivalentTo(DefaultDatabase.class))
+          .because(
+              "ADR 66: the expander names its database on the command line — SEGUE_DB is inherited"
+                  + " by any shell started from the owner's profile, so it cannot stand in for a"
+                  + " flag typed per invocation, least of all for the one dev tool that writes and"
+                  + " fetches");
+
+  /**
+   * The sibling of {@link #theExpanderHasNoDefaultDatabase}, forbidding the capability where that
+   * one forbids the name — ADR 60's measured gap, a fifth time. {@code expand} depends on {@code
+   * support.RequiredDatabase} for the refusal sentence, and that class calls {@code
+   * DefaultDatabase} itself, so a {@link Path}-returning method added there and wired in restores
+   * the default while the rule above stays green.
+   */
+  @ArchTest
+  static final ArchRule theExpanderTakesItsDatabaseFromTheFlagAlone =
+      noClasses()
+          .that()
+          .resideInAPackage("..expand..")
+          .should(ArchConditions.accessTargetWhere(A_PATH_TAKEN_OUT_OF_SUPPORT))
+          .because(
+              "ADR 60's measurement, a fifth time: a fence that forbids a class name stops only the"
+                  + " lazy version — what has to be unavailable is any route from support to a"
+                  + " java.nio.file.Path");
 }

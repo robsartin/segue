@@ -184,9 +184,9 @@ final class MusicBrainzProbe {
       int resolvedNeighbours) {}
 
   /**
-   * Block 3, mirroring the three branches of {@code SegueService.expandEntity}. The shares are
-   * carried rather than computed at render time so that the invariant over them has something to
-   * fail on — an invariant only the renderer could break is one no report can be built to violate.
+   * Block 3, mirroring the three branches of {@code EntityExpansion.expand}. The shares are carried
+   * rather than computed at render time so that the invariant over them has something to fail on —
+   * an invariant only the renderer could break is one no report can be built to violate.
    */
   record Buckets(
       int alreadyInTheGraph,

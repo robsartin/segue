@@ -247,6 +247,21 @@ class SegueServiceTest {
   }
 
   @Test
+  @DisplayName("a bound of zero or less is refused with the sentence naming what was asked for")
+  void shouldNameTheBoundWhenItIsNotPositive() {
+    // Characterisation, added by #284 before the expansion moved out of this class. Nothing in
+    // src/test pinned this sentence, which is why it was the one most likely to drift in the
+    // extraction: ExpansionOutcome.Refused carries a reason and no number, so the requested bound
+    // has to stay in scope here for the message to keep the shape it has.
+    ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "Nick Cave", WIKIDATA));
+
+    ToolResult<SegueService.ExpansionSummary> result = service().expandEntity("Q01", 0);
+
+    assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.ERROR);
+    assertThat(result.detail()).isEqualTo("maxNewEdges must be positive, got 0");
+  }
+
+  @Test
   @DisplayName("expandEntity reports partial when a source is unavailable")
   void expandEntityReportsPartialWhenSourceUnavailable() {
     ingest.record(new NodeAssertion("Q01", NodeKind.PERSON, "Nick Cave", WIKIDATA));

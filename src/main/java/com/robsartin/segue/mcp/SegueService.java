@@ -4,35 +4,28 @@ import com.robsartin.segue.domain.AffinityRecord;
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.Candidate;
 import com.robsartin.segue.domain.EdgeRecord;
-import com.robsartin.segue.domain.ExpansionBounds;
-import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.PathRanking;
 import com.robsartin.segue.domain.PathResult;
 import com.robsartin.segue.domain.RatingScale;
+import com.robsartin.segue.expansion.EntityExpansion;
+import com.robsartin.segue.expansion.ExpansionOutcome;
 import com.robsartin.segue.ingest.IngestService;
-import com.robsartin.segue.ingest.UnknownEndpointException;
 import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.EntityResolver;
-import com.robsartin.segue.port.ExpandContext;
-import com.robsartin.segue.port.ExpandResult;
 import com.robsartin.segue.port.GraphStore;
-import com.robsartin.segue.port.SourceAdapter;
 import com.robsartin.segue.port.SourceAdapters;
 import com.robsartin.segue.wikidata.RecognitionInstitutions;
 import com.robsartin.segue.wikidata.WikidataUnavailableException;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.ToIntFunction;
 import java.util.regex.Pattern;
@@ -57,8 +50,9 @@ import org.slf4j.LoggerFactory;
  *       calling model can read and act on (ADR 27), with {@link CorrelationId#current()} folded
  *       into the detail of every non-ok result so a user-visible error can be pasted into a log
  *       search (ADR 29). {@link WikidataUnavailableException} in particular is caught at every call
- *       site that can throw it — {@code resolver.search}, {@code resolver.fetch}, and the unwrapped
- *       neighbour fetch inside {@link #expandEntity} — rather than left to escape.
+ *       site that can throw it — {@code resolver.search}, {@code resolver.fetch}, and the neighbour
+ *       fetch inside {@link com.robsartin.segue.expansion.EntityExpansion#expand} — rather than
+ *       left to escape.
  *   <li>this class is the only place the two layers meet, and they meet nowhere below it (ADR 33).
  *       {@link #noteAffinity} writes taste and never touches the graph; {@link #getEntity} reads
  *       both and composes them into one view. Neither store learns about the other, which is what
@@ -81,6 +75,7 @@ public final class SegueService {
   private final SourceAdapters adapters;
   private final AffinityStore affinity;
   private final Clock clock;
+  private final EntityExpansion expansion;
 
   public SegueService(
       EntityResolver resolver,
@@ -95,6 +90,9 @@ public final class SegueService {
     this.adapters = Objects.requireNonNull(adapters, "adapters");
     this.affinity = Objects.requireNonNull(affinity, "affinity");
     this.clock = Objects.requireNonNull(clock, "clock");
+    // Built here rather than injected: every collaborator it needs is already a field, and a
+    // seventh constructor parameter would move thirty-odd call sites for nothing. #284.
+    this.expansion = new EntityExpansion(this.resolver, this.graph, this.ingest, this.adapters);
   }
 
   /** Candidates for a free-text query, best match first. Writes nothing. */
@@ -138,284 +136,88 @@ public final class SegueService {
   }
 
   /**
-   * Expand a known entity through every source that supports its kind.
+   * Expand a known entity through every source that supports its kind, and say what happened in the
+   * words ADR 27 asks a calling model to be given.
    *
-   * <p>An expansion can reference neighbour entities the graph has never seen, and {@link
-   * GraphStore#record} throws on an unknown endpoint. Each unknown neighbour therefore has to be
-   * identified before the edge that names it can be recorded, and there are two ways to get that:
+   * <p><b>The expansion itself is {@link EntityExpansion}'s</b> (#284). Every decision it makes —
+   * the refusals, the bound, the neighbour memo, issue #55's identity refresh, #233's refused
+   * endpoints — moved there with the body and with the javadoc that argues for each, because a
+   * second caller needed the expansion and did not need a {@code ToolResult}.
    *
-   * <ul>
-   *   <li><b>The adapter already knew.</b> {@link ExpandResult#neighbors()} carries identity the
-   *       source learned while discovering the edge, and it is used in preference to anything else.
-   *       Wikidata's reverse lookup returns label and kind alongside each backlink in one query
-   *       (ADR 36), and after that change an expansion routinely finds seventy-odd neighbours —
-   *       enough that fetching them individually would cost more than the entire expansion did
-   *       before.
-   *   <li><b>Otherwise, fetch it.</b> {@link EntityResolver#fetch}, sequentially, one HTTP round
-   *       trip per remaining neighbour. Deliberately the slow, correct choice over synthesising a
-   *       placeholder node: a graph full of {@code Q12345}-labelled stubs is worse than an
-   *       expansion that takes a few seconds. (Follow-up: a bounded virtual-thread fan-out for the
-   *       neighbour fetches, not built in this increment.)
-   * </ul>
-   *
-   * <p><b>Identity an adapter supplies inline is recorded whether or not the graph already holds
-   * the node</b> (issue #55). A node's kind comes from a whitelist that grows as it is measured
-   * against real data, so recording only for absent nodes froze every old node at whatever the
-   * mapper said the day it was discovered, and the graph ended up holding two different kinds for
-   * one class of entity. The refresh costs nothing because the source volunteered the identity in
-   * the same response; an existing neighbour that nobody described is left alone rather than
-   * fetched, since that would be a round trip each for every neighbour of every expansion. It is
-   * not counted in {@link ExpansionSummary#nodesAdded()} — a correction is not a discovery.
-   *
-   * <p>Neighbour fetches that fail once are not retried for the same neighbour within this call —
-   * that is the bound on how many calls a dense, partly-unreachable entity can trigger, alongside
-   * {@code maxNewEdges} bounding the assertions considered at all. A neighbour fetch that throws
-   * {@link WikidataUnavailableException} is treated exactly like one that returned empty: the
-   * neighbour is skipped and the call continues, rather than aborting a 30-round-trip expansion
-   * after some assertions are already committed.
-   *
-   * <p><b>An edge {@code IngestService} refuses is skipped and named, not thrown</b> (#233). {@link
-   * #neighborOf} resolves ONE endpoint — the far end from the seed's point of view — so an edge
-   * naming the seed at neither end has its second endpoint resolved by nobody. Every adapter in
-   * {@code src/main} puts the seed at an end, and nothing in {@link SourceAdapter} says it must, so
-   * this is the report rather than the guard: the guard is at the append, where a refusal costs a
-   * message instead of a log that cannot boot. Counted by distinct endpoint, the same unit {@link
-   * ExpansionSummary#skippedNeighbors()} uses — but unlike that field, a refused endpoint has no
-   * counterpart on {@link ExpansionSummary} at all: {@code skippedNeighbors()} IS an aggregate
-   * count on the wire, with only which neighbours kept to prose, where ADR 56 kept an aggregate
-   * flag on the wire and moved only attribution to {@code detail}. Here both the count and the
-   * names live in {@code detail} alone, which is a narrower choice than ADR 56 made, not the same
-   * one repeated.
-   *
-   * <p>What is reported as skipped is the count of <em>distinct</em> neighbours, not of the
-   * assertions dropped along with them. Both are defensible numbers; only one matches the name
-   * {@link ExpansionSummary#skippedNeighbors()} and the sentence it is rendered into, and this
-   * graph is a multigraph by design — Nick Cave both wrote and scored The Proposition, so two
-   * assertions can name one pair of nodes. Counting per assertion told a calling model that two
-   * entities were lost when one was.
-   *
-   * <p><b>A shortfall is flagged aggregately and attributed in prose</b> (issue #148). {@link
-   * ExpansionSummary#sourceUnavailable()} and {@link ExpansionSummary#truncated()} stay ORed across
-   * adapters; the {@code detail} string names the sources by {@link SourceAdapter#id()}, which the
-   * SPI already requires every adapter to have. With one source "a source was unavailable" was
-   * unambiguous. With two it is unactionable — "MusicBrainz is down" and "Wikidata is down" call
-   * for different next moves — and the model reads {@code detail} first, so that is where the
-   * subject belongs. The two alternatives lost on cost against a benefit nothing here would use: a
-   * per-source field on {@link ExpandResult} would restate {@code id()} as a second, forgeable
-   * authority for who the source was, and a per-adapter breakdown on {@link ExpansionSummary} would
-   * change the tool's wire shape for a consumer that reads prose. See
-   * docs/adr/0056-attribute-a-shortfall-to-its-source.md.
-   *
-   * <p><b>One shortfall is deliberately attributed to nobody.</b> Every adapter is handed the same
-   * {@link ExpandContext} and the bound is then applied to the concatenation, so when it is the
-   * shared budget that cut the result, no single adapter made the cut. That reason says so instead
-   * of naming one — the design note's GAP 3, which this issue does not settle.
-   *
-   * <p><b>A {@code CONCEPT} seed is bounded below whatever {@code maxNewEdges} was requested</b>
-   * ({@link ExpansionBounds}, issue #112): {@code maxNewEdges} resolves to {@code
-   * ExpansionBounds.effective(node.kind(), maxNewEdges)} before it reaches {@link ExpandContext} or
-   * either bound below, so a caller cannot ask past the ceiling and a bitten ceiling is reported
-   * exactly like any other truncation — through the same observed {@code truncated} flag, arriving
-   * as {@code partial}.
-   *
-   * <p><b>A local entity is refused, and the refusal is the point</b> (#92). The owner mints one
-   * because no source models it, and its id is one Wikidata's grammar can never allocate (ADR 58),
-   * so there is no source to expand from now or later. The tempting alternative is to run the
-   * adapters anyway and return what they find, which is nothing — but ADR 56 has just finished
-   * establishing that an empty {@link ExpandResult} already carries two meanings, "found nothing"
-   * and "the source was unavailable", and teaching it a third would rebuild the defect ADR 56
-   * fixed. So this is an {@code error} with its own sentence rather than a silent {@code ok} with a
-   * zero in it. A merged local id is refused too: the equivalence gives the canonical id everything
-   * the local one held, and that is the id a source can answer for.
+   * <p>What stays here is the shaping: the three refusal sentences, the reason list in the order it
+   * has always been built, and the {@code ok}/{@code partial} result. Those are wire strings with
+   * one audience, and a shared sentence would be a wire string with two, one of them a language
+   * model.
    */
   public ToolResult<ExpansionSummary> expandEntity(String qid, int maxNewEdges) {
     Objects.requireNonNull(qid, "qid");
-    Optional<NodeRecord> seed = graph.node(qid);
-    if (seed.isEmpty()) {
-      return error("unknown entity: " + qid + " — add it before expanding");
-    }
-    // #92: the owner minted this, so no source has it and none ever will — its id is one Wikidata
-    // cannot allocate (ADR 58). Refused out loud, and before the bound is even checked, because
-    // no argument makes it expandable. Returning the empty result instead would be the cheaper
-    // move and the wrong one: ADR 56 has just separated the two things an empty ExpandResult
-    // already means, and a third would rebuild the defect it fixed.
-    if (LocalEntity.isLocal(qid)) {
-      return error(
-          "local entity: " + qid + " — no source to expand from, because the owner minted it");
-    }
-    if (maxNewEdges <= 0) {
-      return error("maxNewEdges must be positive, got " + maxNewEdges);
-    }
-    NodeRecord node = seed.get();
-    // Issue #112: a ceiling on CONCEPT, applied to whatever the request resolved to before that
-    // number reaches an adapter or the bound below — the same reason ReverseClaims itself is
-    // asked for no more than this, not merely truncated after the fact.
-    int effectiveMax = ExpansionBounds.effective(node.kind(), maxNewEdges);
-    ExpandContext ctx = new ExpandContext(effectiveMax);
+    return switch (expansion.expand(qid, maxNewEdges)) {
+      case ExpansionOutcome.Refused refused -> error(refusalSentence(refused, maxNewEdges));
+      case ExpansionOutcome.Expanded expanded -> shape(expanded);
+    };
+  }
 
-    // Which sources fell short, in the order the adapters ran, rather than whether any did.
-    // Issue #148: the booleans below are still ORed — a caller asking "is this result complete?"
-    // wants one answer — but "a source was unavailable" is unactionable once there is more than
-    // one source, because "MusicBrainz is down" and "Wikidata is down" call for different next
-    // moves. The subject lives in the detail string; see the reasons built at the end.
-    List<String> unavailableSources = new ArrayList<>();
-    List<String> truncatingSources = new ArrayList<>();
-    List<AssertionRecord> collected = new ArrayList<>();
-    // Identity an adapter already knew, keyed by qid. First writer wins, matching the way the
-    // graph resolves a conflict everywhere else: two sources describing one entity differently
-    // is a real possibility, and silently preferring the later one would hide it.
-    Map<String, NodeAssertion> described = new HashMap<>();
-    for (SourceAdapter adapter : adapters.all()) {
-      if (!adapter.supports(node.kind())) {
-        continue;
-      }
-      ExpandResult result = adapter.expand(node, ctx);
-      if (result.sourceUnavailable()) {
-        unavailableSources.add(adapter.id());
-      }
-      if (result.truncated()) {
-        truncatingSources.add(adapter.id());
-      }
-      collected.addAll(result.assertions());
-      for (NodeAssertion neighbor : result.neighbors()) {
-        described.putIfAbsent(neighbor.qid(), neighbor);
-      }
-    }
+  /**
+   * The three sentences this method has always returned, byte for byte.
+   *
+   * <p>{@link ExpansionOutcome.Refused} carries a reason and no number, deliberately — it is read
+   * by a second caller that renders a tally label rather than a sentence. The one sentence that
+   * quotes a number quotes the caller's own argument, and this is the caller, so {@code
+   * maxNewEdges} is passed in rather than travelling on the outcome.
+   */
+  private static String refusalSentence(ExpansionOutcome.Refused refused, int maxNewEdges) {
+    return switch (refused.reason()) {
+      case UNKNOWN_ENTITY -> "unknown entity: " + refused.qid() + " — add it before expanding";
+      case LOCAL_ENTITY ->
+          "local entity: "
+              + refused.qid()
+              + " — no source to expand from, because the owner minted it";
+      case BOUND_NOT_POSITIVE -> "maxNewEdges must be positive, got " + maxNewEdges;
+    };
+  }
 
-    // The shared budget cutting the concatenation is NOT attributable to any one adapter — every
-    // adapter was handed the same ExpandContext and the bound is applied to what they jointly
-    // returned (the design note's GAP 3, established rather than fixed here). So it is reported as
-    // its own reason rather than folded into the named ones, which would put a source's name on a
-    // cut it did not make.
-    boolean boundCutTheConcatenation = collected.size() > effectiveMax;
-    boolean sourceUnavailable = !unavailableSources.isEmpty();
-    boolean truncated = !truncatingSources.isEmpty() || boundCutTheConcatenation;
-    List<AssertionRecord> bounded =
-        collected.size() > effectiveMax
-            ? collected.stream().limit(effectiveMax).toList()
-            : collected;
-
-    int nodesAdded = 0;
-    int edgesAdded = 0;
-    // Does double duty, deliberately: it is the memo that stops one neighbour being fetched twice
-    // in a single call, and it is also the number reported as skippedNeighbors. Keeping a separate
-    // counter is what made the two disagree — the counter incremented per dropped assertion while
-    // the field, and the sentence built from it, both said "neighbour".
-    Set<String> unresolvableNeighbors = new HashSet<>();
-    // Every neighbour whose identity this call has already recorded — see the note further down.
-    Set<String> identityRecorded = new HashSet<>();
-    // Endpoints the graph holds no node for, by endpoint rather than by assertion — the same unit
-    // skippedNeighbors uses, and for the same reason: two assertions naming one unknown entity are
-    // one thing the caller can act on. Insertion-ordered so the reason string is stable.
-    Set<String> refusedEndpoints = new LinkedHashSet<>();
-    for (AssertionRecord assertion : bounded) {
-      String neighbor = neighborOf(assertion, qid);
-      if (neighbor != null) {
-        if (unresolvableNeighbors.contains(neighbor)) {
-          continue;
-        }
-        // This re-read is now the definition of "new" and nothing else. It still cannot let
-        // nodesAdded double-count — a neighbour recorded on the first assertion naming it is in
-        // the graph by the time the second one is examined — but it no longer decides whether
-        // identity is recorded at all; see issue #55 below. edgesAdded needs no such guard:
-        // assertions ARE what it counts, and two of them between one pair are two claims.
-        boolean isNew = graph.node(neighbor).isEmpty();
-        // An adapter that already knows this entity spares a round trip. That is not a
-        // micro-optimisation since ADR 36: expanding a person now discovers seventy-odd
-        // works in one query, and fetching each of them one at a time afterwards would cost
-        // more than the whole expansion used to.
-        Optional<NodeAssertion> resolved = Optional.ofNullable(described.get(neighbor));
-        if (isNew) {
-          if (resolved.isEmpty()) {
-            try {
-              resolved = resolver.fetch(neighbor);
-            } catch (WikidataUnavailableException e) {
-              log.warn(
-                  "expandEntity({}) neighbour {} unavailable: {}", qid, neighbor, e.getMessage());
-              resolved = Optional.empty();
-            }
-          }
-          if (resolved.isEmpty()) {
-            unresolvableNeighbors.add(neighbor);
-            continue;
-          }
-        }
-        // Issue #55. Identity the source volunteered is recorded even when the node already
-        // exists, and the fetch above is deliberately NOT reached for one that does. Kinds come
-        // from KindMapper's whitelist, which grows every time it is measured against real data
-        // (issues #49 and #52); recording only for absent nodes froze each node's kind at
-        // whatever the mapper said on the run that first saw it, so 73% of the CONCEPT nodes in
-        // a real graph were works or groups the mapper had since learned to classify — and ADR
-        // 31's hub rule then vetoed routes through them. GraphStore.upsertNode is
-        // last-writer-wins and ADR 19 says a changed belief is a new claim, so re-recording is
-        // the correction. It is free ONLY because the source already handed the identity over
-        // in the same response; fetching identity for existing neighbours would be hundreds of
-        // extra round trips per expansion and is a different decision, not this one.
-        //
-        // Not the same rule as described.putIfAbsent above, which stays first-writer-wins.
-        // That one settles a disagreement between two sources WITHIN one call, where the later
-        // writer has no claim to be the better one. This one refreshes from the SAME source
-        // ACROSS runs, where the later reading is by construction the better one. Do not
-        // unify them.
-        //
-        // Once per neighbour per call, not once per assertion. The graph re-read used to supply
-        // that for free — a neighbour recorded on the first assertion naming it was present by
-        // the second — and it no longer does, because the refresh fires whether or not the node
-        // is there. This graph is a multigraph by design (Nick Cave both wrote and scored The
-        // Proposition), so without the memo one pair of nodes would append the same identity
-        // claim to the log twice, and a replay would apply it twice.
-        if (resolved.isPresent() && identityRecorded.add(neighbor)) {
-          ingest.record(resolved.get());
-          if (isNew) {
-            nodesAdded++;
-          }
-        }
-      }
-      try {
-        ingest.record(assertion);
-      } catch (UnknownEndpointException e) {
-        // #233. The gate refused this edge BEFORE the append, so nothing is half-written and the
-        // expansion carries on rather than aborting a thirty-round-trip call over one bad row —
-        // the same choice made for an unresolvable neighbour above. Letting it escape is what the
-        // class's second invariant forbids and what ADR 27 turns into a readable result instead.
-        log.warn("expandEntity({}) refused an edge: {}", qid, e.getMessage());
-        refusedEndpoints.addAll(e.endpoints());
-        continue;
-      }
-      edgesAdded++;
-    }
-
-    int skippedNeighbors = unresolvableNeighbors.size();
+  /** The wire summary and the reason list, assembled in the order they have always been. */
+  private static ToolResult<ExpansionSummary> shape(ExpansionOutcome.Expanded expanded) {
+    String qid = expanded.qid();
+    int edgesAdded = expanded.edgesAdded();
+    int nodesAdded = expanded.nodesAdded();
+    int skippedNeighbors = expanded.skippedNeighbors();
+    int effectiveMax = expanded.effectiveMax();
     ExpansionSummary summary =
         new ExpansionSummary(
-            qid, nodesAdded, edgesAdded, skippedNeighbors, truncated, sourceUnavailable);
+            qid,
+            nodesAdded,
+            edgesAdded,
+            skippedNeighbors,
+            expanded.truncated(),
+            expanded.sourceUnavailable());
     List<String> reasons = new ArrayList<>();
-    if (sourceUnavailable) {
+    if (expanded.sourceUnavailable()) {
       reasons.add(
-          String.join(", ", unavailableSources)
-              + (unavailableSources.size() == 1 ? " was" : " were")
+          String.join(", ", expanded.unavailableSources())
+              + (expanded.unavailableSources().size() == 1 ? " was" : " were")
               + " unavailable and could not be reached");
     }
-    if (!truncatingSources.isEmpty()) {
+    if (!expanded.truncatingSources().isEmpty()) {
       reasons.add(
-          String.join(", ", truncatingSources)
-              + (truncatingSources.size() == 1
+          String.join(", ", expanded.truncatingSources())
+              + (expanded.truncatingSources().size() == 1
                   ? " truncated its result"
                   : " truncated their results")
               + " at the bound of "
               + effectiveMax);
     }
-    if (boundCutTheConcatenation) {
+    if (expanded.boundCutTheConcatenation()) {
       reasons.add("the combined result was truncated at the bound of " + effectiveMax);
     }
     if (skippedNeighbors > 0) {
       reasons.add(skippedNeighbors + " neighbour(s) could not be resolved and were skipped");
     }
-    if (!refusedEndpoints.isEmpty()) {
+    if (!expanded.refusedEndpoints().isEmpty()) {
       reasons.add(
-          refusedEndpoints.size()
+          expanded.refusedEndpoints().size()
               + " endpoint(s) the graph holds no node for were refused: "
-              + String.join(", ", refusedEndpoints));
+              + String.join(", ", expanded.refusedEndpoints()));
     }
     if (reasons.isEmpty()) {
       return ToolResult.ok(
@@ -424,17 +226,6 @@ public final class SegueService {
     }
     log.warn("expandEntity({}) partial: {}", qid, reasons);
     return ToolResult.partial(withCorrelation(String.join("; ", reasons)), summary);
-  }
-
-  /** The other end of an assertion from the seed's point of view, or null if both ends are it. */
-  private static String neighborOf(AssertionRecord assertion, String seedQid) {
-    if (!assertion.fromQid().equals(seedQid)) {
-      return assertion.fromQid();
-    }
-    if (!assertion.toQid().equals(seedQid)) {
-      return assertion.toQid();
-    }
-    return null;
   }
 
   /** One entity plus its neighbours, grouped by the relationship type that connects them. */
