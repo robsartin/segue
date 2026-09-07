@@ -335,6 +335,28 @@ class ExpandRunTest {
   }
 
   @Test
+  @DisplayName("the report's header reaches the consumer once the run is done")
+  void shouldEmitTheReportsHeaderWhenTheRunFinishes() {
+    String seed = "Q0900921";
+
+    try (AssertionLog scriptLog = new SqliteAssertionLog(dir.resolve("header.db"));
+        GraphStore scriptGraph = new TinkerGraphStore()) {
+      IngestService ingest = new IngestService(scriptLog, scriptGraph, IdentityMerge.NONE);
+      ingest.record(new NodeAssertion(seed, NodeKind.PERSON, "an act nobody signed", WIKIDATA));
+      ScriptedAdapter adapter = new ScriptedAdapter("wikidata", Map.of());
+      EntityExpansion expansion =
+          new EntityExpansion(
+              new NeverCalledResolver(), scriptGraph, ingest, new SourceAdapters(List.of(adapter)));
+      ExpandRun scriptedRun = new ExpandRun(expansion, scriptGraph);
+      List<String> lines = new ArrayList<>();
+
+      scriptedRun.run(List.of(seed), 10, lines::add);
+
+      assertThat(lines).contains(ExpansionReport.HEADER);
+    }
+  }
+
+  @Test
   @DisplayName("no progress line names an entity, whatever the outcome")
   void shouldNameNoEntityWhenAProgressLineIsWritten() {
     String succeeds = "Q0900901";

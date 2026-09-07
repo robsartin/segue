@@ -66,18 +66,16 @@ public final class ExpandRun {
         inTheGraph++;
       }
     }
-    // Task 9 replaces this with ExpansionReport.dryRunLines(preflight), which does not exist
-    // yet; this is a placeholder line so the "dry run" contract has something to assert on until
-    // then.
-    lines.accept("dry run: nothing was written");
-    return new Preflight(promotions.size(), inTheGraph, minted);
+    Preflight preflight = new Preflight(promotions.size(), inTheGraph, minted);
+    ExpansionReport.dryRunLines(preflight).forEach(lines);
+    return preflight;
   }
 
   /**
    * Expand every promotion, one at a time, in the order given, and tally what happened.
    *
-   * <p>The aggregate report is Task 9's — until that renderer exists, this emits nothing but
-   * progress lines and returns the tally.
+   * <p>The aggregate report ({@link ExpansionReport#lines}) is appended after the last progress
+   * line, once the loop is done — never per entity, and never interleaved with one.
    */
   public ExpansionTally run(List<String> promotions, int maxNewEdges, Consumer<String> lines) {
     Objects.requireNonNull(promotions, "promotions");
@@ -143,20 +141,23 @@ public final class ExpandRun {
       }
     }
 
-    return new ExpansionTally(
-        promotions.size(),
-        expanded,
-        addedNothing,
-        failed,
-        nodesAdded,
-        edgesAdded,
-        skippedNeighbors,
-        refusedEndpoints,
-        boundCut,
-        edgesBySource,
-        unavailableBySource,
-        truncatedBySource,
-        refusalsByReason);
+    ExpansionTally tally =
+        new ExpansionTally(
+            promotions.size(),
+            expanded,
+            addedNothing,
+            failed,
+            nodesAdded,
+            edgesAdded,
+            skippedNeighbors,
+            refusedEndpoints,
+            boundCut,
+            edgesBySource,
+            unavailableBySource,
+            truncatedBySource,
+            refusalsByReason);
+    ExpansionReport.lines(tally).forEach(lines);
+    return tally;
   }
 
   /** A position and a detail — never a qid or a label. See the class javadoc. */
