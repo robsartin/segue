@@ -82,6 +82,30 @@ class EvaluationReportTest {
         .noneMatch(line -> A_QID.matcher(line).find());
   }
 
+  /**
+   * Today's block, character for character (issue #276). The age split appends columns and inserts
+   * one line, and this is what says the block is untouched when no instant is given — the property
+   * every reading already on the record depends on.
+   */
+  private static final List<String> UNSPLIT_BLOCK =
+      List.of(
+          EvaluationReport.HEADER,
+          "# held out every 5 of 10 eligible entity(ies), in 5 fold(s): 10 held out over all"
+              + " folds, at least 8 left on the known-list in each.",
+          "# top 25 per setting, over 2 setting(s).",
+          "scorer  floor  pool  in pool  hits  mean rank  negatives  neg mean rank",
+          "lift        5   900       40     4        7.5          2            4.0",
+          "raw        12    40        3     0          -          0              -");
+
+  @Test
+  @DisplayName("the whole block renders exactly as it does today, character for character")
+  void shouldRenderTheBlockUnchangedWhenNoInstantIsGiven() {
+    assertThat(
+            EvaluationReport.lines(
+                ELIGIBLE, FOLDS, HELD_OUT_TOTAL, LEAST_LEFT, 25, List.of(reading(), sparse())))
+        .containsExactlyElementsOf(UNSPLIT_BLOCK);
+  }
+
   /** The rendered row's cells, in column order — split on the multi-space gap between them. */
   private static List<String> cellsOf(String line) {
     return List.of(line.trim().split("\\s{2,}"));
