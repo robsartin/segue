@@ -32,11 +32,12 @@ import java.util.Objects;
  * log claimed as null is the same "the graph cannot name this" as a qid the log never mentioned,
  * and the listing and this file must not disagree about which rows those are.
  *
- * <p><b>The one header line is a comment by convention only.</b> Nothing here knows whether the
- * uploader on the far side ignores a leading {@code #}; the runbook says to drop the line if it
- * comes back as an artist nobody has heard of. It stays because {@code *.txt} being gitignored is
- * the second lock and this is the third (ADR 43), and a file of names with no provenance is exactly
- * the one that gets attached to an issue.
+ * <p><b>The one header line is a comment by convention only, and it stays.</b> Setlist Scout's bulk
+ * uploader skips lines beginning with {@code #} ({@code ArtistImportService} and {@code
+ * ArtistSeedService}, issue #177 there), so the runbook documents that the upload ignores it rather
+ * than telling the owner to strip it. It stays because {@code *.txt} being gitignored is the second
+ * lock and this is the third (ADR 43), and a file of names with no provenance is exactly the one
+ * that gets attached to an issue.
  *
  * <p><b>{@code CensusIsSafeToPasteTest}'s discipline does not apply here and must not be added by
  * analogy.</b> That property exists because the census and the evaluation report are meant to be

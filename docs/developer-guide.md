@@ -1642,6 +1642,33 @@ counted in the summary — [ADR 39](adr/0039-affinity-capture-and-read.md) requi
 in the graph before it can be rated, but the graph around a rating can be rebuilt and the rating
 has to outlive it.
 
+### The promotions Setlist Scout does not track yet
+
+The known-list file was produced from a concert history, so it means "acts I have seen live".
+Everything rated at or above `KnownList.PROMOTION_RATING` that the file does not name is a
+**promotion** — [ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md) — and those are
+acts you would go and see that nothing else of yours tracks. Setlist Scout takes a plain-text
+upload of artist names, one per line, so this writes that file:
+
+```bash
+# the promotions your known list does not name, as names to upload
+./gradlew listRatings --args="--promotions-off $HOME/filtered-qids.csv --names $HOME/promotions.txt"
+```
+
+`--promotions-off` and `--names` are one output and are given together; either alone is a usage
+error. `--out` is optional alongside them and unchanged when it is given, so one run can write both
+files. The promotion set is composed by `KnownList.promoted` and resolved through your merges first,
+which is what stops this tool disagreeing with `recommend` and `rate` about who is promoted.
+
+One name per line, the label the graph holds, sorted. A promotion the graph has no claim about is
+written as its **qid** rather than dropped: losing something you said yes to out of the file that
+exists to carry it would leave a count as the only trace. The log says how many there were.
+
+The first line is a `#` comment naming the file as personal data and counting the names. Setlist
+Scout's bulk uploader skips lines beginning with `#` (its `ArtistImportService` and
+`ArtistSeedService`, issue #177 there), so the header is ignored on upload rather than something you
+need to strip before pasting. Then upload it on Setlist Scout's artists page.
+
 ### Why this is not `list_affinity`
 
 ADR 39 declined a bulk MCP read on [ADR 16](adr/0016-privacy-and-data-handling.md)'s data
