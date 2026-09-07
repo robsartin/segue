@@ -1,0 +1,334 @@
+---
+status: Accepted
+date: "2026-09-07"
+topic: expand-every-promotion-from-a-dev-tool
+tags: [project, tooling, privacy, data, graph]
+supersedes: []
+related: [assertion-log-source-of-truth, sqlite-assertion-log, mcp-tool-surface, layering-and-archunit, taste-layer-separation, affinity-capture-and-read, bulk-seeding-as-a-dev-tool, retraction-as-a-new-claim, a-kind-scoped-ceiling-on-concept-expansion, what-an-adr-may-quote, musicbrainz-as-the-second-source, what-the-musicbrainz-adapter-refuses, attribute-a-shortfall-to-its-source, owner-claims-as-a-third-layer, the-claim-tools-require-an-explicit-database, the-bridge-returns-classes, a-read-only-census-of-the-graph, fold-the-log-once-per-boot, an-offline-evaluation-harness-for-the-recommender]
+---
+# 66. Expand every promotion from a tenth dev-side tool, through the expansion the MCP tool already runs
+
+## Context
+
+Nothing on the dev side expands. `SegueService.expandEntity` was the only caller of
+`SourceAdapters.all()` in `src/main`, and `GraphTools.expandEntity` was its only caller — so every
+edge in the graph that a source had to be asked for arrived through one interactive MCP call at a
+time. `seed` cannot open a store at all ([ADR 40](0040-bulk-seeding-as-a-dev-tool.md),
+`seedNeverOpensAStore`), and the only other dev tools that reach `ingest` are `retract` and `own`,
+each of which appends exactly one hand-typed claim
+([ADR 44](0044-retraction-as-a-new-claim.md), [ADR 59](0059-owner-claims-as-a-third-layer.md)).
+
+That is a limit on what every downstream decision can see.
+[ADR 48](0048-a-high-rating-counts-as-something-you-have.md) records that what bounds the deck is
+expansion coverage rather than any rule in the code — only a minority of nodes are the subject of a
+stored edge, so a promotion reorders the candidate pool far more than it grows it.
+[ADR 65](0065-an-offline-evaluation-harness-for-the-recommender.md)'s consequence puts the same
+point as a warning about its own instrument: *"reading a low hit rate as a verdict on the scorer
+would be reading it as a verdict on ingest."* The harness cannot separate the two, and neither can
+anybody reading it, while the entities the owner has judged most highly have never been expanded in
+bulk. **The counts behind both sentences are readings of the owner's database and live in
+`graphCensus`'s output ([ADR 63](0063-a-read-only-census-of-the-graph.md)) and in those ADRs, not
+here.**
+
+[ADR 54](0054-musicbrainz-as-the-second-source.md) sharpens it. The second source has only ever been
+reached one interactive call at a time, because the identity bridge that makes it usable lives in
+`app`, which every dev tool's fence bans.
+
+So the missing thing is a supervised batch: run the expansion the client already runs, over the
+population the recommender weights by, once, and report what it did. The population is not a new
+idea either — `KnownList.promoted` already composes it, and this tool reads it.
+
+## Decision
+
+**A tenth dev-side tool, `./gradlew expandPromotions --args="--db <segue.db>"`, expands every entity
+the owner rated at or above `KnownList.PROMOTION_RATING`, one at a time, through the same expansion
+the MCP tool runs, and prints one block of aggregates.** It changes no bound, no constant and no line
+of `expand_entity`'s output; it adds no MCP tool, and `ToolSurfaceTest` still counts six
+([ADR 26](0026-mcp-tool-surface.md)).
+
+### One expansion, two callers
+
+The body of `SegueService.expandEntity` moved, unchanged, into
+`com.robsartin.segue.expansion.EntityExpansion`, which returns facts — `ExpansionOutcome`, a sealed
+interface of `Refused(qid, Reason)` and `Expanded(…)` — rather than sentences. `SegueService` became
+a switch over that outcome and keeps its signature, its three `error(…)` strings, its reason list
+and its `ok`/`partial` shaping, word for word. The extraction landed with `SegueService` delegating
+in the same commit and **no file under `src/test` edited**, which is what says nothing changed: the
+twenty-odd `expandEntity` call sites in `SegueServiceTest`, `GraphToolsTest`, and the five end-to-end
+tests that drive it were the characterisation harness, and they were not touched to make it pass.
+
+`ExpansionOutcome` carries facts precisely so each caller words them for its own reader — one for a
+language model, one for a terminal. A shared sentence would be a wire string with two audiences, one
+of them a model.
+
+**The package is new, and every other package is barred from it.** `EntityExpansion` runs every
+adapter that supports the seed's kind and appends what they return through `IngestService`: it is a
+bulk write and a network connection in one object, so a package that can reach it gains both past
+whatever its own fence says. `onlyTheClientAndTheExpanderExpandAnEntity` therefore permits `mcp`,
+`expand`, `app` — wiring is its job ([ADR 32](0032-layering-and-archunit.md)) — and `expansion`
+itself, and nothing else. `ingest` was the obvious home and is wrong: `own` and `retract` both depend
+on it, so the expansion living there would hand two hand-typed-claim tools a route to a bulk write
+and to the network, past fences whose own text says a claim about the owner's shelf is a pure
+function of one local file.
+
+**The `RuntimeException` catch belongs to the tool and not to the shared class.** `EntityExpansion`
+wraps `adapter.expand` in no `try`, which is right for one interactive call — the MCP layer turns a
+throw into a protocol error — and wrong for a batch that has already written most of what it came
+for. `ExpandRun`'s loop catches, counts the entity as failed, and carries on. Nothing is retried: a
+refused endpoint, an unreachable source and a truncation are all reported outcomes of an expansion
+that completed, exactly as `EntityExpansion` already treats them one level down.
+
+### Why the seed tool's "never writes" does not extend here
+
+[ADR 40](0040-bulk-seeding-as-a-dev-tool.md)'s safety argument is three claims stacked, and **only
+the first survives the move**.
+
+1. **`IngestService` is the only write path** ([ADR 19](0019-assertion-log-source-of-truth.md)).
+   Honoured rather than bent: this tool appends through `IngestService` and nothing else, and
+   `theExpanderWritesThroughIngestAlone` fails the build if any class in `expand` calls
+   `GraphStore.record`, `GraphStore.upsertNode` or `AssertionLog.append` — or either taste-layer
+   write.
+2. **`add_entity` owns adding an entity.** It still does. This tool adds no entity nobody asked for;
+   it expands entities the owner has already rated, and the neighbours an expansion discovers arrive
+   the same way they arrive through `expand_entity`.
+3. **A fence makes writing impossible.** This one is different, because the job is different.
+   `seedNeverOpensAStore` denies `seed` `sqlite`, `tinker`, `jena`, `ingest`, `mcp` and `app`, so it
+   cannot open the database even to read it. This tool must open it, replay it and append to it.
+   What ADR 40 was protecting — a committed tool that reads a private list must not be able to touch
+   the database — is protected here by two other things: the write fence above, which permits exactly
+   one path, and the guard on the output, which is what a private list would otherwise leak through.
+
+### It reads scores, and cannot read a note
+
+The promotions come from `AffinityStore.readRatings`, the note-free bulk read, resolved through the
+boot's merges before the threshold is applied — a merge leaves two affinity rows naming one thing,
+and promoting both would expand the id the owner retired as well as the one he kept. The threshold
+and the sort are `KnownList.promoted`'s, called with an empty file, rather than a second copy of the
+rule here; this repository has been bitten by that shape before
+([ADR 48](0048-a-high-rating-counts-as-something-you-have.md)).
+
+`theExpanderReadsScoresAndNeverNotes` bans `AffinityRecord` as a type and bans `AffinityStore.find`
+and `readAll` as calls, which are the three routes a note could take — copied from
+`theRecommenderReadsRatingsAndNeverNotes` ([ADR 33](0033-taste-layer-separation.md)).
+`onlyTheRecommenderReadsEveryRating` is widened to admit `expand` rather than given a fifth copy:
+nothing varies between the readers, and ADR 26's six-tool surface, which is what that rule protects,
+is untouched by a fifth dev-side reader of a `Map<String, Integer>`.
+
+There is no `--known` flag. The concert-history file is a list of entities, not of judgements
+([ADR 48](0048-a-high-rating-counts-as-something-you-have.md)), and this tool expands what the owner
+rated.
+
+### It folds once
+
+One `GraphProjector.replay`, and the equivalences taken back from the `Replay` it returns rather than
+re-derived from the log — [ADR 64](0064-fold-the-log-once-per-boot.md), held by
+`theReplayingToolsTakeTheBootsFold` widened to a fourth package. A widening rather than a new rule,
+for ADR 64's own stated reason: a fence that skipped the newest replaying tool would be green over
+another copy of the defect, and a fourth instance of one property is not a second property.
+
+### The command line, and the database it will not guess
+
+```
+usage: --db <segue.db> [--max-new-edges <n>] [--dry-run]
+```
+
+**`--db` is required and `SEGUE_DB` does not satisfy it**, refused by the parser before any file is
+opened, with the path it would have resolved to quoted back. That is
+[ADR 60](0060-the-claim-tools-require-an-explicit-database.md)'s central clause and its consequence
+together: an agent's shell inherits `SEGUE_DB` from the owner's profile, and this tool writes. Two
+rules hold it — `theExpanderHasNoDefaultDatabase` forbids the name `support.DefaultDatabase`, and
+`theExpanderTakesItsDatabaseFromTheFlagAlone` forbids taking a `java.nio.file.Path` out of `support`
+at all, which is the capability where the first is the name. Both are **new rules rather than
+widenings of ADR 60's pair**, for ADR 63's and ADR 65's stated reason: a rule named for one tool and
+quoted in an immutable ADR does not get stretched to cover another.
+
+`--max-new-edges` defaults to `ExpandContext.defaults().maxNewEdges()` and is refused at or below
+zero at parse time, so the per-entity `BOUND_NOT_POSITIVE` refusal cannot happen inside a run.
+`--dry-run` counts what a real run would visit — the promotions, those the projection holds a node
+for, and those `LocalEntity.isLocal` answers true for — and asks no adapter anything and appends
+nothing. A flag given twice is refused, `OwnCli`'s rule.
+
+`theExpanderOpensNothingElse` bans every sibling dev tool, `mcp` and `app`. It deliberately does
+**not** ban `java.net`, `tinker`, `sqlite`, `ingest`, `wikidata` or `musicbrainz`, where every
+sibling fence bans a network: each of those tools is a pure function of one local file, and this one
+is the batch form of `expand_entity` and exists to fetch. It holds a `GraphStore`, unlike `own` and
+`retract`, because an expansion reads the graph to decide what is new and `IngestService.record`
+needs the projection the replay built — so the type is permitted and the write calls are forbidden.
+
+### What it costs
+
+`P` is the number of promotions. **No figure for it is written into any committed file**: it is
+derived from `graphCensus`'s taste section, which reports how many ratings sit at each of the five
+values, by summing the buckets at or above `KnownList.PROMOTION_RATING`. That sum is an upper bound
+rather than the number itself, because the census reports the raw table while this tool resolves the
+ratings through the merges first, and a merged pair collapses to one promotion.
+
+Per promotion:
+
+- **MusicBrainz**: one artist-relations request for a `PERSON` or `GROUP` seed that bridges to an
+  MBID — the two kinds `MusicBrainzSourceAdapter` describes — paced by
+  `MusicBrainzClient.DEFAULT_MIN_REQUEST_INTERVAL`, reserved **before** sending rather than in
+  response to a rejection. Every other kind costs nothing, because the adapter is skipped.
+- **Wikidata**: two calls for the adapter (the entity, then the reverse-claims query,
+  [ADR 36](0036-reverse-lookup-via-sparql.md)), two for the bridge (the seed's MBID, then one
+  batched lookup per hundred neighbours), and one `EntityResolver.fetch` for each neighbour no source
+  described. None is proactively throttled; each costs a round trip, and a rejection costs a backoff.
+
+So the floor is **`P` × the MusicBrainz interval**, and the realistic cost is
+**`P × (one interval + (4 + u) × t)`**, where `t` is a Wikidata round trip and `u` is the number of
+neighbours per expansion neither adapter could describe. At a `P` in the hundreds that is tens of
+minutes — which is why the tool is supervised, why the dry run comes first, and why every progress
+line reports a position.
+
+**There is no sleep in this tool and no wall-clock assertion anywhere in its tests.** The pacing is
+the adapters' own, and it is correct only because every entity shares one client instance: the
+reservation is per instance, and `ExpansionSources.both` is what constructs each client once for the
+whole run. That is also why the expansions are not parallelised.
+
+### The output contract
+
+**Every value the tool prints is an integer, and every label is a literal in `ExpansionReport`.**
+The block is a header, then `promotions` (considered, expanded, added nothing, refused, failed),
+`graph` (nodes added, edges added), `edges by source`, `shortfalls` (neighbours skipped, endpoints
+refused, bound cut the result, then `unavailable` and `truncated` per source id) and `refused, by
+reason`. An empty section still prints its heading, so "no edges from any source" is distinguishable
+from a section that vanished.
+
+**`nodes added` sits under `graph` and not under `edges by source`**, and the section names carry the
+reason. Every `AssertionRecord` carries a `Provenance` whose `sourceId` says which adapter produced
+it, so edges tally per source exactly. A node does not: a neighbour's identity comes either from an
+adapter's own neighbours or from `EntityResolver.fetch`, and the second has no adapter behind it.
+[ADR 56](0056-attribute-a-shortfall-to-its-source.md) already refused to restate `id()` as a second,
+forgeable authority for who a source was, and this report does not either.
+
+**No line the tool writes carries a qid, a label, a note or a rating.** That is stronger than
+"aggregates only", and the reason is the run's shape rather than any field's sensitivity: a progress
+line per entity, over every promotion, in qid order, is the owner's whole promoted population
+enumerated down a terminal — the bulk read [ADR 39](0039-affinity-capture-and-read.md) refused,
+arriving by another route. So a progress line is a position and a count. It takes one of three
+forms: what the expansion added, why it was refused, or — when a source was unreachable, an adapter
+truncated, the shared budget bit, or an endpoint was refused — that it was **partial** and in which
+of those ways, counted and never named. A qid on a refusal line would be genuinely useful and is not
+worth that; `--dry-run` answers the same question in aggregate and `listRatings`
+([ADR 43](0043-listing-your-own-ratings.md)) answers it precisely, offline, for the owner alone.
+
+Two things hold it, and the second is the stronger. `ExpansionIsSafeToPasteTest` captures the root
+logger at `TRACE` — so the sqlite driver's own statement logging is included — over a scratch
+database carrying an invented label, an invented note, an id inside that note and a rating, and
+asserts that the block was printed and that no line carries any of them. And `ExpansionReport.lines`
+takes an `ExpansionTally` whose every component is an `int`, a map keyed by a source id or a map
+keyed by a refusal reason: there is nowhere in the signature to put an identifier, which is a
+stronger guarantee than a body that merely happens not to print one
+([ADR 51](0051-what-an-adr-may-quote.md), [ADR 63](0063-a-read-only-census-of-the-graph.md)).
+
+**The guard has one carve-out, and it is a limit rather than a convenience.** `EntityExpansion` emits
+two `warn` lines that name an entity — a neighbour it could not fetch, and an edge endpoint
+`IngestService` refused (#233) — and the MCP server emits those same two lines, from the same class,
+on every `expand_entity` call. They are the shared expansion's diagnostics, not this tool's report,
+so the guard exempts that one logger name by exact match and holds the property over everything
+else. The exemption is matched exactly and never by substring, which is itself tested.
+
+### The seam that moved
+
+`WikidataMusicBrainzIdentity` moved from `app` to `expansion`, and nothing else about it changed.
+ADR 54 placed it in `app` and said the placement was forced rather than chosen: `musicbrainz`
+declares the seam and cannot implement it, because neither adapter package may import the other, and
+ADR 32 names `app` as the one package that may see everything. With one entry point that settled it.
+There are two now, and the second is a plain-Java tool whose own fence bans `app` — rightly, because
+`app` is Spring and reaches `mcp` through `SegueConfiguration`. A bridge the second caller cannot
+reach is a bridge only one source crosses.
+
+**ADR 32 is not amended**: `expansion` depends on two adapters and a handful of other packages, which
+is not everything, and ADR 32 says of itself that `ArchitectureTest` is the list rather than its own
+table. **ADR 54 gains a dated amendment**, which is
+[ADR 61](0061-the-bridge-returns-classes.md)'s convention for a partial reversal — the older ADR
+keeps `Accepted`, nothing in it is withdrawn, and the amendment names this one.
+
+The two-adapter wiring moved with it, into `ExpansionSources.both`, so that the order the sources are
+asked in is stated once. That order is load-bearing: one `ExpandContext` bounds the concatenation, so
+a tight budget is spent by whichever adapter runs first, and a second entry point building its own
+list would be a second statement of it.
+
+## Alternatives considered
+
+- **Drive `expand_entity` from the client in a loop.** The cheapest thing that could work, and what
+  the owner has today. Rejected on three counts, and they are ADR 40's three against `import_list`,
+  in the same order: the caller is a language model, so several hundred calls cost a context window
+  and produce a transcript rather than a summary; the list it iterates is the owner's promotions, so
+  the loop puts the whole taste layer into that transcript, which is the bulk read ADR 39 refused;
+  and there is no aggregate at the end, because each call answers about itself.
+- **A flag on `seed`.** Rejected outright. ADR 40's whole safety argument is that `seed` resolves and
+  reports and never writes, held by a fence that forbids it from opening a store at all. A writing
+  mode would not widen that fence, it would delete it — and it would put a bulk writer inside the one
+  dev tool whose committed input is a private list.
+- **Expand the whole known list rather than the promotions.** More reach per run, and rejected on
+  ADR 65's finding: the `--known` file is a concert history and carries no strength on any row, so it
+  names entities the owner attended rather than entities he judged. The promotions are the population
+  the recommender weights by and the population the harness holds out from, so they are the
+  population whose neighbourhoods change what either can say. A later issue may widen it, with the
+  census's own before and after to argue from.
+- **Expand recursively, or expand what the first pass discovered.** Rejected as unbounded.
+  [ADR 49](0049-a-kind-scoped-ceiling-on-concept-expansion.md) bounds one call and says in as many
+  words that calls are not counted; a depth-two run over a few hundred seeds is tens of thousands of
+  expansions, which is a different decision needing a different cost argument.
+- **Put the shared expansion in `ingest`.** Rejected above: it hands `own` and `retract` a route to
+  the network and to a bulk write, past fences that say they have neither. Their fences forbid
+  `java.net` as a package; they do not forbid reaching a class that runs adapters.
+- **Leave the expansion in `SegueService` and have the tool call `SegueService`.** Rejected: the tool
+  would depend on `mcp`, which every sibling fence bans and for the reason all of them give — a dev
+  tool that can reach the tool layer can become an MCP tool by accident — and it would drag
+  `ToolResult`, `CorrelationId` and the view types into a tool that wants counts.
+- **A per-adapter breakdown on `ExpansionSummary`.** Rejected by ADR 56 already, and not reopened:
+  the MCP wire shape does not move for a dev tool's convenience. The structured lists live on
+  `ExpansionOutcome`, which is below the wire.
+- **Print a qid on each progress line.** Rejected on the enumeration argument above rather than on
+  the sensitivity of the field. A single qid in a single line is unremarkable; one per promotion, in
+  qid order, is the list.
+- **Retry a failed entity at the end of the run.** Rejected: it needs a retry policy against clients
+  that already retry with backoff, it makes the run's cost unpredictable in the one dimension the
+  owner is planning around, and re-running the whole tool converges in the graph anyway. The counts
+  say how many would be worth a second run.
+- **Parallelise the expansions.** Rejected: the MusicBrainz client's slot reservation is what makes
+  the pace correct across a batch, and the honest way to go faster is the bounded virtual-thread
+  neighbour fan-out that `EntityExpansion`'s javadoc already names as a follow-up — inside one
+  expansion rather than across many.
+
+## Consequences
+
+- **The measure of this decision is the next evaluation reading, and this ADR does not take it.**
+  It is judged by ADR 65's rule unchanged. **The denominator will have moved, and that is the point
+  rather than a problem**: the pool count is what expanding every promotion is an attempt to raise,
+  so a reading taken after a run is judged by the rule within itself and is **not row-for-row
+  comparable** with the readings before it — the same thing ADR 65 said of its own fold change, for
+  the same reason. If the pool rises and the hits rise with it, the misses were ingest's; if the pool
+  rises and the hits do not, they were not, and the question moves back to the ranking with one
+  confound removed.
+- **The log grows with every run.** `ProvenanceCodec.append` drops a provenance whose source and
+  reference it already holds, so the graph converges and corroboration does not inflate; the log,
+  being append-only ([ADR 24](0024-sqlite-assertion-log.md)), grows by every assertion a run
+  recorded again. Re-running is the owner's decision and costs the same wall clock.
+- **The safe-to-paste carve-out is open, and closing it is a separate change.** Moving
+  `EntityExpansion`'s two entity-naming warnings out to its callers would close it entirely — each
+  caller would then decide whether to name the entity, and this tool would decide not to. That is a
+  change to a shared class with the MCP server's diagnostics on the other end of it, so it is not
+  made here.
+- **The default bound is stated three times in this repository and this decision did not repair it.**
+  `application.yaml`'s `segue.max-new-edges`, `SegueProperties`' compact-constructor fallback and
+  `ExpandContext.defaults()` each state it, nothing reconciles them, and the MCP server's runtime
+  default is the first while this tool's is the third. The issue forbade moving a bound, and moving
+  where a bound lives is close enough to that line to leave alone. Reported as a finding.
+- **There is no resume file and no ledger.** `seed` has one because it resolves thousands of names
+  against a fuzzy matcher; this walks a list the ratings table regenerates in a millisecond, and a
+  half-finished run is re-runnable at the cost of re-recording assertions the graph already merges.
+  If a run turns out to want resuming, that is an issue with a measurement behind it.
+- **Two documentation sentences were falsified by this decision, and each is narrowed rather than
+  deleted**: the user guide's claim that nothing but `add_entity` and `expand_entity` calls the live
+  Wikidata API now says *no other tool on this surface* does, and the developer guide's "there is no
+  dev-side bridge tool" now says which narrower tool still does not exist. Neither was pinned by a
+  test, which is why they had to be found by reading.
+- **What verifies this document.** `AdrIndexTest` checks that this file has exactly one row in
+  `docs/adr/README.md` and that the row agrees with the heading and the front matter character for
+  character; `AdrCitationsTest` refuses a commit citation anywhere in `docs/adr/`, which is why the
+  ordering evidence above is prose rather than a hash; `DocumentationLinksTest` resolves every
+  relative link and anchor here; and `javadoc -Werror` is what keeps the citations in the code that
+  points back at this decision from rotting.

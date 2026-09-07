@@ -46,8 +46,10 @@ import tools.jackson.databind.JsonNode;
  * is a bridge only one source crosses. So it sits beside {@link ExpansionSources}, in the package
  * both entry points already share. ADR 32 is untouched: {@code expansion} depends on two adapters
  * and four other packages, which is not everything, and ADR 32 itself says "{@code
- * ArchitectureTest} is the list, not this table." ADR 66, and ADR 54's 2026-09-07 amendment, which
- * is where the placement this paragraph reverses was recorded.
+ * ArchitectureTest} is the list, not this table." See
+ * docs/adr/0066-expand-every-promotion-from-a-dev-tool.md, and ADR 54's 2026-09-07 amendment in
+ * docs/adr/0054-musicbrainz-as-the-second-source.md, which is where the placement this paragraph
+ * reverses was recorded and where the reversal is reported.
  *
  * <p><b>It reports its failures, and no longer swallows them</b> (<a
  * href="https://github.com/robsartin/segue/issues/148">issue #148</a>). It used to. {@link

@@ -411,3 +411,29 @@ that an id identifies. It costs a conforming adapter nothing — see ADR 56.
 **What this does not change.** MusicBrainz as the second source, the whitelist, the one-pass shape,
 the corroboration finding, and every enumeration of what a new adapter package fails to inherit. The
 correction is to two consequences, not to the decision.
+
+**Amendment (2026-09-07, issue #284): the identity bridge moves out of `app`.**
+
+Nothing above is withdrawn, no decision above is edited, and this ADR keeps `Accepted`.
+[ADR 66](0066-expand-every-promotion-from-a-dev-tool.md) records the decision this amendment
+reports, and the reasoning it reverses is one paragraph rather than a decision.
+
+The paragraph above headed *"It lives in `app`, and that placement is forced rather than chosen"* is
+correct about what forced it and about what it did not claim — it says in its own last sentence that
+nothing more general is claimed for the placement — and it was reasoning about **one entry point**.
+`WikidataMusicBrainzIdentity` is still the only implementation of `MusicBrainzIdentity` there is,
+`musicbrainz` still may not import `wikidata` and `wikidata` still may not import `musicbrainz`, and
+[ADR 32](0032-layering-and-archunit.md)'s sentence about `app` is unchanged and unamended.
+
+What changed is the number of callers. A second, Spring-free entry point now runs the same expansion
+— a dev tool whose own fence bans `..app..`, as every sibling tool's does and rightly, because `app`
+is Spring and reaches `mcp` through `SegueConfiguration`. A bridge the second caller cannot reach is
+a bridge only one source crosses, which would have left the batch tool expanding through Wikidata
+alone and the two callers disagreeing about what an expansion is.
+
+So the class moved to `expansion`, the package both entry points share, beside `ExpansionSources` —
+the one statement of the order the two sources are asked in — and nothing else about it changed.
+ADR 32 is not amended: `expansion` sees two adapters and a handful of other packages, which is not
+everything, and ADR 32 says of itself that `ArchitectureTest` is the list rather than its own table.
+The table row above reading `app/WikidataMusicBrainzIdentity` now names `expansion` in the tree; the
+row is left as it was written, and this paragraph is the correction.
