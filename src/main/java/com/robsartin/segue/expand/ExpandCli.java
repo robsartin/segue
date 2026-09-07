@@ -25,13 +25,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The promotion expander's command line, without a {@code main} yet.
- *
- * <p><b>No {@code public static void main} in this class</b> (#284). {@code
- * PackageListsTest.shouldNameEveryDevToolPackageWhenAClassEndsInCliAndDeclaresAMain} keys on a
- * {@code *Cli} class declaring one, so adding it here would demand the Gradle task, {@code
- * ArchitectureTest.DEV_TOOL_PACKAGES} and every fence a dev tool carries in the same breath. Task
- * 10 is where those travel together.
+ * The promotion expander's command line, entered through {@code main} below and registered as the
+ * tenth dev tool (#284), run as {@code ./gradlew expandPromotions}.
  *
  * <p><b>{@code --db} is required, and {@code SEGUE_DB} does not satisfy it</b>, exactly as {@code
  * RetractCli}, {@code OwnCli}, {@code CensusCli} and {@code EvaluateCli} refuse it — this tool

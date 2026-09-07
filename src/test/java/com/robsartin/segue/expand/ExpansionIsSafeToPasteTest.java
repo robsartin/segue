@@ -65,9 +65,11 @@ import org.junit.jupiter.api.io.TempDir;
  * bare digit is indistinguishable from a count the block legitimately prints — every row in the
  * report is a number — so an assertion of the form "no line contains 4" would either be vacuous or
  * red on the honest output. What keeps a rating out is not this test but {@link ExpansionTally}'s
- * type-level fence: every component is an {@code int} or a map keyed by a source id or an {@code
- * ExpansionOutcome.Reason}, so there is nowhere in the signature {@code ExpansionReport} reads to
- * put one, which is a stronger guarantee than a body that merely happens not to print one.
+ * type-level fence.
+ *
+ * <p>{@code ExpansionOutcome.Reason} joins {@code int} and a map keyed by a source id as the only
+ * component types the fence allows, so there is nowhere in the signature {@code ExpansionReport}
+ * reads to put one — a stronger guarantee than a body that merely happens not to print one.
  */
 class ExpansionIsSafeToPasteTest {
 
