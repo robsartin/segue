@@ -128,7 +128,8 @@ public final class EvaluateRun {
     }
 
     List<Reading> readings = bySetting.stream().map(Reading::summed).toList();
-    EvaluationReport.lines(eligible, HeldOut.EVERY, heldOutTotal, leastLeft, top, readings)
+    EvaluationReport.lines(
+            eligible, HeldOut.EVERY, heldOutTotal, leastLeft, top, Optional.empty(), 0, 0, readings)
         .forEach(lines);
     return List.copyOf(readings);
   }
