@@ -365,9 +365,9 @@ everything, because wiring is its job. `support` depends on nothing, and the pac
 are the ones the diagram below draws an edge to it from — that half is derivation-checked by
 `DeveloperGuideEnumerationsTest.shouldDrawEveryImportEdgeWhenTheGuideDiagramsTheLayering`, so read
 the edges rather than a count in this sentence, which nothing checks. Today they are:
-`mcp` (`UuidV7`), `export` and `rate` (`ClassLabels`), `export`, `recommend` and `rate`
-(`QidList`), `export`, `ratings`, `recommend` and `rate` (`DefaultDatabase` — issue #179's one
-resolution for the four dev tools that keep a default), and `retract` and `own`
+`mcp` (`UuidV7`), `export` and `rate` (`ClassLabels`), `export`, `ratings`, `recommend`, `evaluate`
+and `rate` (`QidList`), `export`, `ratings`, `recommend` and `rate` (`DefaultDatabase` — issue #179's
+one resolution for the four dev tools that keep a default), and `retract` and `own`
 (`RequiredDatabase` — the sentence those two refuse with, since #179 gave them no default at all;
 it resolves the path it quotes back by calling `DefaultDatabase` itself, so the rule has one home
 and the two claim tools depend on neither a default nor the class that computes one). One thing a reader might expect and will
@@ -480,7 +480,7 @@ line is drawn there.
 
 | Package | Contents | Depends on |
 | --- | --- | --- |
-| `domain` | Records and the borrowed edge vocabulary (`EdgeTypes`), plus `KnownList` — the pure rules that turn a `--known` file and the ratings map into the populations the dev tools need: what counts as owned ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)), what is suppressed, and what a revision pass may deal ([ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md)). `promoted` and `suppressed` are each read by both `recommend` and `rate`, so the two tools cannot apply different answers; `revisitable` is read inside `rate` alone — `recommend` has no revision pass — and lives here so `Deck.dealRevision` and `RateRun`'s count of the same population cannot drift apart. No third-party dependencies at all. | nothing |
+| `domain` | Records and the borrowed edge vocabulary (`EdgeTypes`), plus `KnownList` — the pure rules that turn a `--known` file and the ratings map into the populations the dev tools need: what counts as owned ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)), what is suppressed, and what a revision pass may deal ([ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md)). `promoted` is read by `ratings`, `recommend`, `evaluate` and `rate`, and `suppressed` by `recommend`, `evaluate` and `rate`, so those tools cannot apply different answers; `revisitable` is read inside `rate` alone — `recommend` has no revision pass — and lives here so `Deck.dealRevision` and `RateRun`'s count of the same population cannot drift apart. No third-party dependencies at all. | nothing |
 | `port` | The seams: `GraphStore`, `AssertionLog`, `AffinityStore`, `SourceAdapter`, `EntityResolver`, and their small value types. | `domain` |
 | `tinker` | The chosen Gremlin adapter ([ADR 18](adr/0018-graph-engine-gremlin.md)). | `port`, `domain` |
 | `jena` | The RDF reference adapter, kept working as a cross-check. | `port`, `domain` |
@@ -488,7 +488,7 @@ line is drawn there.
 | `wikidata` | The first source: resolution, expansion, and the two mapping passes. Plain Java, no Spring. | `port`, `domain` |
 | `musicbrainz` | The second source ([ADR 54](adr/0054-musicbrainz-as-the-second-source.md)): `MusicBrainzClient` over `ws/2`, `MusicBrainzSourceAdapter`, and `MusicBrainzIdentity` — the MBID-to-QID seam it declares and may not implement, because an adapter may not import another adapter. Expansion only; no `EntityResolver`. Plain Java, no Spring. | `port`, `domain` |
 | `ingest` | `IngestService` (the only write path) and `GraphProjector` (boot replay). | `port`, `domain`, `wikidata` (`KindMapper` only, [ADR 42](adr/0042-store-p31-and-rederive-kind-at-projection.md)) |
-| `support` | Cross-cutting plain-Java helpers with no project dependencies — `UuidV7` (request correlation), `QidList` (the QID-file reader `export`, `recommend` and `rate` share), `ClassLabels` (the offline `P31` label table `export` and `rate` share; it moved here from `export` when `rate` needed it), `DefaultDatabase` (the one `--db`/`SEGUE_DB`/`${user.home}` resolution `export`, `ratings`, `recommend` and `rate` share — issue #179; the live list is whoever calls `resolve`, so grep rather than trust these four names), and `RequiredDatabase` (the refusal `retract` and `own` give when `--db` was not typed; it calls `DefaultDatabase` for the path it quotes back and hands out a `String`, never a `Path`, so neither claim tool can take a default from it). | nothing |
+| `support` | Cross-cutting plain-Java helpers with no project dependencies — `UuidV7` (request correlation), `QidList` (the QID-file reader `export`, `ratings`, `recommend`, `evaluate` and `rate` share), `ClassLabels` (the offline `P31` label table `export` and `rate` share; it moved here from `export` when `rate` needed it), `DefaultDatabase` (the one `--db`/`SEGUE_DB`/`${user.home}` resolution `export`, `ratings`, `recommend` and `rate` share — issue #179; the live list is whoever calls `resolve`, so grep rather than trust these four names), and `RequiredDatabase` (the refusal `retract` and `own` give when `--db` was not typed; it calls `DefaultDatabase` for the path it quotes back and hands out a `String`, never a `Path`, so neither claim tool can take a default from it). | nothing |
 | `mcp` | The tool classes, `SegueService`, the view records, `CorrelationId`. Spring-aware. | `ingest`, `port`, `domain`, `support` |
 | `app` | Entry point, all bean wiring, `application.yaml`, transport profiles, and `WikidataMusicBrainzIdentity` — the P434 bridge that implements `musicbrainz`'s identity seam, placed here because it is the only package ADR 32 lets see two adapters at once. Spring-aware. | everything it wires |
 | `seed` | The bulk seeding tool ([ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)): a name list to `name → QID`, run as `./gradlew resolveNames`. Plain Java, never opens a store. | `port`, `domain`, `wikidata` |
@@ -1641,6 +1641,34 @@ the note. A rating whose entity the graph has no claim about reads `(not in the 
 counted in the summary — [ADR 39](adr/0039-affinity-capture-and-read.md) requires an entity to be
 in the graph before it can be rated, but the graph around a rating can be rebuilt and the rating
 has to outlive it.
+
+### The promotions Setlist Scout does not track yet
+
+The known-list file was produced from a concert history, so it means "acts I have seen live".
+Everything rated at or above `KnownList.PROMOTION_RATING` that the file does not name is a
+**promotion** — [ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md) — and those are
+acts you would go and see that nothing else of yours tracks. Setlist Scout takes a plain-text
+upload of artist names, one per line, so this writes that file:
+
+```bash
+# the promotions your known list does not name, as names to upload
+./gradlew listRatings --args="--promotions-off $HOME/filtered-qids.csv --names $HOME/promotions.txt"
+```
+
+`--promotions-off` and `--names` are one output and are given together; either alone is a usage
+error. `--out` is optional alongside them and unchanged when it is given, so one run can write both
+files. The promotion set is composed by `KnownList.promoted` and resolved through your merges first,
+which is what stops this tool disagreeing with `recommend` and `rate` about who is promoted.
+
+One name per line, the label the graph holds, sorted. A promotion the graph has no claim about is
+written as its **qid** rather than dropped: losing something you said yes to out of the file that
+exists to carry it would leave a count as the only trace. The log says how many there were.
+
+The first line is a `#` comment naming the file as personal data and counting the names. As of
+2026-09-07, Setlist Scout's bulk upload (its `ArtistImportService` and `ArtistSeedService`, issue
+#177 there) skips lines beginning with `#`, so the header is ignored on upload rather than something
+you need to strip before pasting — check that repository if it has been a while, since nothing on
+this side can tell you if it changes. Then upload it on Setlist Scout's artists page.
 
 ### Why this is not `list_affinity`
 

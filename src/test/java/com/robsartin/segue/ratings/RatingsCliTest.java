@@ -11,6 +11,8 @@ import org.junit.jupiter.api.Test;
 class RatingsCliTest {
 
   private static final String HOME = "/invented/home";
+  private static final String KNOWN = "/invented/known.csv";
+  private static final String NAMES = "/invented/promotions.txt";
 
   private static Options parse(String... args) {
     return RatingsCli.parse(args, null, HOME);
@@ -79,5 +81,41 @@ class RatingsCliTest {
     assertThat(fromHome.database()).isEqualTo(Path.of(HOME, ".segue", "segue.db"));
     assertThat(fromEnv.database()).isEqualTo(Path.of("/invented/scratch.db"));
     assertThat(explicit.database()).isEqualTo(Path.of("/invented/other.db"));
+  }
+
+  @Test
+  @DisplayName("--names alone is refused: there is nothing to measure the promotions against")
+  void shouldRefuseWhenTheNamesPathIsGivenWithoutTheKnownFile() {
+    assertThatThrownBy(() -> parse("--out", "/tmp/ratings.txt", "--names", NAMES))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("--promotions-off");
+  }
+
+  @Test
+  @DisplayName("--promotions-off alone is refused: there is nowhere for the names to go")
+  void shouldRefuseWhenTheKnownFileIsGivenWithoutANamesPath() {
+    assertThatThrownBy(() -> parse("--out", "/tmp/ratings.txt", "--promotions-off", KNOWN))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("--names");
+  }
+
+  @Test
+  @DisplayName("--out is not required when the names export names its own path")
+  void shouldNotRequireAnOutPathWhenTheNamesExportIsAsked() {
+    Options options = parse("--promotions-off", KNOWN, "--names", NAMES);
+
+    assertThat(options.out()).isNull();
+    assertThat(options.promotionsOff()).isEqualTo(Path.of(KNOWN));
+    assertThat(options.names()).isEqualTo(Path.of(NAMES));
+  }
+
+  @Test
+  @DisplayName("both outputs together is one run, not two")
+  void shouldParseBothOutputsWhenTheyAreGivenTogether() {
+    Options options =
+        parse("--out", "/tmp/ratings.txt", "--promotions-off", KNOWN, "--names", NAMES);
+
+    assertThat(options.out()).isEqualTo(Path.of("/tmp/ratings.txt"));
+    assertThat(options.names()).isEqualTo(Path.of(NAMES));
   }
 }

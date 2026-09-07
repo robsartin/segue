@@ -17,6 +17,6 @@ public final class LabelsProbe {
 
   /** {@code ratings/Labels.forQids}, the fourth home of the stand-in rule (ADR 59's residual). */
   public static Map<String, String> forQids(AssertionLog log, Set<String> qids) {
-    return Labels.forQids(log, qids);
+    return Labels.forQids(log.readAll(), qids);
   }
 }

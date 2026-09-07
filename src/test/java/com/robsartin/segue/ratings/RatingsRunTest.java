@@ -15,13 +15,17 @@ import static com.robsartin.segue.ratings.InventedRatings.NOVEL_NOTE;
 import static com.robsartin.segue.ratings.InventedRatings.QUARTET;
 import static com.robsartin.segue.ratings.InventedRatings.QUARTET_LABEL;
 import static com.robsartin.segue.ratings.InventedRatings.QUARTET_NOTE;
+import static com.robsartin.segue.ratings.InventedRatings.SEEN_LIVE;
+import static com.robsartin.segue.ratings.InventedRatings.SEEN_LIVE_LABEL;
 import static com.robsartin.segue.ratings.InventedRatings.VANISHED;
+import static com.robsartin.segue.ratings.InventedRatings.knownFile;
 import static com.robsartin.segue.ratings.InventedRatings.merged;
 import static com.robsartin.segue.ratings.InventedRatings.minted;
 import static com.robsartin.segue.ratings.InventedRatings.node;
 import static com.robsartin.segue.ratings.InventedRatings.owned;
 import static com.robsartin.segue.ratings.InventedRatings.retract;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.robsartin.segue.ratings.InventedRatings.FakeAffinityStore;
 import com.robsartin.segue.ratings.InventedRatings.FakeAssertionLog;
@@ -64,7 +68,16 @@ class RatingsRunTest {
   private List<AffinityRow> run(FakeAffinityStore ratings, FakeAssertionLog log, SortOrder sort)
       throws IOException {
     return new RatingsRun(ratings, log)
-        .run(new Options(dir.resolve("segue.db"), out, sort), this::note);
+        .run(new Options(dir.resolve("segue.db"), out, sort, null, null), this::note);
+  }
+
+  private List<AffinityRow> runNames(
+      FakeAffinityStore ratings, FakeAssertionLog log, Path known, Path names, Path listing)
+      throws IOException {
+    return new RatingsRun(ratings, log)
+        .run(
+            new Options(dir.resolve("segue.db"), listing, SortOrder.RATING, known, names),
+            this::note);
   }
 
   @Test
@@ -393,5 +406,151 @@ class RatingsRunTest {
     assertThat(rows).isEmpty();
     assertThat(log.reads()).isZero();
     assertThat(Files.readString(out)).contains("no ratings");
+  }
+
+  @Test
+  @DisplayName("the names file is written when the known file and a names path are both given")
+  void shouldWriteTheNamesFileWhenBothFlagsAreGiven() throws IOException {
+    Path names = dir.resolve("promotions.txt");
+
+    runNames(
+        new FakeAffinityStore().rated(QUARTET, 5, null, EARLY),
+        new FakeAssertionLog().with(node(QUARTET, QUARTET_LABEL)),
+        knownFile(dir, SEEN_LIVE),
+        names,
+        out);
+
+    assertThat(names).exists();
+  }
+
+  @Test
+  @DisplayName("a promotion is written and an entity already on the known file is not")
+  void shouldWriteOnlyThePromotionsWhenTheKnownFileNamesSomeOfWhatIsRated() throws IOException {
+    Path names = dir.resolve("promotions.txt");
+
+    runNames(
+        new FakeAffinityStore()
+            .rated(QUARTET, 5, QUARTET_NOTE, EARLY)
+            .rated(SEEN_LIVE, 5, null, EARLY)
+            .rated(NOVEL, 3, NOVEL_NOTE, LATE),
+        new FakeAssertionLog()
+            .with(
+                node(QUARTET, QUARTET_LABEL),
+                node(SEEN_LIVE, SEEN_LIVE_LABEL),
+                node(NOVEL, NOVEL_LABEL)),
+        knownFile(dir, SEEN_LIVE),
+        names,
+        out);
+
+    assertThat(Files.readString(names).lines().skip(1))
+        .as("the file's own entities are already known; a 3 is not a promotion (ADR 48)")
+        .containsExactly(QUARTET_LABEL);
+  }
+
+  @Test
+  @DisplayName("a promotion the rating was merged onto is named, not written as a bare qid")
+  void shouldNameACanonicalPromotionWhenTheRatingWasMergedOntoAnIdWithNoRowOfItsOwn()
+      throws IOException {
+    Path names = dir.resolve("promotions.txt");
+
+    runNames(
+        new FakeAffinityStore().rated(MINTED, 5, null, EARLY),
+        new FakeAssertionLog()
+            .with(
+                minted(MINTED, MINTED_LABEL),
+                node(CANONICAL, CANONICAL_LABEL),
+                merged(MINTED, CANONICAL)),
+        knownFile(dir, SEEN_LIVE),
+        names,
+        out);
+
+    assertThat(Files.readString(names).lines().skip(1))
+        .as("the promotion is the canonical id, which has no affinity row and so no label lookup")
+        .containsExactly(CANONICAL_LABEL);
+  }
+
+  @Test
+  @DisplayName("a promotion the graph cannot name is counted, and the count says why")
+  void shouldCountThePromotionsWhenTheGraphCannotNameThem() throws IOException {
+    runNames(
+        new FakeAffinityStore().rated(VANISHED, 5, null, EARLY),
+        new FakeAssertionLog(),
+        knownFile(dir, SEEN_LIVE),
+        dir.resolve("promotions.txt"),
+        out);
+
+    assertThat(notes).anyMatch(line -> line.startsWith("1 of them name an entity"));
+  }
+
+  @Test
+  @DisplayName("no note about the names file carries a label, a note or a qid")
+  void shouldReportCountsAndNothingPersonalWhenItWritesTheNamesFile() throws IOException {
+    runNames(
+        new FakeAffinityStore()
+            .rated(QUARTET, 5, QUARTET_NOTE, EARLY)
+            .rated(VANISHED, 5, null, LATE),
+        new FakeAssertionLog().with(node(QUARTET, QUARTET_LABEL)),
+        knownFile(dir, SEEN_LIVE),
+        dir.resolve("promotions.txt"),
+        out);
+
+    assertThat(notes)
+        .noneMatch(line -> line.contains(QUARTET_LABEL))
+        .noneMatch(line -> line.contains(QUARTET_NOTE))
+        .noneMatch(line -> line.contains(QUARTET))
+        .noneMatch(line -> line.contains(VANISHED));
+  }
+
+  @Test
+  @DisplayName("no listing is written when only the names export was asked for")
+  void shouldNotWriteTheListingWhenOnlyTheNamesExportIsAsked() throws IOException {
+    runNames(
+        new FakeAffinityStore().rated(QUARTET, 5, null, EARLY),
+        new FakeAssertionLog().with(node(QUARTET, QUARTET_LABEL)),
+        knownFile(dir, SEEN_LIVE),
+        dir.resolve("promotions.txt"),
+        null);
+
+    assertThat(out).doesNotExist();
+  }
+
+  @Test
+  @DisplayName("both outputs are written when both were asked for")
+  void shouldWriteBothFilesWhenBothOutputsAreAsked() throws IOException {
+    Path names = dir.resolve("promotions.txt");
+
+    runNames(
+        new FakeAffinityStore().rated(QUARTET, 5, QUARTET_NOTE, EARLY),
+        new FakeAssertionLog().with(node(QUARTET, QUARTET_LABEL)),
+        knownFile(dir, SEEN_LIVE),
+        names,
+        out);
+
+    assertThat(Files.readString(out)).contains(QUARTET_NOTE);
+    assertThat(Files.readString(names)).contains(QUARTET_LABEL).doesNotContain(QUARTET_NOTE);
+  }
+
+  @Test
+  @DisplayName("no output file exists when the known file cannot be read")
+  void shouldWriteNoOutputFileWhenTheKnownFileCannotBeRead() {
+    Path missingKnown = dir.resolve("missing-known.csv");
+    Path names = dir.resolve("promotions.txt");
+
+    assertThatThrownBy(
+            () ->
+                runNames(
+                    new FakeAffinityStore().rated(QUARTET, 5, null, EARLY),
+                    new FakeAssertionLog().with(node(QUARTET, QUARTET_LABEL)),
+                    missingKnown,
+                    names,
+                    out))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("no entity list at");
+
+    assertThat(out)
+        .as(
+            "the known file is read before either output file is written, so a bad path fails"
+                + " before anything lands on disk")
+        .doesNotExist();
   }
 }

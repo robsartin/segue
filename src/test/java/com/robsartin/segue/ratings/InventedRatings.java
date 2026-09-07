@@ -11,6 +11,10 @@ import com.robsartin.segue.domain.Retraction;
 import com.robsartin.segue.domain.SameAs;
 import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -75,6 +79,15 @@ final class InventedRatings {
   static final String QUARTET_NOTE = "a note about a band nobody has heard of";
   static final String NOVEL_NOTE = "a second invented note, unlike the first";
 
+  /**
+   * An entity the known-list file names <em>and</em> the owner rated highly (#285). It is what a
+   * promotion is not: rated at or above the threshold, and already on the file, so it must never
+   * reach the names export.
+   */
+  static final String SEEN_LIVE = "Q0900005";
+
+  static final String SEEN_LIVE_LABEL = "An Ensemble Nobody Booked";
+
   private static final Provenance SOURCE =
       new Provenance("wikidata", "S-1", Instant.parse("2026-01-01T00:00:00Z"), 1.0);
 
@@ -107,6 +120,25 @@ final class InventedRatings {
    */
   static Retraction retract(String qid) {
     return new Retraction(qid, "an invented reason, unlike anything a real one would say", LATE);
+  }
+
+  /**
+   * A known-list file in the seeding tool's real shape (ADR 40) — the header row {@code
+   * SeedFiles.OUTPUT_HEADER} writes, then one row per qid — so a test exercises {@code QidList}'s
+   * "first field that is exactly a QID" rule rather than a bare list nobody produces.
+   *
+   * <p>Every name in it is invented, and the file is written under a {@code @TempDir}.
+   */
+  static Path knownFile(Path dir, String... qids) throws IOException {
+    StringBuilder csv = new StringBuilder("name,kind,status,qid,label,confidence,reason\n");
+    for (String qid : qids) {
+      csv.append("an invented name,WORK,resolved,")
+          .append(qid)
+          .append(",an invented label,1.0,invented\n");
+    }
+    Path file = dir.resolve("known.csv");
+    Files.writeString(file, csv.toString(), StandardCharsets.UTF_8);
+    return file;
   }
 
   /** A log that answers {@code readAll} from a list and counts how often it is asked. */

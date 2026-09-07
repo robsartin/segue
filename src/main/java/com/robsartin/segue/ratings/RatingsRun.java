@@ -1,16 +1,22 @@
 package com.robsartin.segue.ratings;
 
 import com.robsartin.segue.domain.AffinityRecord;
+import com.robsartin.segue.domain.Equivalences;
+import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.ratings.RatingsCli.Options;
+import com.robsartin.segue.support.QidList;
 import java.io.IOException;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -42,6 +48,13 @@ import java.util.stream.Collectors;
  * <p>Notes go to a {@link Consumer} rather than to a logger of this class's own, so the ordering is
  * observable from a test and so this class has no logger to misuse - the same discipline {@code
  * SqliteAffinityStore} keeps.
+ *
+ * <p><b>A second output, and it is the same read (#285).</b> {@code --promotions-off} plus {@code
+ * --names} writes the promotions the known-list file does not name, derived through {@code
+ * KnownList.promoted} so this tool cannot disagree with {@code recommend} and {@code rate} about
+ * who is promoted (ADR 48), and resolved through the merges first for the reason {@code
+ * RecommendCli} resolves before it composes. Both outputs come out of one {@code readAll} of the
+ * affinity table and one {@code readAll} of the log.
  */
 public final class RatingsRun {
 
@@ -73,11 +86,35 @@ public final class RatingsRun {
 
     notes.accept(PERSONAL_DATA_WARNING);
 
+    // Read before anything is written. QidList refuses a missing file and a file with no QID in it,
+    // and those refusals must arrive before a file lands on disk rather than between two writes.
+    List<String> fromFile =
+        options.promotionsOff() == null ? List.of() : QidList.read(options.promotionsOff());
+
     List<AffinityRecord> recorded = ratings.readAll();
     // Skipped entirely when nothing is rated: a real log is a quarter of a million assertions, and
-    // there is no name to look up.
-    Map<String, String> labels =
-        Labels.forQids(log, recorded.stream().map(AffinityRecord::qid).collect(Collectors.toSet()));
+    // there is no name to look up. The skip is here rather than in Labels because this is the class
+    // that knows there is nothing to name, and because the names export folds the merges out of
+    // this same list — one read per run (#285).
+    List<LoggedAssertion> logged = recorded.isEmpty() ? List.of() : log.readAll();
+
+    Set<String> rated =
+        recorded.stream()
+            .map(AffinityRecord::qid)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+    List<String> promotions =
+        options.names() == null
+            ? List.of()
+            : Promotions.offTheKnownList(scores(recorded), Equivalences.in(logged), fromFile);
+
+    // The union, and the reason is a promotion this listing has no row for: where a local id was
+    // rated and merged onto a canonical id with no row of its own, Equivalences.resolve moves the
+    // rating there and THAT is the promotion. Asking only for the stored qids would leave it
+    // unlabelled and write a bare qid for an entity the graph can name perfectly well — invisible,
+    // because a bare qid is also the honest fallback for an entity the graph really cannot name.
+    Set<String> wanted = new LinkedHashSet<>(rated);
+    wanted.addAll(promotions);
+    Map<String, String> labels = Labels.forQids(logged, wanted);
 
     List<AffinityRow> rows =
         recorded.stream()
@@ -91,20 +128,56 @@ public final class RatingsRun {
                         rating.updatedAt()))
             .toList();
 
-    notes.accept(rows.size() + " rating(s), sorted by " + options.sort().describe());
-    long unlabelled = rows.stream().filter(row -> row.label() == null).count();
-    if (unlabelled > 0) {
-      notes.accept(
-          unlabelled
-              + " rating(s) name an entity the graph has no claim about, and are listed as \""
-              + AffinityRow.NO_LABEL
-              + "\" — a rating outlives the graph it was made against");
+    if (options.out() != null) {
+      notes.accept(rows.size() + " rating(s), sorted by " + options.sort().describe());
+      long unlabelled = rows.stream().filter(row -> row.label() == null).count();
+      if (unlabelled > 0) {
+        notes.accept(
+            unlabelled
+                + " rating(s) name an entity the graph has no claim about, and are listed as \""
+                + AffinityRow.NO_LABEL
+                + "\" — a rating outlives the graph it was made against");
+      }
+      try (Writer out = Files.newBufferedWriter(options.out(), StandardCharsets.UTF_8)) {
+        RatingsTable.write(rows, options.sort(), out);
+      }
+      notes.accept("wrote " + options.out());
     }
 
-    try (Writer out = Files.newBufferedWriter(options.out(), StandardCharsets.UTF_8)) {
-      RatingsTable.write(rows, options.sort(), out);
+    if (options.names() != null) {
+      int unnamed;
+      try (Writer names = Files.newBufferedWriter(options.names(), StandardCharsets.UTF_8)) {
+        unnamed = NamesFile.write(promotions, labels, names);
+      }
+      notes.accept(promotions.size() + " promotion(s) off the known list, written as name(s)");
+      if (unnamed > 0) {
+        notes.accept(
+            unnamed
+                + " of them name an entity the graph has no claim about, and are written as their"
+                + " qid instead — a rating outlives the graph it was made against");
+      }
+      notes.accept("wrote " + options.names());
     }
-    notes.accept("wrote " + options.out());
     return rows;
+  }
+
+  /**
+   * The score column of the rows just read, in the table's own order.
+   *
+   * <p>Built from the rows this run already holds rather than by calling {@code
+   * AffinityStore.readRatings}: that is the note-free bulk read the recommender uses (issue #85),
+   * and making a second query for a column already in memory would be a second read of one table. A
+   * {@link LinkedHashMap}, though nothing downstream relies on its order: {@code
+   * Equivalences.collapse} returns {@code Map.copyOf}, which is unordered, and {@code
+   * KnownList.promoted} sorts its promoted half regardless. It costs nothing and matches {@code
+   * recorded}'s own order for anyone reading this map while debugging, which is the only reason
+   * left to keep it.
+   */
+  private static Map<String, Integer> scores(List<AffinityRecord> recorded) {
+    Map<String, Integer> scores = new LinkedHashMap<>();
+    for (AffinityRecord rating : recorded) {
+      scores.put(rating.qid(), rating.rating());
+    }
+    return scores;
   }
 }
