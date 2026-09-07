@@ -32,6 +32,7 @@ Everything here was checked against the source in `src/main/java/com/robsartin/s
 - [Rating one card at a time](#rating-one-card-at-a-time)
 - [Claiming something no source has](#claiming-something-no-source-has)
 - [A supervised first run](#a-supervised-first-run)
+- [Expanding every promotion](#expanding-every-promotion)
 - [How to read an ADR against the code](#how-to-read-an-adr-against-the-code)
 
 ## What segue is, in one pass
@@ -2982,11 +2983,15 @@ with. Minting `--kind CONCEPT` instead would not add a class row either, but it 
 
 ### 9. Optional: reach MusicBrainz once
 
-**There is no dev-side bridge tool, deliberately.** MusicBrainz is reached only by `expand_entity`
-running inside the server, and the adapter describes `PERSON` and `GROUP` and nothing else
+**There is no dev-side bridge tool, deliberately, and that is a narrower claim than it used to
+be.** MusicBrainz is also reached by the promotion expander — see
+[Expanding every promotion](#expanding-every-promotion) — which runs the *same* expansion through
+the *same* adapters, one promotion at a time. The tool that does not exist is one that reaches
+MusicBrainz **differently**: a second bridge, a second client, a second copy of the identity walk.
+The adapter describes `PERSON` and `GROUP` and nothing else
 ([ADR 54](adr/0054-musicbrainz-as-the-second-source.md),
-[ADR 61](adr/0061-the-bridge-returns-classes.md)). So this step is one you do through the client;
-there is no command for it in this chapter.
+[ADR 61](adr/0061-the-bridge-returns-classes.md)). This step stays one you do through the client,
+because what it is checking is one interactive call: there is no command for it in this chapter.
 
 Start the client, pick one person or one band already in your graph, and call `expand_entity` on
 it. Then quit — step 0's rule has not stopped applying — and take a third census:
@@ -3016,6 +3021,157 @@ This run changes no code. What it produces is issues, and these are the ones to 
   what to type next is a defect in the sentence, not in you.
 - **Anything this chapter got wrong.** It was written against the code and checked against the
   parsers, and it has never been run. The first run is what makes it true.
+
+## Expanding every promotion
+
+Of 123,752 nodes in the real graph, [ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)'s
+own note records that 13.6% are the subject of a stored edge — so the thing that bounds what the
+recommender can see is expansion coverage, not any rule in its arithmetic. The entities you rated at
+or above `KnownList.PROMOTION_RATING` are the ones you said you have, and until this chapter existed
+there was no way to expand them except one `expand_entity` call at a time through the client. This
+chapter is that run, done in bulk and supervised (ADR 66, #284).
+
+**The owner types every command here.** Nothing in this repository runs against the real database,
+and an agent reading this chapter is reading a description of what the owner will do, not a script
+it may execute — `--db` is required and `SEGUE_DB` does not satisfy it precisely so that an agent
+inheriting the owner's shell cannot stand in for him
+([ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md)). This is the sharpest case of
+that rule in the project: `expandPromotions` is the only dev-side tool that both **writes the log**
+and **calls a public API**.
+
+Read [Looking at the shape of your graph](#looking-at-the-shape-of-your-graph) first — this chapter
+takes two censuses and compares them, and it does not restate what that one says about any line it
+prints.
+
+Every `./gradlew` line below that carries `--args` is executed by a test before you ever paste it.
+`DeveloperGuideExpandPromotionsExamplesTest` splits each `--args` string the way a shell would and
+hands it to `ExpandCli.parse`, and it checks this chapter in particular: that it is here, that its
+commands are these commands in this order, and that no line of it writes a tilde where `$HOME`
+belongs. `DeveloperGuideCensusExamplesTest` does the same for the two `graphCensus` lines. A flag
+renamed in either tool reds this chapter, and so does a step written out of order.
+
+### 0. Quit the client, and confirm nothing is holding the database
+
+[ADR 24](adr/0024-sqlite-assertion-log.md) assumes a single writer, and **nothing detects a second
+one** — that is [convention, not a check](#which-rules-are-only-convention). This tool appends, and
+a server running through it is a second writer on one file. Quit the MCP client, then confirm no
+JVM is left holding the file, exactly as
+[A supervised first run](#a-supervised-first-run)'s step 0 describes; that step is the authority on
+how to check, and this one does not restate it.
+
+### 1. The census before
+
+```bash
+./gradlew graphCensus --args="--db $HOME/.segue/segue.db"
+```
+
+Keep the whole block. It is the thing step 4's census is compared against, and it is safe to paste
+into an issue ([ADR 63](adr/0063-a-read-only-census-of-the-graph.md)).
+
+### 2. The dry run
+
+```bash
+./gradlew expandPromotions --args="--db $HOME/.segue/segue.db --dry-run"
+```
+
+Nothing is written and no source is asked anything: the dry run reads the projection alone. It
+prints three counts — how many promotions were considered, how many the graph already holds a node
+for, and how many are entities you minted yourself
+([ADR 59](adr/0059-owner-claims-as-a-third-layer.md)). Read them before going further:
+
+- **`minted`** are refused by the run, and correctly: the owner minted them because no source models
+  them, so there is nothing to expand from.
+- **`considered` minus `in the graph` minus `minted`** is how many promotions the run will refuse as
+  unknown entities. A rating can sit on an entity the graph has no node for — the taste layer and the
+  world-fact layer are separate tables ([ADR 33](adr/0033-taste-layer-separation.md)) — so this
+  number being non-zero is information, not a fault.
+- **`considered`** is what sets your expectations for how long step 3 takes. See the arithmetic
+  below.
+
+### 3. The run
+
+```bash
+./gradlew expandPromotions --args="--db $HOME/.segue/segue.db"
+```
+
+**What you will see.** One progress line per promotion, carrying its position in the run and what
+that expansion did — `[17/431] 12 edge(s), 4 new node(s)`, `[18/431] refused: LOCAL_ENTITY`. **No
+line carries an entity id**, and that is deliberate rather than incidental: a line per promotion,
+over every promotion, in qid order, would be your whole promoted population enumerated down a
+terminal, which is the bulk read [ADR 39](adr/0039-affinity-capture-and-read.md) declined by another
+route. `ExpansionIsSafeToPasteTest` is what holds it. Then one aggregate block at the end, in
+`graphCensus`'s shape and safe to paste for the same reason.
+
+**How long it takes, and why.** At a promotion count in the hundreds, expect **tens of minutes**.
+The arithmetic, so the number is yours rather than a figure quoted here:
+
+- Every `PERSON` or `GROUP` promotion costs **at least one second of MusicBrainz's own pacing** —
+  `MusicBrainzClient` reserves its request slots against a minimum interval, one client for the whole
+  run, which is what keeps a batch honest against a public API.
+- Every promotion costs **about four Wikidata round trips**: the Action API fetch of the claims
+  stated on it, the Query Service reverse lookup, and the bridge's own lookups
+  ([ADR 36](adr/0036-reverse-lookup-via-sparql.md), [ADR 54](adr/0054-musicbrainz-as-the-second-source.md)).
+- Plus **one more round trip per neighbour no source described**. Wikidata's reverse pass returns
+  identity inline for the neighbours it discovers, so this is the remainder rather than the count —
+  but a promotion whose neighbours arrive from MusicBrainz alone pays it for each of them.
+
+Nothing is retried by this tool: a refused endpoint, an unreachable source and a truncation are all
+reported outcomes of an expansion that *completed*, and the adapters' own clients already retry with
+backoff. One entity whose expansion throws is caught, counted as `failed`, and the run continues —
+one entity is not the run.
+
+**Leave it alone while it runs.** It is a single writer on one file, and step 0 is still in force.
+
+### 4. The census after
+
+```bash
+./gradlew graphCensus --args="--db $HOME/.segue/segue.db"
+```
+
+### 5. What should have moved, and what should not
+
+`CensusReport` is the authority on the labels below; this table names directions, and deliberately
+carries no figures, because a figure here would be a number nothing regenerates.
+
+| line | direction | why |
+| --- | --- | --- |
+| `nodes` by kind | up | every neighbour no claim described before is a new node |
+| `edges` by type | up | the assertions the adapters returned |
+| `edges` by source | up, **and `musicbrainz` up for the first time in bulk** | the second source has only ever been reached one interactive call at a time |
+| `edges` by corroboration | up at two sources | where both sources state one relationship |
+| `claims` / log rows | up by at least the edges added | every recorded assertion is a row ([ADR 19](adr/0019-assertion-log-source-of-truth.md)) |
+| `degree` quantiles | up | the promotions are the seeds, so the low quantiles move most |
+| `bridge` / entities MusicBrainz reached | up | one bridge lookup per `PERSON` or `GROUP` promotion |
+| `concept classes` | may move | new nodes arrive whose classes `KindMapper` may not yet place |
+| `taste` by score | **unchanged** | this tool writes no rating, and its fence forbids one |
+| `claims` / withdrawn | **unchanged** | nothing is retracted |
+
+The last two are the ones worth checking hardest: they are what a fence being wrong would show up
+as.
+
+### What to file from what you saw
+
+This run changes no code. What it produces is issues, and these are the ones to watch for:
+
+- **A line that moved when the table above says it should not** — `taste` or `claims / withdrawn`.
+  Either one means a fence reaches less far than
+  `ArchitectureTest.theExpanderWritesThroughIngestAlone` says it does, and that is the most serious
+  thing this run can find.
+- **A boot that refused afterwards.** File the `replay refused:` block verbatim, sequence numbers
+  and all. An expansion appends edges, and issue #233's pre-flight is what stands between a bad one
+  and a log that cannot boot.
+- **`failed` above zero.** Each of those is one entity whose expansion threw. The count is in the
+  block and the positions are in the progress lines; neither names the entity, so reproducing one
+  means calling `expand_entity` on a promotion through the client.
+- **A `refused` count you did not expect** from step 2's arithmetic. The dry run predicts it exactly;
+  a disagreement between the two is a defect in one of them.
+- **`bridge / entities MusicBrainz reached` that did not move at all.** With hundreds of `PERSON` and
+  `GROUP` promotions the bridge should have been asked hundreds of times, and a flat line means
+  something declined before it was reached rather than that MusicBrainz holds nothing.
+- **Anything a tool printed that you had to stop and think about.** A refusal that did not tell you
+  what to type next is a defect in the sentence, not in you.
+- **Anything this chapter got wrong.** It was written against the code and checked against the
+  parser, and it has never been run. The first run is what makes it true.
 
 ## How to read an ADR against the code
 

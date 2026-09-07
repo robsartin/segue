@@ -37,7 +37,7 @@ the caveats.
 | You need | Why |
 |---|---|
 | A JDK | Segue is a Spring Boot application. The toolchain version and the `release` level it compiles at are in `build.gradle.kts`. |
-| An internet connection | `add_entity` and `expand_entity` call the live Wikidata API and the Wikidata Query Service. Nothing else does. |
+| An internet connection | `add_entity` and `expand_entity` call the live Wikidata API and the Wikidata Query Service. No other tool on this surface does. |
 | An MCP client | Segue exposes tools, not a UI. Your client does the talking. |
 
 No database to install and no API key to obtain. Wikidata needs neither.
