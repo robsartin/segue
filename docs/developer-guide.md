@@ -2187,6 +2187,23 @@ its counts totalled over the folds and its means taken over every hit in the run
 `HeldOut.EVERY` times the sweeps** — the replay and the sweep's memoised degrees are still paid once,
 but budget five times a single-fold run.
 
+**Two halves by rating age, when you ask for one.** `--rated-since <ISO-8601 instant>` is optional.
+Given, the eligible population is split by whether each rating was last written before that instant
+or on or after it, every row gains `old in pool`, `old hits`, `new in pool` and `new hits`, and the
+header names the instant and the size of each half. Not given, the block is **byte-identical** to
+every one already on record, which is what keeps two runs diffable row by row. The whole-population
+`in pool` and `hits` are the cells a reading is judged on; the halves are an observation.
+
+```bash
+./gradlew evaluate --args="--db $HOME/.segue/segue.db --known $HOME/known.csv --rated-since 2026-09-06T15:00:00Z"
+```
+
+**The timestamp is the last write, not the first.** One row per entity
+([ADR 39](adr/0039-affinity-capture-and-read.md)), so a promotion you rated years ago and re-rated
+after the instant counts as new. The report's split line says so on its own line, because the numbers
+beside it are misread without it. `graphCensus`'s `taste` deltas bound how many ratings *changed*,
+not how many are new.
+
 **One sweep per setting per fold, with suppression withheld.** Each setting's candidate pool is
 swept once per fold with nothing suppressed, so the entities you rated down are in it and can be
 ranked — that ranking is the negative reading. The same sweep's result, with the suppressed
@@ -2232,7 +2249,9 @@ tool's.
   taste-layer writes, and depending on `IngestService` at all — a tool that could write could change
   what it is reporting on.
 - **See a note.** `theEvaluationHarnessReadsRatingsAndNeverNotes` bans `AffinityRecord` as a type
-  and `find`/`readAll` as calls; it may read every score through `readRatings` and nothing more.
+  and `find`/`readAll` as calls; it may read every score through `readRatings` and nothing more. It
+  reads when a rating last changed through `readUpdatedAt`, which carries neither the note nor the
+  score, and `onlyTheEvaluationHarnessReadsWhenARatingChanged` keeps that read inside this package.
 - **Reach a network, an engine, or a sibling tool but one.** `theEvaluationHarnessOpensNothingElse`
   bans every dev tool but `recommend` — the harness measures the shipped sweep rather than a second
   copy of it, so that one dependency is deliberate, the third between dev tools after

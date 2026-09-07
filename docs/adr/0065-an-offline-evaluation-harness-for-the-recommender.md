@@ -335,3 +335,92 @@ records a decision whose code landed with its own tests — the partition of the
 them and both of that sum's guards, each with a planted control. The verification of the *document*
 is the full gate over an otherwise unchanged tree: `AdrIndexTest`, `DocumentationLinksTest` for the
 relative link above, and `javadoc -Werror` inside `./gradlew check`.
+
+**Amendment (2026-09-06, issue #276): the port gained a read that carries when a rating changed and
+nothing else, and the harness reads its held-out population in two halves by rating age.**
+
+Nothing above is withdrawn and no decision above is edited, the fold amendment included. The eligible
+population, the interval, the fold count, the grid, the output contract's shape and every fence are
+exactly as decided. What changes is that the report can be asked one more question of the same split.
+
+**Why an instrument, and not a reading.** [ADR 45](0045-recommend-by-normalised-lift-with-routes.md)'s
+2026-09-06 amendment for issue #272 recorded that the shipped setting's hit rate fell after a deck
+session and said the table cannot say why. Two explanations survive it: the deck deals what the same
+ranking already passed over, so each session promotes entities the top twenty-five cannot reach by
+construction; or the taste layer widened into territory the routes serve less well. Reading the
+held-out population in two halves separates them — under the first the new half's rate sits near zero
+while the old half holds, under the second the halves land near each other. **No reading is taken
+here**, and ADR 45 is not touched.
+
+**The alternative this ADR refused, and the clause of the refusal that moved.** "Read
+`AffinityStore.readAll`, so the report could break the split down by note or by recency" is above,
+refused because `readAll` carries the note, `onlyTheRatingsToolReadsANote` is where that line lives,
+and *nothing the harness reports needs anything but the score*. Every clause survives except the
+last: a reading has now asked for the column. So the port answers it with a read that carries the
+timestamp and neither the note nor the score — `AffinityStore.readUpdatedAt`, qid to `Instant`,
+implemented from the `updated_at` column and contract-tested where this port's contract is tested —
+and **the harness still never calls `readAll`**. `theEvaluationHarnessReadsRatingsAndNeverNotes` is
+where it was, to the character, and the planted control for this work was that line being written
+into the harness and the fence seen firing.
+
+**A new fence lands with the new read.** `onlyTheEvaluationHarnessReadsWhenARatingChanged` keeps
+`readUpdatedAt` inside `evaluate`. The values are not personal in the way a note is; the **keys**
+are every entity the owner has rated, which is the single call
+[ADR 39](0039-affinity-capture-and-read.md) refused to put in front of a model, whatever is on the
+other side of the arrow. It is a new rule rather than a widening of either sibling, for the reason
+this ADR gives for the harness's own fences: a rule named for one tool and quoted in an immutable ADR
+does not get stretched to cover a second. It landed in the same commit as the method, so there was no
+window in which the read existed unfenced, and in the same commit as its row in the developer guide's
+table, which the guide's own test compares against the declared rules exactly.
+
+**`evaluate --rated-since <ISO-8601 instant>`, optional.** Given, the eligible population is
+partitioned by whether its rating's timestamp falls before the instant, every row gains four cells —
+`in pool` and `hits` for each half — and the header names the instant and the size of each half. Not
+given, **the block is byte-identical to today's**, which is what keeps every reading on record
+comparable; a golden test pins the unsplit block character for character and was seen failing against
+a planted change to the renderer before the flag was written. The whole-population `in pool` and
+`hits` are what issue #245's rule reads; the halves are observations and decide nothing.
+
+**Where the split lives.** A small pure value built once per run, not a widening of `HeldOut`: fold
+*k* and fold *k + 1* disagree about which entities are hidden and agree exactly about which are old,
+so the age is not a property of the split and `HeldOut.every` keeps the signature it has. The
+report's two half-sizes are summed from the folds rather than read off a new accessor, because the
+folds partition the eligible population — the identity the header already shows by printing what was
+held out over all folds beside the eligible count. `Scoring` tallies the halves inside the two passes
+it already makes, so no sweep, rank or walk is repeated and the run costs what it cost.
+
+**The type-level fence above is untouched.** `EvaluationReport.lines` takes three more arguments —
+two counts and the instant — and there is still nowhere in the signature to put an identifier. The
+value that knows which entities are new carries a qid set and is deliberately not passed to it. The
+instant is rendered from the parsed value and never from the string the operator typed, so the one
+operator-supplied fact in the whole block cannot carry an identifier into it; the guard that asserts
+so was seen firing on a qid planted into that clause.
+
+**Known limit, stated in the header as well as here: the timestamp is the last write.** ADR 39 keeps
+one row per entity and lets the later rating win, so a promotion rated long ago and re-rated after
+the instant lands in the new half. The census's `taste` deltas bound how many ratings changed, not
+how many are new. The halves are therefore an observation about a population, not a count of new
+promotions, and a reading that treats them as one is reading more than the instrument says.
+
+**What it does not change.** Not the rule that judges a reading, not the grid, not the fold count,
+not the eligible population, not the interval, not the promotion threshold, not the suppression
+boundary, not the scorer default, not the floor. No line of `recommend`'s output moves, and a run
+with no instant reads no timestamp at all.
+
+Alternatives rejected: tagging ratings with their source, which separates the two explanations
+exactly rather than by proxy but is a schema change to `affinity`, and
+[ADR 42](0042-store-p31-and-rederive-kind-at-projection.md) says the next schema change gets a real
+migration path — it is filed only if the age split cannot settle the question; widening the harness
+to `readAll` (above); making the split mandatory with a default instant (a boundary nobody typed
+breaks the row-for-row diff that is the whole value of the instrument); a fold column or one row per
+half (thirty-two rows of half-sized counts, and the cells issue #245's rule reads would have to be
+re-derived by the reader — the fold amendment's reason, restated); and treating a rated entity with
+no timestamp as old (a lenient read feeding a guard turns "cannot tell" into "old", in a cell
+indistinguishable from a real one).
+
+**Nothing here is unit-testable, and that is said out loud rather than left implied.** This entry
+records a decision whose code landed with its own tests — the port read, the merge resolution of the
+timestamps, the halves and both of their guards, the report's two consistency guards, and the two
+fences — each with a planted control. The verification of the *document* is the full gate over an
+otherwise unchanged tree: `AdrIndexTest`, `AdrCitationsTest`, `DocumentationLinksTest` for the
+relative links above, and `javadoc -Werror` inside `./gradlew check`.
