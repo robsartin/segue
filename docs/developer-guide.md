@@ -267,7 +267,7 @@ graph TD
   own["own<br/>OwnCli, OwnRun"]
   census["census<br/>CensusCli, CensusRun, Census, CensusReport"]
   evaluate["evaluate<br/>EvaluateCli, HeldOut, Scoring, EvaluationReport"]
-  expand["expand<br/>ExpandCli"]
+  expand["expand<br/>ExpandCli, ExpandRun, Preflight"]
 
   app --> mcp
   app --> ingest
@@ -356,6 +356,8 @@ graph TD
   evaluate --> wikidata
   expand --> port
   expand --> support
+  expand --> domain
+  expand --> expansion
 ```
 
 **What the diagram shows.** Dependencies point downward and never back up. `domain` sits at the
@@ -510,7 +512,7 @@ line is drawn there.
 | `rate` | The rating deck ([ADR 46](adr/0046-the-rating-deck.md)): a loopback page on 127.0.0.1:8090 dealing one unrated entity per keystroke, run as `./gradlew rate`. Plain Java, offline, and the only dev tool that writes a rating. Composes its known list through the same `KnownList.promoted` `recommend` does ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)), passes the same `KnownList.suppressed` to its sweep, and deals revisions over `KnownList.revisitable` ([ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md)). | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `recommend`, `support` |
 | `census` | The graph census: nodes by kind, edges by type, source and corroboration, the claim rows and what retraction and merge did to them, the taste layer by score, degree quantiles against `Recommendations.MIN_CANDIDATE_DEGREE`, what MusicBrainz reached, and the classes its `CONCEPT` nodes state. Run as `./gradlew graphCensus`. Plain Java, read-only, offline, and the whole output is aggregates and class ids — no label, no note, no entity id — so it is safe to paste. `--db` is required, and `SEGUE_DB` does not satisfy it. | `port`, `domain`, `sqlite`, `support`, `export`, `wikidata` |
 | `evaluate` | The recommender's evaluation harness ([ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md)): holds out a deterministic slice of the entities you rated highly, reads every fold of that split, runs the shipped candidate sweep from what is left over a fixed grid of scorers and degree floors, and reports where the held-out entities and the ones you rated down land. Run as `./gradlew evaluate`. Plain Java, read-only, offline, and the whole output is aggregates — no label, no id, no note, no rating — so it is safe to paste. `--db` is required, and `SEGUE_DB` does not satisfy it. | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `recommend`, `support` |
-| `expand` | The promotion expander (#284): expands the neighbourhood of every entity rated at or above `KnownList.PROMOTION_RATING`, one at a time, through the shared `expansion.EntityExpansion`, and reports what happened as one block of aggregates safe to paste — no label, no note, no entity id, on any line. Not yet a dev tool: `ExpandCli` has no `main` and the build registers no task for it, so it is absent from the dev-side-tool count and every `DEV_TOOL_PACKAGES` fence until it gets one. `--db` is required, and `SEGUE_DB` does not satisfy it. | `port`, `support` |
+| `expand` | The promotion expander (#284): expands the neighbourhood of every entity rated at or above `KnownList.PROMOTION_RATING`, one at a time, through the shared `expansion.EntityExpansion`, and reports what happened as one block of aggregates safe to paste — no label, no note, no entity id, on any line. `ExpandRun.dryRun` counts what a real run would visit — entities the projection holds a node for, and entities `LocalEntity.isLocal` answers true for — without touching an adapter or the log. Not yet a dev tool: `ExpandCli` has no `main` and the build registers no task for it, so it is absent from the dev-side-tool count and every `DEV_TOOL_PACKAGES` fence until it gets one. `--db` is required, and `SEGUE_DB` does not satisfy it. | `port`, `support`, `domain`, `expansion` |
 
 ### Which rules a machine enforces
 
