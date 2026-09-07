@@ -149,9 +149,11 @@ for, and those `LocalEntity.isLocal` answers true for — and asks no adapter an
 nothing. A flag given twice is refused, `OwnCli`'s rule.
 
 `theExpanderOpensNothingElse` bans every sibling dev tool, `mcp` and `app`. It deliberately does
-**not** ban `java.net`, `tinker`, `sqlite`, `ingest`, `wikidata` or `musicbrainz`, where every
-sibling fence bans a network: each of those tools is a pure function of one local file, and this one
-is the batch form of `expand_entity` and exists to fetch. It holds a `GraphStore`, unlike `own` and
+**not** ban `java.net`, `tinker`, `sqlite`, `ingest`, `wikidata` or `musicbrainz`. `rate` is the only
+other dev-tool fence that leaves `java.net` open, and for the opposite reason — it serves on
+loopback and never fetches, where this one fetches and never serves. Every other sibling fence bans
+a network because each of those tools is a pure function of one local file, and this one is the
+batch form of `expand_entity` and exists to fetch. It holds a `GraphStore`, unlike `own` and
 `retract`, because an expansion reads the graph to decide what is new and `IngestService.record`
 needs the projection the replay built — so the type is permitted and the write calls are forbidden.
 
@@ -324,11 +326,15 @@ list would be a second statement of it.
   against a fuzzy matcher; this walks a list the ratings table regenerates in a millisecond, and a
   half-finished run is re-runnable at the cost of re-recording assertions the graph already merges.
   If a run turns out to want resuming, that is an issue with a measurement behind it.
-- **Two documentation sentences were falsified by this decision, and each is narrowed rather than
-  deleted**: the user guide's claim that nothing but `add_entity` and `expand_entity` calls the live
-  Wikidata API now says *no other tool on this surface* does, and the developer guide's "there is no
-  dev-side bridge tool" now says which narrower tool still does not exist. Neither was pinned by a
-  test, which is why they had to be found by reading.
+- **This decision falsified statements in the user guide, the developer guide, and
+  [ADR 61](0061-the-bridge-returns-classes.md), and each is corrected rather than deleted**: the user
+  guide's claim that nothing but `add_entity` and `expand_entity` calls the live Wikidata API now
+  says *no other tool on this surface* does; the developer guide's "there is no dev-side bridge tool"
+  now says which narrower tool still does not exist; and ADR 61's Decision bullet placing
+  `WikidataMusicBrainzIdentity` in `app` — and naming `app` the only package that sees two adapters —
+  is corrected by ADR 61's own 2026-09-07 amendment, since an ADR is corrected in place by an
+  amendment rather than here. None of the three was pinned by a test, which is why they had to be
+  found by reading.
 - **What verifies this document.** `AdrIndexTest` checks that this file has exactly one row in
   `docs/adr/README.md` and that the row agrees with the heading and the front matter character for
   character; `AdrCitationsTest` refuses a commit citation anywhere in `docs/adr/`, which is why the

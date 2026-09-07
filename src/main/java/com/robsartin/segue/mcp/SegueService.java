@@ -50,8 +50,9 @@ import org.slf4j.LoggerFactory;
  *       calling model can read and act on (ADR 27), with {@link CorrelationId#current()} folded
  *       into the detail of every non-ok result so a user-visible error can be pasted into a log
  *       search (ADR 29). {@link WikidataUnavailableException} in particular is caught at every call
- *       site that can throw it — {@code resolver.search}, {@code resolver.fetch}, and the unwrapped
- *       neighbour fetch inside {@link #expandEntity} — rather than left to escape.
+ *       site that can throw it — {@code resolver.search}, {@code resolver.fetch}, and the neighbour
+ *       fetch inside {@link com.robsartin.segue.expansion.EntityExpansion#expand} — rather than
+ *       left to escape.
  *   <li>this class is the only place the two layers meet, and they meet nowhere below it (ADR 33).
  *       {@link #noteAffinity} writes taste and never touches the graph; {@link #getEntity} reads
  *       both and composes them into one view. Neither store learns about the other, which is what

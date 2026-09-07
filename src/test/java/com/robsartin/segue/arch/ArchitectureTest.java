@@ -240,9 +240,9 @@ class ArchitectureTest {
    * two entry points share, and is therefore the package that sees both adapters at once (#284, ADR
    * 66). It was {@code app} until then. ADR 32 is untouched by that move and is not amended: its
    * sentence is about depending on <em>everything</em>, {@code expansion} depends on two adapters
-   * and four other packages, and ADR 32 itself says "{@code ArchitectureTest} is the list, not this
-   * table." This rule is unchanged in every respect — {@code expansion} is not an adapter package,
-   * so the slice assignment never compared it.
+   * and three other packages, and ADR 32 itself says "{@code ArchitectureTest} is the list, not
+   * this table." This rule is unchanged in every respect — {@code expansion} is not an adapter
+   * package, so the slice assignment never compared it.
    */
   @ArchTest
   static final ArchRule adaptersDoNotDependOnEachOther =
@@ -1301,13 +1301,14 @@ class ArchitectureTest {
    * reader create it by accident. It runs one way only: {@link #theRecommenderOpensNothingElse}
    * bans the return trip.
    *
-   * <p><b>{@code java.net} is deliberately NOT banned either</b>, and this is the one dev tool that
-   * could not carry that clause. Its whole shape is an HTTP server: {@code RateServer} binds an
-   * {@code InetSocketAddress} on {@link java.net.InetAddress#getLoopbackAddress()} and parses the
-   * {@code Origin} header with {@link java.net.URI}. What the siblings' {@code java.net} ban buys
-   * them — nothing leaves the machine — is bought here by the bind address and the Origin allowlist
-   * instead, which is ADR 46's own argument and is tested over a real socket in {@code
-   * RateServerTest} rather than asserted here.
+   * <p><b>{@code java.net} is deliberately NOT banned either</b>, and this was the one dev tool
+   * that could not carry that clause until issue #284's {@link #theExpanderOpensNothingElse} joined
+   * it — for the opposite reason. This tool's whole shape is an HTTP server: {@code RateServer}
+   * binds an {@code InetSocketAddress} on {@link java.net.InetAddress#getLoopbackAddress()} and
+   * parses the {@code Origin} header with {@link java.net.URI} — it serves, and never fetches. What
+   * the other siblings' {@code java.net} ban buys them — nothing leaves the machine — is bought
+   * here by the bind address and the Origin allowlist instead, which is ADR 46's own argument and
+   * is tested over a real socket in {@code RateServerTest} rather than asserted here.
    */
   @ArchTest
   static final ArchRule theRatingDeckOpensNothingElse =
@@ -2135,11 +2136,13 @@ class ArchitectureTest {
   /**
    * #284: the expander replays one log, runs the shipped expansion and appends what it returns.
    *
-   * <p><b>{@code java.net} is deliberately NOT banned, and this is the first dev-side tool that can
-   * say so.</b> Every sibling carries the clause because its job is a pure function of one local
-   * file — a recommendation, a census, a measurement, a retraction. This tool exists to fetch: it
-   * is the batch form of {@code expand_entity}, and an expansion that reached no network would
-   * return nothing. Banning {@code java.net} here would ban the tool.
+   * <p><b>{@code java.net} is deliberately NOT banned.</b> {@link #theRatingDeckOpensNothingElse}
+   * is the only other dev-tool fence that omits the clause, and for the opposite reason: {@code
+   * rate} serves on loopback and never fetches, where this tool exists to fetch and never serves.
+   * Every other sibling carries the clause because its job is a pure function of one local file — a
+   * recommendation, a census, a measurement, a retraction. This tool is the batch form of {@code
+   * expand_entity}, and an expansion that reached no network would return nothing. Banning {@code
+   * java.net} here would ban the tool.
    *
    * <p><b>{@code tinker}, {@code sqlite}, {@code ingest}, {@code wikidata} and {@code musicbrainz}
    * are not banned either</b>, and each for the reason a sibling already establishes: the throwaway
@@ -2166,8 +2169,8 @@ class ArchitectureTest {
           .because(
               "#284: the expander replays one log, runs the shipped expansion and appends what it"
                   + " returns — it borrows no sibling's fence and cannot become an MCP tool by"
-                  + " accident. java.net is deliberately NOT banned: unlike every sibling, this"
-                  + " tool exists to fetch");
+                  + " accident. java.net is deliberately NOT banned: unlike every sibling but"
+                  + " rate, this tool exists to fetch");
 
   /**
    * ADR 66 on ADR 60's clause: the expander names its database on the command line.
