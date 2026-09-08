@@ -69,9 +69,11 @@ public final class RecommendCli {
   public static final int DEFAULT_TOP = 25;
 
   /**
-   * Below this a normalised score is meaningless: a candidate with one edge would divide by one.
-   * The real default is measured — see {@code Recommendations.MIN_CANDIDATE_DEGREE} — and this is
-   * only the point at which the argument stops being an argument.
+   * Below this a candidate can carry at most one shared intermediate — ADR 57's degree-bounds-
+   * corroboration argument, applied at the bottom of the dial — which is too little evidence for
+   * any scorer on the dial to rank on. The real default is measured — see {@code
+   * Recommendations.MIN_CANDIDATE_DEGREE} — and this is only the point at which the argument stops
+   * being an argument.
    */
   private static final int LOWEST_USEFUL_FLOOR = 2;
 
@@ -147,7 +149,8 @@ public final class RecommendCli {
       throw usage(
           "--min-degree must be at least "
               + LOWEST_USEFUL_FLOOR
-              + ": without a floor a normalised score puts the thinnest node in the graph first");
+              + ": below it a candidate can carry at most one shared intermediate, too little"
+              + " evidence to trust");
     }
     if (top < 1) {
       throw usage("--top must be at least 1");

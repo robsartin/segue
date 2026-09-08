@@ -1693,7 +1693,7 @@ establishes.
   twenty-five of a setting that the reading shows finding almost nothing at the shipped floor. The
   eighth amendment recorded that hazard in as many words so the owner would not rate through it
   unknowing; reading that and doing it anyway is the one option the record forbids.
-- **Retract the expansion.** Reach rose for every scorer on that reading, so the expansion improved
+- **Retract the expansion.** Reach rose where the run could raise it, so the expansion improved
   the instrument's coverage rather than damaging it. And the log is append-only by design
   ([ADR 24](0024-sqlite-assertion-log.md), [ADR 44](0044-retraction-as-a-new-claim.md)): retracting
   is a new claim, not an undo, and there is nothing here worth spending one on.

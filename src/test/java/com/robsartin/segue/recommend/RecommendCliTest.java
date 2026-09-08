@@ -113,12 +113,13 @@ class RecommendCliTest {
   }
 
   @Test
-  @DisplayName("a floor below two would let a node with one edge be normalised to the top")
+  @DisplayName("a floor below two would admit a candidate with too little evidence to trust")
   void theFloorHasAFloorOfItsOwn() {
     assertThatThrownBy(
             () -> parse("--known", "/tmp/known.csv", "--out", "/tmp/out.txt", "--min-degree", "1"))
         .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("--min-degree");
+        .hasMessageContaining("--min-degree")
+        .hasMessageContaining("at most one shared intermediate");
   }
 
   @Test

@@ -17,9 +17,9 @@ import java.util.Objects;
  * @param score what {@link Scorer} made of {@code shared}. Comparable within one run and
  *     meaningless between two: the scale depends on the scorer, the weights and the size of the
  *     known-list
- * @param degree how many edges the candidate carries in the graph. Kept beside the score because it
- *     is the number that makes a lift score readable — 0.66 over 80 edges and 0.66 over 12 are very
- *     different claims
+ * @param degree how many edges the candidate carries in the graph. Kept beside the score because,
+ *     under {@code lift}, it is the number that makes the score readable — 0.66 over 80 edges and
+ *     0.66 over 12 are very different claims
  * @param shared every route from a known entity to this candidate through one non-hub intermediate
  */
 public record Recommendation(

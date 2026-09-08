@@ -10,7 +10,7 @@ stay green by construction, what a fixture that can tell `resource-allocation` a
 other scorer has to look like and why the shipped one cannot, the exact amendment text, and every
 sentence in the tree that names the default and must follow the constant.
 
-**Authorities, cited and never restated.** ADR 45 and its nine amendments; in particular the
+**Authorities, cited and never restated.** ADR 45 and its amendments; in particular the
 2026-09-07 amendment for issue #289, which is the eighth reading and this decision's whole evidence.
 No cell of that table and no figure derived from it appears below. ADR 46 for the deck, ADR 65 for
 the harness, ADR 51 for what may be quoted, and

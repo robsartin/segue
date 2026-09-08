@@ -12,13 +12,14 @@ import java.util.Objects;
  * person reads in one sitting, and a flag would produce a stack of runs nobody could line up beside
  * each other. Every setting appears in every run, so two runs a month apart diff row by row.
  *
- * <p><b>Each floor earns its place.</b> {@code 2} is the point below which a normalised score stops
- * meaning anything — {@code RecommendCli} refuses a smaller {@code --min-degree} for that reason.
- * {@code 5} is what the recommender ships with, {@code Recommendations.MIN_CANDIDATE_DEGREE}; a
- * grid that could not reproduce today's default could not say what changing it costs. {@code 12} is
- * the floor ADR 50 took its measurements against, before ADR 45's 2026-08-29 amendment lowered it.
- * {@code 8} sits between the two so the trend between them is read rather than inferred. The
- * numbers are a grid, not a set of defaults: nothing here changes what any tool ships with.
+ * <p><b>Each floor earns its place.</b> {@code 2} is the point below which a candidate can carry at
+ * most one shared intermediate — too little evidence to trust on any scorer — and {@code
+ * RecommendCli} refuses a smaller {@code --min-degree} for that reason. {@code 5} is what the
+ * recommender ships with, {@code Recommendations.MIN_CANDIDATE_DEGREE}; a grid that could not
+ * reproduce today's default could not say what changing it costs. {@code 12} is the floor ADR 50
+ * took its measurements against, before ADR 45's 2026-08-29 amendment lowered it. {@code 8} sits
+ * between the two so the trend between them is read rather than inferred. The numbers are a grid,
+ * not a set of defaults: nothing here changes what any tool ships with.
  */
 public record Setting(Scorer scorer, int floor) {
 

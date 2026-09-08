@@ -39,9 +39,11 @@ public final class RateCli {
   private static final int DEFAULT_CANDIDATES = 200;
 
   /**
-   * Below this a normalised score is meaningless: a candidate with one edge would divide by one.
-   * Mirrors {@code RecommendCli.LOWEST_USEFUL_FLOOR} exactly — the two tools share one candidate
-   * sweep and must refuse the same nonsense floor at the same point.
+   * Below this a candidate can carry at most one shared intermediate — ADR 57's degree-bounds-
+   * corroboration argument, applied at the bottom of the dial — which is too little evidence for
+   * any scorer on the dial to rank on. Mirrors {@code RecommendCli.LOWEST_USEFUL_FLOOR} exactly —
+   * the two tools share one candidate sweep and must refuse the same nonsense floor at the same
+   * point.
    */
   private static final int LOWEST_USEFUL_FLOOR = 2;
 
@@ -118,7 +120,8 @@ public final class RateCli {
       throw usage(
           "--min-degree must be at least "
               + LOWEST_USEFUL_FLOOR
-              + ": without a floor a normalised score puts the thinnest node in the graph first");
+              + ": below it a candidate can carry at most one shared intermediate, too little"
+              + " evidence to trust");
     }
     // Refused rather than silently accepted: --revise runs no candidate sweep, so --min-degree
     // has nothing to floor. Accepting it as a no-op would let somebody believe it was in effect.
