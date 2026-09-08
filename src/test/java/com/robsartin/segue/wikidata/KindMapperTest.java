@@ -292,8 +292,8 @@ class KindMapperTest {
     // releases is a Wikipedia page ABOUT the releases, not a release: many works and people point
     // at it and nobody did anything with it, which is the hub shape the CONCEPT-gated rules exist
     // to demote (ADR 31, amended by issue #52). Mapping it to WORK would put a page in the
-    // recommender's
-    // candidate pool. Label and description confirmed live on 2026-09-08, on the issue.
+    // recommender's candidate pool. Label and description confirmed live on 2026-09-08, on the
+    // issue.
     assertThat(KindMapper.fromInstanceOf(List.of("Q104635718"))) // Wikimedia artist discography
         .isEqualTo(NodeKind.CONCEPT);
   }
