@@ -3132,11 +3132,11 @@ carries an entity id**, and that is deliberate rather than incidental: a line pe
 over every promotion, in qid order, would be your whole promoted population enumerated down a
 terminal, which is the bulk read [ADR 39](adr/0039-affinity-capture-and-read.md) declined by another
 route. `ExpansionIsSafeToPasteTest` is what holds it. Then one aggregate block at the end, in
-`graphCensus`'s shape and safe to paste for the same reason. **`edge assertions recorded` in that
-block counts assertions and not new edges**: an edge the graph already holds is recorded again,
-which is how corroboration and freshness work ([ADR 19](adr/0019-assertion-log-source-of-truth.md)),
-so it stands above the `edges` / total movement step 5 compares — the census is the authority on
-what the graph actually gained.
+`graphCensus`'s shape and safe to paste for the same reason. **The block's edge line counts
+assertions and not new edges**, and its label says so (the label is the one step 5's table cites):
+an edge the graph already holds is recorded again, which is how corroboration and freshness work
+([ADR 19](adr/0019-assertion-log-source-of-truth.md)), so it stands above the `edges` / total
+movement step 5 compares — the census is the authority on what the graph actually gained.
 
 **How long it takes, and why.** At a promotion count in the hundreds, expect **tens of minutes**.
 The arithmetic, so the number is yours rather than a figure quoted here:
