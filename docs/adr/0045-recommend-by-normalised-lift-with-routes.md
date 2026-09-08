@@ -1781,11 +1781,11 @@ decision, the reason for it, and the fact that the rule declined to make it.
 `resource-allocation` as the shipped scorer, stood the shipped setting.**
 
 Nothing above is withdrawn and no decision above is edited, including the nine amendments
-immediately above this one; two sentences of the 2026-09-07 decision amendment are corrected below
-by date, in place of an edit. No constant changed and no code changed. What changed is the taste layer: the owner's first
-deck session dealt from the default that amendment set, and the census on issue #297 shows the
-graph did not move — its node, edge and log-row totals are the ones issue #284 recorded after the
-expander's run.
+immediately above this one; two sentences of the 2026-09-07 decision amendment are corrected
+below by date, in place of an edit. No constant changed and no code changed. What changed is the
+taste layer: the owner's first deck session dealt from the default that amendment set, and the
+census on issue #297 shows the graph did not move — its node, edge and log-row totals are the ones
+issue #284 recorded after the expander's run.
 
 **The rule was fixed before the number existed, for the ninth time.** The rule is the one described
 eight amendments above and it was not changed; "the shipped scorer" is what
@@ -1842,11 +1842,11 @@ with `resource-allocation` as the shipped scorer.
 
 **The observations the note allowed.** Against the eighth reading, whose `resource-allocation` row
 was not the shipped row then: the shipped row's `in pool` rose by about a third, its `hits` by about
-two fifths, and its rate by under a point. The old half's `in pool` is unchanged, which the instant
-being unchanged permits but does not compel — a re-rated old promotion would have moved to the new
-half — and its `hits` moved by the least it could. The previously shipped row, `lift` at the shipped
-floor, records a few hits in both readings, a rate under a point in each. At the shipped floor every
-eligible entity is in pool.
+two fifths, and its rate by under a point. The old half's `in pool` is unchanged, which the
+instant being unchanged permits but does not compel — a re-rated old promotion would have moved to
+the new half — and its `hits` moved by the least it could. The previously shipped row, `lift` at
+the shipped floor, records a few hits in both readings, a rate under a point in each. At the shipped
+floor every eligible entity is in pool.
 
 **The halves are read as the note directed, and no further.** What the latest session added to the
 new half of the shipped row is entities the deck offered from `resource-allocation`'s own ranking,
@@ -1875,8 +1875,8 @@ the deck's depth with the harness's head, and no conclusion of that amendment tu
 - **It does not read the decision amendment's outcome off this table.** The population moved by
   the deck's own dealing from the setting under judgement, which the note said before the table
   was seen; a reading whose new half the scorer it judges has begun dealing cannot vouch for that
-  scorer, and this amendment does not ask it to. The old half is the half not dealt from it, and its cells
-  are quoted above for that reason, deciding nothing.
+  scorer, and this amendment does not ask it to. The old half is the half not dealt from it, and its
+  cells are quoted above for that reason, deciding nothing.
 - **The negatives condition was dropped rather than satisfied**, so nothing here is a finding about
   the negatives column; the cells are quoted above, on the entity-fold scale, and decided nothing.
 
