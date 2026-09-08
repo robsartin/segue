@@ -116,6 +116,11 @@ public final class ClassLabels {
     put("Q1364556", "music award");
     put("Q378427", "literary award");
     put("Q11448906", "science award");
+    // Issue #294's two, from the reading after the first expander run: both are Wikimedia pages
+    // about a thing rather than the thing, so KindMapper leaves them unmapped and KindMapperTest
+    // pins them at CONCEPT. Named here so a tooltip and a rating card can say what the node is.
+    put("Q104635718", "Wikimedia artist discography");
+    put("Q13433827", "encyclopedia article");
   }
 
   private ClassLabels() {}

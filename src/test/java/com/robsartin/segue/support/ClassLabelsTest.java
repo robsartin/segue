@@ -73,4 +73,16 @@ class ClassLabelsTest {
   void shouldLabelAnimatedCharacterWhenTheClassIsQ15711870() {
     assertThat(ClassLabels.label("Q15711870")).isEqualTo("animated character");
   }
+
+  @Test
+  @DisplayName("Wikimedia artist discography has a label, confirmed live 2026-09-08 (issue #294)")
+  void shouldLabelWikimediaArtistDiscographyWhenTheClassIsQ104635718() {
+    assertThat(ClassLabels.label("Q104635718")).isEqualTo("Wikimedia artist discography");
+  }
+
+  @Test
+  @DisplayName("encyclopedia article has a label, confirmed live 2026-09-08 (issue #294)")
+  void shouldLabelEncyclopediaArticleWhenTheClassIsQ13433827() {
+    assertThat(ClassLabels.label("Q13433827")).isEqualTo("encyclopedia article");
+  }
 }
