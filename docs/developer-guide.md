@@ -3121,7 +3121,7 @@ for, and how many are entities you minted yourself
 ```
 
 **What you will see.** One progress line per promotion, carrying its position in the run and what
-that expansion did — `[17/431] 12 edge(s), 4 new node(s)`, `[18/431] refused: LOCAL_ENTITY`,
+that expansion did — `[17/431] 12 edge assertion(s), 4 new node(s)`, `[18/431] refused: LOCAL_ENTITY`,
 `[19/431] partial: 1 source(s) unavailable, 2 endpoint(s) refused`, `[20/431] failed`. **An expansion
 that fell short says so on its own line** rather than reading as a clean one and being visible only
 in the aggregate block tens of minutes later; the shortfall is counted, never named, and the bound
