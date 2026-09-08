@@ -53,8 +53,9 @@ import java.util.Map;
  * A tier says what a relation is worth; the direction says whether this hop is a claim about the
  * candidate or a claim by it. Measured on the real graph, undirected scoring put a small band that
  * lists ten famous influences at rank 1, above every ancestor those influences actually have —
- * because to a walk that ignores arrows, citing and being cited are the same edge, and the small
- * band divides by a smaller degree. See {@link #asEvidenceAbout} and {@link #SELF_STATED}.
+ * because to a walk that ignores arrows, citing and being cited are the same edge, and under {@code
+ * lift} the small band divides by a smaller degree. See {@link #asEvidenceAbout} and {@link
+ * #SELF_STATED}.
  *
  * <p><b>The weight is not the hub rule and does not replace it.</b> Hub intermediates are EXCLUDED
  * before any weight applies ({@link PathRanking#isHub}): a route through the Rock and Roll Hall of
@@ -217,11 +218,11 @@ public final class RecommendationWeights {
    *
    * <p><b>The direction is a separate dimension from the tier, and it is the whole of issue
    * #84.</b> Undirected, a small band that lists twelve famous influences and an ancestor twelve
-   * famous bands cite are the same shape — both "share intermediates with things you like" — and
-   * the small band wins, because lift divides by a smaller degree. They are not the same claim.
-   * Being cited by something is a fact somebody else stated about you; citing something is a fact
-   * you stated about yourself, and an entity whose entire presence in the graph is its own
-   * influence list has said nothing anybody can check.
+   * famous bands cite are the same shape — both "share intermediates with things you like" — and,
+   * under {@code lift}, the small band wins because it divides by a smaller degree. They are not
+   * the same claim. Being cited by something is a fact somebody else stated about you; citing
+   * something is a fact you stated about yourself, and an entity whose entire presence in the graph
+   * is its own influence list has said nothing anybody can check.
    *
    * <p><b>Ask this only about the entity being recommended.</b> The hop between one of your own
    * entities and the intermediate is not a claim about either of them that matters here — it is

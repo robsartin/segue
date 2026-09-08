@@ -1636,3 +1636,143 @@ with; it is not a ruling, and this amendment moves nothing.
   `DocumentationLinksTest` for the relative links above, and `javadoc -Werror` inside
   `./gradlew check` — together with the ruling that applied the rule cell by cell and a byte
   comparison of the block above against the owner's paste.
+
+**Amendment (2026-09-07, issue #291): the default scorer moves to `resource-allocation`. A decision
+taken outside the rule, on the graph the expander left, with the eighth reading as its evidence and
+its post hoc position on the record.**
+
+Nothing above is withdrawn and no decision above is edited, including the eight amendments
+immediately above this one. This ADR's title and its Decision section's "defaulting to lift" are
+history: they record what was decided, and measured, on a graph that no longer exists, and they are
+not edited to match what the code now does.
+[ADR 50](0050-suppress-a-candidate-you-have-rejected.md)'s sentence naming `LIFT` "the measured
+default" is history in the same way, and so is
+[ADR 65](0065-an-offline-evaluation-harness-for-the-recommender.md)'s account of the grid's lowest
+floor as the point below which "a normalised score stops meaning anything": true of the default it
+was written under, and the reason `CandidateSweep` gives for the floor is the one that holds now.
+What changes is one constant,
+`Recommendations.DEFAULT_SCORER`, and every sentence in the tree that named its value.
+
+**This is a decision, and it is openly post hoc.** The rule of issue #245 was written so that no
+single reading could move a constant on a near miss, and on the eighth reading — the amendment
+immediately above, for issue #289 — it refused to move this one. That refusal was correct and it is
+not overturned here: no clause is edited, no threshold is softened, and nothing below re-reads the
+rule "in the spirit of" anything. What is recorded here is a decision taken outside it, with the
+eighth reading as evidence, and with the admission that amendment's own last section demanded — a
+rule written today cannot be blind to the table it would be written after. Deciding in the open is
+the honest form of that; writing a new rule that happens to reach the answer already known is not.
+
+**What the eighth reading showed.** The amendment immediately above is the authority, its table is
+quoted there once, and no cell or figure of it is restated here. By reference: at the shipped floor
+every other scorer in the grid is above the shipped scorer's hit rate for the first time, the best
+of them is `resource-allocation`, and it fell short of the rule's margin by less than a point while
+clearing the rule's dominance condition at every floor in the derived range. Its two halves, split
+by rating age, land near each other where the shipped setting's now miss both nearly alike. That
+amendment also records the hazard this one acts on: the rating deck deals its candidate cards from
+the shipped setting, so what the table says about that setting is what the deck deals until a
+decision is taken.
+
+**Why the expansion did this to `lift` and to no other point on the dial.** `Scorer.score` divides
+by the candidate's own degree for exactly one point: `normalisedByCandidateDegree` is true for
+`LIFT` alone. `Scorer`'s own javadoc says of it that it "rewards a thin entity whose whole presence
+in the graph is a list of influences", which is why this ADR paired it with a degree floor rather
+than shipping it alone. The promotion expander
+([ADR 66](0066-expand-every-promotion-from-a-dev-tool.md), issue #284) added neighbours to every
+promotion; the census on that issue is the authority on what it added. A thin node adjacent to
+several of the owner's highest-rated entities is precisely what that divisor rewards, and it is
+precisely what the three scorers that do not divide by the candidate's degree do not reward. The
+eighth amendment reached this explanation from the aggregates and declined to rule on it. This
+amendment acts on it, and names it as the reason it acts rather than as a finding the table
+establishes.
+
+**Alternatives, each rejected, with the reason each lost.**
+
+- **Keep `lift` and raise the floor to twelve.** The eighth reading leaves `lift` at the highest
+  floor in the grid still some points behind the best challenger at the shipped floor, so this buys
+  back less than the move does. It also spends the harness's *other* knob to repair the first, and
+  #245's rule allows one constant to move; spending it on the floor leaves the scorer question open
+  and nothing left to move next time.
+- **Keep the setting and rate through it.** The deck deals from the shipped setting
+  ([ADR 46](0046-the-rating-deck.md), `RateRun`), so this spends a deck session rating the top
+  twenty-five of a setting that the reading shows finding almost nothing at the shipped floor. The
+  eighth amendment recorded that hazard in as many words so the owner would not rate through it
+  unknowing; reading that and doing it anyway is the one option the record forbids.
+- **Retract the expansion.** Reach rose where the run could raise it, so the expansion improved
+  the instrument's coverage rather than damaging it. And the log is append-only by design
+  ([ADR 24](0024-sqlite-assertion-log.md), [ADR 44](0044-retraction-as-a-new-claim.md)): retracting
+  is a new claim, not an undo, and there is nothing here worth spending one on.
+- **Write a new rule and take a ninth reading.** The harness is deterministic — an unchanged
+  database prints the same block, which is `HeldOut`'s design and the eighth amendment's own
+  consequence — so a ninth reading taken before anything moves is the eighth reading. A rule written
+  now would be written by somebody who has read that table. That is a decision wearing a rule's
+  costume, and it is worse than a decision that says what it is.
+
+**What this costs, and it is a real cost.** This ADR chose `lift` for one property: connected to you
+more than its size predicts — surprise rather than popularity — and that property is given up at the
+default. `resource-allocation` discounts the busy intermediate and nothing else, and this ADR's own
+argument against stopping there is not withdrawn: a candidate connected to everything shares its
+intermediates with everything. What the eighth reading says is that on the graph as it now stands,
+the point that keeps the property finds almost nothing at the shipped floor and the point that gives
+it up finds the most. The property is one flag away — `--scorer lift` at the unchanged floor is
+exactly the setting shipped until today — which is why `--scorer` exists, and the honest way to
+disagree with this amendment is to run both and read the two lists.
+
+**What it does to the harness, and what the ninth reading must say.** The deck's sweep scores with
+`Recommendations.DEFAULT_SCORER` by reference (issue #244), so from the owner's next session the
+deck deals `resource-allocation`'s top twenty-five. The population the harness reads is what the
+owner has rated, so the bias issue #272's amendment named — the deck's own cards shaping the
+population the next reading judges — does not go away with this move; it moves with it. **The ninth
+reading is the first taken after a deck session dealt from this default, and its note must say so
+before the reading exists.** `Setting.GRID` and `HeldOut.EVERY` are unchanged, and
+`evaluate` reads no default at all: it sweeps every scorer, so the harness needed no edit for this.
+
+**The rule of issue #245 applies unchanged from here.** "The shipped scorer" is whatever
+`Recommendations.DEFAULT_SCORER` holds, which is now `RESOURCE_ALLOCATION`; the shipped floor is
+unchanged. Every clause, the fifteen-point margin, the dominance range, the void check, the
+negatives deciding nothing, at most one constant moving, and a near miss standing — all as written.
+This amendment is not a precedent for deciding outside the rule a second time: it records one
+decision, the reason for it, and the fact that the rule declined to make it.
+
+### What this does and does not establish
+
+- **It does not establish that `resource-allocation` is the best scorer**, and no reading has said
+  so under the rule. It establishes that the owner moved the default on the evidence of one table,
+  knowing the rule refused to.
+- **It does not establish why the shipped rate fell.** The explanation above is an explanation the
+  aggregates are consistent with and an argument from `Scorer.score`'s arithmetic; it is the reason
+  for the decision, not a finding.
+- **It changes what the next reading is a reading of.** The deck deals from the new default from the
+  next session, so the ninth reading's population is shaped by it.
+- **It says nothing about the floor.** `Recommendations.MIN_CANDIDATE_DEGREE` is unchanged and
+  unexamined here. Whether the floor measured for a normalised scorer is the right floor for one
+  that does not normalise is a question for a reading, and it is not this amendment's.
+
+### Consequences of this amendment
+
+- **One constant moves.** `Recommendations.DEFAULT_SCORER` becomes `Scorer.RESOURCE_ALLOCATION`.
+  `RecommendCli`'s `--scorer` default, the usage sentence it prints and `RateRun`'s sweep all read
+  that constant (issue #244) and follow it without being edited — which is the property #244 bought
+  and this amendment is the first to spend.
+- **The ranking, the deck and the recommender's output all change**, together and by construction.
+  `RateRunTest`'s guard is what holds them together: it reads the constant, and its fixture
+  discriminates the shipped default from every other point on the dial.
+- **`Recommendations.MIN_CANDIDATE_DEGREE`, `Setting.GRID` and `HeldOut.EVERY` are unchanged.**
+- **This is unit-testable, and it was tested that way.** The guard's fixture was rebuilt to separate
+  `resource-allocation` from every other scorer, seen red on the old constant, seen green on the
+  new, and seen red again with the old constant planted back and with a `lift` literal planted into
+  `RateRun`'s sweep. The rest of the gate — `AdrIndexTest`, `AdrCitationsTest`,
+  `DocumentationLinksTest` for the relative links above, and `javadoc -Werror` inside
+  `./gradlew check` — covers this amendment itself.
+- **No commit hash is cited above.** The ordering facts this amendment leans on are the eighth
+  reading's, and pull request #290 carries them.
+- **The ninth reading is a follow-up issue**, taken after the owner's next deck session, with a note
+  fixed before it that records the deck now deals from this default.
+- **Half of what ADR 57's floor reading reports moves with this change, and the owner's next run is
+  the first to show it.** `FloorReading`'s fields split in two: `pool`, `poolMedianDegree`,
+  `heldOut` and `heldOutAtDegreeOne` are counted from the floor and the sweep and do not depend on
+  the scorer; `head`, `headMedianDegree`, `headOnTheFloor` and `headEveryEdgeCounted` are counted
+  from the ranked head and move with it. Under `lift` the head was pulled towards thin candidates
+  (the 2026-08-29 amendment above reported the head median falling from 27 to 6); under
+  `resource-allocation` there is no such pull, so `headMedianDegree` should rise and
+  `headOnTheFloor` should fall on the very next run for that reason alone — a step that reads as
+  drift and is the scorer, not the graph.

@@ -88,8 +88,9 @@ public final class CandidateSweep {
    *     not filtered out of the walk as an intermediate, and it is not filtered out of {@code
    *     known} itself — those are two separate questions this parameter does not answer
    * @param scorer where on the raw-to-lift spectrum to sit
-   * @param minDegree the floor below which a candidate is not ranked. Required under a normalised
-   *     scorer; see {@code Recommendations.MIN_CANDIDATE_DEGREE}
+   * @param minDegree the floor below which a candidate is not ranked — a minimum-evidence bar (ADR
+   *     57): below it a candidate can carry at most one shared intermediate. See {@code
+   *     Recommendations.MIN_CANDIDATE_DEGREE}
    * @param regard what one known entity's connections are worth — {@code Recommendations.regardFor}
    *     over the ratings, which is {@code Recommendations.EQUAL_REGARD} when nothing has been rated
    */

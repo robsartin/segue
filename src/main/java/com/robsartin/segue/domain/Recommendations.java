@@ -16,9 +16,12 @@ public final class Recommendations {
   /**
    * Where on {@link Scorer}'s spectrum both tools start.
    *
-   * <p><b>Measured, not chosen.</b> ADR 45 is the authority for why this point and not another, and
-   * for what the ranked lists looked like at the others; nothing here restates it. {@link Scorer}'s
-   * own javadoc holds the failure mode at each end of the dial.
+   * <p><b>Measured, then decided against the measurement's own rule.</b> ADR 45 is the authority
+   * for why a point on this dial rather than a different kind of score, and for what the ranked
+   * lists looked like at the others; its amendment of 2026-09-07 (issue #291) is the authority for
+   * why this point rather than the one this ADR shipped with, for the four alternatives rejected,
+   * and for what the move costs. Nothing here restates either. {@link Scorer}'s own javadoc holds
+   * the failure mode at each end of the dial.
    *
    * <p><b>One copy, because two tools apply it.</b> {@code RecommendCli} defaults {@code --scorer}
    * to this and {@code RateRun} sweeps with it, so the rating deck's candidate cards are the
@@ -33,7 +36,7 @@ public final class Recommendations {
    * The deck has no such flag on purpose — a deck that could deal something other than the
    * recommender's answer is the divergence this constant exists to prevent.
    */
-  public static final Scorer DEFAULT_SCORER = Scorer.LIFT;
+  public static final Scorer DEFAULT_SCORER = Scorer.RESOURCE_ALLOCATION;
 
   /**
    * The number of edges below which a candidate is not ranked at all.
@@ -56,6 +59,14 @@ public final class Recommendations {
    * <p><b>It is a default on this graph, not a natural constant</b>, which is why {@code
    * --min-degree} exists: a domain whose entities are thinner needs a lower one, and the honest way
    * to choose is to run two floors and read the two lists.
+   *
+   * <p><b>It stays where it is, now that {@link #DEFAULT_SCORER} no longer normalises.</b> The
+   * argument this javadoc opens with is an argument about a normalised score, and since ADR 45's
+   * amendment of 2026-09-07 (issue #291) the shipped default is not one. The floor is kept
+   * regardless: {@code --scorer lift} is one flag away and needs it exactly as before, and what the
+   * floor holds out is what ADR 57's floor reading reports on. Whether a floor measured for a
+   * normalised scorer is the right floor for one that does not normalise is a question for a
+   * reading, and that amendment does not answer it.
    */
   public static final int MIN_CANDIDATE_DEGREE = 5;
 
