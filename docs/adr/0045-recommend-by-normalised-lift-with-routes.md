@@ -1778,17 +1778,17 @@ decision, the reason for it, and the fact that the rule declined to make it.
   drift and is the scorer, not the graph.
 
 **Amendment (2026-09-08, issue #297): the ninth reading, the first judged with
-`resource-allocation` as the shipped scorer, stood it.**
+`resource-allocation` as the shipped scorer, stood the shipped setting.**
 
 Nothing above is withdrawn and no decision above is edited, including the nine amendments
-immediately above this one, save one sentence of the 2026-09-07 decision amendment corrected below
-by date. No constant changed and no code changed. What changed is the taste layer: the owner's first
+immediately above this one; two sentences of the 2026-09-07 decision amendment are corrected below
+by date, in place of an edit. No constant changed and no code changed. What changed is the taste layer: the owner's first
 deck session dealt from the default that amendment set, and the census on issue #297 shows the
 graph did not move — its node, edge and log-row totals are the ones issue #284 recorded after the
 expander's run.
 
 **The rule was fixed before the number existed, for the ninth time.** The rule is the one described
-seven amendments above and it was not changed; "the shipped scorer" is what
+eight amendments above and it was not changed; "the shipped scorer" is what
 `Recommendations.DEFAULT_SCORER` holds, as the amendment above says, and the shipped floor is
 unchanged. A dated note was committed and pushed at 13:25 local on 2026-09-08, before the reading
 the owner pasted carrying 13:38 and 13:40 timestamps, appended to
@@ -1842,46 +1842,54 @@ with `resource-allocation` as the shipped scorer.
 
 **The observations the note allowed.** Against the eighth reading, whose `resource-allocation` row
 was not the shipped row then: the shipped row's `in pool` rose by about a third, its `hits` by about
-two fifths, and its rate by under a point. The old half's `in pool` is unchanged, as it must be with
-the instant unchanged, and its `hits` moved by the least it could. The previously shipped row,
-`lift` at the shipped floor, records a few hits in both readings, a rate under a point in each. At
-the two lowest floors every eligible entity is in pool, where the eighth reading had one entity
-below every floor.
+two fifths, and its rate by under a point. The old half's `in pool` is unchanged, which the instant
+being unchanged permits but does not compel — a re-rated old promotion would have moved to the new
+half — and its `hits` moved by the least it could. The previously shipped row, `lift` at the shipped
+floor, records a few hits in both readings, a rate under a point in each. At the shipped floor every
+eligible entity is in pool.
 
-**The halves are read as the note directed, and no further.** The new half of the shipped row is
-entities the deck offered from `resource-allocation`'s own ranking, rated, and read back through
-the same ranking: the hazard the 2026-09-07 amendment for issue #272 named, landed where the
-decision amendment above said it would. This amendment draws no inference about the scorer from
-any new-half cell and does not read the new half's rate against the old half's; the cells are
-quoted above and that is where they stay.
+**The halves are read as the note directed, and no further.** What the latest session added to the
+new half of the shipped row is entities the deck offered from `resource-allocation`'s own ranking,
+rated, and read back through the same ranking; the rest of that half was dealt under the previous
+default, since the instant is unchanged from the fifth reading and the default changed only on
+2026-09-07. That is the hazard the 2026-09-06 amendment for issue #272 named, arriving where the
+decision amendment above said it would. The note said the whole new half was dealt from
+`resource-allocation`; that overstated it, for the reason just given, and the note stands as it was
+pushed. This amendment draws no inference about the scorer from any new-half cell and does not read
+the new half's rate against the old half's; the cells are quoted above and that is where they stay.
 
-**One correction, by date.** The decision amendment above says the deck "deals
-`resource-allocation`'s top twenty-five". The deck's candidate list is `RateCli.DEFAULT_CANDIDATES`
-deep, dealt a candidate every `Deck.CANDIDATE_EVERY`th card, and twenty-five is the harness's
-per-setting head (`evaluate`'s "top 25 per setting"). The code is the authority on both numbers;
-the sentence conflated the two and nothing else in that amendment turns on it.
+**One correction, by date.** The decision amendment above describes the deck's deal as
+`resource-allocation`'s "top twenty-five" twice: in the sentence naming what the deck deals from the
+owner's next session, and in the rejected alternative "Keep the setting and rate through it". The
+deck's candidate list is `RateCli.DEFAULT_CANDIDATES` deep, dealt a candidate every
+`Deck.CANDIDATE_EVERY`th card, and twenty-five is the harness's per-setting head,
+`RecommendCli.DEFAULT_TOP`. The code is the authority on all three numbers; both sentences conflated
+the deck's depth with the harness's head, and no conclusion of that amendment turns on either.
 
 ### What this does and does not establish
 
 - **It does not establish that the shipped setting is the best one.** It establishes that on this
-  reading, by this rule, nothing displaced it, and that the rule's first application with a scorer
-  chosen outside it ran exactly as it ran for the eight readings before. ADR 65's first consequence
+  reading, by this rule, nothing displaced it, and that the rule applied unchanged with a scorer
+  chosen outside it, as it has applied to every reading since the second. ADR 65's first consequence
   is the governing one: no row of that table means anything on its own.
 - **It does not read the decision amendment's outcome off this table.** The population moved by
   the deck's own dealing from the setting under judgement, which the note said before the table
-  was seen; a reading whose new half was dealt by the scorer it judges cannot vouch for that scorer,
-  and this amendment does not ask it to. The old half is the half not dealt from it, and its cells
+  was seen; a reading whose new half the scorer it judges has begun dealing cannot vouch for that
+  scorer, and this amendment does not ask it to. The old half is the half not dealt from it, and its cells
   are quoted above for that reason, deciding nothing.
 - **The negatives condition was dropped rather than satisfied**, so nothing here is a finding about
   the negatives column; the cells are quoted above, on the entity-fold scale, and decided nothing.
 
-### Consequences
+### Consequences of this amendment
 
 - **The rule of issue #245 applies unchanged from here**, with `resource-allocation` as the
   shipped scorer and the floor unchanged, as the decision amendment above said it would.
 - **The next reading follows the next deck session**, dealt from the same default, and its note is
   written before the reading exists, as every one so far has been. What it may compare against this
   reading is for that note to say.
-- **Nothing here is unit-testable.** The harness has its own tests; the ruling is prose over a
-  reading of the owner's data, checked by the note that preceded it and by review, the way every
-  reading amendment above was.
+- **Nothing here is unit-testable.** The harness has its own tests; no behaviour changed, so there
+  is no test to write and nothing to see red. The verification is the note that preceded the
+  reading, the ruling that applied the rule cell by cell, a byte comparison of the block above
+  against the owner's paste, and the full gate over an otherwise unchanged tree — `AdrIndexTest`,
+  `AdrCitationsTest`, `DocumentationLinksTest` for the relative links above, and `javadoc -Werror`
+  inside `./gradlew check`.
