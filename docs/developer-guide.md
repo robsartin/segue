@@ -3121,18 +3121,24 @@ for, and how many are entities you minted yourself
 ```
 
 **What you will see.** One progress line per promotion, carrying its position in the run and what
-that expansion did — `[17/431] 12 edge(s), 4 new node(s)`, `[18/431] refused: LOCAL_ENTITY`,
-`[19/431] partial: 1 source(s) unavailable, 2 endpoint(s) refused`, `[20/431] failed`. **An expansion
-that fell short says so on its own line** rather than reading as a clean one and being visible only
-in the aggregate block tens of minutes later; the shortfall is counted, never named, and the bound
-cut is attributed to nobody because every adapter was handed one budget. The fourth form, `failed`,
+that expansion did — `[17/431] 12 edge assertion(s), 4 new node(s)`,
+`[18/431] refused: LOCAL_ENTITY`,
+`[19/431] partial: 1 source(s) unavailable, 2 endpoint(s) refused`, `[20/431] failed`. **An
+expansion that fell short says so on its own line** rather than reading as a clean one and being
+visible only in the aggregate block tens of minutes later; the shortfall is counted, never named,
+and the bound cut is attributed to nobody because every adapter was handed one budget. The fourth
+form, `failed`,
 is not an outcome the expansion reported — it is one entity's expansion throwing, caught, counted and
 named by nothing but its position; see "How long it takes" below for what happens next. **No line
 carries an entity id**, and that is deliberate rather than incidental: a line per promotion,
 over every promotion, in qid order, would be your whole promoted population enumerated down a
 terminal, which is the bulk read [ADR 39](adr/0039-affinity-capture-and-read.md) declined by another
 route. `ExpansionIsSafeToPasteTest` is what holds it. Then one aggregate block at the end, in
-`graphCensus`'s shape and safe to paste for the same reason.
+`graphCensus`'s shape and safe to paste for the same reason. **The block's edge line counts
+assertions and not new edges**, and its label says so (the label is the one step 5's table cites):
+an edge the graph already holds is recorded again, which is how corroboration and freshness work
+([ADR 19](adr/0019-assertion-log-source-of-truth.md)), so it stands above the `edges` / total
+movement step 5 compares — the census is the authority on what the graph actually gained.
 
 **How long it takes, and why.** At a promotion count in the hundreds, expect **tens of minutes**.
 The arithmetic, so the number is yours rather than a figure quoted here:
@@ -3178,7 +3184,7 @@ carries no figures, because a figure here would be a number nothing regenerates.
 | `edges` by corroboration | up at two sources | where both sources state one relationship |
 | `edges` / dangling | **unchanged** | `IngestService.record` refuses an edge before it appends unless both folded endpoints already have a node — issue #233's pre-flight is what makes this line stay at whatever it read before |
 | `edges` / withdrawn | **unchanged** | that count is a merge's canonical side emptied by a retraction, and this run makes no retraction |
-| `claims` / log rows | up by at least the edges added | every recorded assertion is a row ([ADR 19](adr/0019-assertion-log-source-of-truth.md)) |
+| `claims` / log rows | up by at least the edge assertions recorded | every recorded assertion is a row ([ADR 19](adr/0019-assertion-log-source-of-truth.md)) |
 | `degree` / max | up | a promotion's own degree, or a shared neighbour's, can push past the previous highest, and nothing in a run with no retraction ever lowers it |
 | `degree` / p50, p90, p99 | may move either way, and probably down | every neighbour no claim described before enters the population at degree 1 (`DegreeCensus`); against a six-figure population, a flood of new degree-1 arrivals more plausibly drags the middle and upper quantiles down than the promotions' own rising degree drags them up — read whichever way your own before/after actually moved, and do not expect the intuitive direction |
 | `degree` / at or below the floor, at or below the floor % | up | every new node enters at degree 1, and `Recommendations.MIN_CANDIDATE_DEGREE` is never zero, so a degree-1 arrival always lands at or below it |

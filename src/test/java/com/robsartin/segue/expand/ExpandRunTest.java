@@ -406,6 +406,40 @@ class ExpandRunTest {
   }
 
   @Test
+  @DisplayName("a clean expansion's progress line counts assertions, not pairs of nodes")
+  void shouldNameTheCountAsAssertionsWhenACleanExpansionReportsItsYield() {
+    String seed = "Q0900961";
+    String neighbour = "Q0900962";
+
+    try (AssertionLog scriptLog = new SqliteAssertionLog(dir.resolve("yield.db"));
+        GraphStore scriptGraph = new TinkerGraphStore()) {
+      IngestService ingest = new IngestService(scriptLog, scriptGraph, IdentityMerge.NONE);
+      ingest.record(new NodeAssertion(seed, NodeKind.PERSON, "an act nobody signed", WIKIDATA));
+      ScriptedResolver resolver =
+          new ScriptedResolver()
+              .withEntity(
+                  new NodeAssertion(neighbour, NodeKind.GROUP, "a band nobody named", WIKIDATA));
+      ScriptedAdapter adapter =
+          new ScriptedAdapter(
+              "wikidata", Map.of(seed, ExpandResult.of(List.of(memberOf(seed, neighbour)))));
+      ExpandRun scriptedRun =
+          new ExpandRun(
+              new EntityExpansion(
+                  resolver, scriptGraph, ingest, new SourceAdapters(List.of(adapter))),
+              scriptGraph);
+      List<String> lines = new ArrayList<>();
+
+      scriptedRun.run(List.of(seed), 10, lines::add);
+
+      assertThat(lines)
+          .as(
+              "the first progress-line form, in the block's own words: one increment per"
+                  + " assertion recorded, never per pair of nodes (#293)")
+          .contains("[1/1] 1 edge assertion(s), 1 new node(s)");
+    }
+  }
+
+  @Test
   @DisplayName("the report's header reaches the consumer once the run is done")
   void shouldEmitTheReportsHeaderWhenTheRunFinishes() {
     String seed = "Q0900921";

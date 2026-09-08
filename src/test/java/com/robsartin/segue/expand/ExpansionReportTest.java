@@ -32,32 +32,32 @@ class ExpansionReportTest {
               + " (ADR 51, ADR 63).",
           "",
           "promotions",
-          "  considered            12",
-          "  expanded               9",
-          "  added nothing          2",
-          "  refused                2",
-          "  failed                 1",
+          "  considered                12",
+          "  expanded                   9",
+          "  added nothing              2",
+          "  refused                    2",
+          "  failed                     1",
           "",
           "graph",
-          "  nodes added           34",
-          "  edges added           77",
+          "  nodes added               34",
+          "  edge assertions recorded  77",
           "",
           "edges by source",
-          "  wikidata              60",
-          "  musicbrainz           17",
+          "  wikidata                  60",
+          "  musicbrainz               17",
           "",
           "shortfalls",
-          "  neighbours skipped     5",
-          "  endpoints refused      3",
-          "  bound cut the result   1",
+          "  neighbours skipped         5",
+          "  endpoints refused          3",
+          "  bound cut the result       1",
           "  unavailable",
-          "    musicbrainz          1",
+          "    musicbrainz              1",
           "  truncated",
-          "    wikidata             2",
+          "    wikidata                 2",
           "",
           "refused, by reason",
-          "  unknown entity         1",
-          "  local entity           1");
+          "  unknown entity             1",
+          "  local entity               1");
 
   private static ExpansionTally goldenTally() {
     // LinkedHashMap, not Map.of: the golden block pins insertion order, and Map.of's iteration
@@ -122,8 +122,8 @@ class ExpansionReportTest {
     String failed =
         lines.stream().filter(line -> line.trim().startsWith("failed")).findFirst().orElseThrow();
 
-    assertThat(considered).isEqualTo("  considered            100000");
-    assertThat(failed).isEqualTo("  failed                     0");
+    assertThat(considered).isEqualTo("  considered                100000");
+    assertThat(failed).isEqualTo("  failed                         0");
     assertThat(considered.length())
         .as("the widest label and the widest count set one column each, for every row")
         .isEqualTo(failed.length());

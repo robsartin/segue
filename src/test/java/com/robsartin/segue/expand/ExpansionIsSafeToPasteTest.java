@@ -214,7 +214,7 @@ class ExpansionIsSafeToPasteTest {
     assertThat(carriesAnIdItMayNot(from("com.example.EntityExpansion", "saw " + RATED)))
         .as("a logger whose simple name is the exempt one in another package")
         .isTrue();
-    assertThat(carriesAnIdItMayNot(from(ExpandRun.class.getName(), "[1/3] 4 edge(s)")))
+    assertThat(carriesAnIdItMayNot(from(ExpandRun.class.getName(), "[1/3] 4 edge assertion(s)")))
         .as("an ordinary progress line, which is what the guard must not red on")
         .isFalse();
   }

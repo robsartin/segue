@@ -205,7 +205,7 @@ public final class ExpandRun {
       shortfalls.add(one.refusedEndpoints().size() + " endpoint(s) refused");
     }
     if (shortfalls.isEmpty()) {
-      return one.edgesAdded() + " edge(s), " + one.nodesAdded() + " new node(s)";
+      return one.edgesAdded() + " edge assertion(s), " + one.nodesAdded() + " new node(s)";
     }
     return "partial: " + String.join(", ", shortfalls);
   }
