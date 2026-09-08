@@ -18,7 +18,9 @@ import java.util.Objects;
  * @param failed entities whose adapter call threw, counted and logged without a qid — see {@link
  *     ExpandRun#run}
  * @param nodesAdded summed across every expanded entity
- * @param edgesAdded summed across every expanded entity
+ * @param edgesAdded edge assertions recorded, summed across every expanded entity — {@link
+ *     ExpansionOutcome.Expanded#edgesAdded()} is the authority on what one of them counts: one
+ *     increment per assertion appended, so an edge the graph already held is counted again (#293)
  * @param skippedNeighbors summed across every expanded entity
  * @param refusedEndpoints summed sizes of {@link ExpansionOutcome.Expanded#refusedEndpoints()}
  *     across every expanded entity

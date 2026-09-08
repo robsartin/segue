@@ -42,6 +42,27 @@ public final class ExpansionReport {
       "# segue promotion expansion — dry run: appends nothing. Aggregates only"
           + " (ADR 51, ADR 63).";
 
+  /**
+   * The {@code graph} section's second label, and the one the runbook cites (#293).
+   *
+   * <p><b>It counts assertions, not edges.</b> {@code EntityExpansion} increments once per edge
+   * assertion it records, and an edge the graph already holds is recorded again — corroboration and
+   * freshness are what that is for (ADR 19). So this row stands above the graph's net gain, which
+   * {@code graphCensus} is the authority on and this tool never sees.
+   *
+   * <p>{@code nodes added} beside it <i>is</i> a net count. After #293 these two labels are the
+   * only thing that says which of the two the reader is looking at.
+   *
+   * <p><b>A constant rather than a second literal.</b> Two documents say this label: this block,
+   * and the developer guide's runbook row for {@code claims} / log rows.
+   *
+   * <p>{@code DeveloperGuideExpandPromotionsExamplesTest} reads it from here, so the row and the
+   * printed line cannot drift apart. {@code ExpansionReportTest}'s golden block still pins the text
+   * itself as a literal, exactly as it pins {@link #HEADER}: reading the pin off the constant it is
+   * meant to pin would prove nothing.
+   */
+  public static final String EDGE_ASSERTIONS_RECORDED = "edge assertions recorded";
+
   private static final String GAP = "  ";
 
   private ExpansionReport() {}
@@ -87,7 +108,7 @@ public final class ExpansionReport {
 
     body.add(new Section("graph"));
     body.add(new Row("  nodes added", tally.nodesAdded()));
-    body.add(new Row("  edges added", tally.edgesAdded()));
+    body.add(new Row("  " + EDGE_ASSERTIONS_RECORDED, tally.edgesAdded()));
 
     body.add(new Section("edges by source"));
     tally.edgesBySource().forEach((source, n) -> body.add(new Row("  " + source, n)));
