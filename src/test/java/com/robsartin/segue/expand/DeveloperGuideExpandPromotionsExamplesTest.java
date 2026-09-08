@@ -34,6 +34,9 @@ class DeveloperGuideExpandPromotionsExamplesTest {
 
   private static final GuideExamples RUNBOOK = GuideExamples.of("expandPromotions");
 
+  /** Step 5's row that cites the block's edge count, matched by its own leading cell. */
+  private static final String LOG_ROWS_ROW = "| `claims` / log rows |";
+
   @Test
   @DisplayName("the guide holds the promotion-expansion chapter")
   void shouldShowTheChapterWhenTheGuideDocumentsAPromotionExpansion() {
@@ -44,6 +47,35 @@ class DeveloperGuideExpandPromotionsExamplesTest {
                 + " chapter is gone rather than silent",
             CHAPTER)
         .isPresent();
+  }
+
+  @Test
+  @DisplayName("the runbook's log-rows row cites the label the block actually prints")
+  void shouldCiteThePrintedLabelWhenTheRunbookExplainsTheLogRows() {
+    String row =
+        GuideExamples.chapterText(CHAPTER)
+            .orElseThrow()
+            .lines()
+            .filter(line -> line.startsWith(LOG_ROWS_ROW))
+            .findFirst()
+            .orElseThrow(
+                () ->
+                    new AssertionError(
+                        "docs/developer-guide.md, '"
+                            + CHAPTER
+                            + "' — no step-5 row starting '"
+                            + LOG_ROWS_ROW
+                            + "'. That row is the only place the guide names the block's edge"
+                            + " count, and a lookup that finds nothing has to say so rather"
+                            + " than leave the assertion below with nothing to check"));
+
+    assertThat(row)
+        .as(
+            "docs/developer-guide.md, '%s' — this row names a label ExpansionReport prints, so"
+                + " it is read from ExpansionReport.EDGE_ASSERTIONS_RECORDED and never typed"
+                + " again here. The count is per assertion and the label is what says so (#293)",
+            CHAPTER)
+        .contains(ExpansionReport.EDGE_ASSERTIONS_RECORDED);
   }
 
   @Test
