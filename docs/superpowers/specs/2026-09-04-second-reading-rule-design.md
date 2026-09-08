@@ -384,3 +384,41 @@ reach into hits. If reach rose and the rate did not move by more than a few poin
 says the promotions' neighbourhoods are not where the held-out entities' routes run, which is a
 finding about what to expand next and not about the setting. If reach did not rise, the amendment
 says so and the expander is the thing to look at.
+
+## Note added 2026-09-08, before the ninth reading (issue #297)
+
+The ninth reading is the first taken after a deck session dealt from `resource-allocation`, the
+default issue #291 set (ADR 45's 2026-09-07 decision amendment), and it is taken with the same
+instant as the fifth to eighth, `2026-09-06T18:56:00Z`. This note is committed before the reading
+exists, so the rule's ordering property survives a ninth time.
+
+**No clause changes**, and the notes above apply as written. "The shipped scorer" is whatever
+`Recommendations.DEFAULT_SCORER` holds, which is now `resource-allocation`; the shipped floor is
+unchanged. The rule reads the shipped row's whole-population `in pool` and `hits` exactly as it read
+lift's; the half cells decide nothing.
+
+**The bias has moved with the default, and this note says so.** The deck's candidate cards are
+dealt from the shipped scorer's ranking (`RateRun` reads `Recommendations.DEFAULT_SCORER` by
+reference), so the entities rated in the session between the eighth reading and this one were
+offered by `resource-allocation` itself. The new half of the shipped row is therefore the deck's own
+dealing read back, which is the hazard issue #272's amendment named, landed where the #291
+amendment said it would. No inference about the scorer is drawn from any new-half cell; the halves
+are read as the bias arriving, and nothing more. One correction the amendment carries: the #291
+amendment says the deck deals the shipped scorer's "top twenty-five"; the deck's candidate list is
+`RateCli.DEFAULT_CANDIDATES` deep, a candidate every `Deck.CANDIDATE_EVERY`th card, and twenty-five
+is the harness's per-setting head. The amendment says so by date and changes nothing else.
+
+**What moved is the taste layer, not the graph.** If the census's node and edge totals are the
+eighth's, the eligible population moved only by the session's ratings, and the observations allowed
+against the eighth, deciding nothing, are: the shipped row's `in pool` and `hits`, and its rate
+against the eighth's same-setting row, which was not the shipped row then; that row's old half
+against the eighth's old half (the seeds moved, since a new rating at or above the promotion
+threshold is a new seed, so the old half can move without a new entity); and the previously shipped
+row, lift at the same floor, against its eighth row. If the census shows the graph moved, this
+paragraph is off and the amendment says only what the rule made of the cells.
+
+**The two sentences, written before the table is seen.** If the shipped setting stands under the
+rule, the amendment says it stands, names the cells, and says the ninth is the first reading judged
+with `resource-allocation` as the shipped scorer. If a challenger clears clause 3, fifteen points at
+the shipped floor and dominance over the floors where the shipped scorer has hits, the rule selects
+it and the amendment says so in the rule's words. A near miss stands, as always.
