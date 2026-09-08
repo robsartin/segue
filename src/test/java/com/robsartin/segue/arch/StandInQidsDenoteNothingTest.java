@@ -830,6 +830,12 @@ class StandInQidsDenoteNothingTest {
                   code(
                       "src/test/java/com/robsartin/segue/wikidata/RecognitionInstitutionsTest.java"))),
           entry(
+              "Q13433827",
+              real(
+                  "class id — deliberately left unmapped by KindMapper, pinned at CONCEPT by"
+                      + " KindMapperTest (issue #294)",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
               "Q13473501",
               real(
                   "class id — mapped by KindMapper",

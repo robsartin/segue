@@ -298,6 +298,17 @@ class KindMapperTest {
   }
 
   @Test
+  @DisplayName("an encyclopedia article stays CONCEPT: it is the page, not the subject")
+  void shouldStayConceptWhenTheClassIsAnEncyclopediaArticle() {
+    // Issue #294. An article is a page ABOUT a subject; the subject is the entity worth
+    // recommending and usually has a node of its own. Mapping the article to WORK would offer a
+    // reference page as something to explore, and would take a high-degree hub out of the reach of
+    // the rule that demotes routes through one. Confirmed live on 2026-09-08, on the issue.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q13433827"))) // encyclopedia article
+        .isEqualTo(NodeKind.CONCEPT);
+  }
+
+  @Test
   @DisplayName("a single release is a WORK")
   void shouldMapToWorkWhenTheClassIsSingleRelease() {
     // The second census reading (issue #265, 2026-09-05). A release of a single is WORK the way
