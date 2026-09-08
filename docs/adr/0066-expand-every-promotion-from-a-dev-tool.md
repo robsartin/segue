@@ -352,9 +352,10 @@ Nothing above is withdrawn, no decision above is edited, and this ADR keeps `Acc
 *The output contract* above names the `graph` section's two rows as *nodes added, edges added*. The
 second is now printed as **`edge assertions recorded`**. Nothing about what it counts changed: it
 was always one increment per edge assertion `EntityExpansion` recorded, and an edge the graph
-already holds is recorded again, because that is how corroboration and freshness work
-([ADR 19](0019-assertion-log-source-of-truth.md)). `nodes added` beside it is a net count, and
-after this change the two labels are the only thing that tells a reader which is which.
+already holds is recorded again; the *Consequences* bullet above says this of the log, and it is
+true of this row for the same reason ([ADR 19](0019-assertion-log-source-of-truth.md)). `nodes
+added` beside it is a net count, and after this change the two labels are the only thing that
+tells a reader which is which.
 
 **The reason is the first full run, reported in #284's closing comment.** The tool's figure and the
 census's edge total before and after did not agree, and a reader taking `edges added` at its word
@@ -362,12 +363,19 @@ would have read the tool's number as the graph's gain. No figure from that readi
 here: `graphCensus` is the authority on the graph and the issue is the record of the run, and a
 number copied into this document could only go stale.
 
+**The alternative was to change the number rather than the label**: report the graph's net gain,
+so the tool and the census agree. It lost because this tool never sees that figure. A net gain is
+the graph before against the graph after, which is a census, and `graphCensus` is the authority on
+it ([ADR 63](0063-a-read-only-census-of-the-graph.md)); step 5 of the runbook is where the owner makes that comparison,
+with the tool's block on one side of it. A second census inside this tool would duplicate that
+authority to correct a label.
+
 The label is `ExpansionReport.EDGE_ASSERTIONS_RECORDED` — still a literal in `ExpansionReport`, as
 the contract above requires, and now a named one because the developer guide's runbook cites it
 too. `DeveloperGuideExpandPromotionsExamplesTest` reads that constant when it checks the runbook's
 `claims` / log rows row, so the row and the printed line cannot drift; `ExpansionReportTest`'s
 golden block still pins the text itself as a literal, as it pins every other label. `ExpandRun`'s
-per-entity progress line says `edge assertion(s)` for the same reason.
+per-entity progress line says `edge assertion(s)` because the same number is behind it.
 
 Nothing else in the block moves. The section names, their order, the empty-section rule and the
 rule that widths are derived from the whole block are unchanged — the last of those is why the
@@ -379,5 +387,8 @@ nobody has asked for.
 The MCP surface is untouched. `expand_entity`'s `edgesAdded` payload field
 ([ADR 26](0026-mcp-tool-surface.md)) keeps its name, because renaming a wire field is a protocol
 change for clients and `SegueService`'s javadoc already says the field counts per assertion rather
-than per pair of nodes. So do the Java names `ExpansionOutcome.Expanded#edgesAdded` and
-`ExpansionTally#edgesAdded`; only the printed label and the prose moved.
+than per pair of nodes. `SegueService`'s own detail sentence for a clean expansion still says
+`edge(s)` of that number; it was seen and left, because it is `expand_entity`'s output under ADR 26
+and not this tool's block, and changing it is a separate issue. The Java names
+`ExpansionOutcome.Expanded#edgesAdded` and `ExpansionTally#edgesAdded` stay too; only the printed
+label and the prose moved.
