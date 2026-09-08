@@ -53,8 +53,9 @@ import java.util.Map;
  * A tier says what a relation is worth; the direction says whether this hop is a claim about the
  * candidate or a claim by it. Measured on the real graph, undirected scoring put a small band that
  * lists ten famous influences at rank 1, above every ancestor those influences actually have —
- * because to a walk that ignores arrows, citing and being cited are the same edge, and the small
- * band divides by a smaller degree. See {@link #asEvidenceAbout} and {@link #SELF_STATED}.
+ * because to a walk that ignores arrows, citing and being cited are the same edge, and under {@code
+ * lift} the small band divides by a smaller degree. See {@link #asEvidenceAbout} and {@link
+ * #SELF_STATED}.
  *
  * <p><b>The weight is not the hub rule and does not replace it.</b> Hub intermediates are EXCLUDED
  * before any weight applies ({@link PathRanking#isHub}): a route through the Rock and Roll Hall of

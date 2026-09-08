@@ -1646,7 +1646,11 @@ immediately above this one. This ADR's title and its Decision section's "default
 history: they record what was decided, and measured, on a graph that no longer exists, and they are
 not edited to match what the code now does.
 [ADR 50](0050-suppress-a-candidate-you-have-rejected.md)'s sentence naming `LIFT` "the measured
-default" is history in the same way. What changes is one constant,
+default" is history in the same way, and so is
+[ADR 65](0065-an-offline-evaluation-harness-for-the-recommender.md)'s account of the grid's lowest
+floor as the point below which "a normalised score stops meaning anything": true of the default it
+was written under, and the reason `CandidateSweep` gives for the floor is the one that holds now.
+What changes is one constant,
 `Recommendations.DEFAULT_SCORER`, and every sentence in the tree that named its value.
 
 **This is a decision, and it is openly post hoc.** The rule of issue #245 was written so that no
