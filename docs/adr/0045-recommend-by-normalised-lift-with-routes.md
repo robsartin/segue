@@ -1776,3 +1776,112 @@ decision, the reason for it, and the fact that the rule declined to make it.
   `resource-allocation` there is no such pull, so `headMedianDegree` should rise and
   `headOnTheFloor` should fall on the very next run for that reason alone — a step that reads as
   drift and is the scorer, not the graph.
+
+**Amendment (2026-09-08, issue #297): the ninth reading, the first judged with
+`resource-allocation` as the shipped scorer, stood it.**
+
+Nothing above is withdrawn and no decision above is edited, including the nine amendments
+immediately above this one, save one sentence of the 2026-09-07 decision amendment corrected below
+by date. No constant changed and no code changed. What changed is the taste layer: the owner's first
+deck session dealt from the default that amendment set, and the census on issue #297 shows the
+graph did not move — its node, edge and log-row totals are the ones issue #284 recorded after the
+expander's run.
+
+**The rule was fixed before the number existed, for the ninth time.** The rule is the one described
+seven amendments above and it was not changed; "the shipped scorer" is what
+`Recommendations.DEFAULT_SCORER` holds, as the amendment above says, and the shipped floor is
+unchanged. A dated note was committed and pushed at 13:25 local on 2026-09-08, before the reading
+the owner pasted carrying 13:38 and 13:40 timestamps, appended to
+`docs/superpowers/specs/2026-09-04-second-reading-rule-design.md`; pull request #298 carries it. The
+note kept the instant, said before the table was seen that the deck's bias had moved with the
+default and that no inference about the scorer would be drawn from a new-half cell, named the
+observations this amendment may make against the eighth reading, and wrote both outcomes in
+advance. The rule is the authority on what would have counted and is not restated here.
+
+**The reading.** One run of `./gradlew evaluate` with `--rated-since` on the owner's database on
+2026-09-08, on the folded harness, quoted whole and unedited; the census taken before it is on
+issue #297. Aggregates only, per [ADR 51](0051-what-an-adr-may-quote.md): every cell is a count, a
+one-decimal mean or a dash, every label is a column name or a `Scorer` spelling, and the header
+names the folds and the instant. `in pool`, `hits` and the four half cells count entities; `pool`
+and `negatives` count entity-folds.
+
+```
+# segue recommender evaluation — aggregates only: no labels, no ids, no notes, no ratings (ADR 51, ADR 63, ADR 65).
+# held out every 5 of 397 eligible entity(ies), in 5 fold(s): 397 held out over all folds, at least 317 left on the known-list in each.
+# split by rating age at 2026-09-06T18:56:00Z: 152 old (rated before it), 245 new (rated on or after it) — a rating's timestamp is its last write, so a re-rated old promotion counts as new.
+# top 25 per setting, over 16 setting(s).
+scorer               floor   pool  in pool  hits  mean rank  negatives  neg mean rank  old in pool  old hits  new in pool  new hits
+raw                      2  17799      397    49       12.2         26           19.2          152        23          245        26
+raw                      5   7234      397    51       12.6         26           19.2          152        23          245        28
+raw                      8   5328      375    51       12.6         26           19.2          149        23          226        28
+raw                     12   4331      352    51       12.6         26           19.2          145        23          207        28
+adamic-adar              2  17799      397    60       11.4         16           19.3          152        27          245        33
+adamic-adar              5   7234      397    60       11.4         16           19.3          152        27          245        33
+adamic-adar              8   5328      375    60       11.4         16           19.3          149        27          226        33
+adamic-adar             12   4331      352    60       11.4         16           19.3          145        27          207        33
+resource-allocation      2  17799      397    62       11.5         18           13.4          152        26          245        36
+resource-allocation      5   7234      397    62       11.5         18           13.4          152        26          245        36
+resource-allocation      8   5328      375    62       11.5         18           13.4          149        26          226        36
+resource-allocation     12   4331      352    62       11.5         18           13.4          145        26          207        36
+lift                     2  17799      397     0          -          7           18.4          152         0          245         0
+lift                     5   7234      397     3       15.7         47           12.8          152         1          245         2
+lift                     8   5328      375    20       14.3         46           11.9          149        14          226         6
+lift                    12   4331      352    29       13.7         31           11.7          145        19          207        10
+```
+
+**What the rule made of it.** Clause 2's void check was run first and did not fire. Clause 3(a)
+compared every non-shipped scorer's rate at the shipped floor with `resource-allocation`'s row
+there, and none is above it: `adamic-adar` sits under a point below, `raw` a few points below, and
+`lift` about the whole margin below. A scorer moves only on the margin and the dominance condition
+together, so clause 3(b) was not reached and no scorer moved. Clause 4 compared the shipped scorer's
+rate at every other floor with its rate at the shipped floor: its `hits` cell is the same at every
+floor in the grid, so the rate rises only as `in pool` falls, and at floor twelve it clears about an
+eighth of the margin. The `negatives` and `neg mean rank` cells were read for every row and, per
+clause 5, decided nothing. Outcome: the shipped setting stands, and this is the first reading judged
+with `resource-allocation` as the shipped scorer.
+
+**The observations the note allowed.** Against the eighth reading, whose `resource-allocation` row
+was not the shipped row then: the shipped row's `in pool` rose by about a third, its `hits` by about
+two fifths, and its rate by under a point. The old half's `in pool` is unchanged, as it must be with
+the instant unchanged, and its `hits` moved by the least it could. The previously shipped row,
+`lift` at the shipped floor, records a few hits in both readings, a rate under a point in each. At
+the two lowest floors every eligible entity is in pool, where the eighth reading had one entity
+below every floor.
+
+**The halves are read as the note directed, and no further.** The new half of the shipped row is
+entities the deck offered from `resource-allocation`'s own ranking, rated, and read back through
+the same ranking: the hazard the 2026-09-07 amendment for issue #272 named, landed where the
+decision amendment above said it would. This amendment draws no inference about the scorer from
+any new-half cell and does not read the new half's rate against the old half's; the cells are
+quoted above and that is where they stay.
+
+**One correction, by date.** The decision amendment above says the deck "deals
+`resource-allocation`'s top twenty-five". The deck's candidate list is `RateCli.DEFAULT_CANDIDATES`
+deep, dealt a candidate every `Deck.CANDIDATE_EVERY`th card, and twenty-five is the harness's
+per-setting head (`evaluate`'s "top 25 per setting"). The code is the authority on both numbers;
+the sentence conflated the two and nothing else in that amendment turns on it.
+
+### What this does and does not establish
+
+- **It does not establish that the shipped setting is the best one.** It establishes that on this
+  reading, by this rule, nothing displaced it, and that the rule's first application with a scorer
+  chosen outside it ran exactly as it ran for the eight readings before. ADR 65's first consequence
+  is the governing one: no row of that table means anything on its own.
+- **It does not read the decision amendment's outcome off this table.** The population moved by
+  the deck's own dealing from the setting under judgement, which the note said before the table
+  was seen; a reading whose new half was dealt by the scorer it judges cannot vouch for that scorer,
+  and this amendment does not ask it to. The old half is the half not dealt from it, and its cells
+  are quoted above for that reason, deciding nothing.
+- **The negatives condition was dropped rather than satisfied**, so nothing here is a finding about
+  the negatives column; the cells are quoted above, on the entity-fold scale, and decided nothing.
+
+### Consequences
+
+- **The rule of issue #245 applies unchanged from here**, with `resource-allocation` as the
+  shipped scorer and the floor unchanged, as the decision amendment above said it would.
+- **The next reading follows the next deck session**, dealt from the same default, and its note is
+  written before the reading exists, as every one so far has been. What it may compare against this
+  reading is for that note to say.
+- **Nothing here is unit-testable.** The harness has its own tests; the ruling is prose over a
+  reading of the owner's data, checked by the note that preceded it and by review, the way every
+  reading amendment above was.
