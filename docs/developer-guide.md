@@ -2095,6 +2095,12 @@ constant; ADR 57 records the baseline and names the one condition that says to r
 comparison. Nothing fails a build when it drifts. What changes is that a drifted run looks
 different.
 
+**Two of those figures move for a reason that is not drift.** `headMedianDegree` and
+`headOnTheFloor` are counted from the ranked head, so the 2026-09-07 move to `resource-allocation`
+(issue #291) — which no longer pulls the head towards thin candidates the way `lift` did — will
+raise the first and lower the second on the very next run; `pool`, `poolMedianDegree`, `heldOut`
+and `heldOutAtDegreeOne` are counted from the floor and the sweep and do not move for that reason.
+
 ### Expanding a top candidate demotes it — "expand the top candidates" is an anti-pattern
 
 **Read this before running a batch of expansions, not after.** **This section is about `--scorer

@@ -1763,3 +1763,12 @@ decision, the reason for it, and the fact that the rule declined to make it.
   reading's, and pull request #290 carries them.
 - **The ninth reading is a follow-up issue**, taken after the owner's next deck session, with a note
   fixed before it that records the deck now deals from this default.
+- **Half of what ADR 57's floor reading reports moves with this change, and the owner's next run is
+  the first to show it.** `FloorReading`'s fields split in two: `pool`, `poolMedianDegree`,
+  `heldOut` and `heldOutAtDegreeOne` are counted from the floor and the sweep and do not depend on
+  the scorer; `head`, `headMedianDegree`, `headOnTheFloor` and `headEveryEdgeCounted` are counted
+  from the ranked head and move with it. Under `lift` the head was pulled towards thin candidates
+  (the 2026-08-29 amendment above reported the head median falling from 27 to 6); under
+  `resource-allocation` there is no such pull, so `headMedianDegree` should rise and
+  `headOnTheFloor` should fall on the very next run for that reason alone — a step that reads as
+  drift and is the scorer, not the graph.
