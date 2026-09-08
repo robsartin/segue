@@ -361,3 +361,26 @@ when that has happened — and that no further reading is worth taking on a smal
 
 **The limit, as before.** The halves are drawn on the last write; the census's `taste` section,
 read before the harness, bounds how many ratings changed.
+
+## Note added 2026-09-07, before the eighth reading (issue #289)
+
+The eighth reading follows the promotion expander's first run (ADR 66, issue #284), and it is taken
+with the same instant as the fifth to seventh, `2026-09-06T18:56:00Z`. This note is committed
+before the reading exists, so the rule's ordering property survives an eighth time.
+
+**No clause changes**, and the notes above apply as written. The rule reads the whole-population
+`in pool` and `hits` cells; the half cells decide nothing.
+
+**What moved is the graph, not the taste layer.** The census's `taste` section is unchanged since
+the seventh reading, so the eligible population is the seventh's exactly, and this is the first
+reading since the folded baseline whose rows can be set beside the previous reading's row for row.
+The observations allowed against the seventh, deciding nothing: for every row, `in pool` and
+`hits`; the shipped setting's hit rate; the halves as before.
+
+**The two sentences, written before the table is seen.** Reach — `in pool` — should rise at every
+floor above the lowest, since the run added neighbours to every promotion. If the shipped setting's
+hit rate rose against the seventh by more than a few points, the amendment says the run turned
+reach into hits. If reach rose and the rate did not move by more than a few points, the amendment
+says the promotions' neighbourhoods are not where the held-out entities' routes run, which is a
+finding about what to expand next and not about the setting. If reach did not rise, the amendment
+says so and the expander is the thing to look at.
