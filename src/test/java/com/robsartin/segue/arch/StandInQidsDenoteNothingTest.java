@@ -830,6 +830,13 @@ class StandInQidsDenoteNothingTest {
                   code(
                       "src/test/java/com/robsartin/segue/wikidata/RecognitionInstitutionsTest.java"))),
           entry(
+              "Q13433827",
+              real(
+                  "class id — named by ClassLabels, deliberately left unmapped by KindMapper,"
+                      + " pinned at CONCEPT by KindMapperTest (issue #294)",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"),
+                  code("src/test/java/com/robsartin/segue/support/ClassLabelsTest.java"))),
+          entry(
               "Q13473501",
               real(
                   "class id — mapped by KindMapper",
@@ -948,6 +955,13 @@ class StandInQidsDenoteNothingTest {
                   "entity — a real value in the recorded cave-reverse.json",
                   code("src/test/java/com/robsartin/segue/wikidata/ReverseClaimsTest.java"),
                   code("src/test/resources/wikidata/cave-reverse.json"))),
+          entry(
+              "Q104635718",
+              real(
+                  "class id — named by ClassLabels, deliberately left unmapped by KindMapper,"
+                      + " pinned at CONCEPT by KindMapperTest (issue #294)",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"),
+                  code("src/test/java/com/robsartin/segue/support/ClassLabelsTest.java"))),
           entry(
               "Q105543609",
               real(

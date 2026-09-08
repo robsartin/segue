@@ -286,6 +286,30 @@ class KindMapperTest {
   }
 
   @Test
+  @DisplayName("a Wikimedia artist discography stays CONCEPT: it is the page, not the releases")
+  void shouldStayConceptWhenTheClassIsAWikimediaArtistDiscography() {
+    // Issue #294, the reading after the first expander run. A Wikimedia list of an artist's
+    // releases is a Wikipedia page ABOUT the releases, not a release: many works and people point
+    // at it and nobody did anything with it, which is the hub shape the CONCEPT-gated rules exist
+    // to demote (ADR 31, amended by issue #52). Mapping it to WORK would put a page in the
+    // recommender's candidate pool. Label and description confirmed live on 2026-09-08, on the
+    // issue.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q104635718"))) // Wikimedia artist discography
+        .isEqualTo(NodeKind.CONCEPT);
+  }
+
+  @Test
+  @DisplayName("an encyclopedia article stays CONCEPT: it is the page, not the subject")
+  void shouldStayConceptWhenTheClassIsAnEncyclopediaArticle() {
+    // Issue #294. An article is a page ABOUT a subject; the subject is the entity worth
+    // recommending and usually has a node of its own. Mapping the article to WORK would offer a
+    // reference page as something to explore, and would take a high-degree hub out of the reach of
+    // the rule that demotes routes through one. Confirmed live on 2026-09-08, on the issue.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q13433827"))) // encyclopedia article
+        .isEqualTo(NodeKind.CONCEPT);
+  }
+
+  @Test
   @DisplayName("a single release is a WORK")
   void shouldMapToWorkWhenTheClassIsSingleRelease() {
     // The second census reading (issue #265, 2026-09-05). A release of a single is WORK the way
