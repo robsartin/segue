@@ -366,7 +366,8 @@ number copied into this document could only go stale.
 **The alternative was to change the number rather than the label**: report the graph's net gain,
 so the tool and the census agree. It lost because this tool never sees that figure. A net gain is
 the graph before against the graph after, which is a census, and `graphCensus` is the authority on
-it ([ADR 63](0063-a-read-only-census-of-the-graph.md)); step 5 of the runbook is where the owner makes that comparison,
+it ([ADR 63](0063-a-read-only-census-of-the-graph.md)); step 5 of the runbook is where the owner
+makes that comparison,
 with the tool's block on one side of it. A second census inside this tool would duplicate that
 authority to correct a label.
 

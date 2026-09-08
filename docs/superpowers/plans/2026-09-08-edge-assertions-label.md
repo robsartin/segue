@@ -344,7 +344,7 @@ Files: `src/test/java/com/robsartin/segue/expand/ExpandRunTest.java`,
 counts. That gap is why `detail()` could say `edge(s)` unchallenged.
 
 - [ ] **Step 1 — RED. Pin the clean progress line.** Add to `ExpandRunTest`, after
-  `shouldEmitTheSpecsThirdFormWhenAnExpansionFallsShort`:
+  `shouldSayWhatFellShortWhenAnExpansionWasPartial`:
 
   ```java
     @Test

@@ -53,8 +53,9 @@ public final class ExpansionReport {
    * <p>{@code nodes added} beside it <i>is</i> a net count. After #293 these two labels are the
    * only thing that says which of the two the reader is looking at.
    *
-   * <p><b>A constant rather than a second literal.</b> Two documents say this label: this block,
-   * and the developer guide's runbook row for {@code claims} / log rows.
+   * <p><b>A constant rather than a second literal.</b> This label is said outside this block: the
+   * developer guide's runbook row for {@code claims} / log rows cites it, and so does ADR 66's
+   * amendment for #293.
    *
    * <p>{@code DeveloperGuideExpandPromotionsExamplesTest} reads it from here, so the row and the
    * printed line cannot drift apart. {@code ExpansionReportTest}'s golden block still pins the text

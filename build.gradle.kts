@@ -421,7 +421,8 @@ tasks.register<JavaExec>("expandPromotions") {
     description =
         "Expands every entity you rated at or above KnownList.PROMOTION_RATING, one at a time, " +
             "through the same expansion the MCP tool runs, and reports what the whole batch did: " +
-            "promotions considered, expanded, refused and failed, nodes and edges added, edges by " +
+            "promotions considered, expanded, refused and failed, nodes added, edge assertions " +
+            "recorded, edges by " +
             "source, and every shortfall. Aggregates only — no labels, no ids, no notes, no " +
             "ratings — so the output is safe to paste. WRITES: it appends what the sources return " +
             "through IngestService, and it CALLS THE NETWORK — the live Wikidata API, the " +
