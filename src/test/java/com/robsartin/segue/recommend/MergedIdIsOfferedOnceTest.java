@@ -48,13 +48,13 @@ import org.junit.jupiter.api.io.TempDir;
  * reach.</b> A merge used to <em>add</em> an edge to the graph — {@code IngestService.carry} copied
  * the owner's edge onto the canonical id and left the local one where it was — so the shared
  * artist's degree grew by one, and {@code lift} discounts each intermediate by the log of that
- * degree. Under the shipped {@code lift} the same fixture read 0.2236 before the merge, 0.4332
- * after it unfixed (1.94x), and 0.2166 after it fixed: a 3% residual that was the graph having one
- * more edge in it, not the rating being counted twice. {@code raw} is the one scorer whose discount
- * is constant, so it isolates the question this test is asking and lets it be asserted without a
- * tolerance. That residual was the concern recorded here, it became issue #178, and it is gone —
- * both folds resolve endpoints now, so the merged entity's edges exist once. This test keeps {@code
- * raw} because the question it asks is still about ratings and not about degree.
+ * degree. Under the {@code lift} this test pins explicitly the same fixture read 0.2236 before the
+ * merge, 0.4332 after it unfixed (1.94x), and 0.2166 after it fixed: a 3% residual that was the
+ * graph having one more edge in it, not the rating being counted twice. {@code raw} is the one
+ * scorer whose discount is constant, so it isolates the question this test is asking and lets it be
+ * asserted without a tolerance. That residual was the concern recorded here, it became issue #178,
+ * and it is gone — both folds resolve endpoints now, so the merged entity's edges exist once. This
+ * test keeps {@code raw} because the question it asks is still about ratings and not about degree.
  *
  * <p><b>It drives {@link RecommendCli#main} rather than {@link RecommendRun}, for the reason {@code
  * AffinityWeightedRecommendationTest} does</b> — what is under test is a wiring, not an arithmetic.

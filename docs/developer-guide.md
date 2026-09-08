@@ -1966,7 +1966,7 @@ same for the next one.
 ## What to explore next
 
 ```bash
-# the measured defaults: `Recommendations.DEFAULT_SCORER`, `Recommendations.MIN_CANDIDATE_DEGREE`, twenty-five candidates, three routes each
+# the shipped defaults: `Recommendations.DEFAULT_SCORER`, `Recommendations.MIN_CANDIDATE_DEGREE`, twenty-five candidates, three routes each
 ./gradlew recommend --args="--known $HOME/known.csv --out $HOME/next.txt"
 
 # turn the dial, and read the two lists side by side
@@ -2069,9 +2069,20 @@ with everything; dividing by the candidate's own degree is what turns a populari
 surprise one. Run `--scorer raw` against a real graph once: it returns the most famous entities in
 it, which is the thing this feature exists to escape.
 
-Dividing by the candidate's degree rewards a small denominator, so a **degree floor is not
-optional** — `--min-degree`, defaulting to `Recommendations.MIN_CANDIDATE_DEGREE`. Without one the
-answer is whatever is thinnest.
+**The shipped point is `resource-allocation`, which is not the normalising one.** That is a decision
+rather than a measurement, taken on the graph the promotion expander left and recorded in
+[ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md)'s 2026-09-07 amendment for issue #291
+— which holds the evidence, the four alternatives rejected and the cost. The paragraph above is ADR
+45's finding and is not withdrawn, so what the default gives up is exactly the
+surprise-over-popularity property, and `--scorer lift` at the unchanged floor is one flag away.
+`Recommendations.DEFAULT_SCORER` is the constant; `RecommendCli`'s `--scorer` default, the usage line
+it prints and the deck's own sweep all read it (issue #244).
+
+Dividing by the candidate's degree rewards a small denominator, so under `lift` a **degree floor is
+not optional** — `--min-degree`, defaulting to `Recommendations.MIN_CANDIDATE_DEGREE`. Without one
+the answer is whatever is thinnest. The floor did not move when the default did, and whether a floor
+measured for a normalised scorer is the right one for a scorer that does not normalise is a question
+for a reading rather than something this guide should assert.
 
 **The floor reports itself, and reading it is how you tell a drifted run from a wrong one**
 ([ADR 57](adr/0057-the-floor-reports-itself.md), issue #135). Two header lines in every output file,
@@ -2086,8 +2097,10 @@ different.
 
 ### Expanding a top candidate demotes it — "expand the top candidates" is an anti-pattern
 
-**Read this before running a batch of expansions, not after.** `lift` divides by the candidate's
-own degree, and `expand_entity` raises exactly that number. So expanding a candidate lowers its own
+**Read this before running a batch of expansions, not after.** **This section is about `--scorer
+lift`**, which stopped being the default on 2026-09-07 (issue #291) and is still one flag away; the
+measurement below was taken under it. `lift` divides by the candidate's own degree, and
+`expand_entity` raises exactly that number. So expanding a candidate lowers its own
 score, and expanding the ones at the top of the list is the most reliable way to remove them from
 it. Measured on the real graph (issue #117): after a batch of expansions that included it, **the
 entity at rank 1 dropped out of the top 25 entirely**, and an entity that had *not* been expanded
@@ -2123,6 +2136,13 @@ Three practical consequences:
   Expanding a candidate is worth doing when the aim is to *know more about it* — just re-run
   `recommend` afterwards expecting the list to move, rather than reading the new list as a verdict
   on the old one.
+
+**The shipped default no longer divides by the candidate's own degree**, so this route to demotion is
+not in it. That is arithmetic from `Scorer.score` — `normalisedByCandidateDegree` is true for `LIFT`
+alone — and not a second measurement. It is not a licence to expand top candidates either: an
+expansion still moves the degrees of the intermediates a candidate is reached through, which every
+scorer but `raw` discounts by. And this mechanism is why the default moved at all: the same expansion
+is the graph change ADR 45's 2026-09-07 amendment for issue #291 decided on.
 
 ### Edge type carries more of the signal than the arithmetic does
 

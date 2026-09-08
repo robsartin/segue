@@ -19,6 +19,7 @@ import com.robsartin.segue.tinker.TinkerGraphStore;
 import com.robsartin.segue.wikidata.RecognitionInstitutions;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -65,14 +66,23 @@ class RateRunTest {
   private static final String BELOVED = "Q0900301";
   private static final String CROWDED = "Q0900302";
 
-  /** A candidate three of yours reach, sitting at the floor — small enough for lift to like it. */
-  private static final String OBSCURE = "Q0900401";
+  /** A candidate three of yours reach, through intermediates nothing much else touches. */
+  private static final String QUIETLY_REACHED = "Q0900401";
 
-  /** A candidate six of yours reach, big enough that dividing by its own degree buries it. */
-  private static final String FAMOUS = "Q0900402";
+  /** A candidate six of yours reach, through intermediates more than twice as busy. */
+  private static final String BUSILY_REACHED = "Q0900402";
 
-  /** Twelve times the floor: far enough apart that lift and counting cannot agree. */
-  private static final int FAMOUS_DEGREE = 60;
+  /** The degree every intermediate that reaches {@link #QUIETLY_REACHED} is padded to. */
+  private static final int QUIET_VIA_DEGREE = 3;
+
+  /** The degree every intermediate that reaches {@link #BUSILY_REACHED} is padded to. */
+  private static final int BUSY_VIA_DEGREE = 7;
+
+  /**
+   * Both candidates, deliberately equal. Lift then divides both sides by the same number, so it
+   * follows Adamic-Adar here instead of producing a third answer.
+   */
+  private static final int BOTH_CANDIDATES_DEGREE = 12;
 
   @Test
   @DisplayName("the deck is built from the graph, and the notes carry counts and no rating")
@@ -391,22 +401,27 @@ class RateRunTest {
     // dealing lift candidates while `recommend` ranked with something else, with the whole gate
     // green. This is the check that would not have been.
     try (TinkerGraphStore graph = new TinkerGraphStore()) {
-      oneObscureAndOneFamous(graph);
+      oneQuietlyReachedAndOneBusilyReached(graph);
       List<String> everything = new ArrayList<>(LOVED);
       everything.addAll(LUKEWARM);
 
-      // The fixture has to be able to tell the scorers apart, or every assertion below is
-      // vacuously true: counting prefers the candidate more of yours reach, lift prefers the one
-      // its own degree does not bury. Asserted, not assumed, so a later fixture change that made
-      // the two agree fails here instead of reporting clean forever.
-      String byCounting = topCandidate(graph, everything, Scorer.RAW);
+      // The fixture has to be able to tell the default apart from every other point on the dial, or
+      // every assertion below is vacuously true. Asserted against all of them rather than against
+      // raw counting alone (issue #291): the fixture this replaced claimed in its javadoc to
+      // separate the default from every scorer and compared it with one, so the claim could not
+      // fail. A scorer added to the enum now joins the comparison without anybody remembering to.
       String byTheDefault = topCandidate(graph, everything, DEFAULT_SCORER);
+      List<String> byEveryOtherScorer =
+          Arrays.stream(Scorer.values())
+              .filter(scorer -> scorer != DEFAULT_SCORER)
+              .map(scorer -> topCandidate(graph, everything, scorer))
+              .toList();
       assertThat(byTheDefault)
           .as(
-              "this fixture separates %s from raw counting; if the default has moved, rebuild"
-                  + " oneObscureAndOneFamous so it discriminates the new default",
+              "this fixture must separate %s from every other scorer; if the default has moved,"
+                  + " rebuild oneQuietlyReachedAndOneBusilyReached so it discriminates the new one",
               DEFAULT_SCORER)
-          .isNotEqualTo(byCounting);
+          .isNotIn(byEveryOtherScorer);
 
       List<Card> deck =
           RateRun.buildDeck(
@@ -419,7 +434,10 @@ class RateRunTest {
               OptionalInt.empty(),
               note -> {});
 
-      assertThat(deck).extracting(Card::qid).contains(byTheDefault).doesNotContain(byCounting);
+      assertThat(deck)
+          .extracting(Card::qid)
+          .contains(byTheDefault)
+          .doesNotContainAnyElementsOf(byEveryOtherScorer);
     }
   }
 
@@ -449,24 +467,43 @@ class RateRunTest {
   }
 
   /**
-   * Two ancestors the scorers rank in opposite orders. One is reached by three of yours and carries
-   * the floor's worth of edges; the other is reached by six and carries twelve times as many.
-   * Counting, Adamic-Adar and resource allocation all prefer the crowded one; lift, which divides
-   * by the candidate's own degree, is alone in preferring the other — so this graph does not merely
-   * separate lift from counting, it separates lift from every other point on the dial.
+   * Two ancestors that only resource allocation ranks the way it does. One is reached by three of
+   * yours through intermediates at {@link #QUIET_VIA_DEGREE}; the other by six, through
+   * intermediates at {@link #BUSY_VIA_DEGREE}. Both candidates carry the same degree.
+   *
+   * <p><b>Varying the INTERMEDIATE's degree is the whole mechanism, and the fixture this replaced
+   * could not do it.</b> The three scorers that do not divide by the candidate's own degree differ
+   * only in how they discount the intermediate's ({@code Scorer.score}), so a graph whose
+   * intermediates are all one degree ranks identically under all three and can never tell them
+   * apart. Here the seed counts are three against six and the intermediate degrees three against
+   * seven, so the count ratio sits strictly between {@code ln 7 / ln 3} and {@code 7 / 3}:
+   * counting, Adamic-Adar and lift all prefer the busily reached candidate, and resource allocation
+   * is alone in preferring the other. Issue #291's design spec holds the arithmetic and the
+   * margins.
+   *
+   * <p>Padding is left to the shared {@code padDegreeTo} and its shared filler range on purpose. A
+   * filler is a {@code WORK}, so {@code CandidateSweep.couldBeExplored} never offers one, and it is
+   * never one hop from a seed, so it is never an intermediate either — two nodes padding through
+   * the same filler changes no score. A busy intermediate is not at risk of being dropped as a hub
+   * either: {@code PathRanking.isHub} answers yes to a busy {@code CONCEPT} or a recognition
+   * institution, and {@link #reaches} mints intermediates as {@code PERSON}.
    */
-  private static void oneObscureAndOneFamous(TinkerGraphStore graph) {
-    node(graph, OBSCURE, NodeKind.GROUP, "the obscure ancestor");
-    node(graph, FAMOUS, NodeKind.GROUP, "the famous ancestor");
+  private static void oneQuietlyReachedAndOneBusilyReached(TinkerGraphStore graph) {
+    node(graph, QUIETLY_REACHED, NodeKind.GROUP, "the quietly reached ancestor");
+    node(graph, BUSILY_REACHED, NodeKind.GROUP, "the busily reached ancestor");
     int intermediate = 0;
     for (String seed : LOVED) {
-      reaches(graph, seed, "Q09004" + (10 + intermediate++), OBSCURE);
+      String via = "Q09004" + (10 + intermediate++);
+      reaches(graph, seed, via, QUIETLY_REACHED);
+      padDegreeTo(graph, via, QUIET_VIA_DEGREE);
     }
     for (String seed : LUKEWARM) {
-      reaches(graph, seed, "Q09004" + (10 + intermediate++), FAMOUS);
+      String via = "Q09004" + (10 + intermediate++);
+      reaches(graph, seed, via, BUSILY_REACHED);
+      padDegreeTo(graph, via, BUSY_VIA_DEGREE);
     }
-    padDegreeTo(graph, OBSCURE, MIN_CANDIDATE_DEGREE);
-    padDegreeTo(graph, FAMOUS, FAMOUS_DEGREE);
+    padDegreeTo(graph, QUIETLY_REACHED, BOTH_CANDIDATES_DEGREE);
+    padDegreeTo(graph, BUSILY_REACHED, BOTH_CANDIDATES_DEGREE);
   }
 
   /**

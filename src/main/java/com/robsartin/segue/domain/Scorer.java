@@ -24,13 +24,15 @@ import java.util.stream.Collectors;
  * own degree is what turns a popularity ranking into a surprise one — "connected to me more than
  * its fame predicts" — and it is what produced a list worth reading.
  *
- * <p><b>Why a dial and not simply {@link #LIFT}.</b> The right point differs by domain, and the
- * failure mode at each end is real rather than theoretical. {@link #RAW} rediscovers fame. {@link
- * #LIFT} rewards a thin entity whose whole presence in the graph is a list of influences, which is
- * why it is paired with a degree floor rather than used alone (see {@code
- * Recommendations.MIN_CANDIDATE_DEGREE}). A domain whose graph is shallower than music's may well
- * want {@link #RESOURCE_ALLOCATION}, so the choice belongs on the command line where it can be
- * compared in one run, not buried in a constant.
+ * <p><b>Why a dial and not a constant.</b> The right point differs by domain, and by what ingest
+ * has since made of the graph; the failure mode at each end is real rather than theoretical. {@link
+ * #RAW} rediscovers fame. {@link #LIFT} rewards a thin entity whose whole presence in the graph is
+ * a list of influences, which is why it is paired with a degree floor rather than used alone (see
+ * {@code Recommendations.MIN_CANDIDATE_DEGREE}) — and why an expansion that put thin neighbours
+ * beside the owner's highest-rated entities moved the default off it (ADR 45's amendment of
+ * 2026-09-07, issue #291). That the shipped point could move at all is the argument for the dial:
+ * the choice belongs on the command line where two points can be compared in one run, not buried in
+ * a constant.
  *
  * <p><b>Personalised PageRank is the alternative that is not here.</b> It handles multiple hops
  * natively and is the right family for "start from what I know and see where the mass lands" — and
@@ -59,6 +61,10 @@ public enum Scorer {
    * Discount each intermediate by its degree itself. Harsher than Adamic-Adar by an order of
    * magnitude on the busiest nodes, which is the point: it all but ignores a connection through
    * something everybody touches.
+   *
+   * <p><b>The shipped default since 2026-09-07</b>, by decision rather than by measurement: ADR
+   * 45's amendment for issue #291 is the authority for it, and {@code
+   * Recommendations.DEFAULT_SCORER} is the constant every tool reads.
    */
   RESOURCE_ALLOCATION(
       "resource-allocation",
@@ -67,10 +73,15 @@ public enum Scorer {
       false),
 
   /**
-   * Adamic-Adar, then divided by the candidate's own degree. The measured default: on the real
-   * graph this is the point at which the list stopped naming the most famous entities in it and
-   * started naming things reached by the list far more often than their size in the graph would
-   * predict.
+   * Adamic-Adar, then divided by the candidate's own degree. The point ADR 45 measured and shipped:
+   * on the graph of that measurement this is where the list stopped naming the most famous entities
+   * in it and started naming things reached by the list far more often than their size in the graph
+   * would predict.
+   *
+   * <p><b>It stopped being the default on 2026-09-07</b> (ADR 45's amendment for issue #291), on a
+   * graph the promotion expander had changed the shape of. It is one {@code --scorer lift} away, at
+   * the unchanged floor, and it is still the only point here that divides by the candidate's own
+   * degree.
    */
   LIFT(
       "lift",
