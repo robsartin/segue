@@ -18,7 +18,7 @@ is rather than showing a bare QID.
 
 A Wikimedia artist discography is a Wikipedia list page *about* an artist's releases, not a
 release. An encyclopedia article is a page *about* a subject, not the subject. Both are the hub
-shape ADR 38 and issue #52 built the `CONCEPT` gate for: a node many works and people point at that
+shape issue #52's amendment to ADR 31 built the `CONCEPT` gate for: a node many works and people point at that
 nobody did anything with. Mapping either to `WORK` would put a Wikipedia page into the recommender's
 candidate pool, which is the failure the gate exists to prevent. This is the same ruling issue #261
 gave awards and fictional human, and issue #265 gave the three character classes.
@@ -36,7 +36,8 @@ Four things, all found by reading the files the issue names. None changes the ru
   no counterpart in the code; the guard it stands in for is real, and is written out as two reds
   per pin task instead.
 - **The census does not name classes, deliberately.** The issue's Shape says `ClassLabels` is
-  wanted "so a tooltip and the census name them". ADR 63 explicitly rejected printing a
+  wanted "so a tooltip and the census name them" (the issue was corrected on 2026-09-08 to say the
+  census names no class by label, after this finding). ADR 63 explicitly rejected printing a
   `ClassLabels` label beside the qid in the census section, on the grounds that the fallback prints
   the bare qid on exactly the classes the section exists to surface. No class under `census` imports
   `ClassLabels`; the two consumers are `export/DotWriter` (the DOT tooltip) and `rate/Card` (the
