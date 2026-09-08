@@ -1510,7 +1510,7 @@ Every node claim stores its raw `P31` (ADR 42), and the exporter spends it twice
 or "television special", the channel with no budget, and the only one that reaches the long tail.
 **Hovering a rendered SVG will not show it**; see "why hovering an SVG shows a QID" below. A
 real graph has 861 distinct classes and the top 40 still only cover 96.6%; six fills were never
-going to describe that. The names come from `ClassLabels`, a table in the source of about 45 classes
+going to describe that. The names come from `ClassLabels`, a table in the source whose entries were
 read from Wikidata's own `labels/en`, and **an unknown class shows as its bare QID** rather than a
 guess — useless and true beats useful and sometimes wrong. Adding a class to that table is one line
 and needs the label AND description confirmed, exactly like `KindMapper`'s whitelist.
