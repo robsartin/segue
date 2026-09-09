@@ -109,10 +109,12 @@ retract/  The retraction tool (ADR 44): appends one Retraction claim so the
           kind of row, through IngestService, holding no GraphStore at all. (ADR
           46's `rate` is the other dev tool that writes, but only ever to the
           taste layer, through AffinityStore — never through IngestService.)
-recommend/ The recommender (ADR 45): ranks entities ABSENT from the known-list by
-          candidate-degree-normalised lift, excludes hub intermediates through PathRanking.isHub,
-          weights edge types, and explains every candidate with real find_paths routes. Run as
-          `./gradlew recommend`. Dev-side, plain Java, READ-ONLY, offline, NOT a seventh MCP tool.
+recommend/ The recommender (ADR 45): ranks entities ABSENT from the known-list by the scorer
+          Recommendations.DEFAULT_SCORER holds (the constant is the authority on which; ADR 45's
+          2026-09-07 amendment for #291 records the current decision), excludes hub intermediates
+          through PathRanking.isHub, weights edge types, and explains every candidate with real
+          find_paths routes. Run as `./gradlew recommend`. Dev-side, plain Java, READ-ONLY,
+          offline, NOT a seventh MCP tool.
           Since issue #85 it WEIGHTS by rating — Recommendations.regardFor over the note-free
           AffinityStore.readRatings — under a fence written at the CALL SITES:
           theRecommenderReadsRatingsAndNeverNotes bans find and readAll and the AffinityRecord
@@ -649,12 +651,17 @@ adapters, so the cross-engine comparison is a merge gate rather than a program.
   otherwise rewards whatever is thinnest — the experiment's cosine variant put a degree-2 node
   first. **Issues #117/#118 lowered that default** — see ADR 45's 2026-08-29 amendment for the
   number it moved to, the measurement, the cost and the six alternatives that lost.
-  **Expanding a top candidate DEMOTES it**, because expansion raises the degree the score divides
-  by: "expand the top candidates" is an anti-pattern, and the developer guide's "What to explore
-  next" says so at length. `--scorer` keeps raw/adamic-adar/resource-allocation/lift as a dial, and
-  running two of them is how you see what the normalisation does. **Plain PageRank is the wrong
-  tool** (it measures the fame this is escaping) and personalised PageRank is refused for a different
-  reason: it cannot produce the routes, and a score with no receipts is not a segue recommendation.
+  **The shipped scorer has since moved, and everything above is the history of how lift was
+  chosen** (issue #291, ADR 45's 2026-09-07 amendment): `Recommendations.DEFAULT_SCORER` is the
+  authority on what is shipped, the scorer it names does not divide by the candidate's degree, and
+  lift stays one `--scorer` away. The floor stayed where #117/#118 put it.
+  **Under lift, expanding a top candidate DEMOTES it**, because expansion raises the degree that
+  score divides by: "expand the top candidates" is an anti-pattern there, and the developer
+  guide's "What to explore next" says so at length. `--scorer` keeps
+  raw/adamic-adar/resource-allocation/lift as a dial, and running two of them is how you see what
+  the normalisation does. **Plain PageRank is the wrong tool** (it measures the fame this is
+  escaping) and personalised PageRank is refused for a different reason: it cannot produce the
+  routes, and a score with no receipts is not a segue recommendation.
 - **Hub intermediates are EXCLUDED from recommendations, not demoted, and it is `PathRanking.isHub`
   — now public for exactly this.** Discounting let the Rock and Roll Hall of Fame decide the top of
   the experiment's ranking. Routing demotes a hub route because "what connects me to the hall of
