@@ -393,3 +393,50 @@ than per pair of nodes. `SegueService`'s own detail sentence for a clean expansi
 and not this tool's block, and changing it is a separate issue. The Java names
 `ExpansionOutcome.Expanded#edgesAdded` and `ExpansionTally#edgesAdded` stay too; only the printed
 label and the prose moved.
+
+**Amendment (2026-09-08, issue #299): the per-source heading, and `expand_entity`'s detail
+sentence.**
+
+Nothing above is withdrawn, no decision above is edited, and this ADR keeps `Accepted`.
+
+*The output contract* above names a section `edges by source`. It is now printed as
+**`edge assertions by source`**. Nothing about what it counts changed: those rows are the same
+increments, broken down per adapter id, that the row above them sums as `edge assertions
+recorded`. The amendment for #293 renamed that row and left this heading, saying renaming it was
+a separate decision nobody had asked for. #299 is that ask, and this records it; the sentence
+above stands as written.
+
+**The `nodes added` paragraph in the output contract still holds, word for word, under the new
+name.** It says `nodes added` sits under `graph` and not under the per-source section, and its
+reason is that every `AssertionRecord` carries a `Provenance` whose `sourceId` says which adapter
+produced it while a node's identity may instead come from `EntityResolver.fetch`, which has no
+adapter behind it. That is a contrast between two sections and the authority each has for a
+source id, not a claim about the word "edges", so renaming the section changes neither side of
+it.
+
+**No column moves, and that is the difference from #293.** `ExpansionReport.render` derives the
+label column and the count column from counted rows alone; a section heading is never measured.
+So unlike the longer row label, which shifted every count in the block, this rename shifts
+nothing. `ExpansionReportTest`'s golden block pins the heading as a literal and its
+empty-section test looks the heading up by the same text, so both carry the new name and a
+missing heading still reds. The heading stays an inline literal rather than becoming a named
+constant: nothing outside `ExpansionReport` says it, and the contract above asks for a literal.
+
+**`expand_entity`'s detail sentence has moved.** The amendment for #293 recorded that
+`SegueService`'s clean-expansion sentence still said `edge(s)` of the same number, that it was
+seen and left, and that changing it was a separate issue. It now reads
+`expanded <qid>: N edge assertion(s), M new node(s)`.
+
+**That is not a protocol change.** The payload field `edgesAdded`
+([ADR 26](0026-mcp-tool-surface.md)) is untouched, and so is every Java identifier behind it. What
+moved is the human-readable `detail` string, which no client parses — a caller that wants the
+number reads the field, and `ExpansionSummary`'s javadoc for that field already said the count is
+per assertion rather than per pair of nodes, which is what the sentence now says too. The tool
+surface ADR 26 governs is unchanged, so ADR 26 needs no amendment of its own. Nothing in
+`src/test` pinned that sentence before #299; a pin was added with the change, and it was seen red
+on the old wording first.
+
+`get_entity`'s sentence is a different quantity and stays as it is. It counts the edges the graph
+holds on one node, after corroborating assertions have been merged into single edges, so
+`edge(s)` is the correct word for it — the same word in a neighbouring method for a number that
+really is an edge count.
