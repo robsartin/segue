@@ -232,7 +232,7 @@ class SegueServiceTest {
     // meanings an empty ExpandResult already carries — "found nothing" and "the source was
     // unavailable". A third meaning would rebuild the defect ADR 56 fixed, so the refusal is
     // said out loud instead. The adapter here returns the "found nothing" shape: without the
-    // refusal this call succeeds with a truthful-looking "0 edge(s), 0 new node(s)".
+    // refusal this call succeeds with a truthful-looking "0 edge assertion(s), 0 new node(s)".
     ingest.record(LocalEntity.minted(MINTED, NodeKind.WORK, "a book no source indexes", MINTED_AT));
     SourceAdapter findsNothing = new StubSourceAdapter("wikidata", ExpandResult.of(List.of()));
 
@@ -541,6 +541,38 @@ class SegueServiceTest {
     assertThat(result.payload().skippedNeighbors()).isZero();
     assertThat(resolver.fetchCallCount()).isEqualTo(1);
     assertThat(graph.edges("Q01")).hasSize(2);
+  }
+
+  @Test
+  @DisplayName("a clean expansion's sentence counts assertions, not pairs of nodes")
+  void shouldNameTheCountAsAssertionsWhenACleanExpansionReportsItsYield() {
+    // Nothing pinned this sentence before #299 — the nearest assertion in this file checks the
+    // "new node(s)" half, which this change does not touch, so it could never have caught the
+    // other half being wrong. Two assertions about one pair of nodes, so the number the sentence
+    // quotes is visibly the assertion count and not the graph's edge count: ExpansionSummary's
+    // javadoc for edgesAdded is the authority, and the sentence now says what that javadoc says.
+    String seed = "Q0900299";
+    String neighbour = "Q0900300";
+    ingest.record(new NodeAssertion(seed, NodeKind.PERSON, "an act nobody signed", WIKIDATA));
+    resolver.withEntity(
+        new NodeAssertion(neighbour, NodeKind.WORK, "a film nobody shot", WIKIDATA));
+    AssertionRecord wrote =
+        new AssertionRecord(seed, neighbour, "WROTE_SCREENPLAY_FOR", null, null, WIKIDATA);
+    AssertionRecord scored =
+        new AssertionRecord(seed, neighbour, "COMPOSED_FOR", null, null, WIKIDATA);
+    SourceAdapter adapter =
+        new StubSourceAdapter("multigraph", new ExpandResult(List.of(wrote, scored), false, false));
+
+    ToolResult<SegueService.ExpansionSummary> result = service(adapter).expandEntity(seed, 10);
+
+    assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.OK);
+    // These two are the control on the fixture: they must PASS in the red run below, or the
+    // sentence's failure would be a mis-built expansion rather than the wrong word.
+    assertThat(result.payload().edgesAdded()).isEqualTo(2);
+    assertThat(result.payload().nodesAdded()).isEqualTo(1);
+    assertThat(result.detail())
+        .as("the sentence a model reads, in the words the payload's own javadoc already uses")
+        .isEqualTo("expanded Q0900299: 2 edge assertion(s), 1 new node(s)");
   }
 
   @Test
