@@ -324,6 +324,19 @@ class KindMapperTest {
   }
 
   @Test
+  @DisplayName("a discography stays CONCEPT: it is the catalogue, not the recordings")
+  void shouldStayConceptWhenTheClassIsADiscography() {
+    // Issue #300. Wikidata describes this class as the "study and cataloging of published sound
+    // recordings" — a discipline, and a catalogue OF releases rather than a release. It is the
+    // class the Wikimedia artist-discography pages #294 pinned belong to, so promoting it would
+    // undo that pin one level up. Many works and people point at a catalogue and nobody did
+    // anything with it, which is the hub shape the CONCEPT-gated rules exist to demote (ADR 31,
+    // amended by issue #52). Label and description confirmed live on 2026-09-08, on the issue.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q273057"))) // discography
+        .isEqualTo(NodeKind.CONCEPT);
+  }
+
+  @Test
   @DisplayName("a single release is a WORK")
   void shouldMapToWorkWhenTheClassIsSingleRelease() {
     // The second census reading (issue #265, 2026-09-05). A release of a single is WORK the way
