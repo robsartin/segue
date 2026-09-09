@@ -124,7 +124,7 @@ public final class ClassLabels {
     // Issue #300's one new name, from the class pass below issue #294's: a biographical article is
     // a dictionary or encyclopedia entry about a person, so it is the entry and not the person, and
     // KindMapperTest pins it at CONCEPT the way it pins #294's two. That pass's other class,
-    // discography, is named in the award block above already and needed only the pin.
+    // discography, is named in the concepts block above already and needed only the pin.
     put("Q19389637", "biographical article");
   }
 

@@ -313,8 +313,8 @@ class KindMapperTest {
   @DisplayName("a biographical article stays CONCEPT: it is the entry, not the person")
   void shouldStayConceptWhenTheClassIsABiographicalArticle() {
     // Issue #300, the class pass below issue #294's. Wikidata describes this class as an "article
-    // in a dictionary or encyclopedia": it is an encyclopedia article's sibling, and #294 pinned
-    // that parent for this reason. The person the entry is about is the entity worth recommending
+    // in a dictionary or encyclopedia": the same shape as encyclopedia article, which #294 pinned
+    // for this reason. The person the entry is about is the entity worth recommending
     // and usually has a node of its own, so mapping the entry to WORK would offer a reference page
     // as something to explore and would take a high-degree hub out of the reach of the rule that
     // demotes routes through one (ADR 31, amended by issue #52). Label and description confirmed
@@ -327,11 +327,12 @@ class KindMapperTest {
   @DisplayName("a discography stays CONCEPT: it is the catalogue, not the recordings")
   void shouldStayConceptWhenTheClassIsADiscography() {
     // Issue #300. Wikidata describes this class as the "study and cataloging of published sound
-    // recordings" — a discipline, and a catalogue OF releases rather than a release. It is the
-    // class the Wikimedia artist-discography pages #294 pinned belong to, so promoting it would
-    // undo that pin one level up. Many works and people point at a catalogue and nobody did
-    // anything with it, which is the hub shape the CONCEPT-gated rules exist to demote (ADR 31,
-    // amended by issue #52). Label and description confirmed live on 2026-09-08, on the issue.
+    // recordings" — a discipline, and a catalogue OF releases rather than a release. Issue #300's
+    // live lookup records the Wikimedia artist-discography class #294 pinned as a subclass of this
+    // one, so promoting it would undo that pin one level up. Many works and people point at a
+    // catalogue and nobody did anything with it, which is the hub shape the CONCEPT-gated rules
+    // exist to demote (ADR 31, amended by issue #52). Label and description confirmed live on
+    // 2026-09-08, on the issue.
     assertThat(KindMapper.fromInstanceOf(List.of("Q273057"))) // discography
         .isEqualTo(NodeKind.CONCEPT);
   }

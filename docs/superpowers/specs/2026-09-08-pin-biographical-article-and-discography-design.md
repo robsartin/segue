@@ -21,13 +21,14 @@ discography is the study and cataloguing of published sound recordings — a dis
 catalogue *of* releases, not a release. Both are the hub shape issue #52's amendment to ADR 31 built
 the `CONCEPT` gate for: a node many works and people point at that nobody did anything with. Mapping
 either to `WORK` would put a reference page or a catalogue into the recommender's candidate pool,
-which is the failure the gate exists to prevent. This is the same ruling issue #261 gave awards and
-fictional human, issue #265 gave the three character classes, and issue #294 gave Wikimedia artist
-discography and encyclopedia article one week's reading ago.
+which is the failure the gate exists to prevent. This is the same ruling ADR 38 and issue #52 gave
+awards, issue #261 gave fictional human, issue #265 gave the three character classes, and issue
+#294 gave Wikimedia artist discography and encyclopedia article in the reading immediately before
+this one.
 
 The two are the direct neighbours of #294's two, which is why this issue repeats #294's shape
-exactly: a biographical article is an encyclopedia article's sibling, and the issue records that
-`Q104635718` (the Wikimedia list class #294 pinned) is a subclass of `Q273057`. That subclass claim
+exactly: a biographical article is the same shape as an encyclopedia article, and the issue
+records that `Q104635718` (the Wikimedia list class #294 pinned) is a subclass of `Q273057`. That subclass claim
 is the issue's, quoted from its live lookup; nothing here re-derives it and no committed file
 restates it as a fact of this repository.
 
@@ -98,10 +99,12 @@ than the assertion — a compile-or-load error is not a red. Both ids qualify: `
 And each pin is planted separately: two pins in one test method would let the first failing
 assertion mask the second, so each class gets its own test and its own plant.
 
-The same reasoning is why `Q273057` gets no `ClassLabelsTest` test. Its label is already in the
-table, so the test would be green on its first run with no production change to plant against —
-exactly the shape this section refuses. The pin is the statement this issue is making about that
-class; the label is not new and needs none.
+`Q273057` gets no `ClassLabelsTest` test for a different reason: scope. Its label is already in the
+table, so a test for it would characterise behaviour this issue does not change (a plant exists —
+deleting the table line — but the issue's Shape says discography needs only the pin, and a test
+added against unchanged production code is test-after). The residual gap is that discography is the
+one class `KindMapperTest` pins whose label nothing asserts; a follow-up issue is the home for that
+if it is worth closing.
 
 ## Ordering, so every commit is green
 
