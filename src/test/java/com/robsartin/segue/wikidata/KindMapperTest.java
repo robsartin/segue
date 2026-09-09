@@ -310,6 +310,20 @@ class KindMapperTest {
   }
 
   @Test
+  @DisplayName("a biographical article stays CONCEPT: it is the entry, not the person")
+  void shouldStayConceptWhenTheClassIsABiographicalArticle() {
+    // Issue #300, the class pass below issue #294's. Wikidata describes this class as an "article
+    // in a dictionary or encyclopedia": it is an encyclopedia article's sibling, and #294 pinned
+    // that parent for this reason. The person the entry is about is the entity worth recommending
+    // and usually has a node of its own, so mapping the entry to WORK would offer a reference page
+    // as something to explore and would take a high-degree hub out of the reach of the rule that
+    // demotes routes through one (ADR 31, amended by issue #52). Label and description confirmed
+    // live on 2026-09-08, on the issue.
+    assertThat(KindMapper.fromInstanceOf(List.of("Q19389637"))) // biographical article
+        .isEqualTo(NodeKind.CONCEPT);
+  }
+
+  @Test
   @DisplayName("a single release is a WORK")
   void shouldMapToWorkWhenTheClassIsSingleRelease() {
     // The second census reading (issue #265, 2026-09-05). A release of a single is WORK the way

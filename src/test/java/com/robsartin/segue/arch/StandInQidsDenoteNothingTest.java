@@ -899,6 +899,12 @@ class StandInQidsDenoteNothingTest {
                   "class id — mapped by KindMapper",
                   code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
           entry(
+              "Q19389637",
+              real(
+                  "class id — deliberately left unmapped by KindMapper, pinned at CONCEPT by"
+                      + " KindMapperTest (issue #300)",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
               "Q19863965",
               real(
                   "entity — a real value in the recorded search-cave.json",
