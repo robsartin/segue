@@ -402,12 +402,15 @@ Nothing above is withdrawn, no decision above is edited, and this ADR keeps `Acc
 *The output contract* above names a section `edges by source`. It is now printed as
 **`edge assertions by source`**. Nothing about what it counts changed: those rows are the same
 increments, broken down per adapter id, that the row above them sums as `edge assertions
-recorded`. The amendment for #293 renamed that row and left this heading, saying renaming it was
-a separate decision nobody had asked for. #299 is that ask, and this records it; the sentence
+recorded` — and that is the reason for the rename, since a section labelled `edges` sitting
+directly under a row labelled `edge assertions recorded` re-opens one line later the ambiguity
+#293 closed. The amendment for #293 renamed that row and left this heading, saying renaming it
+was a separate decision nobody had asked for. #299 is that ask, and this records it; the sentence
 above stands as written.
 
-**The `nodes added` paragraph in the output contract still holds, word for word, under the new
-name.** It says `nodes added` sits under `graph` and not under the per-source section, and its
+**The `nodes added` paragraph in the output contract holds unchanged under the new name; read
+the heading it names, and the one in the section list above it, as the renamed one.** It says
+`nodes added` sits under `graph` and not under the per-source section, and its
 reason is that every `AssertionRecord` carries a `Provenance` whose `sourceId` says which adapter
 produced it while a node's identity may instead come from `EntityResolver.fetch`, which has no
 adapter behind it. That is a contrast between two sections and the authority each has for a
@@ -420,7 +423,9 @@ So unlike the longer row label, which shifted every count in the block, this ren
 nothing. `ExpansionReportTest`'s golden block pins the heading as a literal and its
 empty-section test looks the heading up by the same text, so both carry the new name and a
 missing heading still reds. The heading stays an inline literal rather than becoming a named
-constant: nothing outside `ExpansionReport` says it, and the contract above asks for a literal.
+constant. #293 named its label because the developer guide's runbook cites it and a test reads it
+from there; no document cites this heading, so there is nothing for a constant to keep in step,
+and the golden block pins the text as a literal exactly as it pins every other heading.
 
 **`expand_entity`'s detail sentence has moved.** The amendment for #293 recorded that
 `SegueService`'s clean-expansion sentence still said `edge(s)` of the same number, that it was
@@ -429,8 +434,10 @@ seen and left, and that changing it was a separate issue. It now reads
 
 **That is not a protocol change.** The payload field `edgesAdded`
 ([ADR 26](0026-mcp-tool-surface.md)) is untouched, and so is every Java identifier behind it. What
-moved is the human-readable `detail` string, which no client parses — a caller that wants the
-number reads the field, and `ExpansionSummary`'s javadoc for that field already said the count is
+moved is the `detail` string, which [ADR 27](0027-mcp-protocol-conformance.md) makes actionable
+text for the model to read rather than a field to compute from — a caller that wants the number
+reads `edgesAdded`, nothing in this repository reads the sentence for it, and `ExpansionSummary`'s
+javadoc for that field already said the count is
 per assertion rather than per pair of nodes, which is what the sentence now says too. The tool
 surface ADR 26 governs is unchanged, so ADR 26 needs no amendment of its own. Nothing in
 `src/test` pinned that sentence before #299; a pin was added with the change, and it was seen red
@@ -439,4 +446,6 @@ on the old wording first.
 `get_entity`'s sentence is a different quantity and stays as it is. It counts the edges the graph
 holds on one node, after corroborating assertions have been merged into single edges, so
 `edge(s)` is the correct word for it — the same word in a neighbouring method for a number that
-really is an edge count.
+really is an edge count. The user guide's `expand_entity` transcript moved with the sentence and
+its two `get_entity` transcripts deliberately did not, so the guide shows both wordings — which
+is the distinction, not a drift.
