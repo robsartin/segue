@@ -907,9 +907,10 @@ class StandInQidsDenoteNothingTest {
           entry(
               "Q19389637",
               real(
-                  "class id — deliberately left unmapped by KindMapper, pinned at CONCEPT by"
-                      + " KindMapperTest (issue #300)",
-                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+                  "class id — named by ClassLabels, deliberately left unmapped by KindMapper,"
+                      + " pinned at CONCEPT by KindMapperTest (issue #300)",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"),
+                  code("src/test/java/com/robsartin/segue/support/ClassLabelsTest.java"))),
           entry(
               "Q19863965",
               real(
