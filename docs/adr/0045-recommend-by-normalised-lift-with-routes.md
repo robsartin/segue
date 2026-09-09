@@ -1900,7 +1900,9 @@ change, stood the shipped setting.**
 Nothing above is withdrawn and no decision above is edited, including the ten amendments
 immediately above this one. No constant changed and no code changed. What changed is the taste
 layer: a second deck session dealt from `resource-allocation`, and the census on issue #303 shows
-the graph did not move — its node, edge and log-row totals are the ninth reading's.
+the graph did not move — its node, edge and log-row totals are the ninth reading's on issue #297,
+its counts per kind are unchanged, and its concept-class head is unchanged, so the two pins that
+merged between the readings re-kinded nothing.
 
 **The rule was fixed before the number existed, for the tenth time.** The rule is the one described
 nine amendments above and it was not changed; "the shipped scorer" is what
@@ -1993,9 +1995,9 @@ about the scorer is drawn from either half.
 
 - **The rule of issue #245 applies unchanged from here**, with `resource-allocation` as the
   shipped scorer and the floor unchanged.
-- **The split instant is now the default change**, and a later note that keeps it makes the
-  halves comparable to this reading's; a note that moves it again says so and starts afresh, as
-  this one did.
+- **The split instant is now the default change.** A later note that keeps it draws the same
+  old-half boundary; a note that moves it again says so and starts afresh, as this one did. What
+  any later reading may compare against this one is for that note to say.
 - **Nothing here is unit-testable.** The harness has its own tests; no behaviour changed, so there
   is no test to write and nothing to see red. The verification is the note that preceded the
   reading, the ruling that applied the rule cell by cell, a byte comparison of the block above
