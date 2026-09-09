@@ -221,7 +221,13 @@ public final class SegueService {
     }
     if (reasons.isEmpty()) {
       return ToolResult.ok(
-          "expanded " + qid + ": " + edgesAdded + " edge(s), " + nodesAdded + " new node(s)",
+          "expanded "
+              + qid
+              + ": "
+              + edgesAdded
+              + " edge assertion(s), "
+              + nodesAdded
+              + " new node(s)",
           summary);
     }
     log.warn("expandEntity({}) partial: {}", qid, reasons);

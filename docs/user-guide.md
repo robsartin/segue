@@ -909,7 +909,7 @@ And expanding her finds nothing at all:
 ```json
 {
   "outcome": "ok",
-  "detail": "expanded Q24525280: 0 edge(s), 0 new node(s)",
+  "detail": "expanded Q24525280: 0 edge assertion(s), 0 new node(s)",
   "payload": { "qid": "Q24525280", "nodesAdded": 0, "edgesAdded": 0,
                "skippedNeighbors": 0, "truncated": false, "sourceUnavailable": false }
 }

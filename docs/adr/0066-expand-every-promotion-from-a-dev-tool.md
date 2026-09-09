@@ -393,3 +393,62 @@ than per pair of nodes. `SegueService`'s own detail sentence for a clean expansi
 and not this tool's block, and changing it is a separate issue. The Java names
 `ExpansionOutcome.Expanded#edgesAdded` and `ExpansionTally#edgesAdded` stay too; only the printed
 label and the prose moved.
+
+**Amendment (2026-09-08, issue #299): the per-source heading, and `expand_entity`'s detail
+sentence.**
+
+Nothing above is edited and this ADR keeps `Accepted`. One choice above is superseded: #293's
+amendment left this heading alone for want of an ask, and #299 is that ask.
+
+*The output contract* above names a section `edges by source`. It is now printed as
+**`edge assertions by source`**. Nothing about what it counts changed: those rows are the same
+increments, broken down per adapter id, that the row above them sums as `edge assertions
+recorded` — and that is the reason for the rename, since a section labelled `edges` sitting
+directly under a row labelled `edge assertions recorded` re-opens one line later the ambiguity
+#293 closed. The amendment for #293 renamed that row and left this heading, saying renaming it
+was a separate decision nobody had asked for. #299 is that ask, and this records it; the sentence
+above is not edited, and reads as the record of what was decided then, not as a description of the
+block today.
+
+**The `nodes added` paragraph in the output contract holds unchanged under the new name; read the
+heading it names, and the one in the section list above it, as the renamed one.** It says `nodes
+added` sits under `graph` and not under the per-source section, and its reason is that every
+`AssertionRecord` carries a `Provenance` whose `sourceId` says which adapter produced it while a
+node's identity may instead come from `EntityResolver.fetch`, which has no adapter behind it. That
+is a contrast between two sections and the authority each has for a source id, not a claim about
+the word "edges", so renaming the section changes neither side of it.
+
+**No column moves, and that is the difference from #293.** `ExpansionReport.render` derives the
+label column and the count column from counted rows alone; a section heading is never measured.
+So unlike the longer row label, which shifted every count in the block, this rename shifts
+nothing. `ExpansionReportTest`'s golden block pins the heading as a literal and its
+empty-section test looks the heading up by the same text, so both carry the new name and a
+missing heading still reds. The heading stays an inline literal rather than becoming a named
+constant. #293 named its label because the developer guide's runbook cites it and
+`DeveloperGuideExpandPromotionsExamplesTest` reads it from there. Nothing reads this heading out
+of a document — the mentions above are prose no test resolves — so there is nothing for a
+constant to keep in step, and the golden block pins the text as a literal exactly as it pins every
+other heading.
+
+**`expand_entity`'s detail sentence has moved.** The amendment for #293 recorded that
+`SegueService`'s clean-expansion sentence still said `edge(s)` of the same number, that it was
+seen and left, and that changing it was a separate issue. It now reads
+`expanded <qid>: N edge assertion(s), M new node(s)`.
+
+**That is not a protocol change.** The payload field `edgesAdded`
+([ADR 26](0026-mcp-tool-surface.md)) is untouched, and so is every Java identifier behind it. What
+moved is the `detail` string. `ToolResult` declares that field human-readable for every outcome,
+and [ADR 27](0027-mcp-protocol-conformance.md) is why its failure half is prose a model can act on
+rather than a protocol error; nothing anywhere makes it a field to compute from — a caller that
+wants the number reads `edgesAdded`, nothing in this repository reads the sentence for it, and
+`ExpansionSummary`'s javadoc for that field already said the count is per assertion rather than
+per pair of nodes, which is what the sentence now says too. The tool surface ADR 26 governs is
+unchanged, so ADR 26 needs no amendment of its own. Nothing in `src/test` pinned that sentence
+before #299; a pin was added with the change, and it was seen red on the old wording first.
+
+`get_entity`'s sentence is a different quantity and stays as it is. It counts the edges the graph
+holds on one node, after corroborating assertions have been merged into single edges, so
+`edge(s)` is the correct word for it — the same word in a neighbouring method for a number that
+really is an edge count. The user guide's `expand_entity` transcript moved with the sentence and
+its two `get_entity` transcripts deliberately did not, so the guide shows both wordings — which
+is the distinction, not a drift.

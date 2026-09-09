@@ -13,11 +13,12 @@ import java.util.List;
  * int}s. There is nowhere in either signature to put an identifier, which is a stronger guarantee
  * than a body that merely happens not to print one.
  *
- * <p><b>Every section prints its heading, whether or not it has a row to show.</b> An empty {@code
- * edges by source} means no edge was recorded from any source, and a reader has to be able to tell
- * that from the section simply being gone — the same distinction {@code CensusReport} does not have
- * to draw, because its sections are never empty on a real graph. Applied uniformly here rather than
- * only where the issue names it, so the rule is one rule and not a per-section judgement call.
+ * <p><b>Every section prints its heading, whether or not there is a row to show under it.</b> An
+ * empty {@code edge assertions by source} means no edge assertion was recorded from any source, and
+ * a reader has to be able to tell that from the section simply being gone — the same distinction
+ * {@code CensusReport} does not have to draw, because its sections are never empty on a real graph.
+ * Applied uniformly here rather than only where the issue names it, so the rule is one rule and not
+ * a per-section judgement call.
  *
  * <p><b>Widths are derived from the whole block</b>, {@code CensusReport}'s rule: labels padded to
  * the widest counted label anywhere in the document, counts right-aligned to the widest count
@@ -111,7 +112,7 @@ public final class ExpansionReport {
     body.add(new Row("  nodes added", tally.nodesAdded()));
     body.add(new Row("  " + EDGE_ASSERTIONS_RECORDED, tally.edgesAdded()));
 
-    body.add(new Section("edges by source"));
+    body.add(new Section("edge assertions by source"));
     tally.edgesBySource().forEach((source, n) -> body.add(new Row("  " + source, n)));
 
     body.add(new Section("shortfalls"));

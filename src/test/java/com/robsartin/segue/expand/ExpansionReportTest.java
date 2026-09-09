@@ -42,7 +42,7 @@ class ExpansionReportTest {
           "  nodes added               34",
           "  edge assertions recorded  77",
           "",
-          "edges by source",
+          "edge assertions by source",
           "  wikidata                  60",
           "  musicbrainz               17",
           "",
@@ -146,7 +146,7 @@ class ExpansionReportTest {
 
     List<String> lines = ExpansionReport.lines(tally);
 
-    int index = lines.indexOf("edges by source");
+    int index = lines.indexOf("edge assertions by source");
     assertThat(index).as("the heading is printed even though the map is empty").isPositive();
     assertThat(lines.get(index + 1))
         .as("no row follows an empty section — the next thing is the blank line before the next")
