@@ -422,3 +422,48 @@ rule, the amendment says it stands, names the cells, and says the ninth is the f
 with `resource-allocation` as the shipped scorer. If a challenger clears clause 3, fifteen points at
 the shipped floor and dominance over the floors where the shipped scorer has hits, the rule selects
 it and the amendment says so in the rule's words. A near miss stands, as always.
+
+## Note added 2026-09-08, before the tenth reading (issue #303)
+
+The tenth reading is the second taken after a deck session dealt from `resource-allocation`, and
+the first whose age split falls at the default change. This note is committed before the reading
+exists, so the rule's ordering property survives a tenth time.
+
+**No clause changes**, and the notes above apply as written. "The shipped scorer" is what
+`Recommendations.DEFAULT_SCORER` holds, `resource-allocation`; the shipped floor is unchanged. The
+rule reads the shipped row's whole-population `in pool` and `hits`; the half cells decide nothing.
+
+**The split instant moves, and the rule does not.** The instant carried since the fifth reading,
+`2026-09-06T18:56:00Z`, predates the default change, and the ninth reading's amendment records
+that its new half mixed sessions dealt under `lift` with one dealt under `resource-allocation`, so
+nothing could be read from it. The rule reads whole-population cells only, so the instant is this
+note's to set. This reading is taken with `--rated-since 2026-09-08T02:13:42Z`, the instant pull
+request #292 merged the new default: the old half is everything rated before
+`resource-allocation` shipped, and the new half is only what the deck dealt from it, the sessions
+behind the ninth reading and this one, on the assumption that both sessions ran from main after
+that merge. A rating's timestamp is its last write, so an old entity re-rated in either session
+counts as new; the header's split line says so.
+
+**What the new instant makes comparable, and what it does not.** If the census taken first shows
+the graph did not move (node, edge and log-row totals as the ninth's census on issue #297), the
+whole-population cells compare to the ninth's as the notes above allow, deciding nothing: the
+shipped row's `in pool`, `hits` and rate; and the previously shipped row, `lift` at the same
+floor, against its ninth row. The halves compare to no earlier reading's halves, because the split
+moved; the amendment says so and makes no such comparison. If the census shows the graph moved,
+the whole-population comparisons are off too and the amendment says only what the rule made of the
+cells.
+
+**What the halves may say, written before the table is seen.** The new half is the deck's own
+dealing read back through the scorer that dealt it, which is the hazard issue #272's amendment
+named; this is the first reading where the split puts that half on its own. The amendment reads
+the shipped row's old-half rate beside its new-half rate as that look, and draws no inference
+about the scorer from either. If the new half's rate is above the old half's by more than a few
+points, the amendment says the deck's dealing is visible in the harness where the split now
+isolates it. If it is not, the amendment says this reading shows no such lift in the half the deck
+dealt, and no more than that. Neither sentence decides anything.
+
+**The two sentences of the rule, written before the table is seen.** If the shipped setting
+stands under the rule, the amendment says it stands and names the cells. If a challenger clears
+clause 3, fifteen points at the shipped floor and dominance over the floors where the shipped
+scorer has hits, the rule selects it and the amendment says so in the rule's words. A near miss
+stands, as always.
