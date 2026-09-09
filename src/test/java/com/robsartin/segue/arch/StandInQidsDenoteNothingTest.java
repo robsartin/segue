@@ -511,6 +511,12 @@ class StandInQidsDenoteNothingTest {
                   code("src/test/resources/wikidata/hugo-best-novel.json"),
                   code("src/test/resources/wikidata/scalzi-claims.json"))),
           entry(
+              "Q273057",
+              real(
+                  "class id — already named by ClassLabels, deliberately left unmapped by"
+                      + " KindMapper, pinned at CONCEPT by KindMapperTest (issue #300)",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
               "Q277308",
               real(
                   "entity — a real value in the recorded scalzi-claims.json",
@@ -898,6 +904,13 @@ class StandInQidsDenoteNothingTest {
               real(
                   "class id — mapped by KindMapper",
                   code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+          entry(
+              "Q19389637",
+              real(
+                  "class id — named by ClassLabels, deliberately left unmapped by KindMapper,"
+                      + " pinned at CONCEPT by KindMapperTest (issue #300)",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"),
+                  code("src/test/java/com/robsartin/segue/support/ClassLabelsTest.java"))),
           entry(
               "Q19863965",
               real(

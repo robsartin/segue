@@ -85,4 +85,10 @@ class ClassLabelsTest {
   void shouldLabelEncyclopediaArticleWhenTheClassIsQ13433827() {
     assertThat(ClassLabels.label("Q13433827")).isEqualTo("encyclopedia article");
   }
+
+  @Test
+  @DisplayName("biographical article has a label, confirmed live 2026-09-08 (issue #300)")
+  void shouldLabelBiographicalArticleWhenTheClassIsQ19389637() {
+    assertThat(ClassLabels.label("Q19389637")).isEqualTo("biographical article");
+  }
 }

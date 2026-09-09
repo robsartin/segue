@@ -100,11 +100,12 @@ public final class KindMapper {
     put("Q108352496", NodeKind.WORK); // single release
     put("Q140727568", NodeKind.WORK); // comic book issue
     put("Q7889", NodeKind.WORK); // video game
-    // The third reading (issue #294, after the first expander run) added no rule. The two classes
-    // at the head of its CONCEPT list are Wikimedia pages about a thing rather than the thing, so
-    // they stay CONCEPT on purpose and KindMapperTest pins them, the way it pins the character
-    // classes. The ids are in the test, not here: this table is for what a class MEANS, and a
-    // second copy of the list would be the one a later editor forgets.
+    // The third reading (issue #294, after the first expander run) added no rule, and the pass
+    // below it (issue #300) added none either. The classes at the head of those CONCEPT lists are
+    // pages and catalogues about a thing rather than the thing, so they stay CONCEPT on purpose and
+    // KindMapperTest pins them, the way it pins the character classes. The ids are in the test, not
+    // here: this table is for what a class MEANS, and a second copy of the list would be the one a
+    // later editor forgets.
     // places
     put("Q515", NodeKind.PLACE); // city
     put("Q6256", NodeKind.PLACE); // country
