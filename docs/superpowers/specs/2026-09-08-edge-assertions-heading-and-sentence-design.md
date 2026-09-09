@@ -19,7 +19,8 @@ the code does not, are recorded here rather than left for the implementer to tri
 - **The issue says "The developer guide's chapter that lists the block's sections follows." No
   chapter lists them, and nothing in the developer guide changes.** Across `docs/`, the string
   `edges by source` appears only in `docs/adr/0066-expand-every-promotion-from-a-dev-tool.md`
-  (twice) and in the superpowers specs and plans that produced it. The chapter *Expanding every
+  (in the output contract and in the 2026-09-08 amendment for #293) and in the superpowers specs
+  and plans that produced it. The chapter *Expanding every
   promotion* names the block's edge **row** — through step 5's `` | `claims` / log rows | `` row,
   which `DeveloperGuideExpandPromotionsExamplesTest` reads off
   `ExpansionReport.EDGE_ASSERTIONS_RECORDED` — and it names no section heading of the expansion
@@ -198,3 +199,14 @@ matter are untouched, so `docs/adr/README.md` does not move (`AdrIndexTest`).
   `DocumentationLinksTest` (links and anchors resolve), `AdrIndexTest` (the index row still agrees)
   and `AdrCitationsTest` (no commit citation) among the tests run. This is stated rather than left
   to be inferred.
+
+## Note added 2026-09-08, after review of the amendment this spec drafted
+
+Three sentences above were retracted when ADR 66's amendment for #299 was corrected under review,
+and the amendment is the record: the output contract's `nodes added` paragraph holds *unchanged*
+under the new name, not "word for word" (its words include the old heading); "no client parses" the
+`detail` string is not something this repository can know, and the amendment says instead that
+`ToolResult` declares the field human-readable and nothing here reads the sentence for the number;
+and the contract's "every label is a literal" does not distinguish an inline literal from a named
+constant (#293 named one under the same sentence), so the reason the heading stays inline is that
+no test reads it out of a document. The originals stand above as the draft they were.
