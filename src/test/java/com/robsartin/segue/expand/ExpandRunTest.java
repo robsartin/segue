@@ -57,6 +57,9 @@ class ExpandRunTest {
 
   private static final Instant MINTED_AT = Instant.parse("2026-09-07T10:00:00Z");
 
+  /** The example instant, invented. */
+  private static final Instant SINCE = Instant.parse("2026-09-08T00:00:00Z");
+
   @TempDir private Path dir;
 
   private AssertionLog log;
@@ -129,6 +132,19 @@ class ExpandRunTest {
     run.dryRun(PROMOTIONS, line -> {});
 
     assertThat(log.readAll()).hasSize(before);
+  }
+
+  @Test
+  @DisplayName("a dry run says which population it would have covered when a filter was applied")
+  void shouldNameTheInstantWhenADryRunCoversOnlyWhatWasRatedSince() {
+    List<String> lines = new ArrayList<>();
+
+    run.dryRun(PROMOTIONS, Optional.of(new RatedSince(SINCE, 2)), lines::add);
+
+    assertThat(lines)
+        .as("the clause reaches the consumer, not just the renderer")
+        .anyMatch(line -> line.startsWith("# only promotions rated on or after " + SINCE))
+        .contains(ExpansionReport.DRY_RUN_HEADER);
   }
 
   @Test
@@ -458,6 +474,31 @@ class ExpandRunTest {
       scriptedRun.run(List.of(seed), 10, lines::add);
 
       assertThat(lines).contains(ExpansionReport.HEADER);
+    }
+  }
+
+  @Test
+  @DisplayName("a run says which population it covered when a filter was applied")
+  void shouldNameTheInstantWhenARunCoversOnlyWhatWasRatedSince() {
+    String seed = "Q0900703";
+
+    try (AssertionLog scriptLog = new SqliteAssertionLog(dir.resolve("since.db"));
+        GraphStore scriptGraph = new TinkerGraphStore()) {
+      IngestService ingest = new IngestService(scriptLog, scriptGraph, IdentityMerge.NONE);
+      ingest.record(new NodeAssertion(seed, NodeKind.PERSON, "an act nobody signed", WIKIDATA));
+      ScriptedAdapter adapter = new ScriptedAdapter("wikidata", Map.of());
+      EntityExpansion expansion =
+          new EntityExpansion(
+              new NeverCalledResolver(), scriptGraph, ingest, new SourceAdapters(List.of(adapter)));
+      ExpandRun scriptedRun = new ExpandRun(expansion, scriptGraph);
+      List<String> lines = new ArrayList<>();
+
+      scriptedRun.run(List.of(seed), Optional.of(new RatedSince(SINCE, 2)), 10, lines::add);
+
+      assertThat(lines)
+          .as("the clause reaches the consumer, not just the renderer")
+          .anyMatch(line -> line.startsWith("# only promotions rated on or after " + SINCE))
+          .contains(ExpansionReport.HEADER);
     }
   }
 
