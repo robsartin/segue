@@ -2006,12 +2006,13 @@ about the scorer is drawn from either half.
   inside `./gradlew check`.
 
 **Amendment (2026-09-11, issue #309): the eleventh reading, the first after the expander's second
-run, stood the shipped setting on a table that did not move.**
+run, stood the shipped setting on an unchanged `in pool` and `hits` at the shipped floor.**
 
-Nothing above is withdrawn and no decision above is edited, including the ten amendments
+Nothing above is withdrawn and no decision above is edited, including the eleven amendments
 immediately above this one. No constant changed and no code changed. What changed is the graph: the
-promotion expander ran a second time on 2026-09-11, with the `--rated-since` flag issue #307 gave it,
-over the promotions rated since its first run; the run and the census before and after are on
+promotion expander ([ADR 66](0066-expand-every-promotion-from-a-dev-tool.md)) ran a second time on
+2026-09-11, with the `--rated-since` flag issue #307 gave it, over the promotions rated since its
+first run; the run and the census before and after are on
 issue #307. The ratings did not move, so the eligible population is the tenth reading's exactly,
 and every whole-population cell sits beside the tenth's row for row.
 
@@ -2066,20 +2067,24 @@ at every floor in the grid, so the rate rises only as `in pool` falls, and at fl
 clears about a tenth of the margin. The `negatives` and `neg mean rank` cells were read for every
 row and, per clause 5, decided nothing. Outcome: the shipped setting stands.
 
-**The observations the note allowed.** Against the tenth reading, row for row: the shipped row is
-unchanged in every whole-population cell and in both halves at every floor, so its rate did not
-move at all. Reach rose where the run could raise it and by the least it could: `in pool` is
-unchanged at the two lowest floors, where every eligible entity was already in pool, and rose by a
-couple of entities at floors eight and twelve, all of them in the new half. Every other scorer's
-`hits` cell is unchanged at the shipped floor; `lift`'s moved by a few at the shipped floor and the
-highest.
+**The observations the note allowed.** Against the tenth reading, row for row: the shipped row's
+`hits` cell is the tenth's at every floor, and so are both of its half `hits` cells; at the
+shipped floor its `in pool` cell is the tenth's too, so its rate there did not move at all. At the
+two highest floors `in pool` rose while `hits` held, so the shipped rate there slipped by well
+under a tenth of a point. Reach rose where the run could raise it: `in pool` is unchanged at the
+two lowest floors, where every eligible entity was already in pool, and rose by a couple of
+entities at floors eight and twelve, all of them in the new half. At the shipped floor `raw`'s and
+`adamic-adar`'s `hits` cells are the tenth's; `lift`'s is the only one that moved, by a couple of
+entities there and by a single entity at the highest floor.
 
-**The note's second sentence applies.** Reach rose at the floors above the lowest and the shipped
-rate did not move by more than a few points; it did not move. So, in the note's words, the newest
+**The second of the note's four sentences applies.** Reach rose at the two highest floors — not at
+the shipped floor, where every eligible entity was already in pool — and the shipped rate there
+did not move by more than a few points; it did not move at all. So, in the note's words, the newest
 promotions' neighbourhoods are not where the held-out entities' routes run, which is a finding
 about what to expand next and not about the setting. What the aggregates support beyond that is
-one sentence: the run expanded the entities the new half holds out, and holding them out with more
-neighbours changed how many of them the shipped scorer's head reaches not at all.
+one sentence: the run's window opens before the split instant above, so every entity the new half
+holds out falls inside it, and holding them out with more neighbours changed how many of them the
+shipped scorer's head reaches not at all.
 
 ### What this does and does not establish
 
@@ -2088,10 +2093,10 @@ neighbours changed how many of them the shipped scorer's head reaches not at all
   newest promotions. ADR 65's first consequence is the governing one: no row of that table means
   anything on its own.
 - **It does not establish that expanding promotions cannot move the harness.** It establishes that
-  expanding these promotions, the ones rated since the first full run, moved this reading's whole
-  population by nothing at the shipped floor. The first full run moved the eighth reading a great
-  deal; the difference between the two runs is a question for the next expansion decision, not for
-  this amendment.
+  expanding these promotions, the ones rated since the first full run, left the shipped row's
+  `in pool` and `hits` at the shipped floor exactly where the tenth reading found them. The first
+  full run moved the eighth reading a great deal; the difference between the two runs is a
+  question for the next expansion decision, not for this amendment.
 - **The negatives condition was dropped rather than satisfied**, so nothing here is a finding about
   the negatives column; the cells are quoted above, on the entity-fold scale, and decided nothing.
 
