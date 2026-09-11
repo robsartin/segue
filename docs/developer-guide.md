@@ -3196,6 +3196,45 @@ carries no figures, because a figure here would be a number nothing regenerates.
 `taste` and `edges` / withdrawn are the ones worth checking hardest: they are what a fence being
 wrong would show up as.
 
+### Only what was rated recently: `--rated-since`
+
+Every run above re-records every assertion of the last one, for the sake of the newest few
+promotions. `--rated-since <ISO-8601 instant>` keeps only the promotions whose rating's last write
+is on or after the instant. Absent, nothing changes and no timestamp is read at all.
+
+The dry run, first:
+
+```bash
+./gradlew expandPromotions --args="--db $HOME/.segue/segue.db --dry-run --rated-since 2026-09-08T00:00:00Z"
+```
+
+The instant is yours to choose — the end of the last run is the usual one — and the block now
+carries a second `#` line naming it and how many promotions it excluded.
+
+**What `considered` means here.** It is the promoted population *after* the filter, so step 2's
+arithmetic (`considered` minus `in the graph` minus `minted`) still reads, over the smaller
+population. `considered` plus the excluded count on the clause is the whole promoted population,
+which is how you check the instant did what you meant.
+
+The run:
+
+```bash
+./gradlew expandPromotions --args="--db $HOME/.segue/segue.db --rated-since 2026-09-08T00:00:00Z"
+```
+
+**The limit, stated where the number is read.** `updated_at` is the last write
+([ADR 39](adr/0039-affinity-capture-and-read.md)), so a promotion rated years ago and re-rated after
+the instant is expanded again. That is cheap and harmless — one entity re-expanded — and it is why
+this is "rated since" rather than "new since".
+
+**How to read step 5's table after a partial run.** The table is unchanged and is still read
+against step 1's census: every `up` is still `up`, because expanding a smaller population cannot
+move a line the other way. What changes is the **size** of each movement, which is bounded by the
+promotions that actually ran rather than by the whole population — so a small delta against a large
+`considered` is the finding, and a small delta against a small `considered` is not. The two
+`unchanged` rows — `taste` and `edges` / withdrawn — are unchanged for reasons that have nothing to
+do with how many promotions ran, so they are still the ones to check hardest.
+
 ### What to file from what you saw
 
 This run changes no code. What it produces is issues, and these are the ones to watch for:
