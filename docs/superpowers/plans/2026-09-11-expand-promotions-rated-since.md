@@ -331,8 +331,8 @@ line**. If you find yourself re-padding counts, stop — something else is wrong
      * <p><b>A clause rather than a counted row.</b> A row would print on every run, and on a run
      * with no instant it would read {@code excluded 0} — a count of a filter nobody applied, a
      * line a reader would believe; ADR 65 keeps its own no-instant block byte-identical for the
-     * same reason. It would also widen the label column of every block by
-     * two characters for a number that is usually zero.
+     * same reason. It would also land on every block already pasted into an issue, for a value
+     * only one run in many carries.
      *
      * <p>The last-write clause is here rather than in the guide alone because the number beside it
      * is misread without it: {@code updated_at} is when the rating last changed, so a promotion

@@ -12,9 +12,9 @@ import java.util.Optional;
  * shape, held to it for the same reason: {@link #lines} takes an {@link ExpansionTally} whose every
  * component is an {@code int} or a map keyed by {@code SourceAdapter#id()} or {@link
  * ExpansionOutcome.Reason}, and {@link #dryRunLines} takes a {@link Preflight} of three {@code
- * int}s. Both arities also take an {@code Optional<RatedSince>}, whose own two components are an
- * {@code Instant} and an {@code int}. There is nowhere in any of it to put an identifier, which is
- * a stronger guarantee than a body that merely happens not to print one.
+ * int}s. Each renderer's long arity also takes an {@code Optional<RatedSince>}, whose own two
+ * components are an {@code Instant} and an {@code int}. There is nowhere in any of it to put an
+ * identifier, which is a stronger guarantee than a body that merely happens not to print one.
  *
  * <p><b>Every section prints its heading, whether or not there is a row to show under it.</b> An
  * empty {@code edge assertions by source} means no edge assertion was recorded from any source, and
@@ -168,7 +168,7 @@ public final class ExpansionReport {
    *
    * <p><b>A clause rather than a counted row.</b> A row would print on every run, and on a run with
    * no instant it would read {@code excluded 0} — a count of a filter nobody applied. It would also
-   * widen the label column of every block by two characters for a number that is usually zero.
+   * land on every block already pasted into an issue, for a value only one run in many carries.
    * Keeping the block with no instant byte-identical is what ADR 65's 2026-09-06 amendment does for
    * its own report, and for the same reason: every block already on record stays comparable.
    *

@@ -458,8 +458,8 @@ promotions the instant admits.**
 
 Nothing above is withdrawn, no decision above is edited, and this ADR keeps `Accepted`. What changes
 is that a run may now be asked to visit a smaller population than every promotion, and the block
-says so when it was. The usage line above gains an optional `--rated-since`; `ExpandCli.USAGE` is
-the authority on its current text.
+says so when it was. The usage line above no longer lists every flag: the tool takes an optional
+`--rated-since`, and `ExpandCli.USAGE` is the authority on its current text.
 
 **The flag.** `./gradlew expandPromotions --args="--db <segue.db> --rated-since <ISO-8601
 instant>"`, optional, parsed exactly as `evaluate` already parses its own flag of the same name —
@@ -479,9 +479,9 @@ was **not** handed, which `considered` and its three parts have no business desc
 **The header form.** One `#` clause is printed directly under the block's own header, in **both**
 the dry-run block and the real block, naming the instant, how many promotions it excluded and the
 last-write limit below. A clause rather than a counted row. A row would print on every run, and on a
-run with no instant it would read an excluded count of zero — a count of a filter nobody applied —
-and it would re-pad every count in every block by the width of a number that is usually zero, for a
-value only one run in many carries. `ExpansionReport.sinceLine` is the authority on the clause's
+run with no instant it would read an excluded count of zero — a count of a filter nobody applied,
+on every block ever pasted, for a value only one run in many carries. `ExpansionReport.sinceLine`
+is the authority on the clause's
 wording and carries that argument in full. **The block with no instant is byte-identical to
 today's**, which is what keeps every block already pasted into an issue comparable to a new one, and
 which is what [ADR 65](0065-an-offline-evaluation-harness-for-the-recommender.md)'s 2026-09-06
