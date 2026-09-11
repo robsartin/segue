@@ -467,3 +467,41 @@ stands under the rule, the amendment says it stands and names the cells. If a ch
 clause 3, fifteen points at the shipped floor and dominance over the floors where the shipped
 scorer has hits, the rule selects it and the amendment says so in the rule's words. A near miss
 stands, as always.
+
+## Note added 2026-09-11, before the eleventh reading (issue #309)
+
+The eleventh reading follows the promotion expander's second run, the first with `--rated-since`
+(issue #307, the run and the census before and after on that issue), and it is taken with the
+instant the tenth reading set, `2026-09-08T02:13:42Z`. This note is committed before the reading
+exists, so the rule's ordering property survives an eleventh time.
+
+**No clause changes**, and the notes above apply as written. "The shipped scorer" is what
+`Recommendations.DEFAULT_SCORER` holds, `resource-allocation`; the shipped floor is unchanged. The
+rule reads the shipped row's whole-population `in pool` and `hits`; the half cells decide nothing.
+
+**What moved is the graph, not the taste layer.** The census on issue #307 shows the ratings
+unchanged since the tenth reading, so the eligible population is the tenth's exactly, and every
+whole-population cell can be set beside the tenth's row for row, as the eighth was set beside the
+seventh. The run expanded only the promotions rated since the first full run: the entities the
+deck dealt from `resource-allocation` and the owner rated at or above the promotion threshold.
+The observations allowed against the tenth, deciding nothing: for every row, `in pool` and
+`hits`; the shipped setting's rate; and the halves, which are the tenth's halves under the same
+instant and so are comparable to the tenth's for the first time since the split moved — read as
+before, the new half being the deck's own dealing read back, with no inference about the scorer
+drawn from either.
+
+**The sentences, written before the table is seen.** Reach — `in pool` — should rise at the
+floors above the lowest, since the run added neighbours to the newest promotions and those are
+entities the harness holds out. If the shipped setting's hit rate rose against the tenth by more
+than a few points, the amendment says the run turned reach into hits. If reach rose and the rate
+did not move by more than a few points, the amendment says the newest promotions' neighbourhoods
+are not where the held-out entities' routes run, a finding about what to expand next and not
+about the setting. If reach did not rise, the amendment says the run reached nothing the harness
+sees, and the expander is the thing to look at. If the rate fell by more than a few points, the
+amendment says so and offers no explanation the aggregates do not support.
+
+**The two sentences of the rule, written before the table is seen.** If the shipped setting
+stands under the rule, the amendment says it stands and names the cells. If a challenger clears
+clause 3, fifteen points at the shipped floor and dominance over the floors where the shipped
+scorer has hits, the rule selects it and the amendment says so in the rule's words. A near miss
+stands, as always.
