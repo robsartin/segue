@@ -1,6 +1,7 @@
 package com.robsartin.segue.evaluate;
 
 import com.robsartin.segue.domain.Equivalences;
+import com.robsartin.segue.domain.RatingAge;
 import com.robsartin.segue.ingest.GraphProjector;
 import com.robsartin.segue.ingest.Replay;
 import com.robsartin.segue.port.IdentityMerge;

@@ -74,7 +74,9 @@ domain/   records + Wikidata-derived edge vocabulary. NO third-party deps. Also 
           cannot apply two different answers. revisitable is read inside `rate` alone
           (Deck.dealRevision, RateRun.buildDeck) — `recommend` has no revision pass — and
           lives here so the deal and the count that precedes it cannot diverge. One home per
-          question, whoever asks.
+          question, whoever asks. Also RatingAge: which rated entities were last written on or
+          after an instant, read by `evaluate` (its held-out split) and `expand` (its promotion
+          filter), so the two cannot disagree about what "since" means.
 port/     GraphStore, AssertionLog, AffinityStore, SourceAdapter, EntityResolver
           — the seams.
 tinker/   Gremlin adapter (the chosen one).

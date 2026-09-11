@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
+import com.robsartin.segue.domain.RatingAge;
 import com.robsartin.segue.domain.Recommendation;
 import com.robsartin.segue.domain.Scorer;
 import com.robsartin.segue.recommend.Sweep;

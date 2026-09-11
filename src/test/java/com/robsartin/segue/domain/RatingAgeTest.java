@@ -1,4 +1,4 @@
-package com.robsartin.segue.evaluate;
+package com.robsartin.segue.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
