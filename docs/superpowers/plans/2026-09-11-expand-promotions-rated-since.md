@@ -329,9 +329,9 @@ line**. If you find yourself re-padding counts, stop — something else is wrong
      * Said under the header when a filter was applied, and not at all when none was.
      *
      * <p><b>A clause rather than a counted row.</b> A row would print on every run, and on a run
-     * with no instant it would read {@code excluded 0} — a count of a filter nobody applied, which
-     * is the shape ADR 65 refused in its own report ("a split line naming a division nothing made
-     * is a line a reader would believe"). It would also widen the label column of every block by
+     * with no instant it would read {@code excluded 0} — a count of a filter nobody applied, a
+     * line a reader would believe; ADR 65 keeps its own no-instant block byte-identical for the
+     * same reason. It would also widen the label column of every block by
      * two characters for a number that is usually zero.
      *
      * <p>The last-write clause is here rather than in the guide alone because the number beside it
@@ -1042,7 +1042,7 @@ gate, over a tree that is otherwise unchanged.
     tally; it is on the clause.
   - **The header form**: one `#` clause under the block's own header, in **both** blocks, naming the
     instant, the excluded count and the last-write limit. Say why a clause and not a counted row
-    (ADR 65's own words about a line naming a division nothing made; and a row would re-pad every
+    (a row would name a division nothing made, and a row would re-pad every
     count in every block for a number that is usually zero). Say that **the block with no instant is
     byte-identical to today's**, which is what keeps every block already pasted into an issue
     comparable, and that a golden test pins it character for character.
@@ -1055,7 +1055,8 @@ gate, over a tree that is otherwise unchanged.
     entity the owner asked to expand is never visited and nothing says so. The refusal names no qid
     and no count.
   - **Alternatives rejected**: recording which promotions have been expanded (a new claim type or a
-    mark in the log — the timestamp is a proxy that needs no state; filed, not done here); an
+    mark in the log — the timestamp is a proxy that needs no state; not done here, and no issue is
+    recorded for it); an
     excluded **row** instead of a clause; making the filter mandatory with a default instant; and
     copying the harness's machinery into `expand` rather than moving it into `domain`.
   - **The closing verification paragraph**, as above.
