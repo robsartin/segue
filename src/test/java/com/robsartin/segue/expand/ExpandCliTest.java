@@ -43,6 +43,21 @@ class ExpandCliTest {
   /** Rated below it, so it is not a promotion at all. */
   private static final String SHRUGGED_AT = "Q0900702";
 
+  /** A promotion whose rating was last written before {@link #THE_INSTANT}. */
+  private static final String RATED_LONG_AGO = "Q0900703";
+
+  /** A promotion whose rating was last written after {@link #THE_INSTANT}. */
+  private static final String RATED_RECENTLY = "Q0900705";
+
+  /** A promotion rated at {@link #WHEN} and rated again at {@link #AGAIN}. */
+  private static final String RE_RATED = "Q0900706";
+
+  /** The boundary the filtering tests give to {@code --rated-since}. */
+  private static final String THE_INSTANT = "2026-06-01T00:00:00Z";
+
+  /** After {@link #THE_INSTANT} — when the two later writes happened. */
+  private static final Instant AGAIN = Instant.parse("2026-07-01T00:00:00Z");
+
   @TempDir private Path home;
 
   private Logger rootLogger;
@@ -245,6 +260,61 @@ class ExpandCliTest {
   }
 
   @Test
+  @DisplayName("--rated-since is carried as the parsed instant when one is given")
+  void shouldCarryTheInstantWhenRatedSinceIsGiven() {
+    assertThat(
+            ExpandCli.parse(
+                    new String[] {"--db", "db.sqlite", "--rated-since", "2026-09-08T00:00:00Z"},
+                    null,
+                    home.toString())
+                .ratedSince())
+        .contains(Instant.parse("2026-09-08T00:00:00Z"));
+  }
+
+  @Test
+  @DisplayName("no instant is carried when the flag is absent, which is every run before this one")
+  void shouldCarryNoInstantWhenRatedSinceIsAbsent() {
+    assertThat(
+            ExpandCli.parse(new String[] {"--db", "db.sqlite"}, null, home.toString()).ratedSince())
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("--rated-since that is not an instant is refused with this tool's usage error")
+  void shouldRefuseTheInstantWhenItIsNotAnInstant() {
+    assertThatThrownBy(
+            () ->
+                ExpandCli.parse(
+                    new String[] {"--db", "db.sqlite", "--rated-since", "last Tuesday"},
+                    null,
+                    home.toString()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining(
+            "--rated-since takes an ISO-8601 instant like 2026-09-06T15:00:00Z, got last Tuesday")
+        .hasMessageContaining("[--rated-since");
+  }
+
+  @Test
+  @DisplayName("--rated-since given twice is refused, because last-wins is worst on a filter")
+  void shouldRefuseTheInstantWhenItIsGivenTwice() {
+    assertThatThrownBy(
+            () ->
+                ExpandCli.parse(
+                    new String[] {
+                      "--db",
+                      "db.sqlite",
+                      "--rated-since",
+                      "2026-09-06T15:00:00Z",
+                      "--rated-since",
+                      "2026-09-08T00:00:00Z"
+                    },
+                    null,
+                    home.toString()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("was given twice");
+  }
+
+  @Test
   @DisplayName("an unknown option is refused with a usage error")
   void shouldRefuseAnUnknownOptionWhenOneIsGiven() {
     assertThatThrownBy(
@@ -253,5 +323,113 @@ class ExpandCliTest {
                     new String[] {"--db", "db.sqlite", "--frobnicate", "x"}, null, home.toString()))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("unknown option --frobnicate");
+  }
+
+  @Test
+  @DisplayName("only the promotions rated since the instant are considered, and the rest drop out")
+  void shouldConsiderOnlyTheRecentPromotionsWhenAnInstantIsGiven() {
+    Path db = threePromotions();
+
+    captured.list.clear();
+    ExpandCli.main(new String[] {"--db", db.toString(), "--dry-run"});
+    int withoutTheInstant = countOn(lines(), "considered");
+
+    captured.list.clear();
+    ExpandCli.main(new String[] {"--db", db.toString(), "--dry-run", "--rated-since", THE_INSTANT});
+    int withTheInstant = countOn(lines(), "considered");
+
+    assertThat(withoutTheInstant)
+        .as("all three promotions, or the drop below is a drop from nothing")
+        .isEqualTo(3);
+    assertThat(withTheInstant)
+        .as("the one rated before the instant is gone; the recent one and the re-rated one stay")
+        .isEqualTo(2);
+  }
+
+  @Test
+  @DisplayName("a promotion rated long ago and re-rated after the instant is expanded again")
+  void shouldConsiderThePromotionWhenItWasRatedAgainAfterTheInstant() {
+    Path db = reRatedBesideOneThatNeverWas();
+
+    captured.list.clear();
+    ExpandCli.main(new String[] {"--db", db.toString(), "--dry-run"});
+    int withoutTheInstant = countOn(lines(), "considered");
+
+    captured.list.clear();
+    ExpandCli.main(new String[] {"--db", db.toString(), "--dry-run", "--rated-since", THE_INSTANT});
+    int withTheInstant = countOn(lines(), "considered");
+
+    assertThat(withoutTheInstant)
+        .as("both promotions, or the drop below is a drop from nothing")
+        .isEqualTo(2);
+    assertThat(withTheInstant)
+        .as("the re-rated promotion is the only one left; the one never re-rated is gone")
+        .isEqualTo(1);
+  }
+
+  /**
+   * Three invented entities, all nodes, all rated at the promotion threshold: one whose rating was
+   * last written before the instant, one after it, and one written twice.
+   */
+  private Path threePromotions() {
+    Path db = home.resolve("three.db");
+    Provenance sourced = new Provenance("invented", "invented:3", WHEN, 1.0);
+    try (SqliteAssertionLog log = new SqliteAssertionLog(db);
+        SqliteAffinityStore affinity = new SqliteAffinityStore(db)) {
+      log.append(new NodeAssertion(RATED_LONG_AGO, NodeKind.GROUP, "an invented act", sourced));
+      log.append(
+          new NodeAssertion(RATED_RECENTLY, NodeKind.GROUP, "another invented act", sourced));
+      log.append(new NodeAssertion(RE_RATED, NodeKind.GROUP, "a third invented act", sourced));
+      affinity.put(new AffinityRecord(RATED_LONG_AGO, KnownList.PROMOTION_RATING, null, WHEN));
+      affinity.put(new AffinityRecord(RATED_RECENTLY, KnownList.PROMOTION_RATING, null, AGAIN));
+      reRate(affinity);
+    }
+    return db;
+  }
+
+  /**
+   * The re-rated promotion beside one that was never re-rated.
+   *
+   * <p>The second promotion is what makes the test capable of failing: a database holding the
+   * re-rated entity alone reports one promotion considered whether the filter ran or not.
+   */
+  private Path reRatedBesideOneThatNeverWas() {
+    Path db = home.resolve("re-rated.db");
+    Provenance sourced = new Provenance("invented", "invented:4", WHEN, 1.0);
+    try (SqliteAssertionLog log = new SqliteAssertionLog(db);
+        SqliteAffinityStore affinity = new SqliteAffinityStore(db)) {
+      log.append(new NodeAssertion(RE_RATED, NodeKind.GROUP, "a third invented act", sourced));
+      log.append(new NodeAssertion(RATED_LONG_AGO, NodeKind.GROUP, "an invented act", sourced));
+      affinity.put(new AffinityRecord(RATED_LONG_AGO, KnownList.PROMOTION_RATING, null, WHEN));
+      reRate(affinity);
+    }
+    return db;
+  }
+
+  /**
+   * Written at {@link #WHEN} and then written again at {@link #AGAIN}, on purpose.
+   *
+   * <p>{@code SqliteAffinityStore.put} upserts one row per entity (ADR 39), so the second write is
+   * what {@code updated_at} holds — and a fixture that only ever wrote the later value would pass
+   * without the re-rating being what makes it pass.
+   */
+  private static void reRate(SqliteAffinityStore affinity) {
+    affinity.put(new AffinityRecord(RE_RATED, KnownList.PROMOTION_RATING, null, WHEN));
+    affinity.put(new AffinityRecord(RE_RATED, KnownList.PROMOTION_RATING, null, AGAIN));
+  }
+
+  private List<String> lines() {
+    return List.copyOf(captured.list).stream().map(ILoggingEvent::getFormattedMessage).toList();
+  }
+
+  /** The number on the block's row for this label — the padding is not the subject here. */
+  private static int countOn(List<String> everyLine, String label) {
+    String row =
+        everyLine.stream()
+            .filter(line -> line.strip().startsWith(label))
+            .findFirst()
+            .orElseThrow(
+                () -> new AssertionError("no '" + label + "' row in the block: " + everyLine));
+    return Integer.parseInt(row.strip().substring(label.length()).strip());
   }
 }

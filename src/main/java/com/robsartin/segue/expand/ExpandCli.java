@@ -2,6 +2,7 @@ package com.robsartin.segue.expand;
 
 import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.KnownList;
+import com.robsartin.segue.domain.RatingAge;
 import com.robsartin.segue.expansion.EntityExpansion;
 import com.robsartin.segue.expansion.ExpansionSources;
 import com.robsartin.segue.ingest.GraphProjector;
@@ -18,9 +19,13 @@ import com.robsartin.segue.wikidata.WikidataEntityResolver;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,12 +39,21 @@ import org.slf4j.LoggerFactory;
  * class never names {@code support.DefaultDatabase} and never takes a {@link Path} out of {@code
  * support}: the refusal quotes the path back through {@link RequiredDatabase#refusal}, which owns
  * that resolution.
+ *
+ * <p><b>It reads when a rating last changed, and only when {@code --rated-since} asks.</b> The read
+ * is {@code com.robsartin.segue.port.AffinityStore#readUpdatedAt}, under {@code
+ * ArchitectureTest.onlyTheHarnessAndTheExpanderReadWhenARatingChanged} — the fence the evaluation
+ * harness was the only tool inside until this one asked the same question (#276, #307). It carries
+ * neither the note nor the score, and a run given no instant never makes the call at all. This is
+ * the only class in the package that touches the store.
  */
 public final class ExpandCli {
 
   private static final Logger log = LoggerFactory.getLogger(ExpandCli.class);
 
-  private static final String USAGE = "usage: --db <segue.db> [--max-new-edges <n>] [--dry-run]";
+  private static final String USAGE =
+      "usage: --db <segue.db> [--max-new-edges <n>] [--dry-run] [--rated-since <ISO-8601 instant,"
+          + " e.g. 2026-09-06T15:00:00Z>]";
 
   private ExpandCli() {}
 
@@ -50,8 +64,9 @@ public final class ExpandCli {
    * @param maxNewEdges the bound handed to every entity's expansion, defaulting to {@link
    *     ExpandContext#defaults()}
    * @param dryRun report what would be visited and touch no network and no log
+   * @param ratedSince the instant to filter promotions by, or empty for no filter
    */
-  record Options(Path database, int maxNewEdges, boolean dryRun) {}
+  record Options(Path database, int maxNewEdges, boolean dryRun, Optional<Instant> ratedSince) {}
 
   /** Parse and validate, refusing anything that could not work before a store is opened. */
   static Options parse(String[] args, String envDatabase, String userHome) {
@@ -88,11 +103,17 @@ public final class ExpandCli {
       }
     }
 
+    Instant ratedSince = null;
+    String ratedSinceValue = values.remove("--rated-since");
+    if (ratedSinceValue != null) {
+      ratedSince = instant(ratedSinceValue);
+    }
+
     if (!values.isEmpty()) {
       throw usage("unknown option " + values.keySet().iterator().next());
     }
 
-    return new Options(database, maxNewEdges, dryRun);
+    return new Options(database, maxNewEdges, dryRun, Optional.ofNullable(ratedSince));
   }
 
   private static int number(String value) {
@@ -100,6 +121,15 @@ public final class ExpandCli {
       return Integer.parseInt(value);
     } catch (NumberFormatException e) {
       throw usage("--max-new-edges takes a whole number, got " + value);
+    }
+  }
+
+  private static Instant instant(String value) {
+    try {
+      return Instant.parse(value);
+    } catch (DateTimeParseException e) {
+      throw usage(
+          "--rated-since takes an ISO-8601 instant like 2026-09-06T15:00:00Z, got " + value);
     }
   }
 
@@ -165,7 +195,27 @@ public final class ExpandCli {
       // KnownList.promoted with no file IS "rated at or above PROMOTION_RATING, ascending by
       // qid" — the threshold and the order from the class that owns both, rather than a second
       // copy of the rule here (issues #106 and #109).
-      List<String> promotions = KnownList.promoted(List.of(), ratings);
+      List<String> promoted = KnownList.promoted(List.of(), ratings);
+      // Read only when asked: a run with no --rated-since reads no timestamp at all, which is
+      // ADR 16's data minimisation falling out of the shape rather than being argued for. The
+      // timestamps are resolved through the same merges the ratings were, so the two maps are
+      // keyed alike and a promotion's age cannot be read off another row (issues #276, #307).
+      // The set handed over is the PROMOTIONS and not every rated entity: this tool's population
+      // is the promotions, so a rated entity it was never going to visit is not a reason to
+      // refuse the run.
+      Optional<RatingAge> age =
+          options
+              .ratedSince()
+              .map(
+                  since ->
+                      RatingAge.of(
+                          since,
+                          merges.resolveUpdatedAt(affinity.readUpdatedAt()),
+                          Set.copyOf(promoted)));
+      List<String> promotions =
+          age.map(it -> promoted.stream().filter(it::isNew).toList()).orElse(promoted);
+      Optional<RatedSince> filter =
+          age.map(it -> new RatedSince(it.since(), promoted.size() - promotions.size()));
       log.info("{} promotion(s) to visit", promotions.size());
 
       Clock clock = Clock.systemUTC();
@@ -178,8 +228,16 @@ public final class ExpandCli {
           new EntityExpansion(resolver, graph, ingest, ExpansionSources.both(resolver, clock));
 
       ExpandRun run = new ExpandRun(expansion, graph);
+      // The long arity when a filter was applied and the short one when none was, so both keep a
+      // production caller rather than one of them being reachable from tests alone.
       if (options.dryRun()) {
-        run.dryRun(promotions, log::info);
+        if (filter.isPresent()) {
+          run.dryRun(promotions, filter, log::info);
+        } else {
+          run.dryRun(promotions, log::info);
+        }
+      } else if (filter.isPresent()) {
+        run.run(promotions, filter, options.maxNewEdges(), log::info);
       } else {
         run.run(promotions, options.maxNewEdges(), log::info);
       }

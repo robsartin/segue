@@ -1,5 +1,6 @@
 package com.robsartin.segue.evaluate;
 
+import com.robsartin.segue.domain.RatingAge;
 import com.robsartin.segue.domain.Recommendation;
 import com.robsartin.segue.domain.Recommendations;
 import com.robsartin.segue.recommend.Sweep;

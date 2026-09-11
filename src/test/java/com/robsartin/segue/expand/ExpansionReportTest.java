@@ -3,9 +3,12 @@ package com.robsartin.segue.expand;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.expansion.ExpansionOutcome;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -59,6 +62,24 @@ class ExpansionReportTest {
           "  unknown entity             1",
           "  local entity               1");
 
+  /** The example instant, invented; nothing here was read from a database. */
+  private static final Instant SINCE = Instant.parse("2026-09-08T00:00:00Z");
+
+  /**
+   * The clause both blocks print when an instant was given, character for character. A literal, not
+   * ExpansionReport's constant — see GOLDEN_BLOCK.
+   */
+  private static final String SINCE_LINE =
+      "# only promotions rated on or after 2026-09-08T00:00:00Z: 7 excluded (rated before it) —"
+          + " a rating's timestamp is its last write, so a re-rated old promotion counts as new.";
+
+  /** The golden block with the clause inserted under its header, and nothing else moved. */
+  private static List<String> withSinceLine(List<String> block) {
+    List<String> withIt = new ArrayList<>(block);
+    withIt.add(1, SINCE_LINE);
+    return List.copyOf(withIt);
+  }
+
   private static ExpansionTally goldenTally() {
     // LinkedHashMap, not Map.of: the golden block pins insertion order, and Map.of's iteration
     // order is unspecified.
@@ -91,6 +112,13 @@ class ExpansionReportTest {
   }
 
   @Test
+  @DisplayName("the block names the instant and what it excluded when a filter was applied")
+  void shouldNameTheInstantWhenTheBlockCoversOnlyWhatWasRatedSince() {
+    assertThat(ExpansionReport.lines(goldenTally(), Optional.of(new RatedSince(SINCE, 7))))
+        .containsExactlyElementsOf(withSinceLine(GOLDEN_BLOCK));
+  }
+
+  @Test
   @DisplayName("the dry run block states what would be visited, headed differently")
   void shouldRenderTheDryRunBlockWhenNothingIsAppended() {
     List<String> lines = ExpansionReport.dryRunLines(new Preflight(4, 2, 1));
@@ -99,6 +127,24 @@ class ExpansionReportTest {
         .containsExactly(
             "# segue promotion expansion — dry run: appends nothing. Aggregates only"
                 + " (ADR 51, ADR 63).",
+            "",
+            "promotions",
+            "  considered    4",
+            "  in the graph  2",
+            "  minted        1");
+  }
+
+  @Test
+  @DisplayName("the dry run block names the instant and what it excluded when a filter was applied")
+  void shouldNameTheInstantWhenTheDryRunBlockCoversOnlyWhatWasRatedSince() {
+    List<String> lines =
+        ExpansionReport.dryRunLines(new Preflight(4, 2, 1), Optional.of(new RatedSince(SINCE, 7)));
+
+    assertThat(lines)
+        .containsExactly(
+            "# segue promotion expansion — dry run: appends nothing. Aggregates only"
+                + " (ADR 51, ADR 63).",
+            SINCE_LINE,
             "",
             "promotions",
             "  considered    4",

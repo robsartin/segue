@@ -1151,7 +1151,8 @@ class ArchitectureTest {
                   + " rather than a field on an MCP tool");
 
   /**
-   * Issue #276: the timestamp read is the evaluation harness's alone.
+   * Issues #276 and #307: the timestamp read is the evaluation harness's and the promotion
+   * expander's, and nobody else's.
    *
    * <p>The third rule of this shape, and it is here for {@link
    * #onlyTheRatingsToolReadsEveryRating}'s reason rather than {@link
@@ -1162,22 +1163,36 @@ class ArchitectureTest {
    * it is reachable from {@code mcp} the moment somebody writes the line, and {@code
    * ToolSurfaceTest} counts tools rather than fields.
    *
-   * <p><b>A new rule rather than a widening of either sibling</b>, for ADR 63's reason that ADR 65
-   * restates: a rule named for one tool and quoted in an immutable ADR does not get stretched to
-   * cover a second. It names {@code evaluate} because the harness splits its held-out population by
-   * rating age, and nothing else has asked.
+   * <p><b>The expander adds no entity to what it already holds.</b> {@link
+   * #onlyTheRecommenderReadsEveryRating} has admitted {@code ..expand..} since #284, and the
+   * expander's whole input is that map — a promotion IS an entity rated at or above {@code
+   * KnownList.PROMOTION_RATING} — so by the line that reads a timestamp the tool already has every
+   * rated qid. What this read adds is one {@code Instant} per entity, which is neither a note nor a
+   * score, and the return type is what keeps it that way.
+   *
+   * <p><b>A rename and a widening rather than a second rule.</b> ADR 65's objection was to a rule
+   * whose <b>name</b> goes false, and the fix for a false name is a true one. {@link
+   * #onlyTheRecommenderReadsEveryRating} is the precedent in this same file: it admits five
+   * packages and keeps its name, because that name had already become shorthand for "a dev-side
+   * tool and nothing on the MCP surface". This one had not — it named one tool and meant it — so it
+   * is renamed to name both. The reason not to <em>copy</em> it under a second name is already
+   * written out on {@link #theReplayingToolsTakeTheBootsFold}: a rule's body copied under a new
+   * name is the failure mode, and it is how {@code evaluate} grew a defect after ADR 64 that only
+   * one rule over a list was able to catch.
    */
   @ArchTest
-  static final ArchRule onlyTheEvaluationHarnessReadsWhenARatingChanged =
+  static final ArchRule onlyTheHarnessAndTheExpanderReadWhenARatingChanged =
       noClasses()
           .that()
-          .resideOutsideOfPackage("..evaluate..")
+          .resideOutsideOfPackages("..evaluate..", "..expand..")
           .should()
           .accessTargetWhere(callTo("readUpdatedAt", AffinityStore.class))
           .because(
-              "ADR 39 and issue #276: a bulk read keyed by qid enumerates the whole taste layer"
-                  + " whatever its values are — when a rating last changed belongs to the one"
-                  + " dev-side tool that splits its held-out population by rating age");
+              "ADR 39 and issues #276 and #307: a bulk read keyed by qid enumerates the whole taste"
+                  + " layer whatever its values are — when a rating last changed belongs to the two"
+                  + " dev-side tools that ask how old a rating is, the harness splitting its"
+                  + " held-out population by rating age and the expander filtering its promotions"
+                  + " by it");
 
   /**
    * Issue #101: the deck writes the taste layer and nothing else.

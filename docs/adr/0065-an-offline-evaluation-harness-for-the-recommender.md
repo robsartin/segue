@@ -426,3 +426,69 @@ timestamps, the halves and both of their guards, the report's two consistency gu
 fences — each with a planted control. The verification of the *document* is the full gate over an
 otherwise unchanged tree: `AdrIndexTest`, `AdrCitationsTest`, `DocumentationLinksTest` for the
 relative links above, and `javadoc -Werror` inside `./gradlew check`.
+
+**Amendment (2026-09-11, issue #307): the fence gained a second reader, and its old name went with
+it.**
+
+Nothing above is withdrawn and no decision above is edited, the amendments above included. The
+eligible population, the interval, the fold count, the grid, the output contract's shape and every
+fence this ADR named are exactly as decided. What changes is who else may call the read the
+2026-09-06 amendment introduced, and what the rule that guards it is called.
+
+**The second reader.** [ADR 66](0066-expand-every-promotion-from-a-dev-tool.md)'s promotion
+expander now calls `AffinityStore.readUpdatedAt` too, to filter its promotions by
+`--rated-since` the way this harness filters its held-out population by the same read. The fence
+protecting the read is **one rule that admits `evaluate` or `expand`, not two rules that each admit
+one** — a second copy of one property under a second name is the failure mode already written out
+on `theReplayingToolsTakeTheBootsFold`, which
+[ADR 66](0066-expand-every-promotion-from-a-dev-tool.md) widened to a fourth package rather than
+copying under a second name; the rule here follows that argument rather than repeating it.
+
+**The rename, and the sentence above it that had to be engaged with rather than quietly
+outgrown.** The 2026-09-06 amendment gave this rule its own name,
+`onlyTheEvaluationHarnessReadsWhenARatingChanged`, and its reason for a new rule rather than a
+widened one was explicit: *"a rule named for one tool and quoted in an immutable ADR does not get
+stretched to cover a second."* #307 is that second tool asking. The objection was never to a rule
+gaining a reader — `onlyTheRecommenderReadsEveryRating` in the same file does exactly that,
+repeatedly — it was to a rule whose **name** goes false when it is stretched to cover a case the
+name does not mention. A rule called "the evaluation harness" that
+also admitted the promotion expander would be a rule whose name lied about half of what it allowed.
+The fix for a false name is a true one, not a further exception carved into the rule against
+stretching: the rule is renamed to
+`onlyTheHarnessAndTheExpanderReadWhenARatingChanged`, naming both readers, and its predicate widens
+to admit `..expand..` alongside `..evaluate..` in the same edit. The precedent for renaming rather
+than adding a second rule sits in the same file: `onlyTheRecommenderReadsEveryRating` already admits
+five packages and has kept its original name throughout, because "only the recommender" had already
+become shorthand for "a dev-side tool and nothing on the MCP surface" by the time a second reader
+joined it — the name had already stopped being literal, and widening it cost nothing. This rule's
+name had not gone shorthand; it named one tool and meant it. So it is the one that changes,
+`onlyTheRecommenderReadsEveryRating` is the reason widening can be the right answer at all, and the
+next reader after this one gets to ask the same question again rather than inheriting an answer.
+
+**Why data minimisation still holds.** `onlyTheRecommenderReadsEveryRating` has admitted
+`..expand..` since #284 ([ADR 66](0066-expand-every-promotion-from-a-dev-tool.md)), so the expander
+already reads every score and, by the time it reads a single timestamp, already holds every qid the
+owner has rated. This read adds no entity to what the tool already has — one `Instant` per entity
+whose score it was already holding — and the return type is what keeps that true rather than a
+promise about the body: a `Map<String, Instant>` has nowhere to carry a note or a score. The read
+stays inside `ExpandCli`, the one class in its package that touches the store at all.
+
+**What is not changed.** No reading, no flag, no report and no line of `evaluate`'s output moved.
+The harness's own fences, its grid, its fold count and its eligible population are exactly as this
+ADR and its earlier amendments decided; the only edit here is who else the read's fence admits and
+what the rule is called.
+
+**The controls.** The fence was seen firing on `ExpandCli` before it was widened — one violation,
+naming the class and the line the new read was written on, the same shape this ADR's 2026-09-06
+amendment describes for the harness's own read. After the rename and the widening landed, a call
+planted inside `census`, the read-only graph-summary tool, was seen firing the same rule at the same
+count: one violation, naming `CensusCli` and not `ExpandCli` — a third package is still refused, and
+the plant was reverted rather than kept.
+
+**Nothing here is unit-testable, and that is said out loud rather than left implied.** This entry
+records a decision whose code landed with its own tests — the widened and renamed rule, its own
+positive control seen firing on the new call site before the rename, and a planted control in
+`census` seen firing after it, naming that package alone. The verification of the *document* is the
+full gate over an otherwise unchanged tree: `AdrIndexTest`, `AdrCitationsTest`,
+`DocumentationLinksTest` for the relative links above, and `javadoc -Werror` inside
+`./gradlew check`.

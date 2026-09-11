@@ -508,7 +508,7 @@ line is drawn there.
 
 | Package | Contents | Depends on |
 | --- | --- | --- |
-| `domain` | Records and the borrowed edge vocabulary (`EdgeTypes`), plus `KnownList` — the pure rules that turn a `--known` file and the ratings map into the populations the dev tools need: what counts as owned ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)), what is suppressed, and what a revision pass may deal ([ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md)). `promoted` is read by `ratings`, `recommend`, `evaluate` and `rate`, and `suppressed` by `recommend`, `evaluate` and `rate`, so those tools cannot apply different answers; `revisitable` is read inside `rate` alone — `recommend` has no revision pass — and lives here so `Deck.dealRevision` and `RateRun`'s count of the same population cannot drift apart. No third-party dependencies at all. | nothing |
+| `domain` | Records and the borrowed edge vocabulary (`EdgeTypes`), plus `KnownList` — the pure rules that turn a `--known` file and the ratings map into the populations the dev tools need: what counts as owned ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)), what is suppressed, and what a revision pass may deal ([ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md)). `promoted` is read by `ratings`, `recommend`, `evaluate` and `rate`, and `suppressed` by `recommend`, `evaluate` and `rate`, so those tools cannot apply different answers; `revisitable` is read inside `rate` alone — `recommend` has no revision pass — and lives here so `Deck.dealRevision` and `RateRun`'s count of the same population cannot drift apart — and `RatingAge`, the same kind of rule over the other column of the same table: which rated entities were last written on or after an instant. It is read by `evaluate`, which splits its held-out population by it, and by `expand`, which filters its promotions by it, so the two tools cannot disagree about what "since" means. No third-party dependencies at all. | nothing |
 | `port` | The seams: `GraphStore`, `AssertionLog`, `AffinityStore`, `SourceAdapter`, `EntityResolver`, and their small value types. | `domain` |
 | `tinker` | The chosen Gremlin adapter ([ADR 18](adr/0018-graph-engine-gremlin.md)). | `port`, `domain` |
 | `jena` | The RDF reference adapter, kept working as a cross-check. | `port`, `domain` |
@@ -562,7 +562,7 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `theRecommenderReadsRatingsAndNeverNotes` | `recommend` depending on `AffinityRecord` **as a type**, or calling `AffinityStore.find` or `readAll` — it may hold the store and call the note-free `readRatings`, and nothing that carries free text | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 39](adr/0039-affinity-capture-and-read.md), [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
 | `onlyTheRatingsToolReadsANote` | calling `AffinityRecord.note()` from outside `ratings` and `sqlite` — the score is ordinary data, the note is the owner's and is read on their own machine | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 43](adr/0043-listing-your-own-ratings.md) |
 | `onlyTheRecommenderReadsEveryRating` | calling `AffinityStore.readRatings` from outside `recommend`, `rate`, `census`, `evaluate` **and `expand`** — the note-free bulk read belongs to the five dev-side tools that weight, deal, count, evaluate or expand by it, and ADR 26 still pins the surface at six tools. A widening rather than a fifth rule: nothing varies between the readers, and the expander's promotions ARE the entities rated at or above the threshold, which this is the only read that can find | [ADR 26](adr/0026-mcp-tool-surface.md), [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md), [ADR 63](adr/0063-a-read-only-census-of-the-graph.md), [ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md), [ADR 66](adr/0066-expand-every-promotion-from-a-dev-tool.md) |
-| `onlyTheEvaluationHarnessReadsWhenARatingChanged` | calling `AffinityStore.readUpdatedAt` from outside `evaluate` — a bulk read keyed by qid enumerates the whole taste layer whatever its values are, so when a rating last changed belongs to the one tool that splits its held-out population by rating age | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 39](adr/0039-affinity-capture-and-read.md), [ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md) |
+| `onlyTheHarnessAndTheExpanderReadWhenARatingChanged` | calling `AffinityStore.readUpdatedAt` from outside `evaluate` **or `expand`** — a bulk read keyed by qid enumerates the whole taste layer whatever its values are, so when a rating last changed belongs to the two tools that ask how old a rating is: the harness splitting its held-out population by rating age, and the expander filtering its promotions by it. The expander is admitted rather than fenced out because the keyset is already in its hands — it reads every score one line earlier, and what this adds is one `Instant` per entity | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 39](adr/0039-affinity-capture-and-read.md), [ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md), [ADR 66](adr/0066-expand-every-promotion-from-a-dev-tool.md) |
 | `theRecommenderOpensNothingElse` | `recommend` depending on `jena`, `mcp`, `app`, `java.net`, `javax.net` or every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`, so a new tool joins every fence at once) — `rate` depends on `recommend` by design, and this is what keeps that trip one-way | [ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md) |
 | `theRatingDeckWritesOnlyAffinity` | `rate` calling the three world-fact writes, or depending on `IngestService` **as a type** — the deck records what the owner thinks, never what the world says, and cannot route a claim through the one class allowed to write one | [ADR 46](adr/0046-the-rating-deck.md) |
 | `theRatingDeckNeverReadsANote` | `rate` calling `AffinityRecord.note()` — it writes the score and must not be able to display the note | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 46](adr/0046-the-rating-deck.md) |
@@ -2352,7 +2352,8 @@ tool's.
 - **See a note.** `theEvaluationHarnessReadsRatingsAndNeverNotes` bans `AffinityRecord` as a type
   and `find`/`readAll` as calls; it may read every score through `readRatings` and nothing more. It
   reads when a rating last changed through `readUpdatedAt`, which carries neither the note nor the
-  score, and `onlyTheEvaluationHarnessReadsWhenARatingChanged` keeps that read inside this package.
+  score, and `onlyTheHarnessAndTheExpanderReadWhenARatingChanged` keeps that read inside this
+  package and `expand` — the two tools that ask how old a rating is (#307).
 - **Reach a network, an engine, or a sibling tool but one.** `theEvaluationHarnessOpensNothingElse`
   bans every dev tool but `recommend` — the harness measures the shipped sweep rather than a second
   copy of it, so that one dependency is deliberate, the third between dev tools after
@@ -3194,6 +3195,48 @@ carries no figures, because a figure here would be a number nothing regenerates.
 
 `taste` and `edges` / withdrawn are the ones worth checking hardest: they are what a fence being
 wrong would show up as.
+
+### Only what was rated recently: `--rated-since`
+
+Every run above re-records every assertion of the last one, for the sake of the newest few
+promotions. `--rated-since <ISO-8601 instant>` keeps only the promotions whose rating's last write
+is on or after the instant. Absent, nothing changes and no timestamp is read at all.
+
+The dry run, first:
+
+```bash
+./gradlew expandPromotions --args="--db $HOME/.segue/segue.db --dry-run --rated-since 2026-09-08T00:00:00Z"
+```
+
+The instant is yours to choose — the end of the last run is the usual one — and the block now
+carries a second `#` line naming it and how many promotions it excluded.
+
+**What `considered` means here.** It is the promoted population *after* the filter, so step 2's
+arithmetic (`considered` minus `in the graph` minus `minted`) still reads, over the smaller
+population. `considered` plus the excluded count on the clause is the whole promoted population,
+which is how you check the instant did what you meant.
+
+This is still the chapter's run: step 0's check that nothing else is holding the database applies
+unchanged, and the two censuses are still what make the result readable.
+
+The run:
+
+```bash
+./gradlew expandPromotions --args="--db $HOME/.segue/segue.db --rated-since 2026-09-08T00:00:00Z"
+```
+
+**The limit, stated where the number is read.** `updated_at` is the last write
+([ADR 39](adr/0039-affinity-capture-and-read.md)), so a promotion rated years ago and re-rated after
+the instant is expanded again. That is cheap and harmless — one entity re-expanded — and it is why
+this is "rated since" rather than "new since".
+
+**How to read step 5's table after a partial run.** The table is unchanged and is still read
+against step 1's census: every `up` is still `up`, because expanding a smaller population cannot
+move a line the other way. What changes is the **size** of each movement, which is bounded by the
+promotions that actually ran rather than by the whole population — so a small delta against a large
+`considered` is the finding, and a small delta against a small `considered` is not. The two rows
+worth checking hardest — `taste` and `edges` / withdrawn — are unchanged for reasons that have
+nothing to do with how many promotions ran, so a partial run does not soften either of them.
 
 ### What to file from what you saw
 

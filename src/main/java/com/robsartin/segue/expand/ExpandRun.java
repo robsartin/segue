@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,6 +45,13 @@ import org.slf4j.LoggerFactory;
  * adapter that throws that shape and holds it. The type is what an operator needs to tell a network
  * failure from a bad row; the stack trace is not logged either, because a frame can carry an id as
  * readily as a message can.
+ *
+ * <p><b>This class never filters.</b> {@link #dryRun} and {@link #run} are handed the promotions
+ * their caller already decided on and an {@link Optional} {@link RatedSince} describing the filter
+ * their caller applied — they report it, on the block {@link ExpansionReport} renders, and never
+ * touch a store to compute it. The population is composed at {@code ExpandCli} from {@code
+ * KnownList.promoted} and the merges; a second place that knows how to drop a promotion would be a
+ * second answer to the same question (#307).
  */
 public final class ExpandRun {
 
@@ -57,8 +65,14 @@ public final class ExpandRun {
     this.graph = Objects.requireNonNull(graph, "graph");
   }
 
+  /** Count what a real run would visit, without visiting it, and with no filter applied. */
+  public Preflight dryRun(List<String> promotions, Consumer<String> lines) {
+    return dryRun(promotions, Optional.empty(), lines);
+  }
+
   /**
-   * Count what a real run would visit, without visiting it.
+   * Count what a real run would visit, without visiting it, and say which population it would have
+   * covered.
    *
    * <p>A local entity always holds a node too — minting one records it — so counting graph presence
    * first would double it into {@code inTheGraph}. Checked in the same order {@link
@@ -66,8 +80,10 @@ public final class ExpandRun {
    * checking {@link LocalEntity#isLocal} first, so a minted entity lands in {@code minted} and
    * nowhere else, matching the two distinct refusals a real run would give it — never both.
    */
-  public Preflight dryRun(List<String> promotions, Consumer<String> lines) {
+  public Preflight dryRun(
+      List<String> promotions, Optional<RatedSince> filter, Consumer<String> lines) {
     Objects.requireNonNull(promotions, "promotions");
+    Objects.requireNonNull(filter, "filter");
     Objects.requireNonNull(lines, "lines");
     int inTheGraph = 0;
     int minted = 0;
@@ -79,8 +95,13 @@ public final class ExpandRun {
       }
     }
     Preflight preflight = new Preflight(promotions.size(), inTheGraph, minted);
-    ExpansionReport.dryRunLines(preflight).forEach(lines);
+    ExpansionReport.dryRunLines(preflight, filter).forEach(lines);
     return preflight;
+  }
+
+  /** Expand every promotion, one at a time, in the order given, with no filter applied. */
+  public ExpansionTally run(List<String> promotions, int maxNewEdges, Consumer<String> lines) {
+    return run(promotions, Optional.empty(), maxNewEdges, lines);
   }
 
   /**
@@ -89,8 +110,13 @@ public final class ExpandRun {
    * <p>The aggregate report ({@link ExpansionReport#lines}) is appended after the last progress
    * line, once the loop is done — never per entity, and never interleaved with one.
    */
-  public ExpansionTally run(List<String> promotions, int maxNewEdges, Consumer<String> lines) {
+  public ExpansionTally run(
+      List<String> promotions,
+      Optional<RatedSince> filter,
+      int maxNewEdges,
+      Consumer<String> lines) {
     Objects.requireNonNull(promotions, "promotions");
+    Objects.requireNonNull(filter, "filter");
     Objects.requireNonNull(lines, "lines");
 
     int expanded = 0;
@@ -171,7 +197,7 @@ public final class ExpandRun {
             unavailableBySource,
             truncatedBySource,
             refusalsByReason);
-    ExpansionReport.lines(tally).forEach(lines);
+    ExpansionReport.lines(tally, filter).forEach(lines);
     return tally;
   }
 

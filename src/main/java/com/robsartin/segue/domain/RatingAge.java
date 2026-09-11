@@ -1,4 +1,4 @@
-package com.robsartin.segue.evaluate;
+package com.robsartin.segue.domain;
 
 import java.time.Instant;
 import java.util.HashSet;
@@ -12,7 +12,7 @@ import java.util.Set;
  *
  * <p><b>A value built once per run, not a question asked per fold.</b> Fold {@code k} and fold
  * {@code k + 1} disagree about which entities are hidden and agree exactly about which are old, so
- * the age is not a property of the split: {@link HeldOut#every} keeps the signature it has, and
+ * the age is not a property of the split: {@code HeldOut.every} keeps the signature it has, and
  * this is derived once, before the first sweep, from the ratings the run is about to read.
  *
  * <p><b>On or after the instant is new; before it is old.</b> An entity whose rating was last
@@ -45,7 +45,9 @@ public record RatingAge(Instant since, Set<String> newer) {
    *
    * @param since the instant the halves are drawn at
    * @param updatedAt qid to when that rating was last written, already resolved through the merges
-   * @param rated every qid the run's ratings map names, resolved the same way
+   * @param rated the qids whose age the caller needs, resolved through the merges the same way
+   *     {@code updatedAt} was — the evaluation harness passes every rated entity, the promotion
+   *     expander passes its promotions
    * @throws IllegalStateException if a rated entity has no timestamp
    */
   public static RatingAge of(Instant since, Map<String, Instant> updatedAt, Set<String> rated) {

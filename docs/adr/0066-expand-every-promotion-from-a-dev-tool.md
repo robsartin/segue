@@ -452,3 +452,94 @@ holds on one node, after corroborating assertions have been merged into single e
 really is an edge count. The user guide's `expand_entity` transcript moved with the sentence and
 its two `get_entity` transcripts deliberately did not, so the guide shows both wordings — which
 is the distinction, not a drift.
+
+**Amendment (2026-09-11, issue #307): the tool takes `--rated-since`, and expands only the
+promotions the instant admits.**
+
+Nothing above is withdrawn, no decision above is edited, and this ADR keeps `Accepted`. What changes
+is that a run may now be asked to visit a smaller population than every promotion, and the block
+says so when it was. The usage line above no longer lists every flag: the tool takes an optional
+`--rated-since`, and `ExpandCli.USAGE` is the authority on its current text.
+
+**The flag.** `./gradlew expandPromotions --args="--db <segue.db> --rated-since <ISO-8601
+instant>"`, optional, parsed exactly as `evaluate` already parses its own flag of the same name —
+`Instant.parse`, refused with this tool's own usage error rather than the harness's on a value that
+does not parse. Not given, the tool reads no timestamp at all and behaves exactly as it always has;
+this is the same shape [ADR 65](0065-an-offline-evaluation-harness-for-the-recommender.md)'s
+2026-09-06 amendment gave the harness, read here rather than restated.
+
+**What `considered` means under it.** `Preflight.considered` and `ExpansionTally.considered` are the
+promoted population **after** the filter — the same field, a smaller population, never a second
+field naming the smaller count — so the identity `considered == expanded + refused + failed` and
+step 2's dry-run arithmetic both survive unchanged: every promotion the run was handed is accounted
+for by one of those three, whether or not `--rated-since` was given. The excluded count is not a
+second field on the tally at all; it is on the clause below, because it counts promotions the run
+was **not** handed, which `considered` and its three parts have no business describing.
+
+**The header form.** One `#` clause is printed directly under the block's own header, in **both**
+the dry-run block and the real block, naming the instant, how many promotions it excluded and the
+last-write limit below. A clause rather than a counted row. A row would print on every run, and on a
+run with no instant it would read an excluded count of zero — a count of a filter nobody applied,
+on every block ever pasted, for a value only one run in many carries. `ExpansionReport.sinceLine`
+is the authority on the clause's
+wording and carries that argument in full. **The block with no instant is byte-identical to
+today's**, which is what keeps every block already pasted into an issue comparable to a new one, and
+which is what [ADR 65](0065-an-offline-evaluation-harness-for-the-recommender.md)'s 2026-09-06
+amendment does for its own report, for the same reason. A golden test that predates the flag pins
+the unsplit block character for character and is unchanged by this work; the two new with-instant
+pins were seen failing — on the missing clause alone, every other line matching in order — before
+the renderer took the filter.
+
+**The type-level fence is untouched.** The renderer's new argument is an `Instant` and an `int` —
+`RatedSince`, one instant and one count, exactly as `ExpansionReport.lines` and `dryRunLines`
+already took only `int`s and a map keyed by a source id or a refusal reason. There is still nowhere
+in either signature to put an identifier: `Instant.toString` emits only digits, `+`, `-`, `:`, `.`,
+`T` and `Z` — never a letter but `T` and `Z` — so the one operator-supplied fact in the whole block
+cannot carry a qid into it however the flag was spelled, the same property this ADR's output
+contract already relies on for every other field.
+
+**Where the filter lives.** Composed at `ExpandCli` from `KnownList.promoted` and the
+merge-resolved rating timestamps — `AffinityStore.readUpdatedAt`, resolved through the same
+`Equivalences` the ratings themselves are resolved through, so the two maps agree on which qid names
+which entity — and not a second filtering rule inside the run. The age comparison itself is
+`RatingAge`, moved from `evaluate` into `domain` so that both tools read one answer to "since" rather
+than two copies of the same one-line comparison drifting apart the way a copied rule always does in
+this repository.
+
+**A promotion with no timestamp is refused, not excluded.** The two bulk reads of the affinity table
+are two selects over one table through one connection, so a disagreement between their keysets means
+the resolution or the store is wrong, not that the entity is old. Excluding it silently would mean an
+entity the owner asked this tool to expand is never visited and nothing on the block says so — a
+promotion that vanishes into the same count as one the instant genuinely excluded. The refusal names
+no qid and no count, for the reason every other refusal in this block does: how much the owner has
+rated is itself a fact about him.
+
+**Alternatives rejected.**
+
+- **Recording which promotions have already been expanded**, as a new claim type or a mark in the
+  log, so a later run could skip them outright rather than merely visiting fewer of them. **Not done
+  here, and no issue is recorded for it:** the rating's own timestamp is a proxy for "probably
+  already covered" that needs no new state at all, and a real marker is a schema change this
+  repository's own rule says gets a real migration path, not a rider on this issue. It becomes worth
+  raising if the proxy is ever seen to re-expand enough promotions to matter.
+- **An excluded row instead of a clause.** Rejected above, for the reason given there — a row prints
+  on every block and pads every count for a number that is usually zero.
+- **Making the filter mandatory, with a default instant.** Rejected: a boundary nobody typed would
+  break comparability with every block already on record — the reason
+  [ADR 65](0065-an-offline-evaluation-harness-for-the-recommender.md)'s 2026-09-06 amendment gives
+  for refusing a default instant for the evaluation harness's own split.
+- **Copying the harness's age-split machinery into `expand` rather than moving it into `domain`.**
+  Rejected: a second copy of `RatingAge`'s one comparison is exactly the shape this repository has
+  already been bitten by once — a rule duplicated under a second name is how a fold amendment
+  drifted after [ADR 64](0064-fold-the-log-once-per-boot.md) was written and before its fences
+  landed, and moving the class rather than copying its body is what keeps the two tools answering
+  one question the same way.
+
+**Nothing here is unit-testable on its own, and that is said out loud rather than left implied.**
+This entry records a decision whose code landed with its own tests — the parser, the filter's
+composition at the call site, the refusal for a promotion with no timestamp, the header clause and
+its two new pins, the golden block beside them left unchanged, and the widened fence this ADR's
+sibling amendment records — each with its own control. The verification of the *document*
+is the full gate over an otherwise unchanged tree: `AdrIndexTest`, `AdrCitationsTest`,
+`DocumentationLinksTest` for the relative links above, and `javadoc -Werror` inside
+`./gradlew check`.

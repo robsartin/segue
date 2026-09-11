@@ -130,33 +130,47 @@ class DeveloperGuideExpandPromotionsExamplesTest {
   }
 
   @Test
-  @DisplayName("the chapter shows the census, the dry run, the run and the census, in that order")
+  @DisplayName(
+      "the chapter shows the census, the dry run, the run, the census, then the since-variant's"
+          + " own dry run and run, in that order")
   void shouldRunEveryStepInOrderWhenTheChapterIsRead() {
     assertThat(steps())
         .as(
             "docs/developer-guide.md, '%s' — the runbook's whole substance is this sequence: the"
                 + " census the census at the end is compared against comes first, the dry run"
                 + " comes before the only writing command in the chapter, and a census after is"
-                + " what makes the run readable. A parser cannot see any of that",
+                + " what makes the run readable. The two --rated-since entries are the variant"
+                + " section, shown after the full runbook rather than interleaved with it, and"
+                + " its dry run precedes its run for the same reason the full runbook's does. A"
+                + " parser cannot see any of that",
             CHAPTER)
         .containsExactly(
-            "graphCensus", "expandPromotions --dry-run", "expandPromotions", "graphCensus");
+            "graphCensus",
+            "expandPromotions --dry-run",
+            "expandPromotions",
+            "graphCensus",
+            "expandPromotions --dry-run --rated-since",
+            "expandPromotions --rated-since");
   }
 
   /**
    * The chapter's {@code ./gradlew} lines, merged across the two tasks and put back into the order
-   * the guide writes them, each reduced to its task name plus {@code " --dry-run"} where that flag
-   * is among its arguments.
+   * the guide writes them, each reduced to its task name plus {@code " --dry-run"} and/or {@code "
+   * --rated-since"} where those flags are among its arguments.
    */
   private static List<String> steps() {
     record Numbered(int line, String command) {}
     List<Numbered> found = new ArrayList<>();
     for (String task : List.of("graphCensus", "expandPromotions")) {
       for (Example example : GuideExamples.inChapter(CHAPTER, task).examples()) {
-        found.add(
-            new Numbered(
-                example.line(),
-                example.arguments().contains("--dry-run") ? task + " --dry-run" : task));
+        String command = task;
+        if (example.arguments().contains("--dry-run")) {
+          command += " --dry-run";
+        }
+        if (example.arguments().contains("--rated-since")) {
+          command += " --rated-since";
+        }
+        found.add(new Numbered(example.line(), command));
       }
     }
     found.sort(Comparator.comparingInt(Numbered::line));

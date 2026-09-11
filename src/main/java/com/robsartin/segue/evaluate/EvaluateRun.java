@@ -2,6 +2,7 @@ package com.robsartin.segue.evaluate;
 
 import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.KnownList;
+import com.robsartin.segue.domain.RatingAge;
 import com.robsartin.segue.domain.Recommendations;
 import com.robsartin.segue.port.GraphStore;
 import com.robsartin.segue.recommend.CandidateSweep;

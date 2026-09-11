@@ -3,6 +3,8 @@ package com.robsartin.segue.expand;
 import com.robsartin.segue.expansion.ExpansionOutcome;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 
 /**
  * A tally in, one aligned block of text out. A pure function, and the only class here that decides
@@ -10,8 +12,9 @@ import java.util.List;
  * shape, held to it for the same reason: {@link #lines} takes an {@link ExpansionTally} whose every
  * component is an {@code int} or a map keyed by {@code SourceAdapter#id()} or {@link
  * ExpansionOutcome.Reason}, and {@link #dryRunLines} takes a {@link Preflight} of three {@code
- * int}s. There is nowhere in either signature to put an identifier, which is a stronger guarantee
- * than a body that merely happens not to print one.
+ * int}s. Each renderer's long arity also takes an {@code Optional<RatedSince>}, whose own two
+ * components are an {@code Instant} and an {@code int}. There is nowhere in any of it to put an
+ * identifier, which is a stronger guarantee than a body that merely happens not to print one.
  *
  * <p><b>Every section prints its heading, whether or not there is a row to show under it.</b> An
  * empty {@code edge assertions by source} means no edge assertion was recorded from any source, and
@@ -83,19 +86,32 @@ public final class ExpansionReport {
 
   /** Render the whole block, header included. */
   public static List<String> lines(ExpansionTally tally) {
-    List<Entry> body = body(tally);
-    return render(HEADER, body);
+    return lines(tally, Optional.empty());
+  }
+
+  /** Render the whole block, header included, saying which population it covered. */
+  public static List<String> lines(ExpansionTally tally, Optional<RatedSince> filter) {
+    Objects.requireNonNull(filter, "filter");
+    return render(HEADER, filter, body(tally));
   }
 
   /** Render what a dry run would visit — nothing else, because nothing else happened. */
   public static List<String> dryRunLines(Preflight preflight) {
-    List<Entry> body =
-        List.of(
-            new Section("promotions"),
-            new Row("  considered", preflight.considered()),
-            new Row("  in the graph", preflight.inTheGraph()),
-            new Row("  minted", preflight.minted()));
-    return render(DRY_RUN_HEADER, body);
+    return dryRunLines(preflight, Optional.empty());
+  }
+
+  /** Render what a dry run would visit, saying which population it would have covered. */
+  public static List<String> dryRunLines(Preflight preflight, Optional<RatedSince> filter) {
+    Objects.requireNonNull(filter, "filter");
+    return render(DRY_RUN_HEADER, filter, dryRunBody(preflight));
+  }
+
+  private static List<Entry> dryRunBody(Preflight preflight) {
+    return List.of(
+        new Section("promotions"),
+        new Row("  considered", preflight.considered()),
+        new Row("  in the graph", preflight.inTheGraph()),
+        new Row("  minted", preflight.minted()));
   }
 
   private static List<Entry> body(ExpansionTally tally) {
@@ -147,7 +163,29 @@ public final class ExpansionReport {
     };
   }
 
-  private static List<String> render(String header, List<Entry> body) {
+  /**
+   * Said under the header when a filter was applied, and not at all when none was.
+   *
+   * <p><b>A clause rather than a counted row.</b> A row would print on every run, and on a run with
+   * no instant it would read {@code excluded 0} — a count of a filter nobody applied. It would also
+   * land on every block already pasted into an issue, for a value only one run in many carries.
+   * Keeping the block with no instant byte-identical is what ADR 65's 2026-09-06 amendment does for
+   * its own report, and for the same reason: every block already on record stays comparable.
+   *
+   * <p>The last-write clause is here rather than in the guide alone because the number beside it is
+   * misread without it: {@code updated_at} is when the rating last changed, so a promotion rated
+   * years ago and re-rated after the instant is expanded again (ADR 39).
+   */
+  private static String sinceLine(RatedSince filter) {
+    return "# only promotions rated on or after "
+        + filter.since()
+        + ": "
+        + filter.excluded()
+        + " excluded (rated before it) — a rating's timestamp is its last write, so a re-rated"
+        + " old promotion counts as new.";
+  }
+
+  private static List<String> render(String header, Optional<RatedSince> filter, List<Entry> body) {
     int labelWidth = 0;
     int countWidth = 0;
     for (Entry entry : body) {
@@ -159,6 +197,7 @@ public final class ExpansionReport {
 
     List<String> rendered = new ArrayList<>();
     rendered.add(header);
+    filter.ifPresent(f -> rendered.add(sinceLine(f)));
     for (Entry entry : body) {
       switch (entry) {
         case Section section -> {
