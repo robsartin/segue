@@ -3216,6 +3216,9 @@ arithmetic (`considered` minus `in the graph` minus `minted`) still reads, over 
 population. `considered` plus the excluded count on the clause is the whole promoted population,
 which is how you check the instant did what you meant.
 
+This is still the chapter's run: step 0's check that nothing else is holding the database applies
+unchanged, and the two censuses are still what make the result readable.
+
 The run:
 
 ```bash
@@ -3231,9 +3234,9 @@ this is "rated since" rather than "new since".
 against step 1's census: every `up` is still `up`, because expanding a smaller population cannot
 move a line the other way. What changes is the **size** of each movement, which is bounded by the
 promotions that actually ran rather than by the whole population — so a small delta against a large
-`considered` is the finding, and a small delta against a small `considered` is not. The two
-`unchanged` rows — `taste` and `edges` / withdrawn — are unchanged for reasons that have nothing to
-do with how many promotions ran, so they are still the ones to check hardest.
+`considered` is the finding, and a small delta against a small `considered` is not. The two rows
+worth checking hardest — `taste` and `edges` / withdrawn — are unchanged for reasons that have
+nothing to do with how many promotions ran, so a partial run does not soften either of them.
 
 ### What to file from what you saw
 

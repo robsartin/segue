@@ -439,17 +439,19 @@ fence this ADR named are exactly as decided. What changes is who else may call t
 expander now calls `AffinityStore.readUpdatedAt` too, to filter its promotions by
 `--rated-since` the way this harness filters its held-out population by the same read. The fence
 protecting the read is **one rule that admits `evaluate` or `expand`, not two rules that each admit
-one** — a second copy of one property under a second name is the failure mode this document's own
-2026-09-06 amendment names when it explains `theReplayingToolsTakeTheBootsFold`'s reach, and the
-rule here follows that argument rather than repeating it.
+one** — a second copy of one property under a second name is the failure mode already written out
+on `theReplayingToolsTakeTheBootsFold`, which
+[ADR 66](0066-expand-every-promotion-from-a-dev-tool.md) widened to a fourth package rather than
+copying under a second name; the rule here follows that argument rather than repeating it.
 
 **The rename, and the sentence above it that had to be engaged with rather than quietly
-outgrown.** The 2026-09-06 amendment gave this rule its own name, `onlyTheEvaluationHarnessReadsWhenARatingChanged`,
-and its reason for a new rule rather than a widened one was explicit: *"a rule named for one tool
-and quoted in an immutable ADR does not get stretched to cover a second."* #307 is that second tool
-asking. The objection was never to a rule gaining a reader — `onlyTheRecommenderReadsEveryRating` in
-the same file does exactly that, repeatedly — it was to a rule whose **name** goes false when it is
-stretched to cover a case the name does not mention. A rule called "the evaluation harness" that
+outgrown.** The 2026-09-06 amendment gave this rule its own name,
+`onlyTheEvaluationHarnessReadsWhenARatingChanged`, and its reason for a new rule rather than a
+widened one was explicit: *"a rule named for one tool and quoted in an immutable ADR does not get
+stretched to cover a second."* #307 is that second tool asking. The objection was never to a rule
+gaining a reader — `onlyTheRecommenderReadsEveryRating` in the same file does exactly that,
+repeatedly — it was to a rule whose **name** goes false when it is stretched to cover a case the
+name does not mention. A rule called "the evaluation harness" that
 also admitted the promotion expander would be a rule whose name lied about half of what it allowed.
 The fix for a false name is a true one, not a further exception carved into the rule against
 stretching: the rule is renamed to
@@ -466,10 +468,10 @@ next reader after this one gets to ask the same question again rather than inher
 **Why data minimisation still holds.** `onlyTheRecommenderReadsEveryRating` has admitted
 `..expand..` since #284 ([ADR 66](0066-expand-every-promotion-from-a-dev-tool.md)), so the expander
 already reads every score and, by the time it reads a single timestamp, already holds every qid the
-owner has rated. This read adds no entity to what the tool already has — one `Instant` per entity it
-was already going to visit — and the return type is what keeps that true rather than a promise about
-the body: a `Map<String, Instant>` has nowhere to carry a note or a score. The read stays inside
-`ExpandCli`, the one class in its package that touches the store at all.
+owner has rated. This read adds no entity to what the tool already has — one `Instant` per entity
+whose score it was already holding — and the return type is what keeps that true rather than a
+promise about the body: a `Map<String, Instant>` has nowhere to carry a note or a score. The read
+stays inside `ExpandCli`, the one class in its package that touches the store at all.
 
 **What is not changed.** No reading, no flag, no report and no line of `evaluate`'s output moved.
 The harness's own fences, its grid, its fold count and its eligible population are exactly as this

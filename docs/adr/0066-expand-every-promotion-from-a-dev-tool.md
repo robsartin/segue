@@ -458,7 +458,8 @@ promotions the instant admits.**
 
 Nothing above is withdrawn, no decision above is edited, and this ADR keeps `Accepted`. What changes
 is that a run may now be asked to visit a smaller population than every promotion, and the block
-says so when it was.
+says so when it was. The usage line above gains an optional `--rated-since`; `ExpandCli.USAGE` is
+the authority on its current text.
 
 **The flag.** `./gradlew expandPromotions --args="--db <segue.db> --rated-since <ISO-8601
 instant>"`, optional, parsed exactly as `evaluate` already parses its own flag of the same name —
@@ -477,23 +478,25 @@ was **not** handed, which `considered` and its three parts have no business desc
 
 **The header form.** One `#` clause is printed directly under the block's own header, in **both**
 the dry-run block and the real block, naming the instant, how many promotions it excluded and the
-last-write limit below. A clause rather than a counted row, for the reason
-[ADR 65](0065-an-offline-evaluation-harness-for-the-recommender.md) already gave its own report: *"a
-split line naming a division nothing made is a line a reader would believe"* — a row would print on
-every run, and on a run with no instant it would read an excluded count of zero, which is a count of
-a filter nobody applied. A row would also re-pad every count in every block by the width of a number
-that is usually zero, for a value only one run in many carries. **The block with no instant is
-byte-identical to today's**, which is what keeps every block already pasted into an issue comparable
-to a new one; a golden test pins the unsplit block character for character and was seen failing
-against a planted change to the renderer before the flag existed.
+last-write limit below. A clause rather than a counted row. A row would print on every run, and on a
+run with no instant it would read an excluded count of zero — a count of a filter nobody applied —
+and it would re-pad every count in every block by the width of a number that is usually zero, for a
+value only one run in many carries. `ExpansionReport.sinceLine` is the authority on the clause's
+wording and carries that argument in full. **The block with no instant is byte-identical to
+today's**, which is what keeps every block already pasted into an issue comparable to a new one, and
+which is what [ADR 65](0065-an-offline-evaluation-harness-for-the-recommender.md)'s 2026-09-06
+amendment does for its own report, for the same reason. A golden test that predates the flag pins
+the unsplit block character for character and is unchanged by this work; the two new with-instant
+pins were seen failing — on the missing clause alone, every other line matching in order — before
+the renderer took the filter.
 
 **The type-level fence is untouched.** The renderer's new argument is an `Instant` and an `int` —
 `RatedSince`, one instant and one count, exactly as `ExpansionReport.lines` and `dryRunLines`
 already took only `int`s and a map keyed by a source id or a refusal reason. There is still nowhere
-in either signature to put an identifier: `Instant.toString` emits only digits and `-`, `:`, `.`,
-`T`, `Z`, so the one operator-supplied fact in the whole block cannot carry a qid into it however the
-flag was spelled, the same property this ADR's output contract already relies on for every other
-field.
+in either signature to put an identifier: `Instant.toString` emits only digits, `+`, `-`, `:`, `.`,
+`T` and `Z` — never a letter but `T` and `Z` — so the one operator-supplied fact in the whole block
+cannot carry a qid into it however the flag was spelled, the same property this ADR's output
+contract already relies on for every other field.
 
 **Where the filter lives.** Composed at `ExpandCli` from `KnownList.promoted` and the
 merge-resolved rating timestamps — `AffinityStore.readUpdatedAt`, resolved through the same
@@ -514,25 +517,29 @@ rated is itself a fact about him.
 **Alternatives rejected.**
 
 - **Recording which promotions have already been expanded**, as a new claim type or a mark in the
-  log, so a later run could skip them outright rather than merely visiting fewer of them. Filed, not
-  done here: the rating's own timestamp is a proxy for "probably already covered" that needs no new
-  state at all, and a real marker is a schema change this repository's own rule says gets a real
-  migration path, not a rider on this issue.
+  log, so a later run could skip them outright rather than merely visiting fewer of them. **Not done
+  here, and no issue is recorded for it:** the rating's own timestamp is a proxy for "probably
+  already covered" that needs no new state at all, and a real marker is a schema change this
+  repository's own rule says gets a real migration path, not a rider on this issue. It becomes worth
+  raising if the proxy is ever seen to re-expand enough promotions to matter.
 - **An excluded row instead of a clause.** Rejected above, for the reason given there — a row prints
   on every block and pads every count for a number that is usually zero.
 - **Making the filter mandatory, with a default instant.** Rejected: a boundary nobody typed would
-  break comparability with every block already on record, the same reason this ADR's 2026-09-06
-  antecedent refused a default for the evaluation harness's own split.
+  break comparability with every block already on record — the reason
+  [ADR 65](0065-an-offline-evaluation-harness-for-the-recommender.md)'s 2026-09-06 amendment gives
+  for refusing a default instant for the evaluation harness's own split.
 - **Copying the harness's age-split machinery into `expand` rather than moving it into `domain`.**
   Rejected: a second copy of `RatingAge`'s one comparison is exactly the shape this repository has
   already been bitten by once — a rule duplicated under a second name is how a fold amendment
-  drifted before [ADR 64](0064-fold-the-log-once-per-boot.md) closed that gap, and moving the class
-  rather than copying its body is what keeps the two tools answering one question the same way.
+  drifted after [ADR 64](0064-fold-the-log-once-per-boot.md) was written and before its fences
+  landed, and moving the class rather than copying its body is what keeps the two tools answering
+  one question the same way.
 
 **Nothing here is unit-testable on its own, and that is said out loud rather than left implied.**
 This entry records a decision whose code landed with its own tests — the parser, the filter's
 composition at the call site, the refusal for a promotion with no timestamp, the header clause and
-its golden pin against the unsplit block, and the widened fence this ADR's sibling amendment records
-— each with its own control. The verification of the *document* is the full gate over an otherwise
-unchanged tree: `AdrIndexTest`, `AdrCitationsTest`, `DocumentationLinksTest` for the relative links
-above, and `javadoc -Werror` inside `./gradlew check`.
+its two new pins, the golden block beside them left unchanged, and the widened fence this ADR's
+sibling amendment records — each with its own control. The verification of the *document*
+is the full gate over an otherwise unchanged tree: `AdrIndexTest`, `AdrCitationsTest`,
+`DocumentationLinksTest` for the relative links above, and `javadoc -Werror` inside
+`./gradlew check`.

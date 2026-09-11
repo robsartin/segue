@@ -14,9 +14,10 @@ import java.util.Objects;
  * second bare {@code int}, which is a swap no compiler can see.
  *
  * <p><b>There is nowhere here to put an identifier.</b> {@code Instant.toString} emits only digits,
- * {@code -}, {@code :}, {@code .}, {@code T} and {@code Z}, so the one operator-supplied fact the
- * block carries cannot bring a qid into it however the flag was spelled — the same property {@code
- * EvaluationReport} relies on for its own split line.
+ * {@code +}, {@code -}, {@code :}, {@code .}, {@code T} and {@code Z}, never a letter but {@code T}
+ * and {@code Z}, so the one operator-supplied fact the block carries cannot bring a qid into it
+ * however the flag was spelled — the same property {@code EvaluationReport} relies on for its own
+ * split line.
  *
  * @param since the instant the operator gave, parsed — never the string they typed
  * @param excluded how many promotions were dropped because their rating's last write fell before it

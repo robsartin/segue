@@ -167,10 +167,10 @@ public final class ExpansionReport {
    * Said under the header when a filter was applied, and not at all when none was.
    *
    * <p><b>A clause rather than a counted row.</b> A row would print on every run, and on a run with
-   * no instant it would read {@code excluded 0} — a count of a filter nobody applied, which is the
-   * shape ADR 65 refused in its own report ("a split line naming a division nothing made is a line
-   * a reader would believe"). It would also widen the label column of every block by two characters
-   * for a number that is usually zero.
+   * no instant it would read {@code excluded 0} — a count of a filter nobody applied. It would also
+   * widen the label column of every block by two characters for a number that is usually zero.
+   * Keeping the block with no instant byte-identical is what ADR 65's 2026-09-06 amendment does for
+   * its own report, and for the same reason: every block already on record stays comparable.
    *
    * <p>The last-write clause is here rather than in the guide alone because the number beside it is
    * misread without it: {@code updated_at} is when the rating last changed, so a promotion rated
