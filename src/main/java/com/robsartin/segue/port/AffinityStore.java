@@ -134,8 +134,9 @@ public interface AffinityStore extends AutoCloseable {
    * <p><b>The keys are every rated entity, which is why this read is fenced at all.</b> An instant
    * is not a note and not a score, but the keyset is the whole taste layer enumerated — the single
    * call ADR 39 refused to put in front of a model, whatever is on the other side of the arrow.
-   * {@code ArchitectureTest.onlyTheEvaluationHarnessReadsWhenARatingChanged} keeps it to the one
-   * dev-side tool that asked for it.
+   * {@code ArchitectureTest.onlyTheHarnessAndTheExpanderReadWhenARatingChanged} keeps it to the two
+   * dev-side tools that have asked for it: the harness's age split, and the promotion expander's
+   * {@code --rated-since} filter (issue #307).
    *
    * <p><b>It is the last write, not the first.</b> ADR 39 keeps one row per entity and lets the
    * later rating win, so an opinion held for years and re-rated today reads as today. {@link

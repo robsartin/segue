@@ -2,6 +2,7 @@ package com.robsartin.segue.expand;
 
 import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.KnownList;
+import com.robsartin.segue.domain.RatingAge;
 import com.robsartin.segue.expansion.EntityExpansion;
 import com.robsartin.segue.expansion.ExpansionSources;
 import com.robsartin.segue.ingest.GraphProjector;
@@ -24,6 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,6 +39,13 @@ import org.slf4j.LoggerFactory;
  * class never names {@code support.DefaultDatabase} and never takes a {@link Path} out of {@code
  * support}: the refusal quotes the path back through {@link RequiredDatabase#refusal}, which owns
  * that resolution.
+ *
+ * <p><b>It reads when a rating last changed, and only when {@code --rated-since} asks.</b> The read
+ * is {@code com.robsartin.segue.port.AffinityStore#readUpdatedAt}, under {@code
+ * ArchitectureTest.onlyTheHarnessAndTheExpanderReadWhenARatingChanged} — the fence the evaluation
+ * harness was the only tool inside until this one asked the same question (#276, #307). It carries
+ * neither the note nor the score, and a run given no instant never makes the call at all. This is
+ * the only class in the package that touches the store.
  */
 public final class ExpandCli {
 
@@ -186,7 +195,27 @@ public final class ExpandCli {
       // KnownList.promoted with no file IS "rated at or above PROMOTION_RATING, ascending by
       // qid" — the threshold and the order from the class that owns both, rather than a second
       // copy of the rule here (issues #106 and #109).
-      List<String> promotions = KnownList.promoted(List.of(), ratings);
+      List<String> promoted = KnownList.promoted(List.of(), ratings);
+      // Read only when asked: a run with no --rated-since reads no timestamp at all, which is
+      // ADR 16's data minimisation falling out of the shape rather than being argued for. The
+      // timestamps are resolved through the same merges the ratings were, so the two maps are
+      // keyed alike and a promotion's age cannot be read off another row (issues #276, #307).
+      // The set handed over is the PROMOTIONS and not every rated entity: this tool's population
+      // is the promotions, so a rated entity it was never going to visit is not a reason to
+      // refuse the run.
+      Optional<RatingAge> age =
+          options
+              .ratedSince()
+              .map(
+                  since ->
+                      RatingAge.of(
+                          since,
+                          merges.resolveUpdatedAt(affinity.readUpdatedAt()),
+                          Set.copyOf(promoted)));
+      List<String> promotions =
+          age.map(it -> promoted.stream().filter(it::isNew).toList()).orElse(promoted);
+      Optional<RatedSince> filter =
+          age.map(it -> new RatedSince(it.since(), promoted.size() - promotions.size()));
       log.info("{} promotion(s) to visit", promotions.size());
 
       Clock clock = Clock.systemUTC();
@@ -199,8 +228,16 @@ public final class ExpandCli {
           new EntityExpansion(resolver, graph, ingest, ExpansionSources.both(resolver, clock));
 
       ExpandRun run = new ExpandRun(expansion, graph);
+      // The long arity when a filter was applied and the short one when none was, so both keep a
+      // production caller rather than one of them being reachable from tests alone.
       if (options.dryRun()) {
-        run.dryRun(promotions, log::info);
+        if (filter.isPresent()) {
+          run.dryRun(promotions, filter, log::info);
+        } else {
+          run.dryRun(promotions, log::info);
+        }
+      } else if (filter.isPresent()) {
+        run.run(promotions, filter, options.maxNewEdges(), log::info);
       } else {
         run.run(promotions, options.maxNewEdges(), log::info);
       }

@@ -97,6 +97,9 @@ class ExpansionIsSafeToPasteTest {
 
   private static final Instant WHEN = Instant.parse("2026-02-01T08:00:00Z");
 
+  /** An instant after {@link #WHEN}, so the filter runs and excludes the one promotion. */
+  private static final String SINCE = "2026-03-01T00:00:00Z";
+
   private static boolean carriesAnIdItMayNot(ILoggingEvent event) {
     return !THE_SHARED_EXPANSION.equals(event.getLoggerName())
         && A_QID.matcher(event.getFormattedMessage()).find();
@@ -141,6 +144,27 @@ class ExpansionIsSafeToPasteTest {
     ExpandCli.main(new String[] {"--db", db.toString(), "--dry-run"});
 
     assertEverySafe(ExpansionReport.DRY_RUN_HEADER);
+  }
+
+  @Test
+  @DisplayName(
+      "a dry run filtered by --rated-since reaches the block, and the clause carries no id")
+  void shouldEmitCountsAndNothingElseWhenTheRunIsFilteredByAnInstant() {
+    Path db = home.resolve("since.db");
+    Provenance sourced = new Provenance("invented", "invented:5", WHEN, 1.0);
+    try (SqliteAssertionLog log = new SqliteAssertionLog(db);
+        SqliteAffinityStore affinity = new SqliteAffinityStore(db)) {
+      log.append(new NodeAssertion(RATED, NodeKind.GROUP, LABEL, sourced));
+      affinity.put(new AffinityRecord(RATED, KnownList.PROMOTION_RATING, NOTE, WHEN));
+    }
+    captured.list.clear();
+
+    ExpandCli.main(new String[] {"--db", db.toString(), "--dry-run", "--rated-since", SINCE});
+
+    assertEverySafe(ExpansionReport.DRY_RUN_HEADER);
+    assertThat(lines())
+        .as("the since clause really was printed, or the assertions above cover a block without it")
+        .anyMatch(line -> line.contains("only promotions rated on or after"));
   }
 
   @Test
