@@ -245,6 +245,61 @@ class ExpandCliTest {
   }
 
   @Test
+  @DisplayName("--rated-since is carried as the parsed instant when one is given")
+  void shouldCarryTheInstantWhenRatedSinceIsGiven() {
+    assertThat(
+            ExpandCli.parse(
+                    new String[] {"--db", "db.sqlite", "--rated-since", "2026-09-08T00:00:00Z"},
+                    null,
+                    home.toString())
+                .ratedSince())
+        .contains(Instant.parse("2026-09-08T00:00:00Z"));
+  }
+
+  @Test
+  @DisplayName("no instant is carried when the flag is absent, which is every run before this one")
+  void shouldCarryNoInstantWhenRatedSinceIsAbsent() {
+    assertThat(
+            ExpandCli.parse(new String[] {"--db", "db.sqlite"}, null, home.toString()).ratedSince())
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("--rated-since that is not an instant is refused with this tool's usage error")
+  void shouldRefuseTheInstantWhenItIsNotAnInstant() {
+    assertThatThrownBy(
+            () ->
+                ExpandCli.parse(
+                    new String[] {"--db", "db.sqlite", "--rated-since", "last Tuesday"},
+                    null,
+                    home.toString()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining(
+            "--rated-since takes an ISO-8601 instant like 2026-09-06T15:00:00Z, got last Tuesday")
+        .hasMessageContaining("[--rated-since");
+  }
+
+  @Test
+  @DisplayName("--rated-since given twice is refused, because last-wins is worst on a filter")
+  void shouldRefuseTheInstantWhenItIsGivenTwice() {
+    assertThatThrownBy(
+            () ->
+                ExpandCli.parse(
+                    new String[] {
+                      "--db",
+                      "db.sqlite",
+                      "--rated-since",
+                      "2026-09-06T15:00:00Z",
+                      "--rated-since",
+                      "2026-09-08T00:00:00Z"
+                    },
+                    null,
+                    home.toString()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("was given twice");
+  }
+
+  @Test
   @DisplayName("an unknown option is refused with a usage error")
   void shouldRefuseAnUnknownOptionWhenOneIsGiven() {
     assertThatThrownBy(

@@ -18,9 +18,12 @@ import com.robsartin.segue.wikidata.WikidataEntityResolver;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,7 +42,9 @@ public final class ExpandCli {
 
   private static final Logger log = LoggerFactory.getLogger(ExpandCli.class);
 
-  private static final String USAGE = "usage: --db <segue.db> [--max-new-edges <n>] [--dry-run]";
+  private static final String USAGE =
+      "usage: --db <segue.db> [--max-new-edges <n>] [--dry-run] [--rated-since <ISO-8601 instant,"
+          + " e.g. 2026-09-06T15:00:00Z>]";
 
   private ExpandCli() {}
 
@@ -50,8 +55,9 @@ public final class ExpandCli {
    * @param maxNewEdges the bound handed to every entity's expansion, defaulting to {@link
    *     ExpandContext#defaults()}
    * @param dryRun report what would be visited and touch no network and no log
+   * @param ratedSince the instant to filter promotions by, or empty for no filter
    */
-  record Options(Path database, int maxNewEdges, boolean dryRun) {}
+  record Options(Path database, int maxNewEdges, boolean dryRun, Optional<Instant> ratedSince) {}
 
   /** Parse and validate, refusing anything that could not work before a store is opened. */
   static Options parse(String[] args, String envDatabase, String userHome) {
@@ -88,11 +94,17 @@ public final class ExpandCli {
       }
     }
 
+    Instant ratedSince = null;
+    String ratedSinceValue = values.remove("--rated-since");
+    if (ratedSinceValue != null) {
+      ratedSince = instant(ratedSinceValue);
+    }
+
     if (!values.isEmpty()) {
       throw usage("unknown option " + values.keySet().iterator().next());
     }
 
-    return new Options(database, maxNewEdges, dryRun);
+    return new Options(database, maxNewEdges, dryRun, Optional.ofNullable(ratedSince));
   }
 
   private static int number(String value) {
@@ -100,6 +112,15 @@ public final class ExpandCli {
       return Integer.parseInt(value);
     } catch (NumberFormatException e) {
       throw usage("--max-new-edges takes a whole number, got " + value);
+    }
+  }
+
+  private static Instant instant(String value) {
+    try {
+      return Instant.parse(value);
+    } catch (DateTimeParseException e) {
+      throw usage(
+          "--rated-since takes an ISO-8601 instant like 2026-09-06T15:00:00Z, got " + value);
     }
   }
 
