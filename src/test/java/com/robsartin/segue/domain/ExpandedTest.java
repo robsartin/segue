@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -150,5 +151,21 @@ class ExpandedTest {
                 edge(SEED, OTHER, "artist/invented#member of band:invented")));
 
     assertThat(expanded.seeds()).isEmpty();
+  }
+
+  @Test
+  @DisplayName("a seed recorded on a merge's retired side covers the canonical id after the fold")
+  void shouldCoverTheCanonicalIdWhenTheSeedWasRecordedOnTheRetiredSide() {
+    Expanded expanded = Expanded.in(List.of(edge(LOCAL, OTHER, LOCAL + "$4f1a-invented")));
+
+    assertThat(expanded.covers(CANONICAL))
+        .as("the raw rows cite the id the owner has since retired")
+        .isFalse();
+    assertThat(
+            expanded
+                .onTheCanonicalSide(new Equivalences(Map.of(LOCAL, CANONICAL)))
+                .covers(CANONICAL))
+        .as("a population already on its canonical side must find the work that was really done")
+        .isTrue();
   }
 }

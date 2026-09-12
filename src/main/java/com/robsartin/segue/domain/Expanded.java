@@ -126,6 +126,25 @@ public record Expanded(Set<String> seeds) {
   }
 
   /**
+   * The seeds on the side a population is counted on, by the fold that population is read by.
+   *
+   * <p><b>Defensive rather than reachable today.</b> {@link #in} reads the rows as they were
+   * written, so a row recorded before a merge cites the id the owner has since retired; asked about
+   * a population already folded, it would report an entity as never expanded on work that was
+   * really done. No writer in {@code src/main} records a seed on a retired side — a merge retires
+   * an id the expander no longer visits — so this exists so that one fold, one side and every count
+   * stay true whatever a later writer does (#311, #313).
+   */
+  public Expanded onTheCanonicalSide(Equivalences merges) {
+    Objects.requireNonNull(merges, "merges");
+    Set<String> resolved = new LinkedHashSet<>();
+    for (String seed : seeds) {
+      resolved.add(merges.canonical(seed));
+    }
+    return new Expanded(resolved);
+  }
+
+  /**
    * The seed a reference names, or null where it names none.
    *
    * <p>Read apart on the separator each shape actually uses. A reference that is neither shape —

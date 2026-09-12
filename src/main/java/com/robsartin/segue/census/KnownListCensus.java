@@ -11,7 +11,6 @@ import com.robsartin.segue.export.LogProjection;
 import com.robsartin.segue.support.KnownListInput;
 import java.util.Collections;
 import java.util.EnumMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -38,6 +37,10 @@ import java.util.Set;
  * would find no seed and report an entity as never expanded on work that was really done. No writer
  * in {@code src/main} records a seed on a retired side today, so this is defensive: one fold, one
  * side, every count, whatever a later writer does.
+ *
+ * <p>The two folds themselves now live on {@link Equivalences} and {@link Expanded}, because the
+ * promotion expander composes its known-list population by the same two steps and may not depend on
+ * this package (#313).
  *
  * <p><b>A qid the file names that the fold holds no node for counts under {@code named} and not
  * under {@code in the graph}.</b> That is not a gap in this reading; it is the first coverage gap
@@ -112,34 +115,16 @@ public record KnownListCensus(String file, Population fromFile, Population withP
     Objects.requireNonNull(ratings, "ratings");
 
     Equivalences merges = fold.equivalences();
-    List<String> fromFile = canonical(known.qids(), merges);
+    List<String> fromFile = merges.canonical(known.qids());
     // KnownList.promoted appends the ratings map's own keys, which resolve() has already moved
     // onto their canonical side, so nothing here canonicalises a second time.
     List<String> withPromotions = KnownList.promoted(fromFile, merges.resolve(ratings));
     Map<String, Set<String>> adjacency = Neighbours.in(projection);
-    Expanded seeds = onTheCanonicalSide(expanded, merges);
+    Expanded seeds = expanded.onTheCanonicalSide(merges);
     return new KnownListCensus(
         known.name(),
         read(fromFile, seeds, projection, adjacency),
         read(withPromotions, seeds, projection, adjacency));
-  }
-
-  /** The seeds on the side the population is counted on, by the fold the population is read by. */
-  private static Expanded onTheCanonicalSide(Expanded expanded, Equivalences merges) {
-    Set<String> seeds = new LinkedHashSet<>();
-    for (String seed : expanded.seeds()) {
-      seeds.add(merges.canonical(seed));
-    }
-    return new Expanded(seeds);
-  }
-
-  /** The file's ids on their canonical side, de-duplicated, in the file's own order. */
-  private static List<String> canonical(List<String> qids, Equivalences merges) {
-    Set<String> resolved = new LinkedHashSet<>();
-    for (String qid : qids) {
-      resolved.add(merges.canonical(qid));
-    }
-    return List.copyOf(resolved);
   }
 
   /** One population's figures, by one rule rather than two — {@code DegreeCensus}'s shape. */

@@ -1090,6 +1090,26 @@ public record Equivalences(
   }
 
   /**
+   * Every id here on the side it turned out to be, distinct, in the order given.
+   *
+   * <p><b>The list shape of {@link #canonical(String)}, beside {@link #resolve} and {@link
+   * #resolveUpdatedAt} for the two map shapes.</b> It is here rather than in either caller because
+   * two dev tools read one known-list file and count over it — the census counts coverage and the
+   * expander chooses its population (#311, #313) — and they may not depend on each other. De-
+   * duplication is part of the fold and not a caller's afterthought: a file naming both sides of a
+   * merge names one entity, and counting it twice would be a second answer to a question this type
+   * already owns.
+   */
+  public List<String> canonical(List<String> qids) {
+    Objects.requireNonNull(qids, "qids");
+    Set<String> resolved = new LinkedHashSet<>();
+    for (String qid : qids) {
+      resolved.add(canonical(qid));
+    }
+    return List.copyOf(resolved);
+  }
+
+  /**
    * The local ids that have been merged — everything that must stop being offered.
    *
    * <p>The local side only. The canonical id is a real entity the owner may well want recommended
