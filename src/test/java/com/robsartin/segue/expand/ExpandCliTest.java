@@ -8,12 +8,14 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.robsartin.segue.domain.AffinityRecord;
+import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.KnownList;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
@@ -57,6 +59,18 @@ class ExpandCliTest {
 
   /** After {@link #THE_INSTANT} — when the two later writes happened. */
   private static final Instant AGAIN = Instant.parse("2026-07-01T00:00:00Z");
+
+  /** On the known-list file, with a node, and cited by a row as an expansion's seed. */
+  private static final String ALREADY_EXPANDED = "Q0901301";
+
+  /** On the file, with a node, cited by nothing as a seed. */
+  private static final String NEVER_EXPANDED = "Q0901302";
+
+  /** The same, so the count below can drop by one and still not be a drop to nothing. */
+  private static final String ALSO_NEVER_EXPANDED = "Q0901303";
+
+  /** On the file, and deliberately given no node at all. */
+  private static final String NO_NODE = "Q0901304";
 
   @TempDir private Path home;
 
@@ -454,6 +468,91 @@ class ExpandCliTest {
   private static void reRate(SqliteAffinityStore affinity) {
     affinity.put(new AffinityRecord(RE_RATED, KnownList.PROMOTION_RATING, null, WHEN));
     affinity.put(new AffinityRecord(RE_RATED, KnownList.PROMOTION_RATING, null, AGAIN));
+  }
+
+  /**
+   * Three invented entities with nodes, one edge between two of them, and no rating anywhere.
+   *
+   * <p>The edge's reference decides the whole test: {@code reference} is either a Wikidata
+   * statement id, which names {@link #ALREADY_EXPANDED} as the expansion's seed, or {@code
+   * ClaimMapper}'s fallback for a statement carrying no id, which names no seed at all. One
+   * character of fixture is the difference between the rule firing and not.
+   */
+  private Path knownListGraph(String name, String reference) {
+    Path db = home.resolve(name);
+    Provenance sourced = new Provenance("wikidata", reference, WHEN, 1.0);
+    Provenance plain = new Provenance("invented", "invented:6", WHEN, 1.0);
+    try (SqliteAssertionLog log = new SqliteAssertionLog(db)) {
+      log.append(new NodeAssertion(ALREADY_EXPANDED, NodeKind.GROUP, "an invented act", plain));
+      log.append(new NodeAssertion(NEVER_EXPANDED, NodeKind.GROUP, "another invented act", plain));
+      log.append(new NodeAssertion(ALSO_NEVER_EXPANDED, NodeKind.GROUP, "a third one", plain));
+      log.append(
+          new AssertionRecord(
+              ALREADY_EXPANDED, NEVER_EXPANDED, "INFLUENCED_BY", null, null, sourced));
+    }
+    return db;
+  }
+
+  /** The file the runs below are given: three ids, one per line, in a @TempDir. */
+  private Path knownFile(String name) throws Exception {
+    return Files.writeString(
+        home.resolve(name),
+        ALREADY_EXPANDED + "\n" + NEVER_EXPANDED + "\n" + ALSO_NEVER_EXPANDED + "\n");
+  }
+
+  @Test
+  @DisplayName("only the known-list entities no row cites as a seed are considered")
+  void shouldConsiderOnlyTheNeverExpandedEntitiesWhenAKnownFileIsGiven() throws Exception {
+    Path db = knownListGraph("known.db", ALREADY_EXPANDED + "$4f1a-invented");
+    Path file = knownFile("known.csv");
+    captured.list.clear();
+
+    ExpandCli.main(new String[] {"--db", db.toString(), "--dry-run", "--known", file.toString()});
+
+    assertThat(countOn(lines(), "considered"))
+        .as("three ids in the file, one of them cited by a row as an expansion's seed")
+        .isEqualTo(2);
+    assertThat(lines())
+        .as("and the block says which population it covered, naming the basename")
+        .anyMatch(line -> line.startsWith("# only known-list entities from known.csv"));
+  }
+
+  @Test
+  @DisplayName("the same file over a log citing no seed considers every entity in it")
+  void shouldConsiderEveryEntityWhenNoRowCitesAnyOfThemAsASeed() throws Exception {
+    // The control for the test above: the same three ids, the same graph, and one row's reference
+    // changed to ClaimMapper's fallback for a statement carrying no id — which names no seed. If
+    // this reported 2 as well, the drop above would not be the rule firing.
+    Path db = knownListGraph("nothing-expanded.db", "P737:" + NEVER_EXPANDED);
+    Path file = knownFile("control.csv");
+    captured.list.clear();
+
+    ExpandCli.main(new String[] {"--db", db.toString(), "--dry-run", "--known", file.toString()});
+
+    assertThat(countOn(lines(), "considered"))
+        .as("no row cites a seed, so nothing is excluded as already expanded")
+        .isEqualTo(3);
+  }
+
+  @Test
+  @DisplayName("a known-list id the graph holds no node for is refused as an unknown entity")
+  void shouldRefuseTheKnownEntityWhenTheGraphHoldsNoNodeForIt() throws Exception {
+    // A REAL run, and it reaches no network by construction: EntityExpansion refuses an entity
+    // with no node before any adapter is asked. The file names that one id and nothing else, so
+    // there is nothing here that could be expanded.
+    Path db = home.resolve("no-node.db");
+    try (SqliteAssertionLog log = new SqliteAssertionLog(db)) {
+      assertThat(log.readAll()).as("the log is deliberately empty").isEmpty();
+    }
+    Path file = Files.writeString(home.resolve("absentee.csv"), NO_NODE + "\n");
+    captured.list.clear();
+
+    ExpandCli.main(new String[] {"--db", db.toString(), "--known", file.toString()});
+
+    assertThat(countOn(lines(), "considered")).isEqualTo(1);
+    assertThat(countOn(lines(), "unknown entity"))
+        .as("the same refusal a promotion with no node already gets, counted the same way")
+        .isEqualTo(1);
   }
 
   private List<String> lines() {

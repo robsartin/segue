@@ -1,6 +1,7 @@
 package com.robsartin.segue.expand;
 
 import com.robsartin.segue.domain.Equivalences;
+import com.robsartin.segue.domain.Expanded;
 import com.robsartin.segue.domain.KnownList;
 import com.robsartin.segue.domain.RatingAge;
 import com.robsartin.segue.expansion.EntityExpansion;
@@ -12,6 +13,7 @@ import com.robsartin.segue.port.ExpandContext;
 import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
+import com.robsartin.segue.support.KnownListInput;
 import com.robsartin.segue.support.RequiredDatabase;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import com.robsartin.segue.wikidata.WikidataClient;
@@ -46,6 +48,14 @@ import org.slf4j.LoggerFactory;
  * harness was the only tool inside until this one asked the same question (#276, #307). It carries
  * neither the note nor the score, and a run given no instant never makes the call at all. This is
  * the only class in the package that touches the store.
+ *
+ * <p><b>It reads a known-list file, and only when {@code --known} asks.</b> The file is the one
+ * {@code recommend}, {@code rate}, {@code evaluate} and {@code graphCensus} take, read through
+ * {@code support.KnownListInput}, and the population is its entities — folded onto their canonical
+ * side — that no row in the log cites as an expansion's seed. That rule is {@code domain.Expanded},
+ * which the census reads too, so the two tools cannot disagree about who has been expanded (#311,
+ * #313). A run given a file composes no promotions and reads no rating at all. The two flags are
+ * exclusive: they name different populations, and the block names one.
  */
 public final class ExpandCli {
 
@@ -207,37 +217,51 @@ public final class ExpandCli {
 
       // The fold the replay already derived (#246, ADR 64) — never read back and folded again.
       Equivalences merges = replay.fold().equivalences();
-      // Resolved before the threshold is applied: a merge leaves two affinity rows naming one
-      // thing, and promoting both would expand the id the owner retired as well as the one he
-      // kept. A count, never a qid and never a score (ADR 33).
-      Map<String, Integer> ratings = merges.resolve(affinity.readRatings());
-      log.info("read {} rating(s)", ratings.size());
-
-      // KnownList.promoted with no file IS "rated at or above PROMOTION_RATING, ascending by
-      // qid" — the threshold and the order from the class that owns both, rather than a second
-      // copy of the rule here (issues #106 and #109).
-      List<String> promoted = KnownList.promoted(List.of(), ratings);
-      // Read only when asked: a run with no --rated-since reads no timestamp at all, which is
-      // ADR 16's data minimisation falling out of the shape rather than being argued for. The
-      // timestamps are resolved through the same merges the ratings were, so the two maps are
-      // keyed alike and a promotion's age cannot be read off another row (issues #276, #307).
-      // The set handed over is the PROMOTIONS and not every rated entity: this tool's population
-      // is the promotions, so a rated entity it was never going to visit is not a reason to
-      // refuse the run.
-      Optional<RatingAge> age =
-          options
-              .ratedSince()
-              .map(
-                  since ->
-                      RatingAge.of(
-                          since,
-                          merges.resolveUpdatedAt(affinity.readUpdatedAt()),
-                          Set.copyOf(promoted)));
-      List<String> promotions =
-          age.map(it -> promoted.stream().filter(it::isNew).toList()).orElse(promoted);
-      Optional<Population> filter =
-          age.map(it -> new RatedSince(it.since(), promoted.size() - promotions.size()));
-      log.info("{} promotion(s) to visit", promotions.size());
+      List<String> population;
+      Optional<Population> covered;
+      if (options.known().isPresent()) {
+        // The census's own two folds and its own rule (#311, #313), reused rather than copied:
+        // the file's ids on their canonical side, and the log's expansion seeds on the same side,
+        // so this tool and graphCensus cannot come to disagree about who has been expanded. A
+        // --known run composes no promotions, so it reads no rating at all — ADR 16's
+        // minimisation falling out of the shape, exactly as a run with no --rated-since reads no
+        // timestamp.
+        KnownListInput known = KnownListInput.read(options.known().get());
+        List<String> named = merges.canonical(known.qids());
+        Expanded expanded = Expanded.in(assertions.readAll()).onTheCanonicalSide(merges);
+        population = named.stream().filter(qid -> !expanded.covers(qid)).toList();
+        covered =
+            Optional.of(new KnownNeverExpanded(known.name(), named.size() - population.size()));
+        log.info("{} known-list entity(s) to visit", population.size());
+      } else {
+        // Resolved before the threshold is applied: a merge leaves two affinity rows naming one
+        // thing, and promoting both would expand the id the owner retired as well as the one he
+        // kept. A count, never a qid and never a score (ADR 33).
+        Map<String, Integer> ratings = merges.resolve(affinity.readRatings());
+        log.info("read {} rating(s)", ratings.size());
+        // KnownList.promoted with no file IS "rated at or above PROMOTION_RATING, ascending by
+        // qid" — the threshold and the order from the class that owns both, rather than a second
+        // copy of the rule here (issues #106 and #109).
+        List<String> promoted = KnownList.promoted(List.of(), ratings);
+        // Read only when asked, and resolved through the same merges the ratings were, so the two
+        // maps are keyed alike and a promotion's age cannot be read off another row (#276, #307).
+        // The set handed over is the PROMOTIONS: a rated entity this tool was never going to
+        // visit is not a reason to refuse the run.
+        Optional<RatingAge> age =
+            options
+                .ratedSince()
+                .map(
+                    since ->
+                        RatingAge.of(
+                            since,
+                            merges.resolveUpdatedAt(affinity.readUpdatedAt()),
+                            Set.copyOf(promoted)));
+        List<String> promotions =
+            age.map(it -> promoted.stream().filter(it::isNew).toList()).orElse(promoted);
+        covered = age.map(it -> new RatedSince(it.since(), promoted.size() - promotions.size()));
+        population = promotions;
+        log.info("{} promotion(s) to visit", promotions.size());
+      }
 
       Clock clock = Clock.systemUTC();
       WikidataEntityResolver resolver = new WikidataEntityResolver(new WikidataClient(), clock);
@@ -252,15 +276,15 @@ public final class ExpandCli {
       // The long arity when a filter was applied and the short one when none was, so both keep a
       // production caller rather than one of them being reachable from tests alone.
       if (options.dryRun()) {
-        if (filter.isPresent()) {
-          run.dryRun(promotions, filter, log::info);
+        if (covered.isPresent()) {
+          run.dryRun(population, covered, log::info);
         } else {
-          run.dryRun(promotions, log::info);
+          run.dryRun(population, log::info);
         }
-      } else if (filter.isPresent()) {
-        run.run(promotions, filter, options.maxNewEdges(), log::info);
+      } else if (covered.isPresent()) {
+        run.run(population, covered, options.maxNewEdges(), log::info);
       } else {
-        run.run(promotions, options.maxNewEdges(), log::info);
+        run.run(population, options.maxNewEdges(), log::info);
       }
     }
   }

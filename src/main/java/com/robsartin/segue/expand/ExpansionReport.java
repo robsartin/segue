@@ -12,9 +12,10 @@ import java.util.Optional;
  * shape, held to it for the same reason: {@link #lines} takes an {@link ExpansionTally} whose every
  * component is an {@code int} or a map keyed by {@code SourceAdapter#id()} or {@link
  * ExpansionOutcome.Reason}, and {@link #dryRunLines} takes a {@link Preflight} of three {@code
- * int}s. Each renderer's long arity also takes an {@code Optional<RatedSince>}, whose own two
- * components are an {@code Instant} and an {@code int}. There is nowhere in any of it to put an
- * identifier, which is a stronger guarantee than a body that merely happens not to print one.
+ * int}s. Each renderer's long arity also takes an {@code Optional<Population>}, whose two shapes
+ * carry an {@code Instant} and an {@code int}, or a file's basename and an {@code int}. There is
+ * nowhere in any of it to put an identifier, which is a stronger guarantee than a body that merely
+ * happens not to print one.
  *
  * <p><b>Every section prints its heading, whether or not there is a row to show under it.</b> An
  * empty {@code edge assertions by source} means no edge assertion was recorded from any source, and
