@@ -515,6 +515,16 @@ class ExpandCliTest {
     assertThat(lines())
         .as("and the block says which population it covered, naming the basename")
         .anyMatch(line -> line.startsWith("# only known-list entities from known.csv"));
+    assertThat(lines())
+        .as(
+            "and the clause carries the excluded count the arithmetic computes — one of the"
+                + " three file ids was cited as an expansion's seed — not just the sentence"
+                + " around it")
+        .anyMatch(
+            line ->
+                line.contains(
+                    "that no expansion has covered: 1 excluded (some row in the log cites them"
+                        + " as an expansion's seed)"));
   }
 
   @Test
