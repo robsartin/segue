@@ -1828,10 +1828,11 @@ a six-figure count moves the column rather than jutting out of it.
 
 **What `--known` costs.** Reading the file adds one scan for the expansion rule and one bounded
 neighbourhood read per known entity, against a fold that already dominates the run — so it costs
-seconds rather than minutes. That was measured on a synthetic graph shaped like the real one, not on
-the owner's own database: nodes in the low six figures, edges a small multiple of that, and degree
-skewed so a few nodes carry hundreds of edges and most carry none. If a run with `--known` takes
-meaningfully longer than that, the walk is the thing to look at, not the flag.
+seconds rather than minutes. That was measured by `KnownListCensusScaleTest` on a synthetic graph
+shaped like the real one, not on the owner's own database: nodes in the low six figures, edges a
+small multiple of that, and degree skewed so a few nodes carry hundreds of edges and most carry
+none. If a run with `--known` takes meaningfully longer than that, the walk is the thing to look at,
+not the flag.
 
 ### What the two sub-sections mean
 
@@ -1841,10 +1842,11 @@ plus everything you rated at or above `KnownList.PROMOTION_RATING` that the file
 name, which is the population `recommend` and `rate` reason over
 ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)) — so the difference between the two
 rows is exactly what promotion adds. In the `file` row, `named` minus `in the graph` is the file
-naming something segue has never seen at all — the first coverage gap there is. In `file and
-promotions` that difference also picks up a promotion the graph holds no node for: promotion
-appends a rating at or above the threshold whether or not anything ever claimed a node for that
-entity, and a retracted entity you had already rated is the everyday way that happens.
+naming something the graph holds no node for — most often something segue has never seen, and
+sometimes something you retracted. In `file and promotions` that difference also picks up a
+promotion the graph holds no node for: promotion appends a rating at or above the threshold whether
+or not anything ever claimed a node for that entity, and a retracted entity you had already rated
+is the everyday way that happens.
 
 ### Why the output is safe to paste
 

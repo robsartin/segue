@@ -175,3 +175,25 @@ actually does, and what the plan does instead. Nothing above is edited.
 7. **`Q12` and `Q123` are allocatable Wikidata ids**, so the prefix control cannot use them:
    `StandInQidsDenoteNothingTest` sweeps every string literal under `src/test`. The plan uses the
    leading-zero form (ADR 58) for both sides of that control.
+
+8. **The forward shape's qid prefix is matched case-insensitively, and the rule above is therefore
+   not "exact".** *Expanded: one rule, derived from the log* and correction 5 both say the forward
+   reference begins with the subject's qid followed by `$`. Asked of the live API on 2026-09-12,
+   after the implementation review, one real entity was found carrying statement ids minted with an
+   uppercase `Q` prefix **and** statement ids minted with a lowercase `q` one, both live on that
+   entity. `Expanded.FORWARD_QID` is therefore `[Qq]\d+`, normalised back to the canonical uppercase
+   form before it is compared; the digits and the `$` separator stay exact, and the reverse arm,
+   whose reference `ReverseClaims` builds itself, is unchanged. No fixture in this repository
+   carries a real statement id, so nothing offline could have caught it. `WikidataLiveSmokeTest`
+   holds the measurement and its counts; ADR 63's 2026-09-12 amendment records why it belongs in an
+   ADR.
+
+9. **The expansion seeds are read through the merge fold too.** *The rows* counts a resolved
+   population, and *Expanded* describes a rule read off the log as written — which leaves the two
+   sides of a merge free to disagree: a row recorded before the merge cites the id the owner has
+   since retired, and a population already on its canonical side finds no seed for it and reports it
+   as never expanded. `KnownListCensus.of` therefore reads the seeds through the same
+   `Equivalences.canonical` the population is read through. `Expanded` itself still reads the raw
+   rows, deliberately: that an expansion ran is a fact the append-only log keeps, and reading a fold
+   there would flip a seed back to never-expanded as soon as a retraction dropped the edges carrying
+   its reference.

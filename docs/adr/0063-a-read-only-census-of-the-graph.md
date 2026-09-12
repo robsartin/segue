@@ -357,10 +357,11 @@ statement id, and a reverse-discovered edge's own reference — read apart by on
 rather than a second copy of the same judgement here. The forward shape is matched
 **case-insensitively on its leading letter**, and that is a measurement rather than a defensiveness:
 asked of the live API, one real entity carries statement ids minted with an uppercase prefix and
-statement ids minted with a lowercase one, both eras still live, because Wikibase changed how it
-mints statement GUIDs and never rewrote the older ones. No fixture in this repository carries a real
-statement id at all — every recorded response falls back to a reference built from the property and
-the object — so nothing offline could have caught it, and an uppercase-only rule would have dropped
+statement ids minted with a lowercase one, both live on that entity today. That distribution is what
+was measured and is all that was measured: why Wikibase's minting differs across them is not
+something this call establishes. No fixture in this repository carries a real statement id at all —
+every recorded response falls back to a reference built from the property and the object — so
+nothing offline could have caught it, and an uppercase-only rule would have dropped
 the lowercase-minted part of the forward arm silently and over-reported "never expanded" with no
 error to see. It is recorded here because it reverses an assumption this design was written on and
 because only a live call can re-derive it.
