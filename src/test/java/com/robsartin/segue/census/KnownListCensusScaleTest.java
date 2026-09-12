@@ -7,6 +7,7 @@ import com.robsartin.segue.domain.Fold;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.export.LogProjection;
+import com.robsartin.segue.support.KnownListInput;
 import com.robsartin.segue.wikidata.KindMapper;
 import java.util.ArrayList;
 import java.util.Collections;
