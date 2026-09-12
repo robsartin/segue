@@ -527,7 +527,7 @@ line is drawn there.
 | `recommend` | The recommender ([ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md)): ranks entities absent from the known-list by how much more of that list reaches them than their size predicts, and explains each with real routes. Run as `./gradlew recommend`. The list is the supplied `--known` file plus everything rated 4 or 5 that the file does not name, through `KnownList.promoted` ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)) — so a highly rated entity stops being offered back — and since [ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md) the sweep also takes `KnownList.suppressed` as a separate set, so an entity rated 2 or below stops being offered back too. Plain Java, read-only, offline, and since issue #85 it weights every candidate by the owner's ratings — `Recommendations.regardFor` over `AffinityStore.readRatings`, the note-free half of the taste layer. (This row said it "cannot see the taste layer at all" until the final review of issue #101; that was already false on `main`.) | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `support` |
 | `own` | The owner-claim tool (issue [#92](https://github.com/robsartin/segue/issues/92)): mints a local entity Wikidata does not model, asserts an edge between two ids, or merges a local id into the QID it turned out to be — one operation per run, as `./gradlew ownClaim`. Plain Java, offline, and the second dev tool that writes a world-fact claim; it appends through `IngestService.claim` and holds no graph, so the projection catches up at the next boot. Deliberately not an MCP tool: an owner claim is exempt from the corroboration count, so a model must not be able to make one. Since #179 it has no default database: `--db` is required, `SEGUE_DB` does not satisfy it, and `./gradlew own` still resolves to `:ownClaim` — it refuses rather than reporting an unknown task ([ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md)). | `port`, `domain`, `ingest`, `sqlite`, `support` |
 | `rate` | The rating deck ([ADR 46](adr/0046-the-rating-deck.md)): a loopback page on 127.0.0.1:8090 dealing one unrated entity per keystroke, run as `./gradlew rate`. Plain Java, offline, and the only dev tool that writes a rating. Composes its known list through the same `KnownList.promoted` `recommend` does ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)), passes the same `KnownList.suppressed` to its sweep, and deals revisions over `KnownList.revisitable` ([ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md)). | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `recommend`, `support` |
-| `census` | The graph census: nodes by kind, edges by type, source and corroboration, the claim rows and what retraction and merge did to them, the taste layer by score, degree quantiles against `Recommendations.MIN_CANDIDATE_DEGREE`, what MusicBrainz reached, and the classes its `CONCEPT` nodes state. Run as `./gradlew graphCensus`. Plain Java, read-only, offline, and the whole output is aggregates and class ids — no label, no note, no entity id — so it is safe to paste. `--db` is required, and `SEGUE_DB` does not satisfy it. | `port`, `domain`, `sqlite`, `support`, `export`, `wikidata` |
+| `census` | The graph census: nodes by kind, edges by type, source and corroboration, the claim rows and what retraction and merge did to them, the taste layer by score, degree quantiles against `Recommendations.MIN_CANDIDATE_DEGREE`, what MusicBrainz reached, and the classes its `CONCEPT` nodes state. Run as `./gradlew graphCensus`. An optional `--known <file>` adds a `known list` section: how much of that file, and of the file composed with your promotions, the graph holds, has expanded, and connects up. Plain Java, read-only, offline, and the whole output is aggregates and class ids — no label, no note, no entity id but the known-list file's own basename — so it is safe to paste. `--db` is required, and `SEGUE_DB` does not satisfy it. | `port`, `domain`, `sqlite`, `support`, `export`, `wikidata` |
 | `evaluate` | The recommender's evaluation harness ([ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md)): holds out a deterministic slice of the entities you rated highly, reads every fold of that split, runs the shipped candidate sweep from what is left over a fixed grid of scorers and degree floors, and reports where the held-out entities and the ones you rated down land. Run as `./gradlew evaluate`. Plain Java, read-only, offline, and the whole output is aggregates — no label, no id, no note, no rating — so it is safe to paste. `--db` is required, and `SEGUE_DB` does not satisfy it. | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `recommend`, `support` |
 | `expand` | The promotion expander ([ADR 66](adr/0066-expand-every-promotion-from-a-dev-tool.md), #284), run as `./gradlew expandPromotions`: expands the neighbourhood of every entity rated at or above `KnownList.PROMOTION_RATING`, one at a time, through the shared `expansion.EntityExpansion`, and reports what happened as one block of aggregates safe to paste — no label, no note, no entity id, on any line. `ExpandRun.dryRun` counts what a real run would visit — entities the projection holds a node for, and entities `LocalEntity.isLocal` answers true for — without touching an adapter or the log. The tenth dev tool, and the only one that both WRITES and FETCHES: it replays the log into a throwaway `TinkerGraphStore`, appends through `IngestService`, and reaches the live Wikidata API, the Query Service and MusicBrainz. `--db` is required, and `SEGUE_DB` does not satisfy it. | `port`, `support`, `domain`, `expansion`, `sqlite`, `tinker`, `ingest`, `wikidata` |
 
@@ -1785,6 +1785,9 @@ names say which side of that line each one is on — rename either and the build
 ```bash
 # every count there is, over the database you name
 ./gradlew graphCensus --args="--db $HOME/.segue/segue.db"
+
+# the same counts, plus how well the graph covers your own list
+./gradlew graphCensus --args="--db $HOME/.segue/segue.db --known $HOME/known.csv"
 ```
 
 It prints one block of counts and writes nothing. **`--db` is required and `SEGUE_DB` does not
@@ -1811,7 +1814,11 @@ over the one database nobody but you may open:
 - which Wikidata classes the `CONCEPT` nodes are wearing, which is the map of `KindMapper`'s gaps —
   `fromInstanceOf` answers `CONCEPT` for any class its whitelist has never met, so an unknown share
   of those nodes are people, groups, works or places. The `concept classes` section counts them, and
-  which classes then deserve a rule is a separate issue that only a real reading can open.
+  which classes then deserve a rule is a separate issue that only a real reading can open;
+- which of your own known-list the graph has never expanded, and which of it connects to nothing
+  else on the list — the question the evaluation harness cannot ask, because it scores only entities
+  you have rated ([ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md)). Pass
+  `--known` and the `known list` section answers it.
 
 `CensusReport` is the authority on which counts are emitted and in what order; this chapter does not
 list them, because a list here would be a second copy going stale on its own. What it prints is a
@@ -1825,6 +1832,16 @@ seconds rather than minutes. That was measured on a synthetic graph shaped like 
 the owner's own database: nodes in the low six figures, edges a small multiple of that, and degree
 skewed so a few nodes carry hundreds of edges and most carry none. If a run with `--known` takes
 meaningfully longer than that, the walk is the thing to look at, not the flag.
+
+### What the two sub-sections mean
+
+`file` is what your `--known` file names, resolved through the merge fold — so two ids that turned
+out to be one entity count once, on its canonical side. `file and promotions` is that same population
+plus everything you rated at or above `KnownList.PROMOTION_RATING` that the file does not already
+name, which is the population `recommend` and `rate` reason over
+([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)) — so the difference between the two
+rows is exactly what promotion adds. Within either row, `named` minus `in the graph` is the file
+naming something segue has never seen at all — the first coverage gap there is.
 
 ### Why the output is safe to paste
 
@@ -1844,7 +1861,9 @@ note, and a node stating a class the whitelist has never met — so the concept-
 non-vacuous rather than absent — captures every log line at TRACE, and asserts that only the class id
 reaches the output, and only where the narrowed clause allows it. ADR 51 says its rule cannot be
 tested in general and explains why; this is the one artefact where it can be, and
-[ADR 63](adr/0063-a-read-only-census-of-the-graph.md) records why.
+[ADR 63](adr/0063-a-read-only-census-of-the-graph.md) records why. `--known` adds exactly one piece of
+non-integer text on top of that — the file's basename, printed on the `known list` heading, never its
+path.
 
 That guarantee is about the census itself, not about everything a run can put on your terminal: a
 refusal names the database path you gave it, and a run that fails prints a stack trace like any
