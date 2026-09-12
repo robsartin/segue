@@ -560,13 +560,20 @@ exactly as it always has.
 **Why it reuses the census's rule rather than its own.**
 [ADR 63](0063-a-read-only-census-of-the-graph.md)'s 2026-09-12 amendment said a second reader of
 `domain.Expanded` was expected — "the re-expansion pass this section's number exists to gate" —
-and this is that reader. One rule in `domain`, read by both, is what stops `graphCensus --known`
-reporting a coverage gap this tool then declines to close, or closing one the census never saw. Two
-steps of the census's composition moved into `domain` with it, because `expand` may not depend on
-`census`: the fold of the file's ids onto their canonical side and the fold of the log's seeds onto
-the same side. Both were private to the census and are now `Equivalences.canonical` in its list
-shape and `Expanded.onTheCanonicalSide`. The file reader moved the same way, from `census` into
-`support` beside `QidList`, which is where a file more than one dev tool reads already lives
+and then ruled this tool out of being it: "deliberately **not** the promotion expander already
+shipped as `expandPromotions`", because "that tool composes its population from
+`KnownList.promoted` and the merges, and reads nothing here". This is that second reader, and it is
+the tool that sentence excluded. The exclusion was true of the tool as it stood and is not true of
+a `--known` run: that run composes no promotions, so its population is not `KnownList.promoted` and
+the merges, and it does read this rule. ADR 63 carries a dated amendment of its own for #313 naming
+the sentence this overtakes; this amendment is the decision. One rule in `domain`, read by both,
+is what stops `graphCensus --known` reporting a coverage gap this tool then declines to close, or
+closing one the census never saw. Two steps of the census's composition moved into `domain` with
+it, because `expand` may not depend on `census`: the fold of the file's ids onto their canonical
+side and the fold of the log's seeds onto the same side. Both were private to the census and are
+now `Equivalences.canonical` in its list shape and `Expanded.onTheCanonicalSide`. The file reader
+moved the same way, from `census` into `support` beside `QidList`, which is where a file more than
+one dev tool reads already lives
 ([ADR 45](0045-recommend-by-normalised-lift-with-routes.md)).
 
 **The two flags are exclusive.** `--known` and `--rated-since` name different populations — one
@@ -589,27 +596,38 @@ with no timestamp.
 **The header form, and the one new thing in it.** One `#` clause under the block's own header, in
 both the dry-run block and the real block, naming the file's **basename** and how many entities the
 rule excluded as already expanded — a clause and not a row, for the reason the 2026-09-11
-amendment gives in full. **The block with no flag and the block with an instant are both
-byte-identical to today's**, and the golden pins that predate this work are unchanged beside the
-two new ones. The clause carries the first operator-supplied *text* this block has ever held: an
+amendment gives in full. `ExpansionReport.knownLine` is the authority on its wording, as
+`sinceLine` is on the instant clause's. **The block with no flag and the block with an instant are
+both byte-identical to today's**, and the golden pins that predate this work are unchanged beside
+the two new ones. The clause carries the first operator-supplied *text* this block has ever held: an
 instant cannot contain an identifier, and a file name can. What holds the line is that the text is
 the basename and never the path — `support.KnownListInput` is the one home of that rule, and it is
 the only reason that type exists — and that the paste guard now covers the flagged path, shown
-failing on a fixture whose basename was itself qid-shaped before it was shown passing.
+firing on a planted fixture whose basename was itself qid-shaped.
 [ADR 51](0051-what-an-adr-may-quote.md)'s line is unchanged, and
 [ADR 63](0063-a-read-only-census-of-the-graph.md)'s 2026-09-12 amendment already took this step for
 the census's own section heading.
 
+**What the block still calls the population.** `ExpansionReport.HEADER` and `DRY_RUN_HEADER` both
+still open `# segue promotion expansion`, and the tally's first section is still headed
+`promotions`, on a `--known` run exactly as on every other — the clause beneath the header is the
+only line that names the population the run actually covered. **The alternative was a second
+section heading for the known population**, worded from the same sealed value the clause is chosen
+from. Rejected for the reason the byte-identity above is kept for: `ExpansionReportTest`'s golden
+block pins that header and that heading as literals, so moving or doubling either moves every block
+already pasted into an issue — and it would give the report two bodies where the clause already
+carries the fact. The residual is stated rather than mitigated: a `--known` block read without its
+clause names a population it did not cover.
+
 **A `--known` run reads no rating at all.** It composes no promotions, so the taste layer's bulk
-read is never made — [ADR 16](0016-privacy-and-data-handling.md)'s minimisation falling out of
-the shape rather than being argued for, the same way a run with no instant reads no timestamp.
+read is never made — [ADR 16](0016-privacy-and-data-handling.md)'s minimisation falls out of the
+shape rather than being argued for, the same way a run with no instant reads no timestamp.
 
 **Alternatives rejected.**
 
 - **A separate dev tool for the known-list expansion.** Rejected: it would be this tool's whole
-  body — the replay, the shared expansion, the tally, the block, the fences — with one
-  population composed differently, and an eleventh tool's fences would be this tool's copied
-  under a new name.
+  body — the replay, the shared expansion, the tally, the block, the fences — with one population
+  composed differently, and an eleventh tool's fences would be this tool's copied under a new name.
   That is the failure mode this repository has already measured once, when a rule duplicated under
   a second name drifted.
 - **A "never expanded" filter on the promotions population instead of a second population.**
@@ -626,7 +644,8 @@ the shape rather than being argued for, the same way a run with no instant reads
 **Nothing here is unit-testable on its own, and that is said out loud rather than left implied.**
 This entry records a decision whose code landed with its own tests — the move, the two extracted
 folds and their reds, the parser and the exclusivity refusal seen red, the population with a
-planted control one reference-character wide, the unknown-entity refusal, the clause and its two
+planted control swapping the reference the rule reads — a statement id against `ClaimMapper`'s
+fallback for a statement carrying none — the unknown-entity refusal, the clause and its two
 new pins beside two unchanged ones, and the paste guard shown firing on a planted qid-shaped
 basename. The verification of the *document* is the full gate over an otherwise unchanged tree:
 `AdrIndexTest`, `AdrCitationsTest`, `DocumentationLinksTest` for the relative links above, and
