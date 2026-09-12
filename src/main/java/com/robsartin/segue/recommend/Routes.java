@@ -3,6 +3,7 @@ package com.robsartin.segue.recommend;
 import com.robsartin.segue.domain.PathRanking;
 import com.robsartin.segue.domain.PathResult;
 import com.robsartin.segue.domain.Recommendation;
+import com.robsartin.segue.domain.Recommendations;
 import com.robsartin.segue.domain.SharedIntermediate;
 import com.robsartin.segue.port.GraphStore;
 import java.util.ArrayList;
@@ -38,15 +39,6 @@ import java.util.function.ToIntFunction;
  */
 public final class Routes {
 
-  /**
-   * The sweep looks two hops out, so an explanation is at most two hops long.
-   *
-   * <p>The traversal is still allowed to return a ONE-hop route and to rank it first, and it
-   * should: if you already have a direct edge to the candidate, "it is cited by something you know"
-   * is a better answer than the two-hop route the scoring happened to count.
-   */
-  public static final int MAX_HOPS = 2;
-
   private final GraphStore graph;
   private final Predicate<String> recognitionInstitutionClass;
   private final Map<String, Integer> degrees = new HashMap<>();
@@ -75,7 +67,7 @@ public final class Routes {
       }
       List<PathResult> ranked =
           PathRanking.rank(
-              graph.paths(seed, candidate.entity().qid(), MAX_HOPS),
+              graph.paths(seed, candidate.entity().qid(), Recommendations.MAX_HOPS),
               lookup,
               recognitionInstitutionClass);
       if (!ranked.isEmpty()) {

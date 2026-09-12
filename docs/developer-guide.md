@@ -2477,7 +2477,7 @@ of, so the useful thing is the routes that reached it. Those come from `Routes.b
 same `PathRanking.rank`. The third is not shared. `SegueService.findPaths` hands the ranked routes
 to `ViewMapper.toPathViews` and returns structured `PathView` records; the deck calls
 `PathResult.render()`, whose only two callers in `src/main` are dev-side — `RecommendationReport`
-and `Deck.routeLines`. The route *set* differs too: `Routes.MAX_HOPS` is 2 where `find_paths`
+and `Deck.routeLines`. The route *set* differs too: `Recommendations.MAX_HOPS` is 2 where `find_paths`
 defaults to 4, and `bestFor` keeps only the top-ranked route per reaching entity. No card shape
 carries a note field; there is nowhere on a `Card` to put one, in any of the three.
 
