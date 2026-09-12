@@ -246,22 +246,21 @@ class WikidataLiveSmokeTest {
   }
 
   /**
-   * The general question behind issue #311's IMP-1, asked of the live API rather than of one
+   * The general question behind the review of issue #311, asked of the live API rather than of one
    * hand-checked anecdote. {@code Expanded.seedOf}'s forward arm depends on every real statement id
    * on an entity beginning with that entity's qid, case-insensitively, then {@code $} — the shape
    * recorded in {@code Expanded}'s javadoc. No fixture in this package can stand in for this: every
    * recorded response falls back to {@code ClaimMapper}'s {@code <property>:<objectQid>} reference,
    * carrying no statement id at all.
    *
-   * <p><b>The live answer is not "always lowercase."</b> One hand-checked id — {@code
-   * q192668$35463C9F-FBDC-4657-9DE0-55B1D9602067} — is what IMP-1 was raised against, and it reads
-   * as though every id on this entity carries a lowercase prefix. Running this check against the
-   * whole of Nick Cave's statements found 800 with an uppercase {@code Q} prefix and 287 with a
-   * lowercase {@code q} one, on the SAME entity — Wikibase minted statement GUIDs one way for years
-   * and switched at some point, and both eras' statements are still live. So the property that
-   * actually holds, and the one this test asserts, is case-insensitivity, not "lowercase" — which
-   * is exactly what {@code Expanded.seedOf}'s fix implements, and a stronger reason for it than the
-   * one anecdote gave.
+   * <p><b>The live answer is not "always lowercase."</b> The one id that review hand-checked,
+   * {@code q192668$35463C9F-FBDC-4657-9DE0-55B1D9602067}, reads as though every id on this entity
+   * carries a lowercase prefix. Running this check against the whole of Nick Cave's statements
+   * found 800 with an uppercase {@code Q} prefix and 287 with a lowercase {@code q} one, on the
+   * SAME entity — Wikibase minted statement GUIDs one way for years and switched at some point, and
+   * both eras' statements are still live. So the property that actually holds, and the one this
+   * test asserts, is case-insensitivity, not "lowercase" — which is exactly what the fix
+   * implements, and a stronger reason for it than the one anecdote gave.
    */
   @Test
   @DisplayName(

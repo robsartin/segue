@@ -82,10 +82,10 @@ class ExpandedTest {
   }
 
   /**
-   * A real statement id, confirmed against live Wikidata for #311's review (IMP-1): {@code
-   * q192668$35463C9F-FBDC-4657-9DE0-55B1D9602067} for Nick Cave (Q192668) — lowercase {@code q},
-   * then digits, then {@code $}, then an uppercase UUID. Invented here with a leading zero so it
-   * denotes nothing (ADR 58); {@link #LOWERCASE_SEED} keeps that shape rather than {@link #SEED}'s
+   * A real statement id, confirmed against live Wikidata for issue #311's review. For Nick Cave
+   * (Q192668): {@code q192668$35463C9F-FBDC-4657-9DE0-55B1D9602067} — lowercase {@code q}, then
+   * digits, then {@code $}, then an uppercase UUID. Invented here with a leading zero so it denotes
+   * nothing (ADR 58); {@link #LOWERCASE_SEED} keeps that shape rather than {@link #SEED}'s
    * uppercase one, because the whole point is the case Wikidata actually sends.
    */
   private static final String LOWERCASE_SEED = "Q0900001";

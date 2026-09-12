@@ -38,9 +38,9 @@ import java.util.function.ToIntFunction;
  * <p><b>Every label is a literal in this file, but for one number it reads off a constant.</b> The
  * known-list section's "no known neighbour" row spells out {@link Recommendations#MAX_HOPS}, the
  * bound {@code KnownListCensus} walks to, so that moving the constant moves the words rather than
- * leaving them saying the old number. That is vocabulary this file compiles against, as the {@code
- * NodeKind} names are; nothing here interpolates a value read from the data except an integer and
- * one identifier. The exceptions are the edge type codes and source ids, which are vocabulary
+ * leaving them saying the old number. That is vocabulary this file compiles against, as are the
+ * {@code NodeKind} names; nothing here interpolates a value read from the data except an integer
+ * and one identifier. The exceptions are the edge type codes and source ids, which are vocabulary
  * rather than entities and are covered by {@code CensusIsSafeToPasteTest}'s "no Q-shaped token
  * anywhere" clause, and the class qids in the concept-classes rows, which ADR 63's 2026-09-04
  * amendment rules the same way and for which that clause is narrowed to the {@code class Q…} prefix

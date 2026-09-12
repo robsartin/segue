@@ -26,7 +26,9 @@ class NeighboursTest {
   private static final String D = "Q0901004";
   private static final String E = "Q0901005";
 
-  /** Named as a node claim and never an edge endpoint — the isolated node MIN-2 asks for. */
+  /**
+   * Named as a node claim and never an edge endpoint — the isolated node this class was missing.
+   */
   private static final String F = "Q0901006";
 
   /** Named as an edge endpoint and never claimed as a node — {@code Neighbours.link}'s guard. */
@@ -74,7 +76,7 @@ class NeighboursTest {
   void shouldLinkFromNeitherEndWhenAnEdgesEndpointIsNotANode() {
     // Hand-built rather than folded from a log: LogProjection.of already drops a dangling edge
     // before Neighbours ever sees it (danglingEdges), so this is the one way to exercise
-    // Neighbours.link's own defensive guard directly, as MIN-2 asks.
+    // Neighbours.link's own defensive guard directly, as the review of issue #311 asked.
     LogProjection projection =
         new LogProjection(
             Map.of(A, new NodeRecord(A, NodeKind.PERSON, "A")),

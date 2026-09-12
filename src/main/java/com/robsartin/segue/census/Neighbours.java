@@ -22,8 +22,8 @@ final class Neighbours {
    * exactly the finding the walk exists to report, and a map that omitted it would answer the
    * question by losing it. {@code Degrees} seeds itself the same way for the same reason.
    *
-   * <p><b>Undirected.</b> "Is anything I know within two hops of this" is a question about the
-   * graph, not about which end of a relationship Wikidata states it on.
+   * <p><b>Undirected.</b> "Is anything I know within the walk's bound of this" is a question about
+   * the graph, not about which end of a relationship Wikidata states it on.
    *
    * <p>{@code LogProjection.edges()} has already dropped the dangling and the withdrawn and applied
    * retraction and merge (ADR 44), so nothing here filters.

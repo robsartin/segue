@@ -29,9 +29,9 @@ import org.junit.jupiter.api.Test;
  * class produces is an observation — read off the test report and the timed window printed below —
  * recorded in the task report and, as an order of magnitude in prose, in the runbook.
  *
- * <p><b>The timed window is what the flag adds, all of it.</b> {@code Census.of} builds {@code
- * Expanded.in} inside {@code known.map(...)}, so its scan over every row in the log is paid only by
- * a run that passed {@code --known} — it is the first of the two costs the runbook names, and it is
+ * <p><b>The timed window is what the flag adds, all of it.</b> The scan {@code Expanded.in} makes
+ * over every row in the log is built inside {@code known.map(...)}, so it is paid only by a run
+ * that passed {@code --known} — it is the first of the two costs the runbook names, and it is
  * inside the window here for that reason. The fold and the projection are paid either way, so they
  * are outside it — and timed separately, because the runbook's claim is a comparison between the
  * two and a comparison with one side unmeasured is an assertion rather than an observation.
@@ -52,12 +52,12 @@ import org.junit.jupiter.api.Test;
  * assertion that cannot fail, and one a {@code covers()} answering false unconditionally would
  * pass. The strict inequality below is what says so out loud.
  *
- * <p><b>Both populations and the merge fold run here too.</b> {@link #MERGED_LOCAL} and {@link
- * #MERGED_CANONICAL} are both on the file, so the canonicalisation the unit tests pin by hand runs
- * over the whole population and {@code named} counts the pair once; and the ratings map carries
- * three promotions the file does not name, one rating on the merge's local side that resolves onto
- * an id the file already names, and one below the threshold — so {@code file and promotions} is
- * exercised at scale rather than being list-identical to {@code file}.
+ * <p><b>Both populations and the merge fold run here too.</b> The file names both sides of the
+ * merge, {@link #MERGED_LOCAL} and {@link #MERGED_CANONICAL}, so the canonicalisation the unit
+ * tests pin by hand runs over the whole population and {@code named} counts the pair once; and the
+ * ratings map carries three promotions the file does not name, one rating on the merge's local side
+ * that resolves onto an id the file already names, and one below the threshold — so the second
+ * population is exercised at scale rather than being list-identical to the first.
  */
 class KnownListCensusScaleTest {
 
@@ -238,7 +238,7 @@ class KnownListCensusScaleTest {
     }
     Collections.shuffle(touchedIndices, rnd);
 
-    List<String> file = new ArrayList<>(KNOWN_LIST_SAMPLE + HUB_COUNT + 6);
+    List<String> file = new ArrayList<>(KNOWN_LIST_SAMPLE + HUB_COUNT + 8);
     for (int i = 0; i < KNOWN_LIST_SAMPLE; i++) {
       file.add(id(touchedIndices.get(i)));
     }

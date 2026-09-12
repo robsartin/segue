@@ -18,11 +18,11 @@ import java.util.regex.Pattern;
  * whichever end you look from.
  *
  * <p><b>The forward shape's qid prefix appears in both cases in the wild, on one and the same
- * entity, and the match is case-insensitive because of it.</b> One hand-checked lowercase id (issue
- * #311's review, IMP-1) raised the question, and it read as though the rule were "always
- * lowercase". Asking the live API instead found statement ids of both cases on one entity, because
- * Wikibase minted statement GUIDs one way, switched, and never rewrote the older ones.
- * WikidataLiveSmokeTest holds that measurement and its counts; they are not restated here, and
+ * entity, and the match is case-insensitive because of it.</b> One hand-checked lowercase id, found
+ * in issue #311's review, raised the question, and it read as though the rule were "always
+ * lowercase". Asking the live API instead found statement ids of both cases on one entity, live
+ * side by side; what was measured is that distribution and not a reason for it.
+ * WikidataLiveSmokeTest holds the measurement and its counts; they are not restated here, and
  * ClaimMapper stores whichever shape it is handed, verbatim, as the reference. No fixture in this
  * repository carries a real statement id at all (the spec's own premise correction #5 records that
  * every recorded response falls back to the property-and-object form), so nothing offline could
@@ -84,7 +84,15 @@ public record Expanded(Set<String> seeds) {
     seeds = Set.copyOf(Objects.requireNonNull(seeds, "seeds"));
   }
 
-  /** Every entity this log cites as the seed of an expansion. */
+  /**
+   * Every entity this log cites as the seed of an expansion.
+   *
+   * <p><b>The rows as they were written, never a fold of them.</b> That an expansion ran is a fact
+   * the append-only log keeps, so it is read from the rows themselves; reading a projection instead
+   * would flip a seed back to never-expanded as soon as a retraction dropped the edges carrying its
+   * reference. What this answers is therefore "some row cites this as a seed", never "this has
+   * current expansion data" — a caller counting a coverage gap wants the first.
+   */
   public static Expanded in(List<LoggedAssertion> log) {
     Objects.requireNonNull(log, "log");
     Set<String> seeds = new LinkedHashSet<>();
