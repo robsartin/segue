@@ -475,8 +475,8 @@ class ExpandCliTest {
    *
    * <p>The edge's reference decides the whole test: {@code reference} is either a Wikidata
    * statement id, which names {@link #ALREADY_EXPANDED} as the expansion's seed, or {@code
-   * ClaimMapper}'s fallback for a statement carrying no id, which names no seed at all. One
-   * character of fixture is the difference between the rule firing and not.
+   * ClaimMapper}'s fallback for a statement carrying no id, which names no seed at all. Swapping
+   * one reference for the other is the difference between the rule firing and not.
    */
   private Path knownListGraph(String name, String reference) {
     Path db = home.resolve(name);
