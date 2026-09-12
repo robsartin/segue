@@ -267,7 +267,7 @@ class WikidataLiveSmokeTest {
   @DisplayName(
       "every statement id on a real entity begins with that entity's qid, case-insensitively, and"
           + " $")
-  void everyStatementIdCarriesTheEntitysQidPrefixCaseInsensitively() {
+  void shouldCarryTheEntitysQidPrefixCaseInsensitivelyWhenTheStatementIsReal() {
     JsonNode entity = resolver.entity(CAVE);
     List<String> statementIds = new ArrayList<>();
     entity

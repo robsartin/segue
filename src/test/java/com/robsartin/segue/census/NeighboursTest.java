@@ -71,7 +71,7 @@ class NeighboursTest {
 
   @Test
   @DisplayName("an edge naming an endpoint that is not a node is linked from neither end")
-  void shouldNotLinkAnEdgeWhoseEndpointIsNotANode() {
+  void shouldLinkFromNeitherEndWhenAnEdgesEndpointIsNotANode() {
     // Hand-built rather than folded from a log: LogProjection.of already drops a dangling edge
     // before Neighbours ever sees it (danglingEdges), so this is the one way to exercise
     // Neighbours.link's own defensive guard directly, as MIN-2 asks.
