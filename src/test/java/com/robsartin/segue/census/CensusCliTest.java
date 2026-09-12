@@ -100,4 +100,33 @@ class CensusCliTest {
         .as("no database was opened, so none was created")
         .doesNotExist();
   }
+
+  @Test
+  @DisplayName("--known is optional, and absent it leaves the options carrying no known list")
+  void shouldCarryNoKnownListWhenTheFlagIsAbsent() throws Exception {
+    Path named = Files.createFile(home.resolve("named.db"));
+
+    CensusCli.Options options =
+        CensusCli.parse(new String[] {"--db", named.toString()}, null, home.toString());
+
+    assertThat(options.known()).isEmpty();
+  }
+
+  @Test
+  @DisplayName("--known is carried as given and no file is opened to parse it")
+  void shouldCarryTheKnownListWhenTheFlagIsGiven() throws Exception {
+    Path named = Files.createFile(home.resolve("named.db"));
+    Path absent = home.resolve("never-written.csv");
+
+    CensusCli.Options options =
+        CensusCli.parse(
+            new String[] {"--db", named.toString(), "--known", absent.toString()},
+            null,
+            home.toString());
+
+    assertThat(options.known()).contains(absent);
+    assertThat(absent)
+        .as("parse opens nothing, so the guide's examples can name a file")
+        .doesNotExist();
+  }
 }
