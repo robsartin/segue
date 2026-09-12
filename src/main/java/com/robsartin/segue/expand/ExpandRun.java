@@ -15,7 +15,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The run: for each promotion, expand it and tally what happened (#284).
+ * The run: for each entity in the population it is handed, expand it and tally what happened
+ * (#284).
  *
  * <p><b>{@code dryRun} touches neither {@code expansion} nor a network</b> — it reads {@link
  * #graph} directly, the same read {@link EntityExpansion#expand} would make before ever reaching an
@@ -46,12 +47,13 @@ import org.slf4j.LoggerFactory;
  * failure from a bad row; the stack trace is not logged either, because a frame can carry an id as
  * readily as a message can.
  *
- * <p><b>This class never filters.</b> {@link #dryRun} and {@link #run} are handed the promotions
- * their caller already decided on and an {@link Optional} {@link RatedSince} describing the filter
- * their caller applied — they report it, on the block {@link ExpansionReport} renders, and never
- * touch a store to compute it. The population is composed at {@code ExpandCli} from {@code
- * KnownList.promoted} and the merges; a second place that knows how to drop a promotion would be a
- * second answer to the same question (#307).
+ * <p><b>This class never filters.</b> {@link #dryRun} and {@link #run} are handed the entities
+ * their caller already decided on and an {@link Optional} {@link Population} describing the
+ * population their caller composed — they report it, on the block {@link ExpansionReport} renders,
+ * and never touch a store to compute it. The population is composed at {@code ExpandCli}, from
+ * {@code KnownList.promoted} and the merges or from the known-list file and {@code Expanded}; a
+ * second place that knows how to drop an entity would be a second answer to the same question
+ * (#307, #313).
  */
 public final class ExpandRun {
 
@@ -81,9 +83,9 @@ public final class ExpandRun {
    * nowhere else, matching the two distinct refusals a real run would give it — never both.
    */
   public Preflight dryRun(
-      List<String> promotions, Optional<RatedSince> filter, Consumer<String> lines) {
+      List<String> promotions, Optional<Population> covered, Consumer<String> lines) {
     Objects.requireNonNull(promotions, "promotions");
-    Objects.requireNonNull(filter, "filter");
+    Objects.requireNonNull(covered, "covered");
     Objects.requireNonNull(lines, "lines");
     int inTheGraph = 0;
     int minted = 0;
@@ -95,7 +97,7 @@ public final class ExpandRun {
       }
     }
     Preflight preflight = new Preflight(promotions.size(), inTheGraph, minted);
-    ExpansionReport.dryRunLines(preflight, filter).forEach(lines);
+    ExpansionReport.dryRunLines(preflight, covered).forEach(lines);
     return preflight;
   }
 
@@ -112,11 +114,11 @@ public final class ExpandRun {
    */
   public ExpansionTally run(
       List<String> promotions,
-      Optional<RatedSince> filter,
+      Optional<Population> covered,
       int maxNewEdges,
       Consumer<String> lines) {
     Objects.requireNonNull(promotions, "promotions");
-    Objects.requireNonNull(filter, "filter");
+    Objects.requireNonNull(covered, "covered");
     Objects.requireNonNull(lines, "lines");
 
     int expanded = 0;
@@ -197,7 +199,7 @@ public final class ExpandRun {
             unavailableBySource,
             truncatedBySource,
             refusalsByReason);
-    ExpansionReport.lines(tally, filter).forEach(lines);
+    ExpansionReport.lines(tally, covered).forEach(lines);
     return tally;
   }
 

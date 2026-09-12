@@ -22,7 +22,7 @@ import java.util.Objects;
  * @param since the instant the operator gave, parsed — never the string they typed
  * @param excluded how many promotions were dropped because their rating's last write fell before it
  */
-public record RatedSince(Instant since, int excluded) {
+public record RatedSince(Instant since, int excluded) implements Population {
 
   public RatedSince {
     Objects.requireNonNull(since, "since");

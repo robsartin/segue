@@ -516,7 +516,7 @@ line is drawn there.
 | `wikidata` | The first source: resolution, expansion, and the two mapping passes. Plain Java, no Spring. | `port`, `domain` |
 | `musicbrainz` | The second source ([ADR 54](adr/0054-musicbrainz-as-the-second-source.md)): `MusicBrainzClient` over `ws/2`, `MusicBrainzSourceAdapter`, and `MusicBrainzIdentity` — the MBID-to-QID seam it declares and may not implement, because an adapter may not import another adapter. Expansion only; no `EntityResolver`. Plain Java, no Spring. | `port`, `domain` |
 | `ingest` | `IngestService` (the only write path) and `GraphProjector` (boot replay). | `port`, `domain`, `wikidata` (`KindMapper` only, [ADR 42](adr/0042-store-p31-and-rederive-kind-at-projection.md)) |
-| `support` | Cross-cutting plain-Java helpers with no project dependencies — `UuidV7` (request correlation), `QidList` (the QID-file reader `export`, `ratings`, `recommend`, `evaluate` and `rate` share), `ClassLabels` (the offline `P31` label table `export` and `rate` share; it moved here from `export` when `rate` needed it), `DefaultDatabase` (the one `--db`/`SEGUE_DB`/`${user.home}` resolution `export`, `ratings`, `recommend` and `rate` share — issue #179; the live list is whoever calls `resolve`, so grep rather than trust these four names), and `RequiredDatabase` (the refusal `retract` and `own` give when `--db` was not typed; it calls `DefaultDatabase` for the path it quotes back and hands out a `String`, never a `Path`, so neither claim tool can take a default from it). | nothing |
+| `support` | Cross-cutting plain-Java helpers with no project dependencies — `UuidV7` (request correlation), `QidList` (the QID-file reader `export`, `ratings`, `recommend`, `evaluate` and `rate` share), `KnownListInput` (the basename-and-ids reading of that file `census` and `expand` share, so the block each prints names a basename and never a path — issues #311 and #313), `ClassLabels` (the offline `P31` label table `export` and `rate` share; it moved here from `export` when `rate` needed it), `DefaultDatabase` (the one `--db`/`SEGUE_DB`/`${user.home}` resolution `export`, `ratings`, `recommend` and `rate` share — issue #179; the live list is whoever calls `resolve`, so grep rather than trust these four names), and `RequiredDatabase` (the refusal `retract` and `own` give when `--db` was not typed; it calls `DefaultDatabase` for the path it quotes back and hands out a `String`, never a `Path`, so neither claim tool can take a default from it). | nothing |
 | `expansion` | One expansion: the source adapters, the bounds of ADR 49, the refusals of ADR 55 and ADR 59, and the partial-result facts both callers report in their own words. Also `ExpansionSources`, the one statement of the order the two sources are asked in, and `WikidataMusicBrainzIdentity`, the P434 bridge — the package that sees two adapters at once, since two entry points need it and only one of them may see Spring. Reached by `mcp`, by `expand` and by `app`, which wires all three, and by nothing else — `onlyTheClientAndTheExpanderExpandAnEntity`. | `port`, `domain`, `ingest`, `wikidata`, `musicbrainz` |
 | `mcp` | The tool classes, `SegueService`, the view records, `CorrelationId`. Spring-aware. | `ingest`, `port`, `domain`, `support` |
 | `app` | Entry point, all bean wiring, `application.yaml`, transport profiles. Spring-aware. Its `sourceAdapters` bean is one line calling `ExpansionSources.both`, and the P434 bridge it used to hold moved to `expansion` in #284, because a plain-Java dev tool needs the bridge and may not depend on Spring. | everything it wires |
@@ -529,7 +529,7 @@ line is drawn there.
 | `rate` | The rating deck ([ADR 46](adr/0046-the-rating-deck.md)): a loopback page on 127.0.0.1:8090 dealing one unrated entity per keystroke, run as `./gradlew rate`. Plain Java, offline, and the only dev tool that writes a rating. Composes its known list through the same `KnownList.promoted` `recommend` does ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)), passes the same `KnownList.suppressed` to its sweep, and deals revisions over `KnownList.revisitable` ([ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md)). | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `recommend`, `support` |
 | `census` | The graph census: nodes by kind, edges by type, source and corroboration, the claim rows and what retraction and merge did to them, the taste layer by score, degree quantiles against `Recommendations.MIN_CANDIDATE_DEGREE`, what MusicBrainz reached, and the classes its `CONCEPT` nodes state. Run as `./gradlew graphCensus`. An optional `--known <file>` adds a `known list` section: how much of that file, and of the file composed with your promotions, the graph holds, has expanded, and connects up. Plain Java, read-only, offline, and the whole output is aggregates and class ids — no label, no note, no entity id, and the known-list file's own basename on that section's heading is the only text in the block that came off the command line rather than out of the data — so it is safe to paste. `--db` is required, and `SEGUE_DB` does not satisfy it. | `port`, `domain`, `sqlite`, `support`, `export`, `wikidata` |
 | `evaluate` | The recommender's evaluation harness ([ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md)): holds out a deterministic slice of the entities you rated highly, reads every fold of that split, runs the shipped candidate sweep from what is left over a fixed grid of scorers and degree floors, and reports where the held-out entities and the ones you rated down land. Run as `./gradlew evaluate`. Plain Java, read-only, offline, and the whole output is aggregates — no label, no id, no note, no rating — so it is safe to paste. `--db` is required, and `SEGUE_DB` does not satisfy it. | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `recommend`, `support` |
-| `expand` | The promotion expander ([ADR 66](adr/0066-expand-every-promotion-from-a-dev-tool.md), #284), run as `./gradlew expandPromotions`: expands the neighbourhood of every entity rated at or above `KnownList.PROMOTION_RATING`, one at a time, through the shared `expansion.EntityExpansion`, and reports what happened as one block of aggregates safe to paste — no label, no note, no entity id, on any line. `ExpandRun.dryRun` counts what a real run would visit — entities the projection holds a node for, and entities `LocalEntity.isLocal` answers true for — without touching an adapter or the log. The tenth dev tool, and the only one that both WRITES and FETCHES: it replays the log into a throwaway `TinkerGraphStore`, appends through `IngestService`, and reaches the live Wikidata API, the Query Service and MusicBrainz. `--db` is required, and `SEGUE_DB` does not satisfy it. | `port`, `support`, `domain`, `expansion`, `sqlite`, `tinker`, `ingest`, `wikidata` |
+| `expand` | The promotion expander ([ADR 66](adr/0066-expand-every-promotion-from-a-dev-tool.md), #284), run as `./gradlew expandPromotions`: expands the neighbourhood of every entity rated at or above `KnownList.PROMOTION_RATING`, one at a time, through the shared `expansion.EntityExpansion`, and reports what happened as one block of aggregates safe to paste — no label, no note, no entity id, on any line. `ExpandRun.dryRun` counts what a real run would visit — entities the projection holds a node for, and entities `LocalEntity.isLocal` answers true for — without touching an adapter or the log. The tenth dev tool, and the only one that both WRITES and FETCHES: it replays the log into a throwaway `TinkerGraphStore`, appends through `IngestService`, and reaches the live Wikidata API, the Query Service and MusicBrainz. Since #307 it takes an optional `--rated-since <instant>`, which narrows those promotions to the ones whose rating was last written on or after it; since #313 it takes an optional `--known <file>` **instead of the promotions**, covering the entities that file names — folded onto their canonical side — that no row in the log cites as an expansion's seed, by `domain.Expanded`, the rule `graphCensus --known` counts by. Those two flags name different populations and are refused together. `--db` is required, and `SEGUE_DB` does not satisfy it. | `port`, `support`, `domain`, `expansion`, `sqlite`, `tinker`, `ingest`, `wikidata` |
 
 ### Which rules a machine enforces
 
@@ -3271,6 +3271,56 @@ promotions that actually ran rather than by the whole population — so a small 
 `considered` is the finding, and a small delta against a small `considered` is not. The two rows
 worth checking hardest — `taste` and `edges` / withdrawn — are unchanged for reasons that have
 nothing to do with how many promotions ran, so a partial run does not soften either of them.
+
+### Only what your own list says nothing has expanded: `--known`
+
+Every run above covers the **promotions**. Your known-list file holds entities that are not
+promotions and have never been expanded at all — known acts whose own neighbourhoods have never
+been fetched, so nothing routes through them. `--known <file>` covers exactly those: the file's
+entities, resolved through the merge fold, that no row in the log cites as an expansion's seed.
+`--known` and `--rated-since` name different populations and are refused together.
+
+**Step 0 applies unchanged**, and so does everything this chapter says about a single writer.
+
+Take the census first, with the same file — its `never expanded` row is what says whether this run
+is worth making at all, and it is the same rule this run selects by
+([ADR 63](adr/0063-a-read-only-census-of-the-graph.md), #311):
+
+```bash
+./gradlew graphCensus --args="--db $HOME/.segue/segue.db --known $HOME/known.csv"
+```
+
+Then the dry run:
+
+```bash
+./gradlew expandPromotions --args="--db $HOME/.segue/segue.db --dry-run --known $HOME/known.csv"
+```
+
+The block now carries a second `#` line naming the file's **basename** — never its path — and how
+many of its entities the rule excluded as already expanded.
+
+**What `considered` means here.** It is the file's entities *after* that rule, so step 2's
+arithmetic (`considered` minus `in the graph` minus `minted`) still reads, over this population:
+an id your file names that the graph holds no node for is **refused as an unknown entity**, counted
+under `refused, by reason`, not silently dropped. `considered` plus the excluded count on the
+clause is the whole of your file as the fold sees it — two ids that turned out to be one entity
+counting once — which is how you check the file was read as you meant.
+
+The run:
+
+```bash
+./gradlew expandPromotions --args="--db $HOME/.segue/segue.db --known $HOME/known.csv"
+```
+
+**A `--known` run reads no rating at all.** It composes no promotions, so the taste layer's bulk
+read is never made — the same shape as a run with no `--rated-since` reading no timestamp. The
+store is still opened, as it is on every run: opening is not reading, and `CREATE TABLE IF NOT
+EXISTS` runs either way.
+
+**How to read step 5's table afterwards.** Unchanged, and against the census you took first: every
+`up` is still `up`. `bridge / entities MusicBrainz reached` is the row to watch hardest here — the
+reading on #311 says this population is people and groups, so the bridge should be asked once per
+entity.
 
 ### What to file from what you saw
 

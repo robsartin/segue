@@ -144,9 +144,14 @@ support/  Plain-Java cross-cutting helpers with no project dependencies of their
           QidList, the QID-file reader `export`, `recommend` and `rate` share (it moved here
           from `export` in ADR 45, so a shared reader would not force a dependency between
           siblings that must not have one — `rate` depending on `recommend` directly, for its
-          candidate sweep, is the one dev-tool pair that already does, by design); and
+          candidate sweep, is the one dev-tool pair that already does, by design);
           ClassLabels, the offline P31 label table `export` and `rate` share, which moved here
-          from `export` in ADR 46 for the same reason QidList did.
+          from `export` in ADR 46 for the same reason QidList did; and KnownListInput, the
+          basename-and-ids reading of the known-list file `census` and `expand` share, which moved
+          here from `census` in #313 for the same reason again — the expander may not depend on a
+          sibling dev tool, so a reader neither owns is the only way the two read one file by one
+          rule. NOT an exhaustive list — DefaultDatabase and RequiredDatabase live here too, and
+          the developer guide's package table is the maintained one.
 mcp/      The six MCP tools (EntityTools, GraphTools, TasteTools), SegueService
           (the facade they call), CorrelationId. Spring-only package (ADR 32) —
           annotated with the starter's @McpTool, but plain enough to unit test.

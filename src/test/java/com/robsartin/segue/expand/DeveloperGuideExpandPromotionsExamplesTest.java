@@ -132,7 +132,8 @@ class DeveloperGuideExpandPromotionsExamplesTest {
   @Test
   @DisplayName(
       "the chapter shows the census, the dry run, the run, the census, then the since-variant's"
-          + " own dry run and run, in that order")
+          + " own dry run and run, then the known-list variant's census, dry run and run, in that"
+          + " order")
   void shouldRunEveryStepInOrderWhenTheChapterIsRead() {
     assertThat(steps())
         .as(
@@ -141,8 +142,10 @@ class DeveloperGuideExpandPromotionsExamplesTest {
                 + " comes before the only writing command in the chapter, and a census after is"
                 + " what makes the run readable. The two --rated-since entries are the variant"
                 + " section, shown after the full runbook rather than interleaved with it, and"
-                + " its dry run precedes its run for the same reason the full runbook's does. A"
-                + " parser cannot see any of that",
+                + " its dry run precedes its run for the same reason the full runbook's does. The"
+                + " three --known entries are the second variant, and the census with the same"
+                + " flag comes first because the never expanded count it prints is what says"
+                + " whether the run is worth making at all. A parser cannot see any of that",
             CHAPTER)
         .containsExactly(
             "graphCensus",
@@ -150,13 +153,16 @@ class DeveloperGuideExpandPromotionsExamplesTest {
             "expandPromotions",
             "graphCensus",
             "expandPromotions --dry-run --rated-since",
-            "expandPromotions --rated-since");
+            "expandPromotions --rated-since",
+            "graphCensus --known",
+            "expandPromotions --dry-run --known",
+            "expandPromotions --known");
   }
 
   /**
    * The chapter's {@code ./gradlew} lines, merged across the two tasks and put back into the order
-   * the guide writes them, each reduced to its task name plus {@code " --dry-run"} and/or {@code "
-   * --rated-since"} where those flags are among its arguments.
+   * the guide writes them, each reduced to its task name plus whichever of {@code " --dry-run"},
+   * {@code " --rated-since"} and {@code " --known"} are among its arguments.
    */
   private static List<String> steps() {
     record Numbered(int line, String command) {}
@@ -169,6 +175,9 @@ class DeveloperGuideExpandPromotionsExamplesTest {
         }
         if (example.arguments().contains("--rated-since")) {
           command += " --rated-since";
+        }
+        if (example.arguments().contains("--known")) {
+          command += " --known";
         }
         found.add(new Numbered(example.line(), command));
       }

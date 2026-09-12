@@ -785,4 +785,16 @@ class EquivalencesTest {
         .containsExactly(CANONICAL)
         .isNotEqualTo(merges.retractedStandIns());
   }
+
+  @Test
+  @DisplayName("a merge's two sides collapse to one id, on the canonical side, in the order given")
+  void shouldFoldBothSidesOntoOneIdWhenAListNamesAMergesLocalAndCanonicalSides() {
+    Equivalences merges = new Equivalences(Map.of("Q00901003", "Q10000901004"));
+
+    assertThat(merges.canonical(List.of("Q0901301", "Q00901003", "Q10000901004", "Q0901302")))
+        .as(
+            "distinct, in the order given, and the merge counted once on the side it turned out"
+                + " to be")
+        .containsExactly("Q0901301", "Q10000901004", "Q0901302");
+  }
 }

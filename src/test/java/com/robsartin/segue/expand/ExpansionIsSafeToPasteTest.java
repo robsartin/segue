@@ -8,6 +8,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.classic.spi.LoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.robsartin.segue.domain.AffinityRecord;
+import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.Candidate;
 import com.robsartin.segue.domain.KnownList;
 import com.robsartin.segue.domain.NodeAssertion;
@@ -25,6 +26,7 @@ import com.robsartin.segue.port.SourceAdapters;
 import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import com.robsartin.segue.tinker.TinkerGraphStore;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
@@ -94,6 +96,9 @@ class ExpansionIsSafeToPasteTest {
    * were handed, and that id is the promotion itself.
    */
   private static final String THROWN_ABOUT = "Q0900903";
+
+  /** On the known-list file, with a node, and cited by a row as an expansion's seed. */
+  private static final String EXPANDED_ALREADY = "Q0901305";
 
   private static final Instant WHEN = Instant.parse("2026-02-01T08:00:00Z");
 
@@ -165,6 +170,35 @@ class ExpansionIsSafeToPasteTest {
     assertThat(lines())
         .as("the since clause really was printed, or the assertions above cover a block without it")
         .anyMatch(line -> line.contains("only promotions rated on or after"));
+  }
+
+  @Test
+  @DisplayName("a dry run over a known list reaches the block, and the clause carries no id")
+  void shouldEmitCountsAndNothingElseWhenTheRunCoversAKnownList() throws Exception {
+    Path db = home.resolve("known.db");
+    Provenance sourced = new Provenance("invented", "invented:6", WHEN, 1.0);
+    Provenance expansion =
+        new Provenance("wikidata", EXPANDED_ALREADY + "$4f1a-invented", WHEN, 1.0);
+    try (SqliteAssertionLog log = new SqliteAssertionLog(db);
+        SqliteAffinityStore affinity = new SqliteAffinityStore(db)) {
+      log.append(new NodeAssertion(RATED, NodeKind.GROUP, LABEL, sourced));
+      log.append(new NodeAssertion(EXPANDED_ALREADY, NodeKind.GROUP, LABEL, sourced));
+      log.append(
+          new AssertionRecord(EXPANDED_ALREADY, RATED, "INFLUENCED_BY", null, null, expansion));
+      affinity.put(new AffinityRecord(RATED, KnownList.PROMOTION_RATING, NOTE, WHEN));
+    }
+    // The basename reaches the clause, so it must not itself be qid-shaped — which is a property
+    // of the file the owner points at, and this names the one the runbook tells him to use.
+    Path known =
+        Files.writeString(home.resolve("known.csv"), RATED + "\n" + EXPANDED_ALREADY + "\n");
+    captured.list.clear();
+
+    ExpandCli.main(new String[] {"--db", db.toString(), "--dry-run", "--known", known.toString()});
+
+    assertEverySafe(ExpansionReport.DRY_RUN_HEADER);
+    assertThat(lines())
+        .as("the known clause really was printed, or the assertions above cover a block without it")
+        .anyMatch(line -> line.contains("only known-list entities from known.csv"));
   }
 
   @Test

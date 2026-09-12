@@ -1,11 +1,18 @@
-package com.robsartin.segue.census;
+package com.robsartin.segue.support;
 
-import com.robsartin.segue.support.QidList;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
 
-/** The known-list file, as the census is allowed to hold it. */
+/**
+ * The known-list file, as a dev tool is allowed to hold it.
+ *
+ * <p><b>In {@code support} for the same reason {@code QidList} is (ADR 45).</b> Two dev tools read
+ * one file: the census counts coverage and the promotion expander chooses its population from it
+ * (#311, #313). {@code ArchitectureTest.theExpanderOpensNothingElse} forbids the expander every
+ * sibling dev tool with no exception, so a shared reader neither of them owns is the only way they
+ * can read one file by one rule.
+ */
 public record KnownListInput(String name, List<String> qids) {
 
   public KnownListInput {

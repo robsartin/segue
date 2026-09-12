@@ -393,3 +393,28 @@ The residual, stated rather than mitigated: a basename is text the owner typed, 
 named after an entity would put that name in the block. Nothing hides it; `--db` and `--known` are
 both typed per invocation, with no default for either, because whether to publish is the owner's
 decision, taken each time.
+
+**Amendment (2026-09-12, issue #313): the expected second reader of `domain.Expanded` arrived, and
+it is the tool the paragraph above ruled out.**
+
+Nothing above is edited and this ADR keeps `Accepted`. One sentence is overtaken: the paragraph
+naming the expected second reader closes "It is deliberately **not** the promotion expander already
+shipped as `expandPromotions` ([ADR 66](0066-expand-every-promotion-from-a-dev-tool.md)): that tool
+composes its population from `KnownList.promoted` and the merges, and reads nothing here."
+
+What is true now is that the expander takes a `--known <file>` of its own, and on that arm it
+composes its population from this rule — the file's ids on their canonical side that `Expanded`
+does not cover — rather than from `KnownList.promoted`. Given no flag it still composes from
+`KnownList.promoted` and the merges and still reads nothing here, so the sentence is overtaken
+rather than simply reversed: it described the only population that tool had, and there are two now.
+Two steps of this section's composition moved out of `census` to make that reuse legal — the fold
+of the file's ids onto their canonical side and the fold of the log's seeds onto the same side, now
+`Equivalences.canonical` and `Expanded.onTheCanonicalSide` in `domain` — and the file reader moved
+from `census` to `support` beside `QidList` for the same reason.
+
+The rest of that paragraph stands, and is what the second reader confirms rather than contradicts:
+a second reader was expected, and one rule read by both is what keeps this section and that tool
+from disagreeing about who has been expanded. What is no longer true is that paragraph's opening
+sentence: the census is not the only thing in this codebase that reads the rule.
+[ADR 66](0066-expand-every-promotion-from-a-dev-tool.md)'s 2026-09-12 amendment is the decision;
+this entry records which sentence here it overtakes.
