@@ -343,23 +343,45 @@ The section answers a question nothing else does: the evaluation harness
 ([ADR 65](0065-an-offline-evaluation-harness-for-the-recommender.md)) scores only entities the owner
 has rated, so an entity on the list that the graph has never expanded, or that connects to nothing
 else on the list, is invisible to every current reading. `KnownListCensus` counts two populations
-against that question — the file's own entities, and the same file composed with the ratings map
-through `KnownList.promoted`, which is `recommend` and `rate`'s own answer to what "known" means
-([ADR 48](0048-a-high-rating-counts-as-something-you-have.md)). The second is that population and not
-a third idea of what "known" could mean, so the two tools that already reason over the known-list and
-this section reporting on it cannot come to disagree about what it holds.
+against that question. The first is the file's own entities, read through the shared `QidList` and
+then through the merge fold — so `named` counts distinct canonical ids rather than lines in the
+file, and two ids that turned out to be one entity count once, on the canonical side. The second is
+that same population composed with the ratings map through `KnownList.promoted`, which is
+`recommend` and `rate`'s own answer to what "known" means
+([ADR 48](0048-a-high-rating-counts-as-something-you-have.md)) — that population and not a third
+idea of what "known" could mean, so the two tools that already reason over the known-list and this
+section reporting on it cannot come to disagree about what it holds.
 
 "Expanded" comes from the provenance the log already holds, in two shapes — a forward Wikidata
 statement id, and a reverse-discovered edge's own reference — read apart by one rule in `domain`
-rather than a second copy of the same judgement here. The census is that rule's first caller; a
-second is expected, the promotion expander this issue's sibling will add, and one rule is what keeps
-two tools from disagreeing about who has been expanded. It deliberately does not read the MusicBrainz
-adapter's own references: every MusicBrainz expansion of an entity Wikidata can also describe runs
-alongside a Wikidata expansion of the same seed in the same call, so the residual this rule misses is
-narrow — a call where Wikidata was unavailable and MusicBrainz was not — and what it reports there is
-a true statement about what Wikidata itself recorded. Missing that residual points the owner toward
-expanding an entity again rather than toward overlooking one that never was, which is the safer of
-the two mistakes for a section whose whole purpose is to surface a gap.
+rather than a second copy of the same judgement here. The forward shape is matched
+**case-insensitively on its leading letter**, and that is a measurement rather than a defensiveness:
+asked of the live API, one real entity carries statement ids minted with an uppercase prefix and
+statement ids minted with a lowercase one, both eras still live, because Wikibase changed how it
+mints statement GUIDs and never rewrote the older ones. No fixture in this repository carries a real
+statement id at all — every recorded response falls back to a reference built from the property and
+the object — so nothing offline could have caught it, and an uppercase-only rule would have dropped
+the lowercase-minted part of the forward arm silently and over-reported "never expanded" with no
+error to see. It is recorded here because it reverses an assumption this design was written on and
+because only a live call can re-derive it.
+
+The census is the only thing in this codebase that reads that rule today. A second reader is
+expected — the re-expansion pass this section's number exists to gate — and one rule is what will
+keep the two from disagreeing about who has been expanded. It is deliberately **not** the promotion
+expander already shipped as `expandPromotions`
+([ADR 66](0066-expand-every-promotion-from-a-dev-tool.md)): that tool composes its population from
+`KnownList.promoted` and the merges, and reads nothing here.
+
+The rule deliberately does not read the MusicBrainz adapter's own references: every MusicBrainz
+expansion of an entity Wikidata can also describe runs alongside a Wikidata expansion of the same
+seed in the same call, so the residual it misses there is narrow — a call where Wikidata was
+unavailable and MusicBrainz was not — and what it reports is a true statement about what Wikidata
+itself recorded. That is one of a small family of residuals rather than the only one, and all of
+them err the same way: an expansion that ran and returned nothing leaves no row either, and neither
+does a forward-only expansion every one of whose statements falls back to the property-and-object
+reference. Missing any of them points the owner toward expanding an entity again rather than toward
+overlooking one that never was, which is the safer of the two mistakes for a section whose whole
+purpose is to surface a gap.
 
 One constant moved to make the walk legal: `MAX_HOPS` now lives in `domain.Recommendations`, beside
 the degree floor this census already reads by reference, because `theCensusOnlyReads` fences `census`

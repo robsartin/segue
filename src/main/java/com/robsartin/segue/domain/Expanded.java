@@ -17,17 +17,20 @@ import java.util.regex.Pattern;
  * testing a prefix or a suffix, which is what makes it exact: {@code Q12} is not {@code Q123}
  * whichever end you look from.
  *
- * <p><b>The forward shape's qid prefix is lowercase in the wild, and the match is case-insensitive
- * because of it.</b> Confirmed against a real statement id (issue #311's review, IMP-1): {@code
- * q192668$35463C9F-FBDC-4657-9DE0-55B1D9602067} — Wikidata's own statement GUIDs carry a lowercase
- * entity prefix, which {@code ClaimMapper} stores verbatim as the reference. No fixture in this
+ * <p><b>The forward shape's qid prefix appears in both cases in the wild, on one and the same
+ * entity, and the match is case-insensitive because of it.</b> One hand-checked lowercase id (issue
+ * #311's review, IMP-1) raised the question, and it read as though the rule were "always
+ * lowercase". Asking the live API instead found statement ids of both cases on one entity, because
+ * Wikibase minted statement GUIDs one way, switched, and never rewrote the older ones.
+ * WikidataLiveSmokeTest holds that measurement and its counts; they are not restated here, and
+ * ClaimMapper stores whichever shape it is handed, verbatim, as the reference. No fixture in this
  * repository carries a real statement id at all (the spec's own premise correction #5 records that
- * every recorded response falls back to {@code <property>:<objectQid>}), so nothing offline could
- * have caught a pattern that silently refused every real one. Requiring uppercase would have
- * dropped the forward arm's whole contribution and over-counted "never expanded" on the real graph,
- * with no error and no signal — exactly the "a lenient parser turns 'cannot read this' into 'there
- * is nothing here'" shape. The digits and the {@code $} stay exact; only the leading letter's case
- * is relaxed, and only on this arm.
+ * every recorded response falls back to the property-and-object form), so nothing offline could
+ * have caught a pattern that silently refused part of them. Requiring uppercase would have dropped
+ * the lowercase-minted part of the forward arm's contribution and over-counted "never expanded" on
+ * the real graph, with no error and no signal — exactly the "a lenient parser turns 'cannot read
+ * this' into 'there is nothing here'" shape. The digits and the dollar separator stay exact; only
+ * the leading letter's case is relaxed, and only on this arm.
  *
  * <p><b>The shape is the whole rule, and the trap it avoids is a real row.</b> The reverse pass
  * also records each neighbour it discovered as a node claim whose reference is that neighbour's own
@@ -47,10 +50,12 @@ import java.util.regex.Pattern;
  * which the forward arm cannot read a seed out of. Both are consistent with what "expanded" means
  * here — no row in the log cites the entity as a seed — and both err the same conservative way.
  *
- * <p><b>Two callers read it, {@code KindMapper.rederive}'s shape (ADR 42) and {@link Retractions}'s
- * (ADR 44).</b> The census reads it to count what has never been expanded; the expander reads it to
- * choose its population. Two tools cannot disagree about who has been expanded when there is one
- * rule to disagree with.
+ * <p><b>One caller reads it today, and it lives here for the shape {@code KindMapper.rederive} (ADR
+ * 42) and {@link Retractions} (ADR 44) already set.</b> The census reads it to count what has never
+ * been expanded. A second reader is expected — the re-expansion pass the census's own number is
+ * meant to gate — and one rule here is what will keep the two from disagreeing about who has been
+ * expanded. The promotion expander already shipped (ADR 66) is <b>not</b> that reader: it composes
+ * its population from {@code KnownList.promoted} and the merges and never asks this question.
  *
  * <p>It holds no graph, opens nothing and makes no network call: a list of rows in, a set of qids
  * out.
@@ -63,13 +68,12 @@ public record Expanded(Set<String> seeds) {
   private static final Pattern QID = Pattern.compile("Q\\d+");
 
   /**
-   * The forward arm's qid prefix, case-insensitive on the leading {@code Q} only. Confirmed against
-   * a real statement id (issue #311's review, IMP-1): {@code
-   * q192668$35463C9F-FBDC-4657-9DE0-55B1D9602067} — Wikidata's own statement GUIDs carry a
-   * lowercase entity prefix, not the uppercase form every id this codebase mints itself uses. The
-   * digits and the {@code $} requirement stay exact; only the letter's case is relaxed, and only
-   * here — {@link #QID} still governs the reverse arm, whose reference {@code ReverseClaims} builds
-   * itself and always in the canonical uppercase form.
+   * The forward arm's qid prefix, case-insensitive on the leading letter, because Wikidata mints
+   * statement GUIDs in both cases and one real entity carries both — the class javadoc above has
+   * the finding, WikidataLiveSmokeTest has the measurement. The digits and the dollar separator
+   * stay exact; only the letter's case is relaxed, and only here — {@link #QID} still governs the
+   * reverse arm, whose reference ReverseClaims builds itself and always in the canonical uppercase
+   * form.
    */
   private static final Pattern FORWARD_QID = Pattern.compile("[Qq]\\d+");
 
