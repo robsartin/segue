@@ -116,3 +116,62 @@ thing to look at, not the flag.
 ## Not this design
 
 Expanding anything; naming an entity; changing the harness; a third population.
+
+## Premise corrections (2026-09-12, issue #311)
+
+Appended after review, from reading the code. Each names what this document assumed, what the code
+actually does, and what the plan does instead. Nothing above is edited.
+
+1. **`Routes.MAX_HOPS` cannot be read by reference from `census`.** *The rows* says the walk is "a
+   walk of depth `Routes.MAX_HOPS` (read by reference; the recommender's route limit)". `Routes`
+   lives in `recommend`, and `theCensusOnlyReads` forbids `census` every dev-tool package but
+   `export` — so that reference does not compile, and widening the fence for a constant would hand
+   the census a sibling's whole surface. The plan **moves the constant into
+   `domain.Recommendations`**, keeping the name, and updates its three call sites (`Routes` twice,
+   `RecommendationReport` once) and the one guide sentence that names it. The precedent is exact:
+   `Recommendations.MIN_CANDIDATE_DEGREE` already lives there and `DegreeCensus` already reads it
+   "by reference and never by a second copy of the number". Rejected: a second literal `2` in
+   `census` (the copy this project's single-source rule exists to prevent), and widening
+   `theCensusOnlyReads` to admit `recommend`.
+
+2. **The census holds no `GraphStore`, so the walk is over the fold.** `theCensusOpensNothingElse`
+   bans `tinker` and `jena`, and nothing in `census` opens an engine. *The rows* already says the
+   walk runs on the projection; this records that it is a constraint rather than a preference. The
+   adjacency is built from `LogProjection.edges()`, in `census`, as `Degrees.in` already builds
+   incidence from the same list.
+
+3. **`theCensusOpensNothingElse` does not refuse `QidList`'s file read**, which *Fences and rules*
+   asked to be checked before the first edit. That rule bans six packages, `java.net`/`javax.net`,
+   and any class in this project that reaches them; `QidList` is in `support`, which `census`
+   already depends on, reads through `java.nio.file`, and reaches nothing on a network.
+   `theCensusOnlyReads` does not fence `support` either. **No ArchUnit rule changes in this issue.**
+
+4. **`QidList` does not refuse a malformed id; it ignores the field.** *Inputs and the two
+   populations* says ids that are not well-formed "are refused the way `QidList` already refuses
+   them". `QidList.read` keeps the first comma-separated field on a line that matches `Q\d+`
+   exactly and silently passes over everything else; its only refusals are a file that does not
+   exist and a file with no QID anywhere in it. So the true behaviour is: a malformed id is never
+   counted, and a file of nothing but malformed ids is refused outright. The plan claims no
+   per-id refusal and adds no validation.
+
+5. **The two reference shapes are confirmed, and one row in the log defeats a loose reading of the
+   reverse arm.** `ClaimMapper` writes the statement's own JSON `id` — the `Q<seed>$<uuid>` form —
+   and falls back to `<property>:<objectQid>` where the response carries none; **no recorded
+   response under `src/test/resources/wikidata` carries a statement `id` at all**, so every
+   fixture-backed forward claim has the fallback reference and is correctly not read as expanded.
+   `ReverseClaims` writes `"wdqs:" + other + ":" + property + ":" + seedQid` on the edge — and, on
+   the same call, records each discovered neighbour as a `NodeAssertion` whose reference **is that
+   neighbour's own bare qid**. A rule phrased as "ends with the seed's qid" would read every
+   neighbour as expanded by itself. The rule is therefore two exact shapes: the reference begins
+   `<qid>$`, or it begins `wdqs:` and ends `:<qid>`. That is what *Tests*' neighbour-only control
+   and prefix control are controls of, and the plan derives the seed by splitting on those
+   separators rather than by testing a suffix.
+
+6. **The basename goes on the section heading, not on `CensusReport.HEADER`.** *Output* says "the
+   header line names the file's basename". `HEADER` is a public constant that `CensusReportTest`
+   pins and `CensusIsSafeToPasteTest` asserts by identity, and the no-flag block must stay
+   byte-identical, so the basename goes on the `known list` section's own heading.
+
+7. **`Q12` and `Q123` are allocatable Wikidata ids**, so the prefix control cannot use them:
+   `StandInQidsDenoteNothingTest` sweeps every string literal under `src/test`. The plan uses the
+   leading-zero form (ADR 58) for both sides of that control.
