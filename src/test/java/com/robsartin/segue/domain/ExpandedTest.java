@@ -81,6 +81,46 @@ class ExpandedTest {
     assertThat(expanded.covers(SEED)).isTrue();
   }
 
+  /**
+   * A real statement id, confirmed against live Wikidata for #311's review (IMP-1): {@code
+   * q192668$35463C9F-FBDC-4657-9DE0-55B1D9602067} for Nick Cave (Q192668) — lowercase {@code q},
+   * then digits, then {@code $}, then an uppercase UUID. Invented here with a leading zero so it
+   * denotes nothing (ADR 58); {@link #LOWERCASE_SEED} keeps that shape rather than {@link #SEED}'s
+   * uppercase one, because the whole point is the case Wikidata actually sends.
+   */
+  private static final String LOWERCASE_SEED = "Q0900001";
+
+  @Test
+  @DisplayName(
+      "a forward claim whose statement id carries Wikidata's real lowercase qid prefix is an"
+          + " expansion")
+  void shouldCoverTheSeedWhenAForwardStatementCarriesTheLowercaseQidWikidataActuallyUses() {
+    Expanded expanded =
+        Expanded.in(
+            List.of(edge(LOWERCASE_SEED, OTHER, "q0900001$35463C9F-FBDC-4657-9DE0-55B1D9602067")));
+
+    assertThat(expanded.covers(LOWERCASE_SEED))
+        .as(
+            "real Wikidata statement ids carry a lowercase qid prefix; requiring uppercase drops"
+                + " every one of them and over-counts \"never expanded\"")
+        .isTrue();
+  }
+
+  @Test
+  @DisplayName(
+      "a prefix of the seed is still not expanded when the forward reference uses the lowercase"
+          + " prefix")
+  void shouldNotCoverAPrefixOfTheSeedWhenTheForwardReferenceUsesTheLowercasePrefix() {
+    Expanded expanded =
+        Expanded.in(
+            List.of(edge(LOWERCASE_SEED, OTHER, "q0900001$35463C9F-FBDC-4657-9DE0-55B1D9602067")));
+
+    assertThat(expanded.covers("Q090000"))
+        .as("Q090000 is a prefix of " + LOWERCASE_SEED + " and a different entity")
+        .isFalse();
+    assertThat(expanded.covers(LOWERCASE_SEED)).isTrue();
+  }
+
   @Test
   @DisplayName("an entity whose id is a prefix of the seed's is not expanded by the seed's rows")
   void shouldNotCoverAPrefixOfTheSeedWhenOnlyTheLongerIdWasExpanded() {
