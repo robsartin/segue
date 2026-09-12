@@ -134,11 +134,11 @@ class KnownListCensusTest {
   @Test
   @DisplayName("a member three hops away is not a known neighbour, and one two hops away is")
   void shouldCountNoKnownNeighbourWhenTheNearestMemberIsThreeHopsAway() {
-    assertThat(census(List.of(SEEN, FAR)).fromFile().noKnownNeighbourWithinTwoHops())
+    assertThat(census(List.of(SEEN, FAR)).fromFile().noKnownNeighbourWithinMaxHops())
         .as("three hops apart, so neither reaches the other within Recommendations.MAX_HOPS")
         .isEqualTo(2);
 
-    assertThat(census(List.of(SEEN, LINK_B)).fromFile().noKnownNeighbourWithinTwoHops())
+    assertThat(census(List.of(SEEN, LINK_B)).fromFile().noKnownNeighbourWithinMaxHops())
         .as("the control: exactly two hops apart, so both are reached")
         .isZero();
   }

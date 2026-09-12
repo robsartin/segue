@@ -203,7 +203,7 @@ class KnownListCensusScaleTest {
     assertThat(population.neverExpanded())
         .as("at most in the graph")
         .isLessThanOrEqualTo(population.inTheGraph());
-    assertThat(population.noKnownNeighbourWithinTwoHops())
+    assertThat(population.noKnownNeighbourWithinMaxHops())
         .as("at most in the graph")
         .isLessThanOrEqualTo(population.inTheGraph());
     assertThat(population.inTheGraphByKind().values().stream().mapToInt(Integer::intValue).sum())

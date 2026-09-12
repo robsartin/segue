@@ -52,9 +52,10 @@ public record KnownListCensus(String file, Population fromFile, Population withP
    * @param named distinct entities in the population, after the merge fold
    * @param inTheGraph of those, the ones the fold holds a node for
    * @param neverExpanded in the graph, and no row cites them as a seed — {@link Expanded}'s answer
-   * @param noKnownNeighbourWithinTwoHops in the graph, and no other member of this population
-   *     within {@code Recommendations.MAX_HOPS} — the recommender's own route limit, read by
-   *     reference
+   * @param noKnownNeighbourWithinMaxHops in the graph, and no other member of this population
+   *     within {@link Recommendations#MAX_HOPS} — the recommender's own route limit, read by
+   *     reference here and named after it rather than after its current value, so that moving the
+   *     constant cannot leave this component's name saying something else
    * @param inTheGraphByKind the same in-graph count per kind, all six emitted in {@code NodeKind}
    *     declaration order. {@code NodeCensus} gives the reason it is an {@code EnumMap} rather than
    *     {@code Map.copyOf}: that factory's order is salted per JVM, and ADR 43's byte-identical
@@ -65,7 +66,7 @@ public record KnownListCensus(String file, Population fromFile, Population withP
       int named,
       int inTheGraph,
       int neverExpanded,
-      int noKnownNeighbourWithinTwoHops,
+      int noKnownNeighbourWithinMaxHops,
       Map<NodeKind, Integer> inTheGraphByKind,
       Map<NodeKind, Integer> neverExpandedByKind) {
 

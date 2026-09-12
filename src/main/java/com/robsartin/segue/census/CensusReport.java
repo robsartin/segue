@@ -1,6 +1,7 @@
 package com.robsartin.segue.census;
 
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.domain.Recommendations;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -34,12 +35,16 @@ import java.util.function.ToIntFunction;
  * not a count — the first is the vocabulary named below. It differs from that one in where it comes
  * from: the command line rather than the data.
  *
- * <p><b>Every label is a literal in this file.</b> Nothing here interpolates a value read from the
- * data except an integer and one identifier. The exceptions are the edge type codes and source ids,
- * which are vocabulary rather than entities and are covered by {@code CensusIsSafeToPasteTest}'s
- * "no Q-shaped token anywhere" clause, and the class qids in the concept-classes rows, which ADR
- * 63's 2026-09-04 amendment rules the same way and for which that clause is narrowed to the {@code
- * class Q…} prefix this block owns.
+ * <p><b>Every label is a literal in this file, but for one number it reads off a constant.</b> The
+ * known-list section's "no known neighbour" row spells out {@link Recommendations#MAX_HOPS}, the
+ * bound {@code KnownListCensus} walks to, so that moving the constant moves the words rather than
+ * leaving them saying the old number. That is vocabulary this file compiles against, as the {@code
+ * NodeKind} names are; nothing here interpolates a value read from the data except an integer and
+ * one identifier. The exceptions are the edge type codes and source ids, which are vocabulary
+ * rather than entities and are covered by {@code CensusIsSafeToPasteTest}'s "no Q-shaped token
+ * anywhere" clause, and the class qids in the concept-classes rows, which ADR 63's 2026-09-04
+ * amendment rules the same way and for which that clause is narrowed to the {@code class Q…} prefix
+ * this block owns.
  */
 public final class CensusReport {
 
@@ -175,8 +180,15 @@ public final class CensusReport {
     body.add(nested("named", population.named()));
     body.add(nested("in the graph", population.inTheGraph()));
     body.add(nested("never expanded", population.neverExpanded()));
+    // The number is read off the constant the walk itself is bounded by, never spelled out a
+    // second time: move Recommendations.MAX_HOPS and this row says the new number rather than
+    // going quietly stale. It is a compile-time constant out of `domain`, the same category as
+    // the NodeKind names above, so it is not data read off the log and the safe-to-paste
+    // guarantee is untouched.
     body.add(
-        nested("no known neighbour within two hops", population.noKnownNeighbourWithinTwoHops()));
+        nested(
+            "no known neighbour within " + Recommendations.MAX_HOPS + " hops",
+            population.noKnownNeighbourWithinMaxHops()));
     for (NodeKind kind : NodeKind.values()) {
       String of = kind.name() + " ";
       body.add(nested(of + "in the graph", population.inTheGraphByKind().get(kind)));
