@@ -113,6 +113,20 @@ final class InventedCensus {
     return new Provenance("invented", "invented:1", WHEN, 1.0);
   }
 
+  /**
+   * A forward claim's reference: the Wikidata statement id, which begins with the subject's qid and
+   * a {@code $}. The source id and confidence are {@link #sourced()}'s, so no count that reads
+   * either of those moves when a row is given this instead.
+   */
+  static Provenance expandedFrom(String seedQid) {
+    return new Provenance("invented", seedQid + "$0000-invented", WHEN, 1.0);
+  }
+
+  /** A reverse-discovered edge's reference, in {@code ReverseClaims}' own shape. */
+  static Provenance discoveredFrom(String otherQid, String seedQid) {
+    return new Provenance("invented", "wdqs:" + otherQid + ":P0000:" + seedQid, WHEN, 1.0);
+  }
+
   static Provenance secondSource() {
     return new Provenance("also-invented", "also-invented:1", WHEN, 0.8);
   }
