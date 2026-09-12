@@ -13,9 +13,10 @@ import java.util.Optional;
  * component is an {@code int} or a map keyed by {@code SourceAdapter#id()} or {@link
  * ExpansionOutcome.Reason}, and {@link #dryRunLines} takes a {@link Preflight} of three {@code
  * int}s. Each renderer's long arity also takes an {@code Optional<Population>}, whose two shapes
- * carry an {@code Instant} and an {@code int}, or a file's basename and an {@code int}. There is
- * nowhere in any of it to put an identifier, which is a stronger guarantee than a body that merely
- * happens not to print one.
+ * carry an {@code Instant} and an {@code int}, or a file's basename and an {@code int}. Every
+ * component but that basename is an {@code int}, an {@code Instant}, or a map keyed by an adapter
+ * id or a reason; the basename is the one operator-supplied string, narrowed by {@code
+ * support.KnownListInput} and held by {@code ExpansionIsSafeToPasteTest}'s positive control.
  *
  * <p><b>Every section prints its heading, whether or not there is a row to show under it.</b> An
  * empty {@code edge assertions by source} means no edge assertion was recorded from any source, and

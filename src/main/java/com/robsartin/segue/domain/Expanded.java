@@ -50,12 +50,11 @@ import java.util.regex.Pattern;
  * which the forward arm cannot read a seed out of. Both are consistent with what "expanded" means
  * here — no row in the log cites the entity as a seed — and both err the same conservative way.
  *
- * <p><b>One caller reads it today, and it lives here for the shape {@code KindMapper.rederive} (ADR
- * 42) and {@link Retractions} (ADR 44) already set.</b> The census reads it to count what has never
- * been expanded. A second reader is expected — the re-expansion pass the census's own number is
- * meant to gate — and one rule here is what will keep the two from disagreeing about who has been
- * expanded. The promotion expander already shipped (ADR 66) is <b>not</b> that reader: it composes
- * its population from {@code KnownList.promoted} and the merges and never asks this question.
+ * <p><b>It lives here for the shape {@code KindMapper.rederive} (ADR 42) and {@link Retractions}
+ * (ADR 44) already set: one rule, whoever asks it.</b> The census counts what has never been
+ * expanded, and {@code expandPromotions --known} (ADR 66) chooses its population from that same
+ * answer (#311, #313) — one rule asked by two readers is what keeps them from disagreeing about who
+ * has been expanded.
  *
  * <p>It holds no graph, opens nothing and makes no network call: a list of rows in, a set of qids
  * out.

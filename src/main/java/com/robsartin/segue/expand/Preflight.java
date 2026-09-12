@@ -3,9 +3,9 @@ package com.robsartin.segue.expand;
 /**
  * What a dry run would visit, without visiting it.
  *
- * @param considered every promotion the run was handed — which, when {@code --rated-since} was
- *     given, is the promoted population <b>after</b> the instant filtered it, and which, when
- *     {@code --known} was given, is the file's entities after the never-expanded rule filtered them
+ * @param considered every entity the run was handed — which, when {@code --rated-since} was given,
+ *     is the promoted population <b>after</b> the instant filtered it, and which, when {@code
+ *     --known} was given, is the file's entities after the never-expanded rule filtered them
  *     (#313). What the instant removed is not counted here; it is named on the block's own clause,
  *     so a pasted block says what population it covered
  * @param inTheGraph those the projection holds a node for and that are not {@link

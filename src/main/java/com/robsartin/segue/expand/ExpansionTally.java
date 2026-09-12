@@ -7,10 +7,10 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * What a run over every promotion did, summed. Aggregate on purpose — see the class javadoc on
- * {@code ExpansionReport} for the reason nothing in this signature can carry an identifier (ADR 51,
- * ADR 63, issue #284): every field is an {@code int} or a map keyed by {@code SourceAdapter#id()}
- * or {@link ExpansionOutcome.Reason}, neither of which is an entity id.
+ * What a run over every entity did, summed. Aggregate on purpose — see the class javadoc on {@code
+ * ExpansionReport} for the reason nothing in this signature can carry an identifier (ADR 51, ADR
+ * 63, issue #284): every field is an {@code int} or a map keyed by {@code SourceAdapter#id()} or
+ * {@link ExpansionOutcome.Reason}, neither of which is an entity id.
  *
  * @param considered every entity the run was handed — the promotions, or the known-list population
  *     when {@code --known} was given (#313)

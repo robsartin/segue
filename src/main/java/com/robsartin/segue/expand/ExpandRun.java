@@ -15,7 +15,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The run: for each promotion, expand it and tally what happened (#284).
+ * The run: for each entity in the population it is handed, expand it and tally what happened
+ * (#284).
  *
  * <p><b>{@code dryRun} touches neither {@code expansion} nor a network</b> — it reads {@link
  * #graph} directly, the same read {@link EntityExpansion#expand} would make before ever reaching an
@@ -46,7 +47,7 @@ import org.slf4j.LoggerFactory;
  * failure from a bad row; the stack trace is not logged either, because a frame can carry an id as
  * readily as a message can.
  *
- * <p><b>This class never filters.</b> {@link #dryRun} and {@link #run} are handed the promotions
+ * <p><b>This class never filters.</b> {@link #dryRun} and {@link #run} are handed the entities
  * their caller already decided on and an {@link Optional} {@link Population} describing the filter
  * their caller applied — they report it, on the block {@link ExpansionReport} renders, and never
  * touch a store to compute it. The population is composed at {@code ExpandCli}, from {@code
