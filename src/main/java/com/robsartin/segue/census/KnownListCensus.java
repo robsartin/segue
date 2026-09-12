@@ -31,6 +31,12 @@ import java.util.Set;
  * — and a rating the owner wrote against a local id promotes the canonical entity, which is what
  * the deck would deal.
  *
+ * <p><b>The expansion seeds are read through the same fold, for the same reason.</b> The rows
+ * {@link Expanded#in} reads are the log as it was written, so a row recorded before a merge cites
+ * the id the owner has since retired; asked about a population already on its canonical side, it
+ * would find no seed and report an entity as never expanded on work that was really done. One fold,
+ * one side, every count.
+ *
  * <p><b>A qid the file names that the fold holds no node for counts under {@code named} and not
  * under {@code in the graph}.</b> That is not a gap in this reading; it is the first coverage gap
  * there is, and it is the one the section exists to print.
@@ -85,7 +91,9 @@ public record KnownListCensus(String file, Population fromFile, Population withP
 
   /**
    * @param known the file, as a basename and a list of ids
-   * @param expanded this log's one answer to who has been expanded
+   * @param expanded this log's one answer to who has been expanded, unresolved; this method reads
+   *     its seeds through the fold
+   * @param projection the fold this census already built — the only source of nodes and edges here
    * @param fold this census's one fold (#246) — its equivalences are the only thing read here
    * @param ratings the note-free bulk read, unresolved; this method resolves it
    */
@@ -107,10 +115,20 @@ public record KnownListCensus(String file, Population fromFile, Population withP
     // onto their canonical side, so nothing here canonicalises a second time.
     List<String> withPromotions = KnownList.promoted(fromFile, merges.resolve(ratings));
     Map<String, Set<String>> adjacency = Neighbours.in(projection);
+    Expanded seeds = onTheCanonicalSide(expanded, merges);
     return new KnownListCensus(
         known.name(),
-        read(fromFile, expanded, projection, adjacency),
-        read(withPromotions, expanded, projection, adjacency));
+        read(fromFile, seeds, projection, adjacency),
+        read(withPromotions, seeds, projection, adjacency));
+  }
+
+  /** The seeds on the side the population is counted on, by the fold the population is read by. */
+  private static Expanded onTheCanonicalSide(Expanded expanded, Equivalences merges) {
+    Set<String> seeds = new LinkedHashSet<>();
+    for (String seed : expanded.seeds()) {
+      seeds.add(merges.canonical(seed));
+    }
+    return new Expanded(seeds);
   }
 
   /** The file's ids on their canonical side, de-duplicated, in the file's own order. */

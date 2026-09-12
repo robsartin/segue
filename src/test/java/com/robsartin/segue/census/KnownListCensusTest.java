@@ -6,6 +6,7 @@ import com.robsartin.segue.domain.Expanded;
 import com.robsartin.segue.domain.Fold;
 import com.robsartin.segue.domain.KnownList;
 import com.robsartin.segue.domain.LoggedAssertion;
+import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.export.LogProjection;
 import com.robsartin.segue.wikidata.KindMapper;
@@ -92,7 +93,7 @@ class KnownListCensusTest {
 
   @Test
   @DisplayName("a file qid the graph holds no node for counts under named and not under in-graph")
-  void shouldCountAFileQidTheGraphLacksUnderNamedAndNotUnderInTheGraph() {
+  void shouldCountUnderNamedAndNotInTheGraphWhenTheFileNamesAQidTheGraphLacks() {
     KnownListCensus.Population population = census(List.of(SEEN, ABSENT)).fromFile();
 
     assertThat(population.named()).as("both ids the file names").isEqualTo(2);
@@ -161,5 +162,36 @@ class KnownListCensusTest {
         .containsEntry(NodeKind.PERSON, 2)
         .containsEntry(NodeKind.GROUP, 1)
         .containsEntry(NodeKind.WORK, 0);
+  }
+
+  @Test
+  @DisplayName("a merged entity is expanded when the row citing it names the id the merge retired")
+  void shouldCountAMergedEntityAsExpandedWhenTheRowCitesTheIdTheMergeRetired() {
+    // Its own log: the census canonicalises the population, so the seed a row cites has to be read
+    // through the same fold or the entity is reported as never expanded on work that was done.
+    List<LoggedAssertion> log =
+        List.of(
+            InventedCensus.minted(LOCAL, "A Thing The Owner Minted"),
+            InventedCensus.merged(LOCAL, CANONICAL),
+            new NodeAssertion(
+                SEEN, NodeKind.PERSON, "A Neighbour It Found", InventedCensus.expandedFrom(LOCAL)));
+    Fold fold = Fold.of(log, KindMapper::rederive);
+    LogProjection projection = LogProjection.of(log, fold);
+
+    KnownListCensus.Population population =
+        KnownListCensus.of(
+                new KnownListInput("known.csv", List.of(CANONICAL)),
+                Expanded.in(log),
+                projection,
+                fold,
+                Map.of())
+            .fromFile();
+
+    assertThat(population.inTheGraph())
+        .as("the fold holds the stand-in it gives the merge's canonical side")
+        .isEqualTo(1);
+    assertThat(population.neverExpanded())
+        .as("the expansion is recorded against the local id, and counts on the canonical side")
+        .isZero();
   }
 }

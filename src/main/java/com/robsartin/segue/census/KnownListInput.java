@@ -24,9 +24,15 @@ public record KnownListInput(String name, List<String> qids) {
    * {@code rate} and {@code evaluate} take, read by the same rule — the first comma-separated field
    * on a line that is exactly a qid. A field that is not one is passed over rather than refused,
    * and a file with no qid anywhere in it is refused by {@code QidList} itself.
+   *
+   * <p><b>The ids are read before the basename is taken</b>, so that every bad value is refused in
+   * the reader's own words. A root directory has no file name component at all, and taking the
+   * basename first turned {@code --known /} into a null dereference rather than the sentence naming
+   * the path (issue #311).
    */
   public static KnownListInput read(Path file) {
     Objects.requireNonNull(file, "file");
-    return new KnownListInput(file.getFileName().toString(), QidList.read(file));
+    List<String> qids = QidList.read(file);
+    return new KnownListInput(file.getFileName().toString(), qids);
   }
 }

@@ -3,6 +3,7 @@ package com.robsartin.segue.census;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.DisplayName;
@@ -38,5 +39,15 @@ class KnownListInputTest {
     assertThatThrownBy(() -> KnownListInput.read(home.resolve("absent.csv")))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("no entity list at");
+  }
+
+  @Test
+  @DisplayName("a directory with no basename at all is refused by name rather than by a null")
+  void shouldRefuseByNameWhenThePathIsARootDirectory() {
+    // A root has no file name component, so reading the basename first died on a null with
+    // nothing said. The ids are read first now, and the reader refuses the path in its own words.
+    assertThatThrownBy(() -> KnownListInput.read(Path.of("/")))
+        .isInstanceOf(UncheckedIOException.class)
+        .hasMessageContaining("could not read /");
   }
 }
