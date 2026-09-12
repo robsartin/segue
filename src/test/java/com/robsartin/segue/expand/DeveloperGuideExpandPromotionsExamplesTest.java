@@ -141,8 +141,10 @@ class DeveloperGuideExpandPromotionsExamplesTest {
                 + " comes before the only writing command in the chapter, and a census after is"
                 + " what makes the run readable. The two --rated-since entries are the variant"
                 + " section, shown after the full runbook rather than interleaved with it, and"
-                + " its dry run precedes its run for the same reason the full runbook's does. A"
-                + " parser cannot see any of that",
+                + " its dry run precedes its run for the same reason the full runbook's does. The"
+                + " three --known entries are the second variant, and the census with the same"
+                + " flag comes first because the never expanded count it prints is what says"
+                + " whether the run is worth making at all. A parser cannot see any of that",
             CHAPTER)
         .containsExactly(
             "graphCensus",
@@ -150,7 +152,10 @@ class DeveloperGuideExpandPromotionsExamplesTest {
             "expandPromotions",
             "graphCensus",
             "expandPromotions --dry-run --rated-since",
-            "expandPromotions --rated-since");
+            "expandPromotions --rated-since",
+            "graphCensus --known",
+            "expandPromotions --dry-run --known",
+            "expandPromotions --known");
   }
 
   /**
@@ -169,6 +174,9 @@ class DeveloperGuideExpandPromotionsExamplesTest {
         }
         if (example.arguments().contains("--rated-since")) {
           command += " --rated-since";
+        }
+        if (example.arguments().contains("--known")) {
+          command += " --known";
         }
         found.add(new Numbered(example.line(), command));
       }
