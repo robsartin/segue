@@ -90,9 +90,9 @@ public final class ExpansionReport {
   }
 
   /** Render the whole block, header included, saying which population it covered. */
-  public static List<String> lines(ExpansionTally tally, Optional<RatedSince> filter) {
-    Objects.requireNonNull(filter, "filter");
-    return render(HEADER, filter, body(tally));
+  public static List<String> lines(ExpansionTally tally, Optional<Population> covered) {
+    Objects.requireNonNull(covered, "covered");
+    return render(HEADER, covered, body(tally));
   }
 
   /** Render what a dry run would visit — nothing else, because nothing else happened. */
@@ -101,9 +101,9 @@ public final class ExpansionReport {
   }
 
   /** Render what a dry run would visit, saying which population it would have covered. */
-  public static List<String> dryRunLines(Preflight preflight, Optional<RatedSince> filter) {
-    Objects.requireNonNull(filter, "filter");
-    return render(DRY_RUN_HEADER, filter, dryRunBody(preflight));
+  public static List<String> dryRunLines(Preflight preflight, Optional<Population> covered) {
+    Objects.requireNonNull(covered, "covered");
+    return render(DRY_RUN_HEADER, covered, dryRunBody(preflight));
   }
 
   private static List<Entry> dryRunBody(Preflight preflight) {
@@ -185,7 +185,39 @@ public final class ExpansionReport {
         + " old promotion counts as new.";
   }
 
-  private static List<String> render(String header, Optional<RatedSince> filter, List<Entry> body) {
+  /**
+   * The one {@code #} clause a run prints when it covered something other than every promotion.
+   *
+   * <p>Exhaustive over {@link Population} with no {@code default}: a third population decides what
+   * it says here, rather than inheriting another population's sentence.
+   */
+  private static String clause(Population covered) {
+    return switch (covered) {
+      case RatedSince since -> sinceLine(since);
+      case KnownNeverExpanded known -> knownLine(known);
+    };
+  }
+
+  /**
+   * Said under the header when a known-list file was given, and not at all when none was — {@link
+   * #sinceLine}'s argument, which carries the reasoning for a clause rather than a row.
+   *
+   * <p>The fold clause is here rather than in the guide alone because the number beside it is
+   * misread without it: the file's ids are counted on their canonical side, so a file naming both
+   * sides of a merge names one entity, and the excluded count is over that population and not over
+   * the file's lines.
+   */
+  private static String knownLine(KnownNeverExpanded known) {
+    return "# only known-list entities from "
+        + known.file()
+        + " that no expansion has covered: "
+        + known.excluded()
+        + " excluded (some row in the log cites them as an expansion's seed) — the file's ids are"
+        + " read through the merge fold, so a merge's two sides count once.";
+  }
+
+  private static List<String> render(
+      String header, Optional<Population> covered, List<Entry> body) {
     int labelWidth = 0;
     int countWidth = 0;
     for (Entry entry : body) {
@@ -197,7 +229,7 @@ public final class ExpansionReport {
 
     List<String> rendered = new ArrayList<>();
     rendered.add(header);
-    filter.ifPresent(f -> rendered.add(sinceLine(f)));
+    covered.ifPresent(it -> rendered.add(clause(it)));
     for (Entry entry : body) {
       switch (entry) {
         case Section section -> {

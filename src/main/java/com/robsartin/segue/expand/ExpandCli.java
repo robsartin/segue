@@ -214,7 +214,7 @@ public final class ExpandCli {
                           Set.copyOf(promoted)));
       List<String> promotions =
           age.map(it -> promoted.stream().filter(it::isNew).toList()).orElse(promoted);
-      Optional<RatedSince> filter =
+      Optional<Population> filter =
           age.map(it -> new RatedSince(it.since(), promoted.size() - promotions.size()));
       log.info("{} promotion(s) to visit", promotions.size());
 

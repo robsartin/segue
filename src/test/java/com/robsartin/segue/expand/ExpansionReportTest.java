@@ -80,6 +80,25 @@ class ExpansionReportTest {
     return List.copyOf(withIt);
   }
 
+  /** The invented basename the clause names; a path never reaches the block. */
+  private static final String KNOWN_FILE = "known.csv";
+
+  /**
+   * The clause both blocks print when a known-list file was given, character for character. A
+   * literal, not ExpansionReport's sentence — see GOLDEN_BLOCK.
+   */
+  private static final String KNOWN_LINE =
+      "# only known-list entities from known.csv that no expansion has covered: 7 excluded (some"
+          + " row in the log cites them as an expansion's seed) — the file's ids are read through"
+          + " the merge fold, so a merge's two sides count once.";
+
+  /** The golden block with the known clause inserted under its header, and nothing else moved. */
+  private static List<String> withKnownLine(List<String> block) {
+    List<String> withIt = new ArrayList<>(block);
+    withIt.add(1, KNOWN_LINE);
+    return List.copyOf(withIt);
+  }
+
   private static ExpansionTally goldenTally() {
     // LinkedHashMap, not Map.of: the golden block pins insertion order, and Map.of's iteration
     // order is unspecified.
@@ -145,6 +164,34 @@ class ExpansionReportTest {
             "# segue promotion expansion — dry run: appends nothing. Aggregates only"
                 + " (ADR 51, ADR 63).",
             SINCE_LINE,
+            "",
+            "promotions",
+            "  considered    4",
+            "  in the graph  2",
+            "  minted        1");
+  }
+
+  @Test
+  @DisplayName("the block names the file and what it excluded when a known list was expanded")
+  void shouldNameTheFileWhenTheBlockCoversOnlyWhatWasNeverExpanded() {
+    assertThat(
+            ExpansionReport.lines(
+                goldenTally(), Optional.of(new KnownNeverExpanded(KNOWN_FILE, 7))))
+        .containsExactlyElementsOf(withKnownLine(GOLDEN_BLOCK));
+  }
+
+  @Test
+  @DisplayName("the dry run block names the file and what it excluded when a known list was given")
+  void shouldNameTheFileWhenTheDryRunBlockCoversOnlyWhatWasNeverExpanded() {
+    List<String> lines =
+        ExpansionReport.dryRunLines(
+            new Preflight(4, 2, 1), Optional.of(new KnownNeverExpanded(KNOWN_FILE, 7)));
+
+    assertThat(lines)
+        .containsExactly(
+            "# segue promotion expansion — dry run: appends nothing. Aggregates only"
+                + " (ADR 51, ADR 63).",
+            KNOWN_LINE,
             "",
             "promotions",
             "  considered    4",

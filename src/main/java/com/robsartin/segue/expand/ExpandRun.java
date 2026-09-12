@@ -81,9 +81,9 @@ public final class ExpandRun {
    * nowhere else, matching the two distinct refusals a real run would give it — never both.
    */
   public Preflight dryRun(
-      List<String> promotions, Optional<RatedSince> filter, Consumer<String> lines) {
+      List<String> promotions, Optional<Population> covered, Consumer<String> lines) {
     Objects.requireNonNull(promotions, "promotions");
-    Objects.requireNonNull(filter, "filter");
+    Objects.requireNonNull(covered, "covered");
     Objects.requireNonNull(lines, "lines");
     int inTheGraph = 0;
     int minted = 0;
@@ -95,7 +95,7 @@ public final class ExpandRun {
       }
     }
     Preflight preflight = new Preflight(promotions.size(), inTheGraph, minted);
-    ExpansionReport.dryRunLines(preflight, filter).forEach(lines);
+    ExpansionReport.dryRunLines(preflight, covered).forEach(lines);
     return preflight;
   }
 
@@ -112,11 +112,11 @@ public final class ExpandRun {
    */
   public ExpansionTally run(
       List<String> promotions,
-      Optional<RatedSince> filter,
+      Optional<Population> covered,
       int maxNewEdges,
       Consumer<String> lines) {
     Objects.requireNonNull(promotions, "promotions");
-    Objects.requireNonNull(filter, "filter");
+    Objects.requireNonNull(covered, "covered");
     Objects.requireNonNull(lines, "lines");
 
     int expanded = 0;
@@ -197,7 +197,7 @@ public final class ExpandRun {
             unavailableBySource,
             truncatedBySource,
             refusalsByReason);
-    ExpansionReport.lines(tally, filter).forEach(lines);
+    ExpansionReport.lines(tally, covered).forEach(lines);
     return tally;
   }
 
