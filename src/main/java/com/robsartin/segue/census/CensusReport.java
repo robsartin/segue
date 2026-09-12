@@ -27,6 +27,13 @@ import java.util.function.ToIntFunction;
  * this same rule by hand to the invented fixture, which is what makes its pinned block an
  * expectation rather than a transcript.
  *
+ * <p><b>The known-list section prints only when the flag was given</b>, which is what makes the
+ * no-flag block byte-identical to the one this class printed before issue #311: an absent section
+ * adds no {@code Line} at all, so neither width derived from {@code body} can move. Its heading
+ * carries the file's basename, and that is the second piece of text this class interpolates that is
+ * not a count — the first is the vocabulary named below. It differs from that one in where it comes
+ * from: the command line rather than the data.
+ *
  * <p><b>Every label is a literal in this file.</b> Nothing here interpolates a value read from the
  * data except an integer and one identifier. The exceptions are the edge type codes and source ids,
  * which are vocabulary rather than entities and are covered by {@code CensusIsSafeToPasteTest}'s
@@ -147,7 +154,42 @@ public final class CensusReport {
       body.add(count("class " + stated.classQid(), stated.nodes()));
     }
 
+    census
+        .knownList()
+        .ifPresent(
+            known -> {
+              // The file's basename, which KnownListInput is the one home of: the block is meant
+              // to be pasted, and a path names a directory on the owner's machine.
+              body.add(section("known list — " + known.file()));
+              body.add(subSection("file"));
+              rows(body, known.fromFile());
+              body.add(subSection("file and promotions"));
+              rows(body, known.withPromotions());
+            });
+
     return body;
+  }
+
+  /** A population's rows, so the two sub-sections read straight down against each other. */
+  private static void rows(List<Line> body, KnownListCensus.Population population) {
+    body.add(nested("named", population.named()));
+    body.add(nested("in the graph", population.inTheGraph()));
+    body.add(nested("never expanded", population.neverExpanded()));
+    body.add(
+        nested("no known neighbour within two hops", population.noKnownNeighbourWithinTwoHops()));
+    for (NodeKind kind : NodeKind.values()) {
+      String of = kind.name() + " ";
+      body.add(nested(of + "in the graph", population.inTheGraphByKind().get(kind)));
+      body.add(nested(of + "never expanded", population.neverExpandedByKind().get(kind)));
+    }
+  }
+
+  private static Line subSection(String name) {
+    return new Line("  " + name, null);
+  }
+
+  private static Line nested(String label, int value) {
+    return new Line("    " + label, value);
   }
 
   /** The widest of one measurement over the counted lines; section headings are not padded. */

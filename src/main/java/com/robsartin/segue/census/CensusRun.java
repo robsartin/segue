@@ -3,6 +3,7 @@ package com.robsartin.segue.census;
 import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 /**
@@ -38,7 +39,7 @@ public final class CensusRun {
    */
   public Census run(Consumer<String> lines) {
     Objects.requireNonNull(lines, "lines");
-    Census census = Census.of(log, ratings);
+    Census census = Census.of(log, ratings, Optional.empty());
     CensusReport.lines(census).forEach(lines);
     return census;
   }

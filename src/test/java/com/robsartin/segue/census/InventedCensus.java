@@ -176,6 +176,11 @@ final class InventedCensus {
    * expectation in this package, so an insertion renumbers them all.
    *
    * <p>Rows are 1-indexed from the first {@code node(} line below — the busiest node is row 1.
+   *
+   * <p><b>Two rows carry an expansion-shaped reference</b> — {@link #WREN} as a forward seed and
+   * {@link #HOLLOW} as a reverse one — so that the known-list section's {@code never expanded} row
+   * is not the whole population. Neither changes a source id or a confidence, so no other count
+   * here moves.
    */
   static List<LoggedAssertion> log() {
     return List.of(
@@ -186,9 +191,9 @@ final class InventedCensus {
         node(NEIGHBOUR, NodeKind.PERSON, "A Neighbour", List.of(UNKNOWN_CLASS)),
         node(THIRD, NodeKind.PERSON, "A Third Invented Person"),
         node(FOURTH, NodeKind.PERSON, "A Fourth Invented Person"),
-        edge(WREN, HOLLOW, "MEMBER_OF", sourced()),
+        edge(WREN, HOLLOW, "MEMBER_OF", expandedFrom(WREN)),
         edge(WREN, HOLLOW, "MEMBER_OF", secondSource()),
-        edge(NEIGHBOUR, HOLLOW, "MEMBER_OF", sourced()),
+        edge(NEIGHBOUR, HOLLOW, "MEMBER_OF", discoveredFrom(NEIGHBOUR, HOLLOW)),
         edge(WREN, PRIZE, "INFLUENCED_BY", guessed()),
         edge(GONE, WREN, "MEMBER_OF", sourced()),
         edge(WREN, NEIGHBOUR, "MEMBER_OF", fromMusicBrainz()),
