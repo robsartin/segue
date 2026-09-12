@@ -323,3 +323,73 @@ would print the qid anyway and add a column of blanks, while putting a curated E
 output whose guarantee is that it interpolates nothing but integers and one identifier. And
 suppressing rows below a minimum count: it would hide the residual above rather than report it, and
 it would make `distinct classes` the only honest number in the section.
+
+**Amendment (2026-09-12, issue #311): the census takes an optional `--known <file>` and prints one
+further section, `known list`.**
+
+The input is the same known-list file `recommend`, `rate` and `evaluate` already take, read through
+the shared `QidList`. It is personal data — a list of who the owner listens to, reads and watches —
+and it lives outside this repository, the same as everywhere else that file is read.
+
+That is within this decision rather than against it, because what the section prints is counts over
+that list, which is exactly the aggregate [ADR 51](0051-what-an-adr-may-quote.md) permits. No entity
+is named, every value is an integer, and the one piece of text is the file's basename, never its
+path — `CensusReport` puts it on the section's own heading rather than on the report's fixed header,
+so the no-flag block stays byte-identical to what this tool printed before. This decision's own
+guarantee is unchanged, and `CensusIsSafeToPasteTest` now covers the flagged path as well as the
+plain one.
+
+The section answers a question nothing else does: the evaluation harness
+([ADR 65](0065-an-offline-evaluation-harness-for-the-recommender.md)) scores only entities the owner
+has rated, so an entity on the list that the graph has never expanded, or that connects to nothing
+else on the list, is invisible to every current reading. `KnownListCensus` counts two populations
+against that question. The first is the file's own entities, read through the shared `QidList` and
+then through the merge fold — so `named` counts distinct canonical ids rather than lines in the
+file, and two ids that turned out to be one entity count once, on the canonical side. The second is
+that same population composed with the ratings map through `KnownList.promoted`, which is
+`recommend` and `rate`'s own answer to what "known" means
+([ADR 48](0048-a-high-rating-counts-as-something-you-have.md)) — that population and not a third
+idea of what "known" could mean, so the two tools that already reason over the known-list and this
+section reporting on it cannot come to disagree about what it holds.
+
+"Expanded" comes from the provenance the log already holds, in two shapes — a forward Wikidata
+statement id, and a reverse-discovered edge's own reference — read apart by one rule in `domain`
+rather than a second copy of the same judgement here. The forward shape is matched
+**case-insensitively on its leading letter**, and that is a measurement rather than a defensiveness:
+asked of the live API, one real entity carries statement ids minted with an uppercase prefix and
+statement ids minted with a lowercase one, both live on that entity today. That distribution is what
+was measured and is all that was measured: why Wikibase's minting differs across them is not
+something this call establishes. No fixture in this repository carries a real statement id at all —
+every recorded response falls back to a reference built from the property and the object — so
+nothing offline could have caught it, and an uppercase-only rule would have dropped
+the lowercase-minted part of the forward arm silently and over-reported "never expanded" with no
+error to see. It is recorded here because it reverses an assumption this design was written on and
+because only a live call can re-derive it.
+
+The census is the only thing in this codebase that reads that rule today. A second reader is
+expected — the re-expansion pass this section's number exists to gate — and one rule is what will
+keep the two from disagreeing about who has been expanded. It is deliberately **not** the promotion
+expander already shipped as `expandPromotions`
+([ADR 66](0066-expand-every-promotion-from-a-dev-tool.md)): that tool composes its population from
+`KnownList.promoted` and the merges, and reads nothing here.
+
+The rule deliberately does not read the MusicBrainz adapter's own references: every MusicBrainz
+expansion of an entity Wikidata can also describe runs alongside a Wikidata expansion of the same
+seed in the same call, so the residual it misses there is narrow — a call where Wikidata was
+unavailable and MusicBrainz was not — and what it reports is a true statement about what Wikidata
+itself recorded. That is one of a small family of residuals rather than the only one, and all of
+them err the same way: an expansion that ran and returned nothing leaves no row either, and neither
+does a forward-only expansion every one of whose statements falls back to the property-and-object
+reference. Missing any of them points the owner toward expanding an entity again rather than toward
+overlooking one that never was, which is the safer of the two mistakes for a section whose whole
+purpose is to surface a gap.
+
+One constant moved to make the walk legal: `MAX_HOPS` now lives in `domain.Recommendations`, beside
+the degree floor this census already reads by reference, because `theCensusOnlyReads` fences `census`
+to one sibling package and a constant left where it stood could only have been followed here by a
+second literal — the copy this project's single-source rule exists to prevent.
+
+The residual, stated rather than mitigated: a basename is text the owner typed, so a known-list file
+named after an entity would put that name in the block. Nothing hides it; `--db` and `--known` are
+both typed per invocation, with no default for either, because whether to publish is the owner's
+decision, taken each time.

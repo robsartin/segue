@@ -71,6 +71,21 @@ public final class Recommendations {
   public static final int MIN_CANDIDATE_DEGREE = 5;
 
   /**
+   * How far the sweep looks, and so how long an explanation may be.
+   *
+   * <p>The traversal is still allowed to return a ONE-hop route and to rank it first, and it
+   * should: if you already have a direct edge to the candidate, "it is cited by something you know"
+   * is a better answer than the two-hop route the scoring happened to count.
+   *
+   * <p><b>Here rather than in {@code recommend}, for {@link #MIN_CANDIDATE_DEGREE}'s reason</b>
+   * (issue #311). A second reader arrived outside that package: {@code theCensusOnlyReads} fences
+   * {@code census} to one sibling, {@code export}, so the known-list census could not have read it
+   * where it was. The choice was between a second literal and one home, and this project has
+   * already made it once, for the floor the same census reads.
+   */
+  public static final int MAX_HOPS = 2;
+
+  /**
    * How much weight one known entity's connections carry. <b>The affinity seam, deliberately
    * flat.</b>
    *

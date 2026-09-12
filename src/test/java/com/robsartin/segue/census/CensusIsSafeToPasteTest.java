@@ -10,6 +10,7 @@ import com.robsartin.segue.domain.AffinityRecord;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
@@ -144,5 +145,36 @@ class CensusIsSafeToPasteTest {
     assertThat(carriesAnIdItMayNot("class Q0900302  1"))
         .as("the section's own words without the indent no other line can fake")
         .isTrue();
+  }
+
+  @Test
+  @DisplayName("the flagged block is safe to paste too, and its heading carries a basename only")
+  void shouldEmitCountsAndNothingElseWhenAKnownListWasNamed() throws Exception {
+    Path db = home.resolve("flagged.db");
+    try (SqliteAssertionLog log = new SqliteAssertionLog(db);
+        SqliteAffinityStore affinity = new SqliteAffinityStore(db)) {
+      log.append(InventedCensus.node("Q0900901", NodeKind.WORK, LABEL));
+      log.append(
+          InventedCensus.node(
+              "Q0900903", NodeKind.WORK, "Another Label Unlike Anything Real", List.of(A_CLASS)));
+      affinity.put(new AffinityRecord("Q0900901", 5, NOTE, Instant.parse("2026-02-01T08:00:00Z")));
+    }
+    // The basename reaches the heading, so it must not itself be qid-shaped - which is a property
+    // of the file the owner points at, and this names the one the runbook tells them to use.
+    Path known = Files.writeString(home.resolve("known.csv"), "Q0900901\nQ0900903\n");
+    captured.list.clear();
+
+    CensusCli.main(new String[] {"--db", db.toString(), "--known", known.toString()});
+
+    List<String> everyLine =
+        List.copyOf(captured.list).stream().map(ILoggingEvent::getFormattedMessage).toList();
+
+    assertThat(everyLine)
+        .as(
+            "the known-list section was actually printed — without this the clause below is vacuous")
+        .anyMatch(line -> line.startsWith("known list — "));
+    assertThat(everyLine)
+        .as("and no line of the flagged block carries anything qid-shaped it may not")
+        .noneMatch(CensusIsSafeToPasteTest::carriesAnIdItMayNot);
   }
 }

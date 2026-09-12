@@ -8,6 +8,7 @@ import com.robsartin.segue.support.RequiredDatabase;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Objects;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,26 +48,34 @@ public final class CensusCli {
 
   private static final Logger log = LoggerFactory.getLogger(CensusCli.class);
 
-  private static final String USAGE = "usage: --db <segue.db>";
+  private static final String USAGE = "usage: --db <segue.db> [--known <file of QIDs>]";
 
   private CensusCli() {}
 
   /**
-   * The database to count.
+   * The database to count, and the known-list file to count it against.
    *
    * @param database no default, on purpose — see this class's Javadoc, and {@code
    *     support.RequiredDatabase}, which owns the refusal sentence
+   * @param known the same file {@code recommend}, {@code rate} and {@code evaluate} take, or empty.
+   *     <b>Optional where {@code --db} is required</b>, and the asymmetry is the point: the
+   *     database decides whether this runs at all, and this decides whether one section is printed.
+   *     <b>It is not opened here</b> — {@code parse} refuses what could not work before any file is
+   *     touched, and {@code DeveloperGuideCensusExamplesTest} runs the runbook's examples through
+   *     it for exactly that reason
    */
-  public record Options(Path database) {
+  public record Options(Path database, Optional<Path> known) {
 
     public Options {
       Objects.requireNonNull(database, "database");
+      Objects.requireNonNull(known, "known");
     }
   }
 
   /** Parse and validate, refusing anything that could not work before a store is opened. */
   static Options parse(String[] args, String envDatabase, String userHome) {
     Path database = null;
+    Path known = null;
 
     for (int i = 0; i < args.length; i++) {
       String flag = args[i];
@@ -74,6 +83,8 @@ public final class CensusCli {
       i++;
       if ("--db".equals(flag)) {
         database = Path.of(value);
+      } else if ("--known".equals(flag)) {
+        known = Path.of(value);
       } else {
         throw usage("unknown option " + flag);
       }
@@ -82,7 +93,7 @@ public final class CensusCli {
     if (database == null) {
       throw usage(RequiredDatabase.refusal(envDatabase, userHome));
     }
-    return new Options(database);
+    return new Options(database, Optional.ofNullable(known));
   }
 
   private static String valueOf(String[] args, int i, String flag) {
@@ -124,7 +135,7 @@ public final class CensusCli {
 
     try (AssertionLog assertions = new SqliteAssertionLog(options.database());
         AffinityStore ratings = new SqliteAffinityStore(options.database())) {
-      new CensusRun(assertions, ratings).run(log::info);
+      new CensusRun(assertions, ratings).run(log::info, options.known());
     }
   }
 }

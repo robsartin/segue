@@ -7,11 +7,13 @@ import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -58,7 +60,7 @@ class CensusRunTest {
       RATINGS.forEach((qid, rating) -> ratings.updateRating(qid, rating, RATED_AT));
 
       List<String> emitted = new ArrayList<>();
-      Census census = new CensusRun(log, ratings).run(emitted::add);
+      Census census = new CensusRun(log, ratings).run(emitted::add, Optional.empty());
 
       assertThat(census.nodes().total())
           .as("the fixture's thirteen nodes, read back off the database rather than a fake")
@@ -67,6 +69,48 @@ class CensusRunTest {
           .as("the eight invented ratings, read back off the affinity table rather than a fake")
           .isEqualTo(8);
       assertThat(emitted).isEqualTo(CensusReport.lines(census));
+    }
+  }
+
+  @Test
+  @DisplayName("a --known file is read here, and the block gains the section that counts it")
+  void shouldCountTheKnownListWhenAFileIsNamed() throws Exception {
+    Path database = home.resolve("known.db");
+    Path file =
+        Files.writeString(
+            home.resolve("known.csv"), InventedCensus.WREN + "\n" + InventedCensus.HOLLOW + "\n");
+    try (AssertionLog log = new SqliteAssertionLog(database);
+        AffinityStore ratings = new SqliteAffinityStore(database)) {
+      for (LoggedAssertion assertion : InventedCensus.log()) {
+        log.append(assertion);
+      }
+
+      List<String> emitted = new ArrayList<>();
+      Census census = new CensusRun(log, ratings).run(emitted::add, Optional.of(file));
+
+      assertThat(census.knownList()).isPresent();
+      assertThat(census.knownList().orElseThrow().fromFile().named())
+          .as("the two ids the file names, read through KnownListInput rather than a Path")
+          .isEqualTo(2);
+      assertThat(emitted).anyMatch(line -> line.startsWith("known list — "));
+    }
+  }
+
+  @Test
+  @DisplayName("no --known file leaves the census carrying none and the block without the section")
+  void shouldPrintNoKnownListSectionWhenNoFileIsNamed() {
+    Path database = home.resolve("unknown.db");
+    try (AssertionLog log = new SqliteAssertionLog(database);
+        AffinityStore ratings = new SqliteAffinityStore(database)) {
+      for (LoggedAssertion assertion : InventedCensus.log()) {
+        log.append(assertion);
+      }
+
+      List<String> emitted = new ArrayList<>();
+      Census census = new CensusRun(log, ratings).run(emitted::add, Optional.empty());
+
+      assertThat(census.knownList()).isEmpty();
+      assertThat(emitted).noneMatch(line -> line.startsWith("known list"));
     }
   }
 }

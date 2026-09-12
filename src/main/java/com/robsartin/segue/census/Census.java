@@ -1,5 +1,6 @@
 package com.robsartin.segue.census;
 
+import com.robsartin.segue.domain.Expanded;
 import com.robsartin.segue.domain.Fold;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.export.LogProjection;
@@ -7,7 +8,9 @@ import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.wikidata.KindMapper;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Every number the census reports, in the seven sections it prints them in.
@@ -37,7 +40,8 @@ public record Census(
     TasteCensus taste,
     DegreeCensus degree,
     BridgeCensus bridge,
-    ConceptClassCensus conceptClasses) {
+    ConceptClassCensus conceptClasses,
+    Optional<KnownListCensus> knownList) {
 
   public Census {
     Objects.requireNonNull(nodes, "nodes");
@@ -47,22 +51,38 @@ public record Census(
     Objects.requireNonNull(degree, "degree");
     Objects.requireNonNull(bridge, "bridge");
     Objects.requireNonNull(conceptClasses, "conceptClasses");
+    Objects.requireNonNull(knownList, "knownList");
   }
 
-  /** Fold once, read once, count seven ways. */
-  public static Census of(AssertionLog log, AffinityStore ratings) {
+  /**
+   * Fold once, read once, count seven ways — eight when a known-list file was named.
+   *
+   * <p><b>The eighth section is optional because the flag is</b>, and that is what keeps the
+   * no-flag block byte-identical to the one printed before issue #311: {@link CensusReport} adds no
+   * line for an empty one, so neither column width moves.
+   *
+   * @param known the known-list file, or empty where {@code --known} was not given
+   */
+  public static Census of(AssertionLog log, AffinityStore ratings, Optional<KnownListInput> known) {
     Objects.requireNonNull(log, "log");
     Objects.requireNonNull(ratings, "ratings");
+    Objects.requireNonNull(known, "known");
     List<LoggedAssertion> logged = log.readAll();
     Fold fold = Fold.of(logged, KindMapper::rederive);
     LogProjection projection = LogProjection.of(logged, fold);
+    // Read once and shared, where TasteCensus used to take it inline: the same answer, so the two
+    // sections that read it cannot disagree about what the taste layer says.
+    Map<String, Integer> scores = ratings.readRatings();
     return new Census(
         NodeCensus.of(projection),
         EdgeCensus.of(projection),
         ClaimCensus.of(logged, projection, fold),
-        TasteCensus.of(ratings.readRatings(), fold, projection),
+        TasteCensus.of(scores, fold, projection),
         DegreeCensus.of(projection),
         BridgeCensus.of(projection),
-        ConceptClassCensus.of(projection));
+        ConceptClassCensus.of(projection),
+        // Expanded.in is built inside the map, so a run without the flag never walks the rows
+        // for it at all.
+        known.map(file -> KnownListCensus.of(file, Expanded.in(logged), projection, fold, scores)));
   }
 }

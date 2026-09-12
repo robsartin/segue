@@ -1,6 +1,7 @@
 package com.robsartin.segue.census;
 
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.domain.Recommendations;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -27,12 +28,23 @@ import java.util.function.ToIntFunction;
  * this same rule by hand to the invented fixture, which is what makes its pinned block an
  * expectation rather than a transcript.
  *
- * <p><b>Every label is a literal in this file.</b> Nothing here interpolates a value read from the
- * data except an integer and one identifier. The exceptions are the edge type codes and source ids,
- * which are vocabulary rather than entities and are covered by {@code CensusIsSafeToPasteTest}'s
- * "no Q-shaped token anywhere" clause, and the class qids in the concept-classes rows, which ADR
- * 63's 2026-09-04 amendment rules the same way and for which that clause is narrowed to the {@code
- * class Q…} prefix this block owns.
+ * <p><b>The known-list section prints only when the flag was given</b>, which is what makes the
+ * no-flag block byte-identical to the one this class printed before issue #311: an absent section
+ * adds no {@code Line} at all, so neither width derived from {@code body} can move. Its heading
+ * carries the file's basename, and that is the second piece of text this class interpolates that is
+ * not a count — the first is the vocabulary named below. It differs from that one in where it comes
+ * from: the command line rather than the data.
+ *
+ * <p><b>Every label is a literal in this file, but for one number it reads off a constant.</b> The
+ * known-list section's "no known neighbour" row spells out {@link Recommendations#MAX_HOPS}, the
+ * bound {@code KnownListCensus} walks to, so that moving the constant moves the words rather than
+ * leaving them saying the old number. That is vocabulary this file compiles against, as are the
+ * {@code NodeKind} names; nothing here interpolates a value read from the data except an integer
+ * and one identifier. The exceptions are the edge type codes and source ids, which are vocabulary
+ * rather than entities and are covered by {@code CensusIsSafeToPasteTest}'s "no Q-shaped token
+ * anywhere" clause, and the class qids in the concept-classes rows, which ADR 63's 2026-09-04
+ * amendment rules the same way and for which that clause is narrowed to the {@code class Q…} prefix
+ * this block owns.
  */
 public final class CensusReport {
 
@@ -147,7 +159,49 @@ public final class CensusReport {
       body.add(count("class " + stated.classQid(), stated.nodes()));
     }
 
+    census
+        .knownList()
+        .ifPresent(
+            known -> {
+              // The file's basename, which KnownListInput is the one home of: the block is meant
+              // to be pasted, and a path names a directory on the owner's machine.
+              body.add(section("known list — " + known.file()));
+              body.add(subSection("file"));
+              rows(body, known.fromFile());
+              body.add(subSection("file and promotions"));
+              rows(body, known.withPromotions());
+            });
+
     return body;
+  }
+
+  /** A population's rows, so the two sub-sections read straight down against each other. */
+  private static void rows(List<Line> body, KnownListCensus.Population population) {
+    body.add(nested("named", population.named()));
+    body.add(nested("in the graph", population.inTheGraph()));
+    body.add(nested("never expanded", population.neverExpanded()));
+    // The number is read off the constant the walk itself is bounded by, never spelled out a
+    // second time: move Recommendations.MAX_HOPS and this row says the new number rather than
+    // going quietly stale. It is a compile-time constant out of `domain`, the same category as
+    // the NodeKind names above, so it is not data read off the log and the safe-to-paste
+    // guarantee is untouched.
+    body.add(
+        nested(
+            "no known neighbour within " + Recommendations.MAX_HOPS + " hops",
+            population.noKnownNeighbourWithinMaxHops()));
+    for (NodeKind kind : NodeKind.values()) {
+      String of = kind.name() + " ";
+      body.add(nested(of + "in the graph", population.inTheGraphByKind().get(kind)));
+      body.add(nested(of + "never expanded", population.neverExpandedByKind().get(kind)));
+    }
+  }
+
+  private static Line subSection(String name) {
+    return new Line("  " + name, null);
+  }
+
+  private static Line nested(String label, int value) {
+    return new Line("    " + label, value);
   }
 
   /** The widest of one measurement over the counted lines; section headings are not padded. */

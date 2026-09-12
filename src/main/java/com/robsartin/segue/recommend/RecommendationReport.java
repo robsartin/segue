@@ -4,6 +4,7 @@ import com.robsartin.segue.domain.FloorReading;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.PathResult;
 import com.robsartin.segue.domain.Recommendation;
+import com.robsartin.segue.domain.Recommendations;
 import com.robsartin.segue.domain.Scorer;
 import java.io.IOException;
 import java.io.Writer;
@@ -40,7 +41,7 @@ public final class RecommendationReport {
 
   /** Printed under a candidate the traversal could not reach within the bound. */
   public static final String NO_ROUTE =
-      "(no route within " + Routes.MAX_HOPS + " hops — the graph moved under the scan)";
+      "(no route within " + Recommendations.MAX_HOPS + " hops — the graph moved under the scan)";
 
   /** Printed instead of a list when nothing survived the filters. */
   public static final String NOTHING_FOUND =

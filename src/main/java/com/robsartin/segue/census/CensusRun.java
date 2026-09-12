@@ -2,7 +2,9 @@ package com.robsartin.segue.census;
 
 import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
+import java.nio.file.Path;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 /**
@@ -33,12 +35,16 @@ public final class CensusRun {
   /**
    * Count the graph and emit the report.
    *
+   * @param known the known-list file, or empty. <b>Read here rather than in the CLI</b>, so the one
+   *     place a path becomes a basename and a list of ids is {@link KnownListInput} and a test can
+   *     exercise it without a command line
    * @return the census that was printed, so a caller can assert on the numbers without parsing the
    *     text back
    */
-  public Census run(Consumer<String> lines) {
+  public Census run(Consumer<String> lines, Optional<Path> known) {
     Objects.requireNonNull(lines, "lines");
-    Census census = Census.of(log, ratings);
+    Objects.requireNonNull(known, "known");
+    Census census = Census.of(log, ratings, known.map(KnownListInput::read));
     CensusReport.lines(census).forEach(lines);
     return census;
   }
