@@ -257,10 +257,10 @@ class WikidataLiveSmokeTest {
    * {@code q192668$35463C9F-FBDC-4657-9DE0-55B1D9602067}, reads as though every id on this entity
    * carries a lowercase prefix. Running this check against the whole of Nick Cave's statements
    * found 800 with an uppercase {@code Q} prefix and 287 with a lowercase {@code q} one, on the
-   * SAME entity — Wikibase minted statement GUIDs one way for years and switched at some point, and
-   * both eras' statements are still live. So the property that actually holds, and the one this
-   * test asserts, is case-insensitivity, not "lowercase" — which is exactly what the fix
-   * implements, and a stronger reason for it than the one anecdote gave.
+   * SAME entity. Why both cases occur is not established here; that they do is the measurement. So
+   * the property that actually holds, and the one this test asserts, is case-insensitivity, not
+   * "lowercase" — which is exactly what the fix implements, and a stronger reason for it than the
+   * one anecdote gave.
    */
   @Test
   @DisplayName(

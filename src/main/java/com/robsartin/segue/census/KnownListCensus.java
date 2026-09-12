@@ -34,8 +34,9 @@ import java.util.Set;
  * <p><b>The expansion seeds are read through the same fold, for the same reason.</b> The rows
  * {@link Expanded#in} reads are the log as it was written, so a row recorded before a merge cites
  * the id the owner has since retired; asked about a population already on its canonical side, it
- * would find no seed and report an entity as never expanded on work that was really done. One fold,
- * one side, every count.
+ * would find no seed and report an entity as never expanded on work that was really done. No writer
+ * in {@code src/main} records a seed on a retired side today, so this is defensive: one fold, one
+ * side, every count, whatever a later writer does.
  *
  * <p><b>A qid the file names that the fold holds no node for counts under {@code named} and not
  * under {@code in the graph}.</b> That is not a gap in this reading; it is the first coverage gap

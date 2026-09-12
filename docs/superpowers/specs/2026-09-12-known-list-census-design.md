@@ -192,7 +192,10 @@ actually does, and what the plan does instead. Nothing above is edited.
    population, and *Expanded* describes a rule read off the log as written — which leaves the two
    sides of a merge free to disagree: a row recorded before the merge cites the id the owner has
    since retired, and a population already on its canonical side finds no seed for it and reports it
-   as never expanded. `KnownListCensus.of` therefore reads the seeds through the same
+   as never expanded. No writer in `src/main` records an expansion seed on a merge's retired side
+   (a merge retires an id the expander no longer visits), so the divergence is not reachable from
+   the tools today; the resolution is defensive, so that the census and a future writer cannot
+   disagree. `KnownListCensus.of` therefore reads the seeds through the same
    `Equivalences.canonical` the population is read through. `Expanded` itself still reads the raw
    rows, deliberately: that an expansion ran is a fact the append-only log keeps, and reading a fold
    there would flip a seed back to never-expanded as soon as a retraction dropped the edges carrying
