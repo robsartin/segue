@@ -1819,6 +1819,13 @@ header line, then a section heading per group with its counts indented under it,
 one width and the numbers right-aligned in another — both widths derived from the census itself, so
 a six-figure count moves the column rather than jutting out of it.
 
+**What `--known` costs.** Reading the file adds one scan for the expansion rule and one bounded
+neighbourhood read per known entity, against a fold that already dominates the run — so it costs
+seconds rather than minutes. That was measured on a synthetic graph shaped like the real one, not on
+the owner's own database: nodes in the low six figures, edges a small multiple of that, and degree
+skewed so a few nodes carry hundreds of edges and most carry none. If a run with `--known` takes
+meaningfully longer than that, the walk is the thing to look at, not the flag.
+
 ### Why the output is safe to paste
 
 Every value is an integer, and every label is a literal in `CensusReport` but for three it reads off
