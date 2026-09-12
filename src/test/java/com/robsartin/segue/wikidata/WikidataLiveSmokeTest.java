@@ -11,11 +11,13 @@ import com.robsartin.segue.fixture.Fixture;
 import com.robsartin.segue.port.ExpandContext;
 import com.robsartin.segue.port.ExpandResult;
 import java.time.Clock;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
 
 /**
  * The positive control. Everything else in this package replays a recorded fixture, and a recorded
@@ -241,6 +243,53 @@ class WikidataLiveSmokeTest {
             });
     assertThat(found.neighbors()).isNotEmpty();
     assertThat(found.neighbors()).allSatisfy(n -> assertThat(n.qid()).matches("Q\\d+"));
+  }
+
+  /**
+   * The general question behind issue #311's IMP-1, asked of the live API rather than of one
+   * hand-checked anecdote. {@code Expanded.seedOf}'s forward arm depends on every real statement id
+   * on an entity beginning with that entity's qid, case-insensitively, then {@code $} — the shape
+   * recorded in {@code Expanded}'s javadoc. No fixture in this package can stand in for this: every
+   * recorded response falls back to {@code ClaimMapper}'s {@code <property>:<objectQid>} reference,
+   * carrying no statement id at all.
+   *
+   * <p><b>The live answer is not "always lowercase."</b> One hand-checked id — {@code
+   * q192668$35463C9F-FBDC-4657-9DE0-55B1D9602067} — is what IMP-1 was raised against, and it reads
+   * as though every id on this entity carries a lowercase prefix. Running this check against the
+   * whole of Nick Cave's statements found 800 with an uppercase {@code Q} prefix and 287 with a
+   * lowercase {@code q} one, on the SAME entity — Wikibase minted statement GUIDs one way for years
+   * and switched at some point, and both eras' statements are still live. So the property that
+   * actually holds, and the one this test asserts, is case-insensitivity, not "lowercase" — which
+   * is exactly what {@code Expanded.seedOf}'s fix implements, and a stronger reason for it than the
+   * one anecdote gave.
+   */
+  @Test
+  @DisplayName(
+      "every statement id on a real entity begins with that entity's qid, case-insensitively, and"
+          + " $")
+  void everyStatementIdCarriesTheEntitysQidPrefixCaseInsensitively() {
+    JsonNode entity = resolver.entity(CAVE);
+    List<String> statementIds = new ArrayList<>();
+    entity
+        .path("claims")
+        .properties()
+        .forEach(
+            property ->
+                property
+                    .getValue()
+                    .forEach(
+                        statement -> {
+                          String id = statement.path("id").asText(null);
+                          if (id != null && !id.isBlank()) {
+                            statementIds.add(id);
+                          }
+                        }));
+
+    assertThat(statementIds).isNotEmpty();
+    String prefix = (CAVE + "$").toLowerCase(java.util.Locale.ROOT);
+    assertThat(statementIds)
+        .as("every statement id on %s begins with its qid, case-insensitively, and $", CAVE)
+        .allSatisfy(id -> assertThat(id.toLowerCase(java.util.Locale.ROOT)).startsWith(prefix));
   }
 
   /**

@@ -2,8 +2,11 @@ package com.robsartin.segue.census;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.robsartin.segue.domain.EdgeRecord;
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.export.LogProjection;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
@@ -23,6 +26,12 @@ class NeighboursTest {
   private static final String D = "Q0901004";
   private static final String E = "Q0901005";
 
+  /** Named as a node claim and never an edge endpoint — the isolated node MIN-2 asks for. */
+  private static final String F = "Q0901006";
+
+  /** Named as an edge endpoint and never claimed as a node — {@code Neighbours.link}'s guard. */
+  private static final String UNCLAIMED = "Q0901099";
+
   private static LogProjection line() {
     return LogProjection.of(
         new InventedCensus.FakeAssertionLog()
@@ -32,6 +41,7 @@ class NeighboursTest {
                 InventedCensus.node(C, NodeKind.PERSON, "C"),
                 InventedCensus.node(D, NodeKind.PERSON, "D"),
                 InventedCensus.node(E, NodeKind.PERSON, "E"),
+                InventedCensus.node(F, NodeKind.PERSON, "F"),
                 InventedCensus.edge(A, B, "MEMBER_OF", InventedCensus.sourced()),
                 InventedCensus.edge(B, C, "MEMBER_OF", InventedCensus.sourced()),
                 InventedCensus.edge(C, D, "MEMBER_OF", InventedCensus.sourced()),
@@ -43,9 +53,63 @@ class NeighboursTest {
   void shouldHoldBothEndsOfEveryEdgeWhenTheFoldIsRead() {
     Map<String, Set<String>> adjacency = Neighbours.in(line());
 
-    assertThat(adjacency).containsOnlyKeys(A, B, C, D, E);
+    assertThat(adjacency).containsOnlyKeys(A, B, C, D, E, F);
     assertThat(adjacency.get(A)).containsExactly(B);
     assertThat(adjacency.get(B)).containsExactlyInAnyOrder(A, C);
+  }
+
+  @Test
+  @DisplayName("an isolated node is a key with an empty set, not omitted")
+  void shouldKeyAnIsolatedNodeToAnEmptySetWhenNothingReachesIt() {
+    Map<String, Set<String>> adjacency = Neighbours.in(line());
+
+    assertThat(adjacency).containsKey(F);
+    assertThat(adjacency.get(F))
+        .as("F has no edge in the fixture; a node nothing reaches is the finding, not an omission")
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("an edge naming an endpoint that is not a node is linked from neither end")
+  void shouldNotLinkAnEdgeWhoseEndpointIsNotANode() {
+    // Hand-built rather than folded from a log: LogProjection.of already drops a dangling edge
+    // before Neighbours ever sees it (danglingEdges), so this is the one way to exercise
+    // Neighbours.link's own defensive guard directly, as MIN-2 asks.
+    LogProjection projection =
+        new LogProjection(
+            Map.of(A, new NodeRecord(A, NodeKind.PERSON, "A")),
+            List.of(new EdgeRecord(A, UNCLAIMED, "MEMBER_OF", null, null, List.of())),
+            0,
+            0);
+
+    Map<String, Set<String>> adjacency = Neighbours.in(projection);
+
+    assertThat(adjacency).containsOnlyKeys(A);
+    assertThat(adjacency.get(A))
+        .as("the guard refuses an endpoint that never claimed a node")
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("a retracted node's edges are absent from the adjacency the fold hands over")
+  void shouldExcludeARetractedNodesEdgesWhenTheFoldReflectsARetraction() {
+    LogProjection projection =
+        LogProjection.of(
+            new InventedCensus.FakeAssertionLog()
+                .with(
+                    InventedCensus.node(A, NodeKind.PERSON, "A"),
+                    InventedCensus.node(B, NodeKind.PERSON, "B"),
+                    InventedCensus.node(C, NodeKind.PERSON, "C"),
+                    InventedCensus.edge(A, B, "MEMBER_OF", InventedCensus.sourced()),
+                    InventedCensus.edge(B, C, "MEMBER_OF", InventedCensus.sourced()),
+                    InventedCensus.retract(C)));
+
+    Map<String, Set<String>> adjacency = Neighbours.in(projection);
+
+    assertThat(adjacency).doesNotContainKey(C);
+    assertThat(adjacency.get(B))
+        .as("the retraction removed C's node claim and every edge touching it")
+        .doesNotContain(C);
   }
 
   @Test
