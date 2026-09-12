@@ -132,7 +132,8 @@ class DeveloperGuideExpandPromotionsExamplesTest {
   @Test
   @DisplayName(
       "the chapter shows the census, the dry run, the run, the census, then the since-variant's"
-          + " own dry run and run, in that order")
+          + " own dry run and run, then the known-list variant's census, dry run and run, in that"
+          + " order")
   void shouldRunEveryStepInOrderWhenTheChapterIsRead() {
     assertThat(steps())
         .as(
@@ -160,8 +161,8 @@ class DeveloperGuideExpandPromotionsExamplesTest {
 
   /**
    * The chapter's {@code ./gradlew} lines, merged across the two tasks and put back into the order
-   * the guide writes them, each reduced to its task name plus {@code " --dry-run"} and/or {@code "
-   * --rated-since"} where those flags are among its arguments.
+   * the guide writes them, each reduced to its task name plus whichever of {@code " --dry-run"},
+   * {@code " --rated-since"} and {@code " --known"} are among its arguments.
    */
   private static List<String> steps() {
     record Numbered(int line, String command) {}

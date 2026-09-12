@@ -48,12 +48,12 @@ import org.slf4j.LoggerFactory;
  * readily as a message can.
  *
  * <p><b>This class never filters.</b> {@link #dryRun} and {@link #run} are handed the entities
- * their caller already decided on and an {@link Optional} {@link Population} describing the filter
- * their caller applied — they report it, on the block {@link ExpansionReport} renders, and never
- * touch a store to compute it. The population is composed at {@code ExpandCli}, from {@code
- * KnownList.promoted} and the merges or from the known-list file and {@code Expanded}; a second
- * place that knows how to drop an entity would be a second answer to the same question (#307,
- * #313).
+ * their caller already decided on and an {@link Optional} {@link Population} describing the
+ * population their caller composed — they report it, on the block {@link ExpansionReport} renders,
+ * and never touch a store to compute it. The population is composed at {@code ExpandCli}, from
+ * {@code KnownList.promoted} and the merges or from the known-list file and {@code Expanded}; a
+ * second place that knows how to drop an entity would be a second answer to the same question
+ * (#307, #313).
  */
 public final class ExpandRun {
 
