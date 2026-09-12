@@ -543,3 +543,91 @@ sibling amendment records — each with its own control. The verification of the
 is the full gate over an otherwise unchanged tree: `AdrIndexTest`, `AdrCitationsTest`,
 `DocumentationLinksTest` for the relative links above, and `javadoc -Werror` inside
 `./gradlew check`.
+
+**Amendment (2026-09-12, issue #313): the tool takes `--known`, and expands a second population —
+the known-list entities the log says were never expanded.**
+
+Nothing above is withdrawn, no decision above is edited, and this ADR keeps `Accepted`. What
+changes is that a run may now cover a population that is not the promotions at all, and the block
+says so when it did. `ExpandCli.USAGE` is the authority on the flags' current text.
+
+**The flag.** `./gradlew expandPromotions --args="--db <segue.db> --known <file>"`, optional, the
+same known-list file `recommend`, `rate`, `evaluate` and `graphCensus --known` already take, read
+by the same rule. The population is the file's entities, resolved through the merge fold, that no
+row in the log cites as an expansion's seed. Not given, the tool covers the promotions and behaves
+exactly as it always has.
+
+**Why it reuses the census's rule rather than its own.**
+[ADR 63](0063-a-read-only-census-of-the-graph.md)'s 2026-09-12 amendment said a second reader of
+`domain.Expanded` was expected — "the re-expansion pass this section's number exists to gate" —
+and this is that reader. One rule in `domain`, read by both, is what stops `graphCensus --known`
+reporting a coverage gap this tool then declines to close, or closing one the census never saw. Two
+steps of the census's composition moved into `domain` with it, because `expand` may not depend on
+`census`: the fold of the file's ids onto their canonical side and the fold of the log's seeds onto
+the same side. Both were private to the census and are now `Equivalences.canonical` in its list
+shape and `Expanded.onTheCanonicalSide`. The file reader moved the same way, from `census` into
+`support` beside `QidList`, which is where a file more than one dev tool reads already lives
+([ADR 45](0045-recommend-by-normalised-lift-with-routes.md)).
+
+**The two flags are exclusive.** `--known` and `--rated-since` name different populations — one
+replaces the promotions, the other narrows them — so a run given both is refused with this tool's
+own usage message. The exclusivity is also a property of the types: which population a run covered
+is one sealed value, so a block cannot describe two.
+
+**What `considered` means under it.** The file's entities after the rule, the same field with a
+different population, so `considered == expanded + refused + failed` and the dry run's arithmetic
+both survive. The excluded count is on the clause and not on the tally, for the reason the
+2026-09-11 amendment gives for its own: it counts entities the run was **not** handed.
+
+**An id the graph holds no node for is refused, not dropped.** `EntityExpansion` reads the node
+first and refuses an unknown entity before any adapter is asked, and the block counts that under
+`refused, by reason` exactly as it already does for a promotion with no node. A known-list file
+naming something the graph has never seen is the first coverage gap there is, and it is reported
+rather than filtered away — the same choice this ADR's 2026-09-11 amendment made for a promotion
+with no timestamp.
+
+**The header form, and the one new thing in it.** One `#` clause under the block's own header, in
+both the dry-run block and the real block, naming the file's **basename** and how many entities the
+rule excluded as already expanded — a clause and not a row, for the reason the 2026-09-11
+amendment gives in full. **The block with no flag and the block with an instant are both
+byte-identical to today's**, and the golden pins that predate this work are unchanged beside the
+two new ones. The clause carries the first operator-supplied *text* this block has ever held: an
+instant cannot contain an identifier, and a file name can. What holds the line is that the text is
+the basename and never the path — `support.KnownListInput` is the one home of that rule, and it is
+the only reason that type exists — and that the paste guard now covers the flagged path, shown
+failing on a fixture whose basename was itself qid-shaped before it was shown passing.
+[ADR 51](0051-what-an-adr-may-quote.md)'s line is unchanged, and
+[ADR 63](0063-a-read-only-census-of-the-graph.md)'s 2026-09-12 amendment already took this step for
+the census's own section heading.
+
+**A `--known` run reads no rating at all.** It composes no promotions, so the taste layer's bulk
+read is never made — [ADR 16](0016-privacy-and-data-handling.md)'s minimisation falling out of
+the shape rather than being argued for, the same way a run with no instant reads no timestamp.
+
+**Alternatives rejected.**
+
+- **A separate dev tool for the known-list expansion.** Rejected: it would be this tool's whole
+  body — the replay, the shared expansion, the tally, the block, the fences — with one
+  population composed differently, and an eleventh tool's fences would be this tool's copied
+  under a new name.
+  That is the failure mode this repository has already measured once, when a rule duplicated under
+  a second name drifted.
+- **A "never expanded" filter on the promotions population instead of a second population.**
+  Rejected on the evidence: the reading on #311 says every promotion has already been expanded, so
+  that filter would select nothing today, and the entities the owner wants reached are precisely
+  the ones on his list that are *not* promotions.
+- **Composing the file with the promotions**, as the census's second sub-section does. Rejected:
+  the promotions are already this tool's other population, so composing them in would make a
+  `--known` run a superset of a no-flag run and the two flags no longer describe disjoint work.
+- **Copying `KnownListInput` and the two folds into `expand`** rather than moving them. Rejected
+  for the reason the 2026-09-11 amendment rejected copying `RatingAge`: a second copy of one
+  judgement is how two tools come to answer one question differently.
+
+**Nothing here is unit-testable on its own, and that is said out loud rather than left implied.**
+This entry records a decision whose code landed with its own tests — the move, the two extracted
+folds and their reds, the parser and the exclusivity refusal seen red, the population with a
+planted control one reference-character wide, the unknown-entity refusal, the clause and its two
+new pins beside two unchanged ones, and the paste guard shown firing on a planted qid-shaped
+basename. The verification of the *document* is the full gate over an otherwise unchanged tree:
+`AdrIndexTest`, `AdrCitationsTest`, `DocumentationLinksTest` for the relative links above, and
+`javadoc -Werror` inside `./gradlew check`.
