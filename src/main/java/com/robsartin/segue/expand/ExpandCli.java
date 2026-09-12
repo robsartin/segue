@@ -53,7 +53,7 @@ public final class ExpandCli {
 
   private static final String USAGE =
       "usage: --db <segue.db> [--max-new-edges <n>] [--dry-run] [--rated-since <ISO-8601 instant,"
-          + " e.g. 2026-09-06T15:00:00Z>]";
+          + " e.g. 2026-09-06T15:00:00Z>] [--known <file of QIDs>]";
 
   private ExpandCli() {}
 
@@ -65,8 +65,15 @@ public final class ExpandCli {
    *     ExpandContext#defaults()}
    * @param dryRun report what would be visited and touch no network and no log
    * @param ratedSince the instant to filter promotions by, or empty for no filter
+   * @param known the known-list file whose never-expanded entities are the population, or empty for
+   *     the promotions. Never read here: the guide's examples are parsed with an invented home
    */
-  record Options(Path database, int maxNewEdges, boolean dryRun, Optional<Instant> ratedSince) {}
+  record Options(
+      Path database,
+      int maxNewEdges,
+      boolean dryRun,
+      Optional<Instant> ratedSince,
+      Optional<Path> known) {}
 
   /** Parse and validate, refusing anything that could not work before a store is opened. */
   static Options parse(String[] args, String envDatabase, String userHome) {
@@ -109,11 +116,25 @@ public final class ExpandCli {
       ratedSince = instant(ratedSinceValue);
     }
 
+    Path known = null;
+    String knownValue = values.remove("--known");
+    if (knownValue != null) {
+      known = Path.of(knownValue);
+    }
+
+    if (known != null && ratedSince != null) {
+      // Two populations, not two filters over one: --rated-since narrows the promotions and
+      // --known replaces them. A run that took both would have to say which one it covered, and
+      // the block says exactly one thing (#313).
+      throw usage("--known and --rated-since name different populations — give one or neither");
+    }
+
     if (!values.isEmpty()) {
       throw usage("unknown option " + values.keySet().iterator().next());
     }
 
-    return new Options(database, maxNewEdges, dryRun, Optional.ofNullable(ratedSince));
+    return new Options(
+        database, maxNewEdges, dryRun, Optional.ofNullable(ratedSince), Optional.ofNullable(known));
   }
 
   private static int number(String value) {

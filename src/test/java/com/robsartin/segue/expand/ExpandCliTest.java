@@ -280,6 +280,44 @@ class ExpandCliTest {
   }
 
   @Test
+  @DisplayName("--known is carried as the path when one is given, and the file is not read here")
+  void shouldCarryTheKnownFileWhenOneIsGiven() {
+    assertThat(
+            ExpandCli.parse(
+                    new String[] {"--db", "db.sqlite", "--known", "known.csv"},
+                    null,
+                    home.toString())
+                .known())
+        .as("parse opens nothing: the guide's examples are parsed against an invented home")
+        .contains(Path.of("known.csv"));
+  }
+
+  @Test
+  @DisplayName("no file is carried when the flag is absent, which is every run before this one")
+  void shouldCarryNoKnownFileWhenTheFlagIsAbsent() {
+    assertThat(ExpandCli.parse(new String[] {"--db", "db.sqlite"}, null, home.toString()).known())
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("--known and --rated-since together are refused: they name different populations")
+  void shouldRefuseBothFlagsWhenAKnownFileAndAnInstantAreGiven() {
+    assertThatThrownBy(
+            () ->
+                ExpandCli.parse(
+                    new String[] {
+                      "--db", "db.sqlite",
+                      "--known", "known.csv",
+                      "--rated-since", "2026-09-08T00:00:00Z"
+                    },
+                    null,
+                    home.toString()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("--known and --rated-since name different populations")
+        .hasMessageContaining("--db <segue.db>");
+  }
+
+  @Test
   @DisplayName("--rated-since that is not an instant is refused with this tool's usage error")
   void shouldRefuseTheInstantWhenItIsNotAnInstant() {
     assertThatThrownBy(
