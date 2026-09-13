@@ -190,6 +190,57 @@ class KnownListCensusTest {
   }
 
   @Test
+  @DisplayName("an isolated act with an unexpanded person beside it is counted under both rows")
+  void shouldCountTheIsolatedActUnderWithSomeoneWhenAnUnexpandedPersonIsBesideIt() {
+    // FAR is three hops from SEEN, so both are isolated. LINK_B is a PERSON beside FAR that no
+    // row cites as a seed; BAND is a GROUP beside SEEN that a row DOES cite.
+    KnownListCensus.Population population = census(List.of(SEEN, FAR)).fromFile();
+
+    assertThat(population.noKnownNeighbourWithinMaxHops()).isEqualTo(2);
+    assertThat(population.isolatedWithSomeoneToExpand())
+        .as("SEEN has LINK_A beside it and FAR has LINK_B, and neither is cited as a seed")
+        .isEqualTo(2);
+    assertThat(population.isolatedWithNoOne()).isZero();
+    assertThat(population.distinctToExpand())
+        .as("LINK_A and LINK_B — BAND is a seed, and QUIET is a WORK two hops out")
+        .isEqualTo(2);
+  }
+
+  @Test
+  @DisplayName("the two nested rows partition the isolated row, whatever the population")
+  void shouldPartitionTheIsolatedRowWhenEitherPopulationIsRead() {
+    KnownListCensus census = census(List.of(SEEN, FAR, QUIET));
+
+    for (KnownListCensus.Population population :
+        List.of(census.fromFile(), census.withPromotions())) {
+      assertThat(population.isolatedWithSomeoneToExpand() + population.isolatedWithNoOne())
+          .as("with someone plus with no one is the isolated row itself")
+          .isEqualTo(population.noKnownNeighbourWithinMaxHops());
+    }
+  }
+
+  @Test
+  @DisplayName("a promotion that places an act moves the three rows for the second population")
+  void shouldMoveTheThreeRowsWhenAPromotionPlacesAnIsolatedAct() {
+    // The file names SEEN and FAR, three hops apart (SEEN-LINK_A-LINK_B-FAR), so both are
+    // isolated. Promoting LINK_B puts a member two hops from SEEN (through LINK_A) and one hop
+    // from FAR, so in the second population all three of SEEN, LINK_B and FAR reach another
+    // member within Recommendations.MAX_HOPS: nobody is left isolated, and there is nothing left
+    // to expand. The hand-derived numbers in the brief said "leaving SEEN alone" (isolated=1);
+    // the actual run showed 0 for a correct implementation, so the expectation here is fixed to
+    // what the rule reports rather than what was guessed.
+    KnownListCensus census = census(List.of(SEEN, FAR), Map.of(LINK_B, KnownList.PROMOTION_RATING));
+
+    assertThat(census.fromFile().noKnownNeighbourWithinMaxHops()).isEqualTo(2);
+    assertThat(census.withPromotions().noKnownNeighbourWithinMaxHops())
+        .as("the promotion places FAR, itself and SEEN — nobody is left isolated")
+        .isEqualTo(0);
+    assertThat(census.withPromotions().distinctToExpand())
+        .as("with nobody isolated, there is nothing beside anyone left to expand")
+        .isEqualTo(0);
+  }
+
+  @Test
   @DisplayName("a merged entity is expanded when the row citing it names the id the merge retired")
   void shouldCountAMergedEntityAsExpandedWhenTheRowCitesTheIdTheMergeRetired() {
     // Its own log: the census canonicalises the population, so the seed a row cites has to be read

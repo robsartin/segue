@@ -313,6 +313,9 @@ class CensusReportTest {
                 in the graph                           4
                 never expanded                         2
                 no known neighbour within 2 hops       1
+                  with someone to expand beside        0
+                  with no one                          1
+                  distinct to expand                   0
                 PERSON in the graph                    1
                 PERSON never expanded                  0
                 GROUP in the graph                     1
@@ -331,6 +334,9 @@ class CensusReportTest {
                 in the graph                           6
                 never expanded                         4
                 no known neighbour within 2 hops       1
+                  with someone to expand beside        0
+                  with no one                          1
+                  distinct to expand                   0
                 PERSON in the graph                    1
                 PERSON never expanded                  0
                 GROUP in the graph                     1
