@@ -1790,6 +1790,9 @@ names say which side of that line each one is on — rename either and the build
 
 # the same counts, plus how well the graph covers your own list
 ./gradlew graphCensus --args="--db $HOME/.segue/segue.db --known $HOME/known.csv"
+
+# the same again, and also write the acts your list can't place to a file
+./gradlew graphCensus --args="--db $HOME/.segue/segue.db --known $HOME/known.csv --isolated $HOME/isolated.txt"
 ```
 
 It prints one block of counts and writes nothing. **`--db` is required and `SEGUE_DB` does not
@@ -1861,6 +1864,13 @@ next, and how to tell that another run would reach nothing (the run on #313;
 [ADR 63](adr/0063-a-read-only-census-of-the-graph.md)'s and
 [ADR 66](adr/0066-expand-every-promotion-from-a-dev-tool.md)'s 2026-09-12 amendments for #315).
 
+**`no known neighbour` breaks into three nested rows.** `with someone to expand beside` and
+`with no one` partition the row above them, so the two add up to it; `distinct to expand` is the
+distinct people and groups a `--second-hop` run would visit across every act in the first of those
+two, counted before any run. The labels name no kind on purpose —
+`domain.SecondHop.WORTH_EXPANDING` is the one statement of which kinds count, and the labels cite it
+rather than restating it.
+
 ### Why the output is safe to paste
 
 Every value is an integer, and every label is a literal in `CensusReport` but for three it reads
@@ -1884,7 +1894,9 @@ TRACE, and asserts that only the class id reaches the output, and only where the
 allows it. ADR 51 says its rule cannot be tested in general and explains why; this is the one
 artefact where it can be, and [ADR 63](adr/0063-a-read-only-census-of-the-graph.md) records why.
 `--known` adds exactly one piece of non-integer text on top of that — the file's basename, printed
-on the `known list` heading, never its path.
+on the `known list` heading, never its path. `--isolated` adds one line on top of that in turn — a
+count, naming no path — and the file it writes sits outside this guarantee entirely, on purpose (see
+below).
 
 That guarantee is about the census itself, not about everything a run can put on your terminal: a
 refusal names the database path you gave it, and a run that fails prints a stack trace like any
@@ -1896,6 +1908,19 @@ One thing to expect when you do paste it: the lines arrive through SLF4J, and th
 Spring context, so `logback-spring.xml` is never loaded and Logback's own default layout goes in
 front of every line, on stdout. The prefix is the same on every line, so the aligned column survives
 — ADR 63 records it as a limit rather than a feature.
+
+### The `--isolated` file is outside that guarantee, on purpose
+
+`--isolated <file>` writes the isolated members of the population **with promotions** — qid, label,
+kind, and how many unexpanded people or groups are beside it, tab-separated, one per line — with a
+`#` header naming it as personal data
+([ADR 33](adr/0033-taste-layer-separation.md), issue #37). It holds entity ids and labels off your
+own list, which is exactly what the census block above exists never to print, so
+`CensusIsSafeToPasteTest`'s discipline does not reach it and must not be added to it by analogy. It
+is written **after** the report, so a run that could not produce one writes nothing, and an existing
+file at the same path is overwritten. The terminal block itself is byte-identical whether or not you
+pass the flag — the guarantee above is a property of that block, and adding the file does not touch
+it.
 
 ### It counts the one fold, not a second one
 
@@ -3358,6 +3383,59 @@ EXISTS` runs either way.
 `up` is still `up`. `bridge / entities MusicBrainz reached` is the row to watch hardest here — the
 reading on #311 says this population is people and groups, so the bridge should be asked once per
 entity.
+
+### The ring beside what your list cannot place: `--second-hop`
+
+`--known` covers acts your log says were never fetched at all. This covers something different: acts
+that **have** been fetched, whose own ring is already in the graph, and where nothing in that ring is
+on your list and nothing one hop beyond it has been fetched either — an isolated act, in
+`domain.SecondHop`'s sense. The census on #317 (2026-09-13) is where that reading lives; no figure
+from it is restated here.
+
+**Step 0 applies unchanged**, and so does everything this chapter says about a single writer.
+
+Take the census first, with the file and both of its new flags — `--known` to compose the
+population and `--isolated` to write it out:
+
+```bash
+./gradlew graphCensus --args="--db $HOME/.segue/segue.db --known $HOME/known.csv --isolated $HOME/isolated.txt"
+```
+
+**How to read the three rows.** `with someone to expand beside` plus `with no one` is the
+`no known neighbour within N hops` row itself — the two partition it. `distinct to expand` is what a
+`--second-hop` run would visit, counted before any run — the same `SecondHop.toExpand()` the run
+itself visits. An act under `with no one` is one nothing here can help: either its ring is fully
+fetched already, or its ring is works and places rather than people and groups.
+
+**The file is personal data.** Write it outside the working tree, and never attach it to an issue.
+`*.txt` is gitignored beside `*.csv` and `*.db`, but the protection is where the file lives, not
+what git ignores ([ADR 33](adr/0033-taste-layer-separation.md), issue #37).
+
+Then the dry run, and the run:
+
+```bash
+./gradlew expandPromotions --args="--db $HOME/.segue/segue.db --dry-run --second-hop $HOME/known.csv"
+```
+
+```bash
+./gradlew expandPromotions --args="--db $HOME/.segue/segue.db --second-hop $HOME/known.csv"
+```
+
+**What `considered` means here.** The distinct people and groups beside every isolated act in the
+population — the file composed with your promotions, exactly as the no-flag run composes them,
+because that composition is the recommender's own notion of known
+([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)). **This run does read ratings,
+where a `--known` run does not** — the same read the no-flag run already makes, logged as a count and
+nothing else about them.
+
+Take the census again, with the same file, and compare it against the one you took first:
+`no known neighbour` should be down, `distinct to expand` should be down, and `nodes` and `edges`
+should be up. **A smaller run is a later run** — the dry run's `considered` is the only bound, and
+there is no `--limit`.
+
+This chapter's own reading is a census, not an evaluation. Whether growing the pool this way is
+enough to warrant the next entry under the recommender's own calibration rule is decided there, not
+here: [the second-reading design](superpowers/specs/2026-09-04-second-reading-rule-design.md).
 
 ### What to file from what you saw
 

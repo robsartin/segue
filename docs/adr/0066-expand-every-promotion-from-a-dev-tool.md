@@ -713,3 +713,68 @@ behaviour changed and no test was written for behaviour. The verification of thi
 full gate over an otherwise unchanged tree: `AdrIndexTest`, `AdrCitationsTest`,
 `DocumentationLinksTest` for the relative links above, and `javadoc -Werror` inside
 `./gradlew check`.
+
+**Amendment (2026-09-13, issue #319): the tool takes `--second-hop`, and expands a third
+population — the unexpanded people and groups beside the known-list acts the graph cannot place.**
+
+Nothing above is withdrawn, no decision above is edited, and this ADR keeps `Accepted`. What changes
+is that a run may now cover a third population, and the block says so when it did. `ExpandCli.USAGE`
+is the authority on the flags' current text.
+
+**The population, and whose answer it is.** The file composed with the owner's promotions through
+`KnownList.promoted`, folded onto its canonical side — the same composition a no-flag run already
+builds for the promotions themselves — is handed with the fold's nodes and edges to
+`domain.SecondHop`, alongside `Expanded`. The population this flag visits is `SecondHop.toExpand()`:
+the nodes one folded edge from an isolated member of that composed population, whose kind is in
+`SecondHop.WORTH_EXPANDING`, that `Expanded` does not already cover — distinct, in first-seen order
+over the isolated members themselves. `Preflight.considered` and `ExpansionTally.considered` are
+that list's size.
+
+**Why the population with promotions.** A rating at or above `KnownList.PROMOTION_RATING` is the
+recommender's own notion of "known"
+([ADR 48](0048-a-high-rating-counts-as-something-you-have.md)), and an act one hop from a promotion
+is not one the graph cannot place — composing the file alone would call an act isolated when a
+promotion already reaches it. The consequence stated plainly: **this run reads ratings where a
+`--known` run does not**. It logs a count of how many it read and nothing else about them — no qid,
+no score — exactly as the no-flag run already does before it composes its own population
+([ADR 33](0033-taste-layer-separation.md)).
+
+**The three-way refusal.** `--second-hop`, `--known` and `--rated-since` each name a different
+population, and a run given any two of them together is refused with the usage message. The pair
+already on record — `--known` and `--rated-since` — keeps its sentence unchanged, so a block or a
+script written against it still reads; `--second-hop` against either of the other two is refused in
+the same words, with `--second-hop` named in place of the flag it is exclusive with.
+
+**Fixed at the start, and why re-runs need no state.** The population is composed once, before the
+first entity is expanded, exactly as the promotions and the `--known` population already are — so a
+run that expands its first entity does not shrink its own list mid-way. The next run is smaller by
+the rule alone: an entity this run expanded is covered by `Expanded` on the next read of the log,
+and an isolated act the new edges connected to something known is no longer isolated on the next
+read of `SecondHop`. **No `--limit`**: it would need an order to be meaningful, and an order is a
+second rule nothing here has argued for — the dry run's `considered` is the bound instead, and a
+smaller run is a later run, after the census has moved. This is the same refusal the 2026-09-12
+amendment above made for #315, about a log-side marker that would make a `--known` run
+self-limiting, reached from the other side: that amendment declined manufactured state so a floor
+could read zero, this declines it so a schedule could read done, and neither overtakes the other.
+
+**What cannot happen on this population.** Every entity in it is, by construction, a node the graph
+already holds — `SecondHop.toExpandBeside` reads it out of the fold's own nodes map — so it cannot
+produce a `refused, unknown entity` the way a `--known` file naming something the graph has never
+seen can. The preflight's other refusals apply exactly as they do to every population, and
+`ExpandRun` still never filters what it is handed.
+
+**The alternatives rejected that belong to the expander.** Expanding every unexpanded neighbour of
+every known act, not only the isolated ones: rejected, because most of that ring is beside acts the
+graph already places, and spend goes where the diagnosis points — an act with a known neighbour
+already routes. Putting the rule in `census` and reading it from here: rejected, because `expand`
+may not open `census` — the same reason `Expanded` and `KnownListInput` left that package before
+this issue. Letting `expand` open `export`: rejected, because it is a dev-tool package and the
+fence exists to keep this tool out of every one of them. Rebuilding nodes and edges from the graph
+store instead of reading `LogProjection`: rejected, because `GraphStore` lists no nodes and a second
+projection is the fold done twice — the thing #246 removed. Deciding isolation on the file alone,
+with no promotions composed in: rejected above, for the reason given there.
+
+**The closing paragraph, in this decision's own form.** What is unit-testable landed with its own
+tests, and the verification of this *document* is the full gate over an otherwise unchanged tree:
+`AdrIndexTest`, `AdrCitationsTest`, `DocumentationLinksTest` for the relative links above, and
+`javadoc -Werror` inside `./gradlew check`.
