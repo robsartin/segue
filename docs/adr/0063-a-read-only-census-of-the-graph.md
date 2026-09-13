@@ -483,12 +483,13 @@ writes nothing; an existing file at the same path is overwritten. `--isolated` g
 than a silent no-op.
 
 **Why the file is not paste-safe, and why that is not a contradiction.** This decision's guarantee
-is about the census **block**, and it is unchanged — the flag adds one line to the block, a count,
-naming no path. The file holds entity ids and labels off the owner's own list, which is exactly
-what the block exists never to print. **`CensusIsSafeToPasteTest`'s discipline does not apply to it
-and must not be added by analogy**, the note `ratings.NamesFile` already carries for the same
-reason. What that test gains is one case: the block on the terminal is byte-identical with and
-without the flag.
+is about the census **block**, and it is unchanged: the block is byte-identical with and without the
+flag. What the flag adds is a separate line, printed after the block, naming two counts — how many
+isolated acts were written and how many of them are named only by their qid — and naming no path and
+no entity. The file holds entity ids and labels off the owner's own list, which is exactly what the
+block exists never to print. **`CensusIsSafeToPasteTest`'s discipline does not apply to it and must
+not be added by analogy**, the note `ratings.NamesFile` already carries for the same reason. What
+that test gains is one case: the block on the terminal is byte-identical with and without the flag.
 
 **The walk left `census`.** It is `domain.SecondHop`'s now, with the rule it serves, so the census
 and `expandPromotions --second-hop` ask one question rather than two that could drift — the same
