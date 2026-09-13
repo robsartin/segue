@@ -650,3 +650,63 @@ new pins beside two unchanged ones, and the paste guard shown firing on a plante
 basename. The verification of the *document* is the full gate over an otherwise unchanged tree:
 `AdrIndexTest`, `AdrCitationsTest`, `DocumentationLinksTest` for the relative links above, and
 `javadoc -Werror` inside `./gradlew check`.
+
+**Amendment (2026-09-12, issue #315): a `--known` run is idempotent in the graph and not
+self-limiting, and the log-side marker that would make it self-limiting is declined here with its
+reason.**
+
+Nothing above is withdrawn, no decision above is edited, and this ADR keeps `Accepted`. The
+amendment above for #313 shipped the flag; this one records what the first run of it showed about
+running it a second time.
+
+**It is not self-limiting.** The population is the file's ids, on their canonical side, that no row
+in the log cites as an expansion's seed, and `domain.Expanded` reads a seed out of two Wikidata
+reference shapes and nothing else — a forward statement id, and a reverse-discovered edge's own
+reference. An expansion that ran and recorded no Wikidata assertion therefore leaves nothing for
+that rule to see, so the same entity is in the population on the next run and the run after that. A
+second `--known` run over the same file visits the same entities.
+
+**It is idempotent where it matters, and it is not a no-op on the log.** The run on #313 added no
+node and no net edge. It did append rows: an assertion restated is a row appended, which is how
+corroboration and freshness work ([ADR 19](0019-assertion-log-source-of-truth.md)). So running it
+again costs public-API calls and log rows and moves the projection nowhere.
+
+**What the operator does instead of waiting for a zero.** Compare one dry run's `considered` against
+the previous `--known` run's. `Preflight.considered` is the population after the rule, so it
+falls by exactly the entities that became ones the rule covers; an unchanged count says the rest
+of the file is thin and the run can stop. The developer guide's "Expanding every promotion"
+chapter is the authority on that procedure and it is not restated here.
+[ADR 63](0063-a-read-only-census-of-the-graph.md)'s 2026-09-12 amendment for #315 records the census
+row's half of the same reading.
+
+**Alternative rejected: an "expansion attempted, found nothing" claim in the log**, so that an
+attempt would be evidence the rule could read and the population could empty to zero.
+
+- **The price is a claim type and a migration.** It is a seventh implementor of the sealed
+  `LoggedAssertion`, which every exhaustive switch over that interface in `src/main` would have to
+  decide about — `Expanded.in`'s own, `SqliteAssertionLog`'s codec and `LogProjection` among them —
+  and a schema change to a log that is never rewritten.
+  [ADR 42](0042-store-p31-and-rederive-kind-at-projection.md) is where that price is already
+  recorded: it shipped one schema change with no migration on an argument about the data that
+  happened to be there, and says in as many words that the next schema change gets a real migration
+  path and that the absence of one there is not a precedent.
+- **The purchase is a row that reads zero instead of a floor** — the same reading, spelled so that
+  it looks finished. What the owner needs from the number is whether another run would reach
+  anything, and the comparison above answers that with no new state at all.
+- **It is the same shape this project has declined twice already**, and neither refusal has been
+  overtaken: the 2026-09-11 amendment above declined a marker for the promotions ("a real marker is
+  a schema change this repository's own rule says gets a real migration path"), and
+  [ADR 57](0057-the-floor-reports-itself.md) declined a derived expansion flag on two findings that
+  meet here — that such a flag "conflates *never expanded* with *expanded and found nothing*", and
+  that a flag not tied to one source's reference format "would have to be recorded rather than
+  derived, which is a schema change to the assertion log".
+- **A later issue may reopen it** with an argument this one does not have: that re-visiting the thin
+  population costs enough — in calls, in rows, or in an operator's attention — to be worth a schema
+  change. Nothing here forecloses that; what it refuses is paying for it to make a number read
+  zero.
+
+**Nothing here is unit-testable on its own, and that is said out loud rather than left implied.** No
+behaviour changed and no test was written for behaviour. The verification of this *document* is the
+full gate over an otherwise unchanged tree: `AdrIndexTest`, `AdrCitationsTest`,
+`DocumentationLinksTest` for the relative links above, and `javadoc -Werror` inside
+`./gradlew check`.
