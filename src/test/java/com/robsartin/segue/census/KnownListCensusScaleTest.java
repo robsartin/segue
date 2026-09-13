@@ -350,8 +350,8 @@ class KnownListCensusScaleTest {
         .as("the two nested rows partition the isolated row")
         .isEqualTo(population.noKnownNeighbourWithinMaxHops());
     assertThat(population.distinctToExpand())
-        .as("at most the whole graph, and non-negative")
-        .isNotNegative();
+        .as("at most the node count the fixture builds")
+        .isLessThanOrEqualTo(projection.nodes().size());
     assertThat(promoted.isolatedWithSomeoneToExpand() + promoted.isolatedWithNoOne())
         .as("and for the second population too")
         .isEqualTo(promoted.noKnownNeighbourWithinMaxHops());

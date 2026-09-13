@@ -10,6 +10,7 @@ import ch.qos.logback.core.read.ListAppender;
 import com.robsartin.segue.domain.AffinityRecord;
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.KnownList;
+import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.Provenance;
@@ -641,8 +642,7 @@ class ExpandCliTest {
   private static final String ISOLATED_ACT = "Q0901412";
 
   /**
-   * Three invented entities and one edge: an act the file names, an unexpanded PERSON beside it,
-   * and a second act on the file three hops away so that neither places the other.
+   * Two invented entities and one edge: an act the file names, and an unexpanded PERSON beside it.
    */
   private Path secondHopGraph(String name) {
     Path db = home.resolve(name);
@@ -697,6 +697,51 @@ class ExpandCliTest {
 
     assertThat(countOn(lines(), "considered")).isZero();
     assertThat(lines()).anyMatch(line -> line.contains("0 act(s)"));
+  }
+
+  /** Isolated, with a minted local PERSON beside it, and nothing else on the file. */
+  private static final String LOCAL_NEIGHBOUR_ACT = "Q0901413";
+
+  /**
+   * The owner's own minted entity, beside {@link #LOCAL_NEIGHBOUR_ACT}.
+   *
+   * <p>{@code EntityExpansion.expand} refuses {@code LocalEntity.isLocal} before any adapter runs
+   * (#92).
+   */
+  private static final String LOCAL_NEIGHBOUR = "Q00901413";
+
+  private Path secondHopLocalGraph(String name) {
+    Path db = home.resolve(name);
+    Provenance plain = new Provenance("invented", "invented:8", WHEN, 1.0);
+    try (SqliteAssertionLog log = new SqliteAssertionLog(db)) {
+      log.append(new NodeAssertion(LOCAL_NEIGHBOUR_ACT, NodeKind.GROUP, "an invented act", plain));
+      log.append(LocalEntity.minted(LOCAL_NEIGHBOUR, NodeKind.PERSON, "a minted bandmate", WHEN));
+      log.append(
+          new AssertionRecord(
+              LOCAL_NEIGHBOUR_ACT, LOCAL_NEIGHBOUR, "MEMBER_OF", null, null, plain));
+    }
+    return db;
+  }
+
+  @Test
+  @DisplayName("a real second-hop run refuses a minted local neighbour without reaching an adapter")
+  void shouldRefuseTheMintedNeighbourWhenASecondHopRunVisitsIt() throws Exception {
+    // A REAL run (no --dry-run), and it reaches no network: EntityExpansion.expand
+    // (src/main/java/com/robsartin/segue/expansion/EntityExpansion.java) checks
+    // LocalEntity.isLocal(qid) and returns Refused(LOCAL_ENTITY) before ExpandContext is built or
+    // any adapter is asked — see this task's report for the confirmed line numbers.
+    Path db = secondHopLocalGraph("second-hop-local.db");
+    Path file = Files.writeString(home.resolve("second-hop-local.csv"), LOCAL_NEIGHBOUR_ACT + "\n");
+    captured.list.clear();
+
+    ExpandCli.main(new String[] {"--db", db.toString(), "--second-hop", file.toString()});
+
+    assertThat(countOn(lines(), "considered"))
+        .as("one isolated act, one minted PERSON beside it")
+        .isEqualTo(1);
+    assertThat(countOn(lines(), "local entity"))
+        .as("the minted neighbour is refused before any adapter runs, never expanded")
+        .isEqualTo(1);
   }
 
   private List<String> lines() {

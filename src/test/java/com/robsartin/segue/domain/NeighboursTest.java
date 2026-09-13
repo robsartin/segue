@@ -116,4 +116,17 @@ class NeighboursTest {
 
     assertThat(Neighbours.reaches(adjacency, E, Set.of(E), 2)).isFalse();
   }
+
+  @Test
+  @DisplayName("a self-loop edge on the start node still does not make it its own neighbour")
+  void shouldNotReachItselfWhenASelfLoopEdgeExists() {
+    // Unlike the test above, A has no OTHER edge at all here — the only thing adjacency holds for
+    // it is the self-loop — so a `reaches` that forgot to mark `from` seen before walking would
+    // find A one hop from itself and answer true (#319 review, minor 14: "deliberately does not
+    // count at all").
+    Map<String, Set<String>> adjacency = Neighbours.in(nodes(A), List.of(edge(A, A)));
+
+    assertThat(adjacency.get(A)).as("the self-loop is recorded in the adjacency").contains(A);
+    assertThat(Neighbours.reaches(adjacency, A, Set.of(A), 2)).isFalse();
+  }
 }

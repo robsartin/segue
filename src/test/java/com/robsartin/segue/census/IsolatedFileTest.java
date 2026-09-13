@@ -78,9 +78,6 @@ class IsolatedFileTest {
   @Test
   @DisplayName("the acts come out in the population's own order, with no sort of their own")
   void shouldKeepThePopulationsOrderWhenTheActsAreWritten() throws Exception {
-    assertThat(written().subList(1, 3))
-        .as("ALONE before NAMELESS because the population names them that way")
-        .allSatisfy(line -> assertThat(line).isNotBlank());
     assertThat(written().get(1)).startsWith(ALONE);
     assertThat(written().get(2)).startsWith(NAMELESS);
   }

@@ -125,8 +125,11 @@ class SecondHopTest {
 
   @Test
   @DisplayName(
-      "two isolated acts far apart each contribute their own neighbours, in isolated order")
+      "two isolated acts far apart each contribute their own neighbours, in population order")
   void shouldListEachActsNeighboursInIsolatedOrderWhenTwoIsolatedActsAreApart() {
+    // Population given SECOND_ACT before ACT — the reverse of the adjacency map's own insertion
+    // order below — so the assertion can only pass by reading the population's order and not the
+    // map's (#319 review, minor 10).
     SecondHop rule =
         SecondHop.of(
             nodes(
@@ -137,17 +140,17 @@ class SecondHopTest {
                         SECOND_ACT, NodeKind.GROUP,
                         OTHER_BAND, NodeKind.GROUP))),
             List.of(edge(ACT, BANDMATE), edge(SECOND_ACT, OTHER_BAND)),
-            List.of(ACT, SECOND_ACT),
+            List.of(SECOND_ACT, ACT),
             new Expanded(Set.of()));
 
     assertThat(rule.isolated())
         .as("no path connects the two acts, so each is isolated from the other")
-        .containsExactly(ACT, SECOND_ACT);
+        .containsExactly(SECOND_ACT, ACT);
     assertThat(rule.toExpandBeside(ACT)).containsExactly(BANDMATE);
     assertThat(rule.toExpandBeside(SECOND_ACT)).containsExactly(OTHER_BAND);
     assertThat(rule.toExpand())
-        .as("each act's own neighbour, in isolated order")
-        .containsExactly(BANDMATE, OTHER_BAND);
+        .as("each act's own neighbour, in population order — not the adjacency map's own order")
+        .containsExactly(OTHER_BAND, BANDMATE);
   }
 
   @Test
