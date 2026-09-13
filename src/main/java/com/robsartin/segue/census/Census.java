@@ -97,10 +97,11 @@ public record Census(
   /**
    * {@link #of}'s full answer, carrying the fold and the isolation rule alongside the block.
    *
-   * <p><b>Composes the with-promotions population exactly as {@link KnownListCensus#of} does</b>:
-   * canonicalised, then promoted over the resolved ratings, through one shared static that both
-   * call — {@link KnownListCensus#populationsOf} — so the two cannot answer different questions
-   * about who is promoted.
+   * <p><b>Takes the with-promotions isolation rule from {@link KnownListCensus#withIsolation}
+   * rather than building a second one</b>: that method already composes the with-promotions
+   * population exactly as {@link KnownListCensus#of} does and folds it into a {@link SecondHop}, so
+   * asking it again here would rebuild the whole-graph adjacency for an answer already in hand
+   * (#319 review, minor 7).
    *
    * @param known the known-list file, or empty where {@code --known} was not given
    */
@@ -118,21 +119,14 @@ public record Census(
     // Expanded.in is built inside the map, so a run without the flag never walks the rows
     // for it at all.
     Optional<Expanded> seeds = known.map(file -> Expanded.in(logged));
-    Optional<KnownListCensus> knownList =
-        known.map(file -> KnownListCensus.of(file, seeds.orElseThrow(), projection, fold, scores));
-    Optional<SecondHop> isolation =
+    Optional<KnownListCensus.WithIsolation> withIsolation =
         known.map(
-            file -> {
-              KnownListCensus.Populations populations =
-                  KnownListCensus.populationsOf(file, fold, scores);
-              Expanded onCanonicalSide =
-                  seeds.orElseThrow().onTheCanonicalSide(fold.equivalences());
-              return SecondHop.of(
-                  projection.nodes(),
-                  projection.edges(),
-                  populations.withPromotions(),
-                  onCanonicalSide);
-            });
+            file ->
+                KnownListCensus.withIsolation(file, seeds.orElseThrow(), projection, fold, scores));
+    Optional<KnownListCensus> knownList =
+        withIsolation.map(KnownListCensus.WithIsolation::knownListCensus);
+    Optional<SecondHop> isolation =
+        withIsolation.map(KnownListCensus.WithIsolation::withPromotionsIsolation);
     Census census =
         new Census(
             NodeCensus.of(projection),

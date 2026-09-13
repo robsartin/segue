@@ -129,6 +129,38 @@ public record KnownListCensus(String file, Population fromFile, Population withP
       LogProjection projection,
       Fold fold,
       Map<String, Integer> ratings) {
+    return withIsolation(known, expanded, projection, fold, ratings).knownListCensus();
+  }
+
+  /**
+   * {@link #of}'s census, plus the with-promotions {@link SecondHop} it already built — so a caller
+   * that also needs that rule, such as {@link Census#reading} for the {@code --isolated} file,
+   * takes this one rather than building a second copy of it (#319 review, minor 7).
+   */
+  public record WithIsolation(KnownListCensus knownListCensus, SecondHop withPromotionsIsolation) {
+    public WithIsolation {
+      Objects.requireNonNull(knownListCensus, "knownListCensus");
+      Objects.requireNonNull(withPromotionsIsolation, "withPromotionsIsolation");
+    }
+  }
+
+  /**
+   * {@link #of}, exposing the with-promotions {@link SecondHop} beside the census it is folded
+   * into, rather than building it and discarding it.
+   *
+   * @param known the file, as a basename and a list of ids
+   * @param expanded this log's one answer to who has been expanded, unresolved; this method reads
+   *     its seeds through the fold
+   * @param projection the fold this census already built — the only source of nodes and edges here
+   * @param fold this census's one fold (#246) — its equivalences are the only thing read here
+   * @param ratings the note-free bulk read, unresolved; this method resolves it
+   */
+  public static WithIsolation withIsolation(
+      KnownListInput known,
+      Expanded expanded,
+      LogProjection projection,
+      Fold fold,
+      Map<String, Integer> ratings) {
     Objects.requireNonNull(known, "known");
     Objects.requireNonNull(expanded, "expanded");
     Objects.requireNonNull(projection, "projection");
@@ -139,10 +171,14 @@ public record KnownListCensus(String file, Population fromFile, Population withP
     List<String> fromFile = populations.fromFile();
     List<String> withPromotions = populations.withPromotions();
     Expanded seeds = expanded.onTheCanonicalSide(fold.equivalences());
-    return new KnownListCensus(
-        known.name(),
-        read(fromFile, seeds, projection, secondHop(projection, fromFile, seeds)),
-        read(withPromotions, seeds, projection, secondHop(projection, withPromotions, seeds)));
+    SecondHop fromFileHop = secondHop(projection, fromFile, seeds);
+    SecondHop withPromotionsHop = secondHop(projection, withPromotions, seeds);
+    KnownListCensus census =
+        new KnownListCensus(
+            known.name(),
+            read(fromFile, seeds, projection, fromFileHop),
+            read(withPromotions, seeds, projection, withPromotionsHop));
+    return new WithIsolation(census, withPromotionsHop);
   }
 
   /**
