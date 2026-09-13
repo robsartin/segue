@@ -50,6 +50,13 @@ import java.util.regex.Pattern;
  * which the forward arm cannot read a seed out of. Both are consistent with what "expanded" means
  * here — no row in the log cites the entity as a seed — and both err the same conservative way.
  *
+ * <p><b>That residual is measured rather than hypothetical, and it is what makes a re-expansion
+ * pass reading this answer not self-limiting:</b> the first {@code expandPromotions --known} run
+ * visited every known-list entity this rule called unexpanded and recorded no Wikidata assertion
+ * for any of them, so those entities are still in this answer and would be handed to the next run
+ * as well — ADR 63's and ADR 66's 2026-09-12 amendments for #315 carry that reading and the
+ * log-side alternative declined with it (#313).
+ *
  * <p><b>It lives here for the shape {@code KindMapper.rederive} (ADR 42) and {@link Retractions}
  * (ADR 44) already set: one rule, whoever asks it.</b> The census counts what has never been
  * expanded, and {@code expandPromotions --known} (ADR 66) chooses its population from that same
