@@ -414,9 +414,9 @@ has a different relationship with the data and a different fence to match.
   into a throwaway projection and traverses it, and it writes nothing at all
   ([ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md)).
 - **`rate` reaches the same four and `recommend` itself**, one of the two dependencies between
-  dev tools (the other is `census → export`), for the candidate half of the deck. It is the other
-  tool that writes — to the taste layer only, through `AffinityStore.updateRating`, never through
-  `IngestService` ([ADR 46](adr/0046-the-rating-deck.md)).
+  dev tools (the other is `evaluate → recommend`), for the candidate half of the deck. It is
+  the other tool that writes — to the taste layer only, through `AffinityStore.updateRating`,
+  never through `IngestService` ([ADR 46](adr/0046-the-rating-deck.md)).
 - **`own` reaches `sqlite` and `ingest`, and is the second that writes a world-fact claim.** It
   appends one of the owner's own claims — a minted entity, an owner edge, or a merge — through
   `IngestService.claim`, and holds no `GraphStore`: those claims do have a graph half, but a
@@ -433,8 +433,8 @@ has a different relationship with the data and a different fence to match.
   the only dev-side tool that measures another one.** It replays the log once, splits what you rated
   highly into deterministic fifths, and for each fifth in turn hides it and runs `recommend`'s own
   `CandidateSweep` from what is left, once per setting on a fixed grid, summing the folds into one
-  row per setting — the third dependency between dev tools, after `rate → recommend`
-  and `census → export`, and deliberate for the same reason: a harness with a sweep of its own would
+  row per setting — the second dependency between dev tools, after `rate → recommend`,
+  and deliberate for the same reason: a harness with a sweep of its own would
   answer a question about itself. It writes nothing, and `--db` is required ([ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md)).
 - **`expand` reaches `sqlite`, `tinker`, `ingest`, `wikidata`, `expansion` and `support`, and it is
   the first dev-side tool that both writes *and* fetches.** It replays the log into a throwaway
@@ -574,7 +574,7 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `theCensusHasNoDefaultDatabase` | `census` depending on `support.DefaultDatabase` at all. A third rule rather than a wider one: ADR 60's two are named for claim tools, ADR 60 names both and is immutable, and its consequences say a third tool joins by hand | [ADR 63](adr/0063-a-read-only-census-of-the-graph.md), [ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md) |
 | `theCensusTakesItsDatabaseFromTheFlagAlone` | `census` calling any `support` method that returns a `java.nio.file.Path`, or reading any `support` field of that type — the capability, where the rule above forbids the name | [ADR 63](adr/0063-a-read-only-census-of-the-graph.md), [ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md) |
 | `theEvaluationHarnessOnlyReads` | `evaluate` calling the three world-fact writes or either taste-layer write (`AffinityStore.put`, `updateRating`), or depending on `IngestService` at all — a tool that could write could change what it is reporting on | [ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md) |
-| `theEvaluationHarnessOpensNothingElse` | `evaluate` depending on `jena`, `mcp`, `app`, `java.net`, `javax.net` or every other dev tool bar one. `recommend` is deliberately allowed — the harness measures the shipped sweep rather than a second copy of it, which is the third dependency between dev tools after `rate → recommend` and `census → export` — and `theRecommenderOpensNothingElse` keeps that trip one-way | [ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md), [ADR 46](adr/0046-the-rating-deck.md), [ADR 63](adr/0063-a-read-only-census-of-the-graph.md) |
+| `theEvaluationHarnessOpensNothingElse` | `evaluate` depending on `jena`, `mcp`, `app`, `java.net`, `javax.net` or every other dev tool bar one. `recommend` is deliberately allowed — the harness measures the shipped sweep rather than a second copy of it, which is the second dependency between dev tools after `rate → recommend` — and `theRecommenderOpensNothingElse` keeps that trip one-way | [ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md), [ADR 46](adr/0046-the-rating-deck.md), [ADR 63](adr/0063-a-read-only-census-of-the-graph.md) |
 | `theEvaluationHarnessReadsRatingsAndNeverNotes` | `evaluate` depending on `AffinityRecord` **as a type**, or calling `AffinityStore.find` or `readAll` — it may hold the store and call the note-free `readRatings`, and nothing that carries free text | [ADR 33](adr/0033-taste-layer-separation.md), [ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md) |
 | `theEvaluationHarnessHasNoDefaultDatabase` | `evaluate` depending on `support.DefaultDatabase` at all. A fourth rule rather than a wider one, for the census rule's reason: ADR 60 names the two claim tools and is immutable | [ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md), [ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md) |
 | `theEvaluationHarnessTakesItsDatabaseFromTheFlagAlone` | `evaluate` calling any `support` method that returns a `java.nio.file.Path`, or reading any `support` field of that type — the capability, where the rule above forbids the name | [ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md), [ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md) |
@@ -2433,8 +2433,8 @@ tool's.
   package and `expand` — the two tools that ask how old a rating is (#307).
 - **Reach a network, an engine, or a sibling tool but one.** `theEvaluationHarnessOpensNothingElse`
   bans every dev tool but `recommend` — the harness measures the shipped sweep rather than a second
-  copy of it, so that one dependency is deliberate, the third between dev tools after
-  `rate → recommend` and `census → export`.
+  copy of it, so that one dependency is deliberate, the second between dev tools after
+  `rate → recommend`.
 - **Default its database, or take one from anywhere but the flag.**
   `theEvaluationHarnessHasNoDefaultDatabase` and
   `theEvaluationHarnessTakesItsDatabaseFromTheFlagAlone` hold the same line
