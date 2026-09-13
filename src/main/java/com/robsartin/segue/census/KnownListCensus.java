@@ -62,7 +62,11 @@ public record KnownListCensus(String file, Population fromFile, Population withP
    *
    * @param named distinct entities in the population, after the merge fold
    * @param inTheGraph of those, the ones the fold holds a node for
-   * @param neverExpanded in the graph, and no row cites them as a seed — {@link Expanded}'s answer
+   * @param neverExpanded in the graph, and no row cites them as a seed — {@link Expanded}'s answer.
+   *     Once a {@code --known} expansion run that reported no failure and no unavailable source has
+   *     visited everything this counts, what is left is entities Wikidata states nothing about in
+   *     the vocabulary this project registers, so read it as a floor rather than a queue that
+   *     empties (the run on #313, #315)
    * @param noKnownNeighbourWithinMaxHops in the graph, and no other member of this population
    *     within {@link Recommendations#MAX_HOPS} — the recommender's own route limit, read by
    *     reference here and named after it rather than after its current value, so that moving the

@@ -418,3 +418,35 @@ from disagreeing about who has been expanded. What is no longer true is that par
 sentence: the census is not the only thing in this codebase that reads the rule.
 [ADR 66](0066-expand-every-promotion-from-a-dev-tool.md)'s 2026-09-12 amendment is the decision;
 this entry records which sentence here it overtakes.
+
+**Amendment (2026-09-12, issue #315): the `known list` section's `never expanded` row is a floor,
+and this records what the first run that tried to move it measured.**
+
+Nothing above is edited and this ADR keeps `Accepted`. The amendment above for #311 named a residual
+— an expansion that ran and recorded nothing leaves no row, so this rule cannot tell that case from
+an entity nothing ever visited — and put it in "a small family" that all err the same conservative
+way. The run on #313 measured that residual on the whole of the population this row names: every
+entity the row counted was visited, Wikidata returned no whitelisted claim for any of them, and the
+`known list` section printed afterwards read the same as the reading on #311. No figure from either
+is restated here; the issues carry them.
+
+**So the row is a floor once every entity it names has been visited by a run that reached
+Wikidata** — the run on #313 reported no failure and no unavailable source — and not a countdown.
+What is left in it at that point is entities Wikidata states nothing about in the vocabulary this
+project registers — thin acts rather than neglected ones — and no Wikidata expansion can leave a
+trace on them for `Expanded` to read. No expansion run will drive the row to zero while Wikidata
+stays silent about them, and an operator who waits for zero is waiting on the wrong number.
+
+**Nothing about the row, the rule or the section changes.** `KnownListCensus` and `CensusReport`
+emit exactly what they emitted before, and `domain.Expanded`'s rule is unchanged; the only edits
+this issue makes under `src/main` are two javadoc sentences. What changes is what the developer
+guide tells the owner to do with the number, and
+[ADR 66](0066-expand-every-promotion-from-a-dev-tool.md)'s 2026-09-12 amendment for #315 is where
+the expander's half of that is decided — including the log-side alternative that would have let the
+row empty, declined there with its reason.
+
+**Nothing here is unit-testable on its own, and that is said out loud rather than left implied.** No
+behaviour changed and no test was written for behaviour. The verification of this *document* is the
+full gate over an otherwise unchanged tree: `AdrIndexTest`, `AdrCitationsTest`,
+`DocumentationLinksTest` for the relative link above, and `javadoc -Werror` inside
+`./gradlew check`.

@@ -144,8 +144,10 @@ class DeveloperGuideExpandPromotionsExamplesTest {
                 + " section, shown after the full runbook rather than interleaved with it, and"
                 + " its dry run precedes its run for the same reason the full runbook's does. The"
                 + " three --known entries are the second variant, and the census with the same"
-                + " flag comes first because the never expanded count it prints is what says"
-                + " whether the run is worth making at all. A parser cannot see any of that",
+                + " flag comes first because the never expanded count it prints is the reading"
+                + " the run is measured against — a floor rather than a countdown, which is why"
+                + " the chapter compares one dry run's considered with the previous run's"
+                + " (#315). A parser cannot see any of that",
             CHAPTER)
         .containsExactly(
             "graphCensus",
