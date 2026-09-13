@@ -637,6 +637,68 @@ class ExpandCliTest {
         .isEqualTo(1);
   }
 
+  /** On the file, in the graph, and nothing else on the file is within the hop limit of it. */
+  private static final String ISOLATED_ACT = "Q0901412";
+
+  /**
+   * Three invented entities and one edge: an act the file names, an unexpanded PERSON beside it,
+   * and a second act on the file three hops away so that neither places the other.
+   */
+  private Path secondHopGraph(String name) {
+    Path db = home.resolve(name);
+    Provenance plain = new Provenance("invented", "invented:7", WHEN, 1.0);
+    try (SqliteAssertionLog log = new SqliteAssertionLog(db)) {
+      log.append(new NodeAssertion(ISOLATED_ACT, NodeKind.GROUP, "an invented act", plain));
+      log.append(new NodeAssertion(NEVER_EXPANDED, NodeKind.PERSON, "a bandmate", plain));
+      log.append(new AssertionRecord(ISOLATED_ACT, NEVER_EXPANDED, "MEMBER_OF", null, null, plain));
+    }
+    return db;
+  }
+
+  @Test
+  @DisplayName("a second-hop run considers the unexpanded people beside the isolated acts")
+  void shouldConsiderTheRingWhenTheFileNamesAnActTheGraphCannotPlace() throws Exception {
+    Path db = secondHopGraph("second-hop.db");
+    Path file = Files.writeString(home.resolve("second-hop.csv"), ISOLATED_ACT + "\n");
+    captured.list.clear();
+
+    ExpandCli.main(
+        new String[] {"--db", db.toString(), "--dry-run", "--second-hop", file.toString()});
+
+    assertThat(countOn(lines(), "considered"))
+        .as("one isolated act, one unexpanded PERSON beside it")
+        .isEqualTo(1);
+    assertThat(lines())
+        .as("and the block says which population it covered, naming the basename and the count")
+        .anyMatch(
+            line ->
+                line.startsWith("# only the unexpanded people and groups beside")
+                    && line.contains("second-hop.csv")
+                    && line.contains("1 act(s)"));
+    assertThat(lines())
+        .as("the ratings read count is logged, and no qid and no score with it")
+        .anyMatch(line -> line.matches("^read \\d+ rating\\(s\\)$"));
+  }
+
+  @Test
+  @DisplayName("an act the graph can place contributes nothing to a second-hop run")
+  void shouldConsiderNothingWhenEveryActOnTheFileHasAKnownNeighbour() throws Exception {
+    // The planted control for the test above: the same graph and the same rule, with BOTH ids on
+    // the file — so each is one hop from the other, neither is isolated, and the ring beside them
+    // is not the question. If this reported 1 as well, the count above would not be the rule
+    // firing.
+    Path db = secondHopGraph("placed.db");
+    Path file =
+        Files.writeString(home.resolve("placed.csv"), ISOLATED_ACT + "\n" + NEVER_EXPANDED + "\n");
+    captured.list.clear();
+
+    ExpandCli.main(
+        new String[] {"--db", db.toString(), "--dry-run", "--second-hop", file.toString()});
+
+    assertThat(countOn(lines(), "considered")).isZero();
+    assertThat(lines()).anyMatch(line -> line.contains("0 act(s)"));
+  }
+
   private List<String> lines() {
     return List.copyOf(captured.list).stream().map(ILoggingEvent::getFormattedMessage).toList();
   }

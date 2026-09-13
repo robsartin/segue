@@ -3,11 +3,14 @@ package com.robsartin.segue.expand;
 import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.Expanded;
 import com.robsartin.segue.domain.KnownList;
+import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.RatingAge;
+import com.robsartin.segue.domain.SecondHop;
 import com.robsartin.segue.expansion.EntityExpansion;
 import com.robsartin.segue.expansion.ExpansionSources;
 import com.robsartin.segue.ingest.GraphProjector;
 import com.robsartin.segue.ingest.IngestService;
+import com.robsartin.segue.ingest.LogProjection;
 import com.robsartin.segue.ingest.Replay;
 import com.robsartin.segue.port.ExpandContext;
 import com.robsartin.segue.port.IdentityMerge;
@@ -263,6 +266,34 @@ public final class ExpandCli {
         covered =
             Optional.of(new KnownNeverExpanded(known.name(), named.size() - population.size()));
         log.info("{} known-list entity(s) to visit", population.size());
+      } else if (options.secondHop().isPresent()) {
+        // The population is composed ONCE, here, and nothing in the run re-reads it: a run that
+        // expands its first entity must not shrink its own list mid-way. The NEXT run is smaller
+        // by the rule alone — every entity this run expanded is covered by Expanded, and an
+        // isolated act the new edges connected to something known is no longer isolated. No
+        // state, no ledger, no --limit: the dry run's `considered` is the bound (#319).
+        KnownListInput named = KnownListInput.read(options.secondHop().get());
+        // Resolved before the threshold is applied, exactly as the promotions branch does it: a
+        // merge leaves two affinity rows naming one thing. A count, never a qid and never a
+        // score (ADR 33).
+        Map<String, Integer> ratings = merges.resolve(affinity.readRatings());
+        log.info("read {} rating(s)", ratings.size());
+        // The population with promotions, because that is the recommender's own notion of known
+        // (KnownList.promoted is what recommend seeds from) and an act one hop from a promotion
+        // is not one the graph cannot place.
+        List<String> promoted = KnownList.promoted(merges.canonical(named.qids()), ratings);
+        // The log read once, and both answers taken from it — the fold is the boot's own
+        // (theReplayingToolsTakeTheBootsFold), never rebuilt through Fold.of.
+        List<LoggedAssertion> logged = assertions.readAll();
+        Expanded expanded = Expanded.in(logged).onTheCanonicalSide(merges);
+        LogProjection projection = LogProjection.of(logged, replay.fold());
+        SecondHop rule = SecondHop.of(projection.nodes(), projection.edges(), promoted, expanded);
+        population = rule.toExpand();
+        covered = Optional.of(new SecondHopNeighbours(named.name(), rule.isolated().size()));
+        log.info(
+            "{} entity(s) to visit beside {} act(s) the graph cannot place",
+            population.size(),
+            rule.isolated().size());
       } else {
         // Resolved before the threshold is applied: a merge leaves two affinity rows naming one
         // thing, and promoting both would expand the id the owner retired as well as the one he
