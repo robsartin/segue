@@ -10,10 +10,11 @@ import java.util.Set;
 /**
  * The known-list acts the graph cannot place, and the entities worth fetching next (#319).
  *
- * <p><b>One rule, two readers.</b> {@code graphCensus --known} counts by it and {@code
- * expandPromotions --second-hop} chooses its population by it, on the shape {@link Expanded} and
- * {@link Retractions} already set: one home per question, whoever asks. A second copy of "isolated"
- * in the tool that spends money on it is how the diagnosis and the run come to disagree.
+ * <p><b>One rule, two readers.</b> The census counts by it and the expander chooses its population
+ * by it — {@code graphCensus --known} and {@code expandPromotions --second-hop} — on the shape
+ * {@link Expanded} and {@link Retractions} already set: one home per question, whoever asks. A
+ * second copy of "isolated" in the tool that spends money on it is how the diagnosis and the run
+ * come to disagree.
  *
  * <p><b>A pure function of four inputs.</b> The fold's nodes and edges, a known population on its
  * canonical side, and {@link Expanded} on the same side. It reads no rating, no timestamp and no
@@ -89,12 +90,15 @@ public final class SecondHop {
   }
 
   /**
-   * The members the graph holds a node for that have no <i>other</i> member within {@link
-   * Recommendations#MAX_HOPS} hops, in the population's own order.
+   * The members the graph holds a node for that have no <i>other</i> member nearby.
+   *
+   * <p>Nearby means within {@link Recommendations#MAX_HOPS} hops, and this returns them in the
+   * population's own order.
    *
    * <p>A member the fold holds no node for is neither isolated nor an error: it is the first
-   * coverage gap there is, and the census counts it under {@code named} and not under {@code in the
-   * graph}.
+   * coverage gap there is.
+   *
+   * <p>The census counts a missing member under {@code named} rather than {@code in the graph}.
    */
   public List<String> isolated() {
     return List.copyOf(isolated);

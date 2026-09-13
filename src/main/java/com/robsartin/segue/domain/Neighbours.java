@@ -13,8 +13,8 @@ import java.util.Set;
  *
  * <p><b>Package-private, and {@link SecondHop} is its only reader.</b> The walk moved here from
  * {@code census} with the rule it serves (#319), so that the census and the promotion expander ask
- * one question rather than two that agree today. The compiler is the fence: nothing outside {@code
- * domain} can call either method, and nothing inside it but {@code SecondHop} does.
+ * one question rather than two that agree today. The compiler is the fence: {@code domain} is the
+ * only package that can call either method, and {@code SecondHop} is the only caller inside it.
  *
  * <p><b>It takes the fold's nodes and edges rather than the fold.</b> {@code domain} may not name
  * {@code ingest.LogProjection}, and the two maps are the whole of what this reads anyway.
