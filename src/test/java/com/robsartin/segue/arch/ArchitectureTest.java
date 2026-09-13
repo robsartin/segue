@@ -2064,8 +2064,8 @@ class ArchitectureTest {
    * {@code GraphProjector.project}, which builds the whole fold, and each then read the log a
    * second time and rebuilt the merges from it. Since #246 the fold comes back from {@code
    * GraphProjector.replay}, so no class in any of the three has any business folding — there is no
-   * exempt class here, unlike theBootFoldsOnce and theExportFoldsOnce, because the one home of
-   * these tools' fold is not in these packages at all.
+   * exempt class here, unlike theBootFoldsOnce, because the one home of these tools' fold is not in
+   * these packages at all.
    *
    * <p>{@code evaluate} is in the list although issue #246 does not name it: it grew the same shape
    * in #242, after ADR 64 was written, and a fence that skipped it would be green over a third copy

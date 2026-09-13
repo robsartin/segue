@@ -82,7 +82,9 @@ public record KnownListCensus(String file, Population fromFile, Population withP
    * @param isolatedWithNoOne of those, the ones with none. These two partition the row above them,
    *     so a reader can add them and check
    * @param distinctToExpand the distinct people and groups to expand across every isolated member
-   *     of this population — the spend a {@code --second-hop} run would make, before any run (#319)
+   *     of this population, counted before any run. Only on the with-promotions population is this
+   *     the spend a {@code --second-hop} run would make, since that is the population the run
+   *     itself composes (#319)
    * @param inTheGraphByKind the same in-graph count per kind, all six emitted in {@code NodeKind}
    *     declaration order. {@code NodeCensus} gives the reason it is an {@code EnumMap} rather than
    *     {@code Map.copyOf}: that factory's order is salted per JVM, and ADR 43's byte-identical
