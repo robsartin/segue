@@ -22,10 +22,11 @@ import org.slf4j.LoggerFactory;
  * so {@code CensusIsSafeToPasteTest} can hold it mechanically. See ADR 63.
  *
  * <p><b>The claim is over the report, not over a failed run.</b> A refusal below names the path it
- * was given, and an exception out of an adapter prints a stack trace like any other tool's — {@code
- * SqliteAssertionLog} wrapping a malformed row can carry that row's own id text through its cause.
- * Neither is a log line, so neither reaches that test; ADR 63 states the limit rather than leaving
- * a reader to find it.
+ * was given, and an adapter's own exception prints a stack trace like any other tool's.
+ *
+ * <p>{@code SqliteAssertionLog} wrapping a malformed row can carry that row's own id text through
+ * its cause. Neither is a log line, so neither reaches that test; ADR 63 states the limit rather
+ * than leaving a reader to find it.
  *
  * <p><b>{@code --db} is required, and {@code SEGUE_DB} does not satisfy it.</b> Not ADR 60's
  * consequence — nothing here writes, and a wrong count costs a re-run — but ADR 60's central
@@ -35,11 +36,12 @@ import org.slf4j.LoggerFactory;
  * pasted into an issue and quoted in an ADR, where a wrong export is discarded and a wrong count
  * becomes the record.
  *
- * <p><b>No {@code --out}, and no {@code System.out}.</b> {@code
- * ArchitectureTest.nothingWritesToStandardOut} bans stdout project-wide (ADR 28, ADR 30), so the
- * table goes through SLF4J at {@code info}, one call per line — the route {@code ExportCli} and
- * {@code RatingsCli} already use for their notes. {@code RatingsCli} writes a file because ADR 33
- * keeps affinity out of every log line and its output is the whole taste layer; this output is
+ * <p><b>No {@code --out}, and no {@code System.out}.</b>
+ *
+ * <p>{@code ArchitectureTest.nothingWritesToStandardOut} bans stdout project-wide (ADR 28, ADR 30),
+ * so the table goes through SLF4J at {@code info}, one call per line — the route {@code ExportCli}
+ * and {@code RatingsCli} already use for their notes. {@code RatingsCli} writes a file because ADR
+ * 33 keeps affinity out of every log line and its output is the whole taste layer; this output is
  * counts alone, so there is nothing a log line may not carry and nothing left on disk afterwards.
  * <b>Nor does it say which database it counted</b> — the line that named the path went when the run
  * was wired in, so nothing this tool emits locates the owner's file.
@@ -48,27 +50,33 @@ public final class CensusCli {
 
   private static final Logger log = LoggerFactory.getLogger(CensusCli.class);
 
-  private static final String USAGE = "usage: --db <segue.db> [--known <file of QIDs>]";
+  private static final String USAGE =
+      "usage: --db <segue.db> [--known <file of QIDs> [--isolated <file>]]";
 
   private CensusCli() {}
 
   /**
    * The database to count, and the known-list file to count it against.
    *
-   * @param database no default, on purpose — see this class's Javadoc, and {@code
-   *     support.RequiredDatabase}, which owns the refusal sentence
+   * @param database no default, on purpose — see this class's Javadoc; {@code RequiredDatabase} in
+   *     {@code support} owns the refusal sentence
    * @param known the same file {@code recommend}, {@code rate} and {@code evaluate} take, or empty.
    *     <b>Optional where {@code --db} is required</b>, and the asymmetry is the point: the
    *     database decides whether this runs at all, and this decides whether one section is printed.
    *     <b>It is not opened here</b> — {@code parse} refuses what could not work before any file is
    *     touched, and {@code DeveloperGuideCensusExamplesTest} runs the runbook's examples through
    *     it for exactly that reason
+   * @param isolated where the known-list acts the graph cannot place are written, or empty. Refused
+   *     without {@code known} — {@code RatingsCli}'s {@code --promotions-off}/{@code --names}
+   *     precedent, one output split across two flags so half of it is a usage error rather than a
+   *     silent no-op. <b>Not opened here either</b>, for the same reason {@code known} is not
    */
-  public record Options(Path database, Optional<Path> known) {
+  public record Options(Path database, Optional<Path> known, Optional<Path> isolated) {
 
     public Options {
       Objects.requireNonNull(database, "database");
       Objects.requireNonNull(known, "known");
+      Objects.requireNonNull(isolated, "isolated");
     }
   }
 
@@ -76,6 +84,7 @@ public final class CensusCli {
   static Options parse(String[] args, String envDatabase, String userHome) {
     Path database = null;
     Path known = null;
+    Path isolated = null;
 
     for (int i = 0; i < args.length; i++) {
       String flag = args[i];
@@ -85,6 +94,8 @@ public final class CensusCli {
         database = Path.of(value);
       } else if ("--known".equals(flag)) {
         known = Path.of(value);
+      } else if ("--isolated".equals(flag)) {
+        isolated = Path.of(value);
       } else {
         throw usage("unknown option " + flag);
       }
@@ -93,7 +104,13 @@ public final class CensusCli {
     if (database == null) {
       throw usage(RequiredDatabase.refusal(envDatabase, userHome));
     }
-    return new Options(database, Optional.ofNullable(known));
+    if (isolated != null && known == null) {
+      // One output in two flags, so half of it is a usage error rather than a silent no-op —
+      // RatingsCli's --promotions-off/--names rule. The file names the isolated members of the
+      // population WITH promotions, and there is no population at all without a file.
+      throw usage("--isolated needs --known <file of QIDs> to name a population");
+    }
+    return new Options(database, Optional.ofNullable(known), Optional.ofNullable(isolated));
   }
 
   private static String valueOf(String[] args, int i, String flag) {
@@ -116,10 +133,10 @@ public final class CensusCli {
    * {@code main}, with the two environment reads passed in.
    *
    * <p>A seam for the same reason {@code RetractCli.run} is one: the order of the two refusals is
-   * the behaviour. A missing {@code --db} has to be refused by {@link #parse} before {@code
-   * Files.exists} is reached, or the operator is told "no segue database at …" — which reads as a
-   * missing file rather than a missing flag, and names a path they never typed. A test can only
-   * hold that order if it can supply a home directory of its own.
+   * the behaviour. A missing {@code --db} must be refused by {@link #parse} before {@code Files}
+   * checks existence, or the operator is told "no segue database at …" — which reads as a missing
+   * file rather than a missing flag, and names a path they never typed. A test can only hold that
+   * order if it can supply a home directory of its own.
    */
   static void run(String[] args, String envDatabase, String userHome) {
     Options options = parse(args, envDatabase, userHome);
@@ -135,7 +152,7 @@ public final class CensusCli {
 
     try (AssertionLog assertions = new SqliteAssertionLog(options.database());
         AffinityStore ratings = new SqliteAffinityStore(options.database())) {
-      new CensusRun(assertions, ratings).run(log::info, options.known());
+      new CensusRun(assertions, ratings).run(log::info, options.known(), options.isolated());
     }
   }
 }

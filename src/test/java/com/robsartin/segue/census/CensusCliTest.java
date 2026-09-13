@@ -16,11 +16,13 @@ import org.junit.jupiter.api.io.TempDir;
  * <p>Each test also asserts that <b>no database was created under the test's own home</b>: a
  * refusal that opened one first would fail twice.
  *
- * <p><b>The order of the two refusals is held through {@link CensusCli#run}, not through {@link
- * CensusCli#parse}.</b> {@code parse} has no {@code Files.exists} call to come before, so no
- * assertion about it can pin an order; the two tests at the foot of this class drive {@code run},
- * which has both checks in it, and each asserts the message it wants <b>and</b> the message it must
- * not see — {@code RetractCliTest}'s shape, for the reason {@code CensusCli.run}'s javadoc gives.
+ * <p><b>The order is held through {@link CensusCli#run}, not through {@code parse}.</b>
+ *
+ * <p>{@code parse} has no {@code Files.exists} call to come before, so no assertion about it can
+ * pin an order; the two tests at the foot of this class drive {@code run}, which has both checks in
+ * it, and each asserts the message it wants <b>and</b> the message it must not see.
+ *
+ * <p>{@code RetractCliTest}'s shape, for the reason {@code CensusCli.run}'s javadoc gives.
  */
 class CensusCliTest {
 
@@ -128,5 +130,55 @@ class CensusCliTest {
     assertThat(absent)
         .as("parse opens nothing, so the guide's examples can name a file")
         .doesNotExist();
+  }
+
+  @Test
+  @DisplayName("--isolated without --known is refused: there is no population to name")
+  void shouldRefuseTheIsolatedFileWhenNoKnownListWasNamed() throws Exception {
+    Path named = Files.createFile(home.resolve("named.db"));
+
+    assertThatThrownBy(
+            () ->
+                CensusCli.parse(
+                    new String[] {"--db", named.toString(), "--isolated", "out.txt"},
+                    null,
+                    home.toString()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("--isolated needs --known")
+        .hasMessageContaining("--db <segue.db>");
+  }
+
+  @Test
+  @DisplayName("--isolated is carried as given beside --known, and no file is opened to parse it")
+  void shouldCarryTheIsolatedFileWhenBothFlagsAreGiven() throws Exception {
+    Path named = Files.createFile(home.resolve("named.db"));
+    Path known = home.resolve("never-written.csv");
+    Path out = home.resolve("never-written.txt");
+
+    CensusCli.Options options =
+        CensusCli.parse(
+            new String[] {
+              "--db", named.toString(), "--known", known.toString(), "--isolated", out.toString()
+            },
+            null,
+            home.toString());
+
+    assertThat(options.isolated()).contains(out);
+    assertThat(out)
+        .as("parse opens nothing, so the guide's examples can name a file")
+        .doesNotExist();
+  }
+
+  @Test
+  @DisplayName("--known alone still parses, so the refusal is about the pair and not the flag")
+  void shouldStillCarryTheKnownListWhenOnlyThatFlagIsGiven() throws Exception {
+    Path named = Files.createFile(home.resolve("named.db"));
+
+    CensusCli.Options options =
+        CensusCli.parse(
+            new String[] {"--db", named.toString(), "--known", "known.csv"}, null, home.toString());
+
+    assertThat(options.known()).isPresent();
+    assertThat(options.isolated()).isEmpty();
   }
 }

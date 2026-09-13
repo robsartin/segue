@@ -133,17 +133,39 @@ public record KnownListCensus(String file, Population fromFile, Population withP
     Objects.requireNonNull(fold, "fold");
     Objects.requireNonNull(ratings, "ratings");
 
-    Equivalences merges = fold.equivalences();
-    List<String> fromFile = merges.canonical(known.qids());
-    // KnownList.promoted appends the ratings map's own keys, which resolve() has already moved
-    // onto their canonical side, so nothing here canonicalises a second time.
-    List<String> withPromotions = KnownList.promoted(fromFile, merges.resolve(ratings));
-    Expanded seeds = expanded.onTheCanonicalSide(merges);
+    Populations populations = populationsOf(known, fold, ratings);
+    List<String> fromFile = populations.fromFile();
+    List<String> withPromotions = populations.withPromotions();
+    Expanded seeds = expanded.onTheCanonicalSide(fold.equivalences());
     return new KnownListCensus(
         known.name(),
         read(fromFile, seeds, projection, secondHop(projection, fromFile, seeds)),
         read(withPromotions, seeds, projection, secondHop(projection, withPromotions, seeds)));
   }
+
+  /**
+   * The file's population, and that same population with promotions folded in — composed once so
+   * {@link Census#reading} can ask for the with-promotions population without deriving it a second
+   * way (#319).
+   *
+   * @param known the file, as a basename and a list of ids
+   * @param fold this census's one fold — its equivalences are the only thing read here
+   * @param ratings the note-free bulk read, unresolved; this method resolves it
+   */
+  static Populations populationsOf(KnownListInput known, Fold fold, Map<String, Integer> ratings) {
+    Objects.requireNonNull(known, "known");
+    Objects.requireNonNull(fold, "fold");
+    Objects.requireNonNull(ratings, "ratings");
+    Equivalences merges = fold.equivalences();
+    List<String> fromFile = merges.canonical(known.qids());
+    // KnownList.promoted appends the ratings map's own keys, which resolve() has already moved
+    // onto their canonical side, so nothing here canonicalises a second time.
+    List<String> withPromotions = KnownList.promoted(fromFile, merges.resolve(ratings));
+    return new Populations(fromFile, withPromotions);
+  }
+
+  /** The two populations {@link #populationsOf} composes, named for {@link #read}'s two calls. */
+  record Populations(List<String> fromFile, List<String> withPromotions) {}
 
   /** One population's answer to "which acts can the graph not place, and what is beside them". */
   private static SecondHop secondHop(

@@ -43,8 +43,8 @@ class CensusIsSafeToPasteTest {
 
   /**
    * The one place ADR 63's 2026-09-04 amendment lets a qid stand: the head of a concept-classes
-   * row. {@code CensusReport} indents every counted line by two spaces and puts the literal {@code
-   * class } in front of the id, so no other line in the report can produce this prefix.
+   * row. {@code CensusReport} indents every counted line two spaces and writes {@code "class "}
+   * before the id, so no other line in the report can produce this prefix.
    */
   private static final Pattern A_CLASS_ROW = Pattern.compile("^  class Q\\d+");
 
@@ -176,5 +176,50 @@ class CensusIsSafeToPasteTest {
     assertThat(everyLine)
         .as("and no line of the flagged block carries anything qid-shaped it may not")
         .noneMatch(CensusIsSafeToPasteTest::carriesAnIdItMayNot);
+  }
+
+  @Test
+  @DisplayName("the report on the terminal is byte-identical with and without --isolated")
+  void shouldPrintTheSameReportWhenTheIsolatedFileIsAlsoWritten() throws Exception {
+    // INFO rather than this class's TRACE: at TRACE the capture also holds sqlite-jdbc's own
+    // statement lines, and the two runs open two connections — so a comparison at TRACE would be
+    // about the driver rather than about the report. @AfterEach restores the level either way.
+    rootLogger.setLevel(Level.INFO);
+    Path db = home.resolve("identical.db");
+    try (SqliteAssertionLog log = new SqliteAssertionLog(db)) {
+      log.append(InventedCensus.node("Q0900901", NodeKind.WORK, LABEL));
+    }
+    Path known = Files.writeString(home.resolve("known.csv"), "Q0900901\n");
+    Path out = home.resolve("isolated.txt");
+
+    captured.list.clear();
+    CensusCli.main(new String[] {"--db", db.toString(), "--known", known.toString()});
+    List<String> withoutFlag = lines();
+
+    captured.list.clear();
+    CensusCli.main(
+        new String[] {
+          "--db", db.toString(), "--known", known.toString(), "--isolated", out.toString()
+        });
+    List<String> withFlag = lines();
+
+    assertThat(withoutFlag)
+        .as("the report was actually printed — without this the comparison below is vacuous")
+        .contains(CensusReport.HEADER)
+        .anyMatch(line -> line.startsWith("known list — "));
+    assertThat(withFlag.subList(0, withoutFlag.size()))
+        .as("every line of the report is the line the run without the flag printed")
+        .isEqualTo(withoutFlag);
+    assertThat(withFlag)
+        .as("and the flag adds exactly one line, which is a count and names no path")
+        .hasSize(withoutFlag.size() + 1);
+    assertThat(withFlag.get(withFlag.size() - 1))
+        .startsWith("wrote ")
+        .doesNotContain(out.toString());
+    assertThat(out).as("and the file really was written").exists();
+  }
+
+  private List<String> lines() {
+    return List.copyOf(captured.list).stream().map(ILoggingEvent::getFormattedMessage).toList();
   }
 }
