@@ -505,3 +505,44 @@ stands under the rule, the amendment says it stands and names the cells. If a ch
 clause 3, fifteen points at the shipped floor and dominance over the floors where the shipped
 scorer has hits, the rule selects it and the amendment says so in the rule's words. A near miss
 stands, as always.
+
+## Note added 2026-09-13, before the twelfth reading (issue #317)
+
+The twelfth reading follows a deck session on 2026-09-13, the first change to the ratings since
+the tenth reading, and it is taken with the instant the tenth reading set, `2026-09-08T02:13:42Z`.
+This note is committed before the reading exists, so the rule's ordering property survives a
+twelfth time.
+
+**No clause changes**, and the notes above apply as written. "The shipped scorer" is what
+`Recommendations.DEFAULT_SCORER` holds, `resource-allocation`; the shipped floor is unchanged. The
+rule reads the shipped row's whole-population `in pool` and `hits`; the half cells decide nothing.
+
+**What moved is the taste layer, not the graph.** Between the eleventh reading and the deck
+session, the only run against the graph was the expander's first `--known` run (issue #313, the
+run and the census before and after on that issue, and issue #315 on what it showed): it appended
+corroboration rows and no node, and the census after it matched the census before. The deck
+session is the other order of change from the eleventh's, where the graph moved and the ratings
+held. The eligible population therefore is not the eleventh's, no cell is comparable row for row,
+and the amendment sets no cell beside the eleventh's. The old half is the tenth's and eleventh's
+old half unchanged; the new half is the eleventh's new half plus whatever the session rated at or
+above the promotion threshold, read as before as the deck's own dealing read back, with no
+inference about the scorer drawn from it.
+
+**The observations allowed, deciding nothing.** The shipped setting's whole-population rate,
+set beside the eleventh's as a rate and not as cells; and the two halves' rates, with the same
+caveat on the new half. Nothing per entity, and nothing about which half the session's ratings
+"should" have landed in: the instant decides that, and it was fixed before the session.
+
+**The sentences, written before the table is seen.** The eligible population should be larger
+than the eleventh's, by the promotions the session added that the graph reaches. If the shipped
+rate stayed within a few points of the eleventh's, the amendment says the session did not move
+the reading. If it rose by more than a few points, the amendment says that part of the rise is
+the deck reading itself back — the session's entities came off a deck dealt from the shipped
+scorer's reach — and draws no inference about the scorer from it. If it fell by more than a few
+points, the amendment says so and offers no explanation the aggregates do not support.
+
+**The two sentences of the rule, written before the table is seen.** If the shipped setting
+stands under the rule, the amendment says it stands and names the cells. If a challenger clears
+clause 3, fifteen points at the shipped floor and dominance over the floors where the shipped
+scorer has hits, the rule selects it and the amendment says so in the rule's words. A near miss
+stands, as always.

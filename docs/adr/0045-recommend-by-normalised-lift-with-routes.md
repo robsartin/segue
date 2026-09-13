@@ -2112,3 +2112,110 @@ shipped scorer's head reaches not at all.
   against the owner's paste, and the full gate over an otherwise unchanged tree — `AdrIndexTest`,
   `AdrCitationsTest`, `DocumentationLinksTest` for the relative link above, and `javadoc -Werror`
   inside `./gradlew check`.
+
+**Amendment (2026-09-13, issue #317): the twelfth reading, the first after a deck session since
+the known-list run, stood the shipped setting with its rate at the shipped floor within a point of
+the eleventh's.**
+
+Nothing above is withdrawn and no decision above is edited, including the twelve amendments
+immediately above this one. No constant changed and no code changed. What changed is the taste
+layer: the owner ran the rating deck ([ADR 46](0046-the-rating-deck.md)) on 2026-09-13, the first
+change to the ratings since the tenth reading. Between the eleventh reading and that session the
+only run against the graph was the promotion expander's first `--known` run
+([ADR 66](0066-expand-every-promotion-from-a-dev-tool.md); the run and the census before and after
+are on issue #313), which appended corroboration rows and no node and left the census unchanged.
+So the eligible population is not the eleventh's, no cell is comparable row for row, and this
+amendment sets no cell beside the eleventh's.
+
+**The rule was fixed before the number existed, for the twelfth time.** The rule is the one
+described eleven amendments above and it was not changed; "the shipped scorer" is what
+`Recommendations.DEFAULT_SCORER` holds, `resource-allocation`, and the shipped floor is unchanged.
+A dated note was committed and pushed at 11:33 local on 2026-09-13, before the reading the owner
+pasted carrying 12:08 and 12:11 timestamps, appended to
+`docs/superpowers/specs/2026-09-04-second-reading-rule-design.md`; pull request #318 carries it.
+The note kept the tenth reading's instant, named the observations this amendment may make against
+the eleventh — rates, not cells — and wrote three sentences in advance for the cases it foresaw.
+The rule is the authority on what would have counted and is not restated here.
+
+**The reading.** One run of `./gradlew evaluate` with `--rated-since` on the owner's database on
+2026-09-13, on the folded harness, quoted whole and unedited, taken directly after a census with
+the known list that is on issue #317. Aggregates only, per [ADR 51](0051-what-an-adr-may-quote.md):
+every cell is a count, a one-decimal mean or a dash, every label is a column name or a `Scorer`
+spelling, and the header names the folds and the instant. `in pool`, `hits` and the four half cells
+count entities; `pool` and `negatives` count entity-folds.
+
+```
+# segue recommender evaluation — aggregates only: no labels, no ids, no notes, no ratings (ADR 51, ADR 63, ADR 65).
+# held out every 5 of 478 eligible entity(ies), in 5 fold(s): 478 held out over all folds, at least 382 left on the known-list in each.
+# split by rating age at 2026-09-08T02:13:42Z: 299 old (rated before it), 179 new (rated on or after it) — a rating's timestamp is its last write, so a re-rated old promotion counts as new.
+# top 25 per setting, over 16 setting(s).
+scorer               floor   pool  in pool  hits  mean rank  negatives  neg mean rank  old in pool  old hits  new in pool  new hits
+raw                      2  17431      478    52       12.2         22           18.5          299        40          179        12
+raw                      5   6787      478    53       12.4         22           18.5          299        40          179        13
+raw                      8   4863      456    53       12.4         22           18.5          278        40          178        13
+raw                     12   3858      433    53       12.4         22           18.5          255        40          178        13
+adamic-adar              2  17431      478    60       10.8         14           19.2          299        45          179        15
+adamic-adar              5   6787      478    60       10.8         14           19.2          299        45          179        15
+adamic-adar              8   4863      456    60       10.8         14           19.2          278        45          178        15
+adamic-adar             12   3858      433    60       10.8         14           19.2          255        45          178        15
+resource-allocation      2  17431      478    59       10.8         19           13.9          299        42          179        17
+resource-allocation      5   6787      478    59       10.8         19           13.9          299        42          179        17
+resource-allocation      8   4863      456    59       10.8         19           13.9          278        42          178        17
+resource-allocation     12   3858      433    59       10.8         19           13.9          255        42          178        17
+lift                     2  17431      478     0          -          6           19.2          299         0          179         0
+lift                     5   6787      478     1       19.0         49           14.0          299         1          179         0
+lift                     8   4863      456    21       14.0         46           11.7          278        21          178         0
+lift                    12   3858      433    33       13.4         28           11.0          255        33          178         0
+```
+
+**What the rule made of it.** Clause 2's void check was run first and did not fire: the smallest
+`in pool` cell among the rows any clause compared is far above the bound at which one entity is
+worth the whole margin. Clause 3(a) compared every non-shipped scorer's rate at the shipped floor
+with `resource-allocation`'s row there. `adamic-adar` is above it, by one entity's worth, about a
+fifth of a point; `raw` is over a point below and `lift` some twelve points below. A scorer moves
+only on the margin and the dominance condition together, and a fifth of a point is not fifteen, so
+no scorer moved and clause 3(b) decided nothing; a near miss stands, and this one is not near.
+Clause 4 compared the shipped scorer's rate at every other floor with its rate at the shipped
+floor: its `hits` cell is the same at every floor in the grid, so the rate rises only as `in pool`
+falls, and at floor twelve it clears under a tenth of the margin. The `negatives` and
+`neg mean rank` cells were read for every row and, per clause 5, decided nothing. Outcome: the
+shipped setting stands.
+
+**The observations the note allowed.** The header shows the eligible population larger than the
+eleventh's, with the old half's `in pool` unchanged and the whole of the growth in the new half.
+The shipped setting's whole-population rate at the shipped floor is about half a point below the
+eleventh's. Its old-half rate is about a point below the eleventh's and its new-half rate about a
+point above; the old half holds the same entities as the eleventh's but, as the header shows, the
+folds were drawn over the larger population and the known list they are held out against has
+grown, so neither half cell is a re-run of the eleventh's and both are read as rates only. The new
+half is the deck's own dealing read back, and no inference about the scorer is drawn from it.
+
+**The first of the note's three sentences applies.** The shipped rate stayed within a few points
+of the eleventh's — within a point — so, in the note's words, the session did not move the
+reading. Nothing about which half the session's ratings landed in is a finding: the instant fixed
+that before the session ran.
+
+### What this does and does not establish
+
+- **It does not establish that the shipped setting is the best one.** It establishes that on this
+  reading, by this rule, nothing displaced it, on a population the session enlarged. ADR 65's
+  first consequence is the governing one: no row of that table means anything on its own.
+- **It does not establish anything about `adamic-adar`.** Its rate at the shipped floor is above
+  the shipped scorer's by one entity's worth, and the rule's margin exists so that one entity
+  decides nothing. Whether that is a trend is a question for a later reading's note, not this one.
+- **The negatives condition was dropped rather than satisfied**, so nothing here is a finding about
+  the negatives column; the cells are quoted above, on the entity-fold scale, and decided nothing.
+
+### Consequences of this amendment
+
+- **The rule of issue #245 applies unchanged from here**, with `resource-allocation` as the
+  shipped scorer and the floor unchanged.
+- **The split instant stays the default change**, and this reading's halves are the tenth's
+  instant's halves over a larger population; what a later reading may compare against this one is
+  for that reading's note to say.
+- **Nothing here is unit-testable.** The harness has its own tests; no behaviour changed, so there
+  is no test to write and nothing to see red. The verification is the note that preceded the
+  reading, the ruling that applied the rule cell by cell, a byte comparison of the block above
+  against the owner's paste, and the full gate over an otherwise unchanged tree — `AdrIndexTest`,
+  `AdrCitationsTest`, `DocumentationLinksTest` for the relative links above, and `javadoc -Werror`
+  inside `./gradlew check`.
