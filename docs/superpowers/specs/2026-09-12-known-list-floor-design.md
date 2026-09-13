@@ -180,3 +180,10 @@ Two sentences above are wrong about the tree, and were written differently where
   javadoc sentence to `KnownListCensus`. The ADR 63 amendment says instead that both emit exactly
   what they emitted before and that the only `src/main` edits this issue makes are two javadoc
   sentences.
+
+- **Two more sentences above are stale for the same reason** (found at the re-review of the fix
+  round). *What was measured, and what it makes true* attributes "freshness" to ADR 19; ADR 19
+  decides corroboration and ADR 20 decides assertion time, and the shipped amendment cites each for
+  its own half. And the stopping rule as first written ("an unchanged count means the entities left
+  are thin") shipped with the precondition it needs: the previous real run reported `failed` zero
+  and named no source under `unavailable`.

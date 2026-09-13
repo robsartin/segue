@@ -3324,8 +3324,9 @@ counting once — which is how you check the file was read as you meant.
 **When to stop running this at all.** Compare this dry run's `considered` against the previous
 `--known` run's dry run. It falls by exactly the entities that became ones the rule covers, so a
 smaller count means the last run reached something. **An unchanged count means the entities left
-are Wikidata-thin, provided that run reported `failed` zero and printed no source under
-`unavailable`** — Wikidata states nothing about them in the vocabulary segue registers, so there is
+are Wikidata-thin, provided the previous real run's block (not its dry run, which prints neither)
+reported `failed` zero and printed no source under `unavailable`** — Wikidata states nothing about
+them in the vocabulary segue registers, so there is
 nothing for an expansion to record and nothing for the rule to read afterwards. A run that failed,
 or one that could not reach Wikidata, records nothing either and leaves the count unchanged for the
 opposite reason: read the `failed` row and the `unavailable` sub-heading before you read this one.
