@@ -165,3 +165,18 @@ there, and what the plan does instead.
 The attempt marker itself. The isolated-but-expanded entities (the second-hop question). The three
 wrongly-kinded file entries. Any change to `Expanded`'s rule, to `KnownListCensus`, to `CensusReport`
 or to the expander.
+
+## Correction (2026-09-12, during execution)
+
+Two sentences above are wrong about the tree, and were written differently where they shipped.
+
+- **The ADR 57 citation in *What was measured, and what it makes true* (and again in note 6) fuses
+  two findings ADR 57 makes separately.** The conflation (ADR 57, line 168) is a property of the
+  *derivable* flag. The "would have to be recorded rather than derived, which is a schema change to
+  the assertion log" objection (lines 197–205) is about a flag that **spanned sources** — the
+  MusicBrainz problem ADR 54 created — not about a flag that avoided the conflation. ADR 66's
+  amendment for #315 cites the two findings separately, each on the flag ADR 57 attaches it to.
+- **"`KnownListCensus` and `CensusReport` are untouched by this issue" is false.** Task 4 adds one
+  javadoc sentence to `KnownListCensus`. The ADR 63 amendment says instead that both emit exactly
+  what they emitted before and that the only `src/main` edits this issue makes are two javadoc
+  sentences.
