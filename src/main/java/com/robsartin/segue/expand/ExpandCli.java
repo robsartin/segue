@@ -56,6 +56,15 @@ import org.slf4j.LoggerFactory;
  * which the census reads too, so the two tools cannot disagree about who has been expanded (#311,
  * #313). A run given a file composes no promotions and reads no rating at all. The two flags are
  * exclusive: they name different populations, and the block names one.
+ *
+ * <p><b>It reads a known-list file's second-hop neighbours, and only when {@code --second-hop}
+ * asks.</b> This third population composes the file's ids with the owner's promotions, folds them
+ * onto their canonical side, and visits the acts the graph holds a node for that no other member of
+ * that composed population is within the recommender's hop limit of — {@code domain.SecondHop} is
+ * the rule and {@code graphCensus --known --isolated} is its other reader. Unlike a {@code --known}
+ * run, this one <b>does</b> read ratings: the population it composes with is the recommender's own
+ * notion of known, promotions and all. {@code --second-hop} is exclusive with both {@code --known}
+ * and {@code --rated-since} — all three name a different population, and the block names one.
  */
 public final class ExpandCli {
 
@@ -63,7 +72,7 @@ public final class ExpandCli {
 
   private static final String USAGE =
       "usage: --db <segue.db> [--max-new-edges <n>] [--dry-run] [--rated-since <ISO-8601 instant,"
-          + " e.g. 2026-09-06T15:00:00Z>] [--known <file of QIDs>]";
+          + " e.g. 2026-09-06T15:00:00Z>] [--known <file of QIDs>] [--second-hop <file of QIDs>]";
 
   private ExpandCli() {}
 
@@ -77,13 +86,16 @@ public final class ExpandCli {
    * @param ratedSince the instant to filter promotions by, or empty for no filter
    * @param known the known-list file whose never-expanded entities are the population, or empty for
    *     the promotions. Never read here: the guide's examples are parsed with an invented home
+   * @param secondHop the known-list file whose second-hop neighbours are the population, or empty
+   *     for the promotions. Never read here, exactly as {@link #known} is not
    */
   record Options(
       Path database,
       int maxNewEdges,
       boolean dryRun,
       Optional<Instant> ratedSince,
-      Optional<Path> known) {}
+      Optional<Path> known,
+      Optional<Path> secondHop) {}
 
   /** Parse and validate, refusing anything that could not work before a store is opened. */
   static Options parse(String[] args, String envDatabase, String userHome) {
@@ -132,11 +144,24 @@ public final class ExpandCli {
       known = Path.of(knownValue);
     }
 
+    Path secondHop = null;
+    String secondHopValue = values.remove("--second-hop");
+    if (secondHopValue != null) {
+      secondHop = Path.of(secondHopValue);
+    }
+
     if (known != null && ratedSince != null) {
       // Two populations, not two filters over one: --rated-since narrows the promotions and
       // --known replaces them. A run that took both would have to say which one it covered, and
       // the block says exactly one thing (#313).
       throw usage("--known and --rated-since name different populations — give one or neither");
+    }
+    if (secondHop != null && known != null) {
+      throw usage("--second-hop and --known name different populations — give one or neither");
+    }
+    if (secondHop != null && ratedSince != null) {
+      throw usage(
+          "--second-hop and --rated-since name different populations — give one or neither");
     }
 
     if (!values.isEmpty()) {
@@ -144,7 +169,12 @@ public final class ExpandCli {
     }
 
     return new Options(
-        database, maxNewEdges, dryRun, Optional.ofNullable(ratedSince), Optional.ofNullable(known));
+        database,
+        maxNewEdges,
+        dryRun,
+        Optional.ofNullable(ratedSince),
+        Optional.ofNullable(known),
+        Optional.ofNullable(secondHop));
   }
 
   private static int number(String value) {

@@ -197,6 +197,7 @@ public final class ExpansionReport {
     return switch (covered) {
       case RatedSince since -> sinceLine(since);
       case KnownNeverExpanded known -> knownLine(known);
+      case SecondHopNeighbours beside -> secondHopLine(beside);
     };
   }
 
@@ -216,6 +217,24 @@ public final class ExpansionReport {
         + known.excluded()
         + " excluded (some row in the log cites them as an expansion's seed) — the file's ids are"
         + " read through the merge fold, so a merge's two sides count once.";
+  }
+
+  /**
+   * Said under the header only when a second-hop file was given — {@link #sinceLine}'s argument,
+   * which carries the reasoning for a clause rather than a row.
+   *
+   * <p>The hop clause is here rather than in the guide alone because the count beside it is misread
+   * without it: the acts are counted over the population <i>with promotions</i>, which is the
+   * recommender's own notion of known, so an act one hop from a promotion is not one of them.
+   */
+  private static String secondHopLine(SecondHopNeighbours beside) {
+    return "# only the unexpanded people and groups beside the acts your own list names that the"
+        + " graph cannot place, from "
+        + beside.file()
+        + ": "
+        + beside.isolated()
+        + " act(s) — an act is one no other entity on that list, with your promotions, is within"
+        + " the recommender's hop limit of.";
   }
 
   private static List<String> render(

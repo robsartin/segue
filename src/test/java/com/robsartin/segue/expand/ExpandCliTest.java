@@ -332,6 +332,78 @@ class ExpandCliTest {
   }
 
   @Test
+  @DisplayName("--second-hop is carried as the path when one is given, and the file is not read")
+  void shouldCarryTheSecondHopFileWhenTheFlagIsGiven() {
+    assertThat(
+            ExpandCli.parse(
+                    new String[] {"--db", "db.sqlite", "--second-hop", "known.csv"},
+                    null,
+                    home.toString())
+                .secondHop())
+        .contains(Path.of("known.csv"));
+  }
+
+  @Test
+  @DisplayName("no second-hop file is carried when the flag is absent, which is every run so far")
+  void shouldCarryNoSecondHopFileWhenTheFlagIsAbsent() {
+    assertThat(
+            ExpandCli.parse(new String[] {"--db", "db.sqlite"}, null, home.toString()).secondHop())
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("--second-hop and --known together are refused: they name different populations")
+  void shouldRefuseBothFlagsWhenASecondHopFileAndAKnownFileAreGiven() {
+    assertThatThrownBy(
+            () ->
+                ExpandCli.parse(
+                    new String[] {
+                      "--db", "db.sqlite", "--known", "known.csv", "--second-hop", "known.csv"
+                    },
+                    null,
+                    home.toString()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("--second-hop and --known name different populations")
+        .hasMessageContaining("--db <segue.db>");
+  }
+
+  @Test
+  @DisplayName("--second-hop and --rated-since together are refused for the same reason")
+  void shouldRefuseBothFlagsWhenASecondHopFileAndAnInstantAreGiven() {
+    assertThatThrownBy(
+            () ->
+                ExpandCli.parse(
+                    new String[] {
+                      "--db", "db.sqlite",
+                      "--second-hop", "known.csv",
+                      "--rated-since", "2026-09-13T00:00:00Z"
+                    },
+                    null,
+                    home.toString()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("--second-hop and --rated-since name different populations");
+  }
+
+  @Test
+  @DisplayName(
+      "all three flags together meet the first refusal on record: --known and --rated-since")
+  void shouldRefuseWithTheFirstRefusalWhenAllThreeFlagsAreGiven() {
+    assertThatThrownBy(
+            () ->
+                ExpandCli.parse(
+                    new String[] {
+                      "--db", "db.sqlite",
+                      "--known", "known.csv",
+                      "--rated-since", "2026-09-13T00:00:00Z",
+                      "--second-hop", "known.csv"
+                    },
+                    null,
+                    home.toString()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("--known and --rated-since name different populations");
+  }
+
+  @Test
   @DisplayName("--rated-since that is not an instant is refused with this tool's usage error")
   void shouldRefuseTheInstantWhenItIsNotAnInstant() {
     assertThatThrownBy(
