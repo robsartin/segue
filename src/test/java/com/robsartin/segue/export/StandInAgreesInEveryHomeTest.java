@@ -16,6 +16,7 @@ import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.Retraction;
 import com.robsartin.segue.export.InventedGraph.FakeAssertionLog;
 import com.robsartin.segue.ingest.IngestService;
+import com.robsartin.segue.ingest.LogProjection;
 import com.robsartin.segue.own.ProjectionLabelsProbe;
 import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.ratings.LabelsProbe;

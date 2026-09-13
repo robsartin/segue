@@ -1,4 +1,4 @@
-package com.robsartin.segue.export;
+package com.robsartin.segue.ingest;
 
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.EdgeRecord;
@@ -27,6 +27,17 @@ import java.util.Set;
 
 /**
  * The whole graph, folded out of the append-only log.
+ *
+ * <p><b>In {@code ingest} because three readers need it and only one of them may open a dev-tool
+ * package (#319).</b> The exporter draws it, the census counts it, and the expander hands it to
+ * {@code domain.SecondHop}. {@code ArchitectureTest.theExpanderOpensNothingElse} forbids the
+ * expander every sibling dev tool with no exception, so a fold that lived in {@code export} could
+ * not be the one the expander reads.
+ *
+ * <p>Nor can it go to {@code domain} either: this fold names {@code port.AssertionLog}, which
+ * {@code domain} does not carry, and {@code wikidata.KindMapper}, which it does not either. It
+ * lives beside {@code Replay} and {@code GraphProjector}, where the boot's own fold already is, and
+ * it is the same move {@code KnownListInput} made out of {@code census} for #313.
  *
  * <p><b>Why the log and not the graph.</b> {@link com.robsartin.segue.port.GraphStore} has no
  * enumerate-all method, and the {@code full} and {@code subgraph} views need one. Adding it would
@@ -141,8 +152,9 @@ public record LogProjection(
    * this answers a different question.
    *
    * <p>{@code LogProjectionTest.shouldGiveTheSameProjectionWhenHandedTheFoldOfWouldCompute} pins
-   * the two forms to one answer, and {@code ArchitectureTest.theExportFoldsOnce} is what keeps this
-   * class the export's only fold.
+   * the two forms to one answer. {@code ArchitectureTest.theExportFoldsOnce} keeps the export from
+   * building a second fold of its own, and since #319 it has no exempt class, because the one fold
+   * the export reads is no longer in that package.
    */
   public static LogProjection of(List<LoggedAssertion> logged, Fold fold) {
     Objects.requireNonNull(logged, "logged");

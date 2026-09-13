@@ -9,7 +9,6 @@ import com.robsartin.segue.domain.OwnerEdge;
 import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.domain.Retraction;
 import com.robsartin.segue.domain.SameAs;
-import com.robsartin.segue.export.LogProjection;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.GraphStore;
 import com.robsartin.segue.port.IdentityMerge;

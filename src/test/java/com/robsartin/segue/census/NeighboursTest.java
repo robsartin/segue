@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.robsartin.segue.domain.EdgeRecord;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
-import com.robsartin.segue.export.LogProjection;
+import com.robsartin.segue.ingest.LogProjection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;

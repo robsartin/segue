@@ -18,6 +18,7 @@ import com.robsartin.segue.domain.EdgeRecord;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.export.InventedGraph.FakeAssertionLog;
 import com.robsartin.segue.ingest.GraphProjector;
+import com.robsartin.segue.ingest.LogProjection;
 import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import java.io.IOException;

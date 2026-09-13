@@ -20,6 +20,7 @@ import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.export.InventedGraph.FakeAssertionLog;
 import com.robsartin.segue.ingest.GraphProjector;
+import com.robsartin.segue.ingest.LogProjection;
 import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import com.robsartin.segue.wikidata.KindMapper;

@@ -20,6 +20,7 @@ import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.Retraction;
 import com.robsartin.segue.export.InventedGraph.FakeAssertionLog;
+import com.robsartin.segue.ingest.LogProjection;
 import com.robsartin.segue.wikidata.KindMapper;
 import java.time.Instant;
 import java.util.List;

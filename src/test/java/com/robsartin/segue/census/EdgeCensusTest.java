@@ -10,7 +10,7 @@ import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.OwnerEdge;
 import com.robsartin.segue.domain.Retraction;
 import com.robsartin.segue.domain.SameAs;
-import com.robsartin.segue.export.LogProjection;
+import com.robsartin.segue.ingest.LogProjection;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;

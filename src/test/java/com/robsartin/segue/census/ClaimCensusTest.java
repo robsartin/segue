@@ -3,7 +3,7 @@ package com.robsartin.segue.census;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.domain.Fold;
-import com.robsartin.segue.export.LogProjection;
+import com.robsartin.segue.ingest.LogProjection;
 import com.robsartin.segue.wikidata.KindMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

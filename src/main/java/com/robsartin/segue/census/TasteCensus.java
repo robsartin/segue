@@ -3,7 +3,7 @@ package com.robsartin.segue.census;
 import com.robsartin.segue.domain.Fold;
 import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.RatingScale;
-import com.robsartin.segue.export.LogProjection;
+import com.robsartin.segue.ingest.LogProjection;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;

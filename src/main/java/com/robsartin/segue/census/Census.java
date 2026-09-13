@@ -3,7 +3,7 @@ package com.robsartin.segue.census;
 import com.robsartin.segue.domain.Expanded;
 import com.robsartin.segue.domain.Fold;
 import com.robsartin.segue.domain.LoggedAssertion;
-import com.robsartin.segue.export.LogProjection;
+import com.robsartin.segue.ingest.LogProjection;
 import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.support.KnownListInput;
