@@ -1851,10 +1851,11 @@ is the everyday way that happens.
 **`never expanded` is a floor, not a queue.** The row counts entities in the graph that no row in
 the log cites as an expansion's seed, and `domain.Expanded` reads a seed out of Wikidata's own
 reference shapes alone — so an expansion that ran and recorded no Wikidata assertion leaves nothing
-for it to count. Once a `--known` expansion run has visited everything the row names, what is left
-in it is the entities Wikidata states nothing about in the vocabulary segue registers, and the row
-stays where it is. [Expanding every promotion](#expanding-every-promotion) says how to read one
-reading against the next, and how to tell that another run would reach nothing (the run on #313;
+for it to count. Once a `--known` expansion run that reported no failure and no unavailable source
+has visited everything the row names, what is left in it is the entities Wikidata states nothing
+about in the vocabulary segue registers, and the row stays where it is.
+[Expanding every promotion](#expanding-every-promotion) says how to read one reading against the
+next, and how to tell that another run would reach nothing (the run on #313;
 [ADR 63](adr/0063-a-read-only-census-of-the-graph.md)'s and
 [ADR 66](adr/0066-expand-every-promotion-from-a-dev-tool.md)'s 2026-09-12 amendments for #315).
 
@@ -3323,9 +3324,12 @@ counting once — which is how you check the file was read as you meant.
 **When to stop running this at all.** Compare this dry run's `considered` against the previous
 `--known` run's dry run. It falls by exactly the entities that became ones the rule covers, so a
 smaller count means the last run reached something. **An unchanged count means the entities left
-are Wikidata-thin** — Wikidata states nothing about them in the vocabulary segue registers, so
-there is nothing for an expansion to record and nothing for the rule to read afterwards — and
-running it again visits the same entities, calls the same public APIs and appends rows that move the
+are Wikidata-thin, provided that run reported `failed` zero and printed no source under
+`unavailable`** — Wikidata states nothing about them in the vocabulary segue registers, so there is
+nothing for an expansion to record and nothing for the rule to read afterwards. A run that failed,
+or one that could not reach Wikidata, records nothing either and leaves the count unchanged for the
+opposite reason: read the `failed` row and the `unavailable` sub-heading before you read this one.
+Running it again visits the same entities, calls the same public APIs and appends rows that move the
 graph nowhere. Stop there. The census's `never expanded` row says the same thing over a slightly
 smaller population: it counts only the entities the graph holds a node for, where `considered`
 also counts the ids your file names that it does not, which this run refuses one at a time as
@@ -3371,7 +3375,10 @@ This run changes no code. What it produces is issues, and these are the ones to 
 - **Anything a tool printed that you had to stop and think about.** A refusal that did not tell you
   what to type next is a defect in the sentence, not in you.
 - **Anything this chapter got wrong.** It was written against the code and checked against the
-  parser, and it has never been run. The first run is what makes it true.
+  parser, and it has been run — the expander's first run over the promotions (#284) and the first
+  `--known` run (#313) among them. Each of those two sent something back: #293 corrected a label out
+  of the first, and #315 corrected what this chapter says about the `--known` variant's stopping
+  rule. The next run is what keeps it true.
 
 ## How to read an ADR against the code
 

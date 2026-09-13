@@ -54,8 +54,8 @@ import java.util.regex.Pattern;
  * pass reading this answer not self-limiting:</b> the first {@code expandPromotions --known} run
  * visited every known-list entity this rule called unexpanded and recorded no Wikidata assertion
  * for any of them, so those entities are still in this answer and would be handed to the next run
- * as well — ADR 63's and ADR 66's 2026-09-12 amendments carry that reading and the log-side
- * alternative declined with it (#313, #315).
+ * as well — ADR 63's and ADR 66's 2026-09-12 amendments for #315 carry that reading and the
+ * log-side alternative declined with it (#313).
  *
  * <p><b>It lives here for the shape {@code KindMapper.rederive} (ADR 42) and {@link Retractions}
  * (ADR 44) already set: one rule, whoever asks it.</b> The census counts what has never been

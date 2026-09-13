@@ -668,14 +668,17 @@ second `--known` run over the same file visits the same entities.
 
 **It is idempotent where it matters, and it is not a no-op on the log.** The run on #313 added no
 node and no net edge. It did append rows: an assertion restated is a row appended, which is how
-corroboration and freshness work ([ADR 19](0019-assertion-log-source-of-truth.md)). So running it
-again costs public-API calls and log rows and moves the projection nowhere.
+corroboration counts ([ADR 19](0019-assertion-log-source-of-truth.md)) and how a new assertion time
+records that a source said it again ([ADR 20](0020-bitemporal-time-model.md)). So running it again
+costs public-API calls and log rows and moves the projection nowhere.
 
 **What the operator does instead of waiting for a zero.** Compare one dry run's `considered` against
-the previous `--known` run's. `Preflight.considered` is the population after the rule, so it
-falls by exactly the entities that became ones the rule covers; an unchanged count says the rest
-of the file is thin and the run can stop. The developer guide's "Expanding every promotion"
-chapter is the authority on that procedure and it is not restated here.
+the previous `--known` run's, over the same file. `Preflight.considered` is the population after the
+rule, so it falls by exactly the entities that became ones the rule covers; an unchanged count says
+the rest of the file is thin **when that previous run reported `failed` zero and named no source
+under `unavailable`** — a run that threw, or one Wikidata was unavailable to, records nothing either
+and leaves the count unchanged for the opposite reason. The developer guide's "Expanding every
+promotion" chapter is the authority on the procedure, and the step-by-step is not restated here.
 [ADR 63](0063-a-read-only-census-of-the-graph.md)'s 2026-09-12 amendment for #315 records the census
 row's half of the same reading.
 

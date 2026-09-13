@@ -430,11 +430,12 @@ entity the row counted was visited, Wikidata returned no whitelisted claim for a
 `known list` section printed afterwards read the same as the reading on #311. No figure from either
 is restated here; the issues carry them.
 
-**So the row is a floor once every entity it names has been visited**, and not a countdown. What is
-left in it at that point is entities Wikidata states nothing about in the vocabulary this project
-registers — thin acts rather than neglected ones — and no Wikidata expansion can leave a trace on
-them for `Expanded` to read. Nothing in this tool will drive the row to zero, and an operator who
-waits for zero is waiting on the wrong number.
+**So the row is a floor once every entity it names has been visited by a run that reached
+Wikidata** — the run on #313 reported no failure and no unavailable source — and not a countdown.
+What is left in it at that point is entities Wikidata states nothing about in the vocabulary this
+project registers — thin acts rather than neglected ones — and no Wikidata expansion can leave a
+trace on them for `Expanded` to read. No expansion run will drive the row to zero while Wikidata
+stays silent about them, and an operator who waits for zero is waiting on the wrong number.
 
 **Nothing about the row, the rule or the section changes.** `KnownListCensus` and `CensusReport`
 emit exactly what they emitted before, and `domain.Expanded`'s rule is unchanged; the only edits
