@@ -84,4 +84,28 @@ class IsolatedFileTest {
     assertThat(written().get(1)).startsWith(ALONE);
     assertThat(written().get(2)).startsWith(NAMELESS);
   }
+
+  @Test
+  @DisplayName("a label carrying a tab or a newline is written as one line of four fields")
+  void shouldFlattenTheLabelWhenItCarriesATabOrANewline() throws Exception {
+    // ALONE is reused rather than inventing a fourth id; only its label changes for this test.
+    Map<String, NodeRecord> nodes = new LinkedHashMap<>();
+    nodes.put(ALONE, new NodeRecord(ALONE, NodeKind.GROUP, "An\tInvented\nAct\r"));
+    SecondHop rule = SecondHop.of(nodes, List.of(), List.of(ALONE), new Expanded(Set.of()));
+
+    StringWriter out = new StringWriter();
+    IsolatedFile.write(rule, nodes, out);
+    List<String> lines = List.of(out.toString().split("\n", -1));
+
+    assertThat(lines)
+        .as(
+            "the header line plus one line per act, plus the trailing empty split artifact"
+                + " after the final newline — never two lines for one act")
+        .hasSize(3);
+    String[] fields = lines.get(1).split("\t", -1);
+    assertThat(fields).as("qid, label, kind and the count, and no more").hasSize(4);
+    assertThat(fields[1])
+        .as("tab and newline become a space; the trailing space is the flattened CR")
+        .isEqualTo("An Invented Act ");
+  }
 }

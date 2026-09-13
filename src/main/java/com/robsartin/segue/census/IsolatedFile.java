@@ -42,7 +42,9 @@ final class IsolatedFile {
 
   /**
    * Write the header and one act per line: qid, label, kind, and how many unexpanded people and
-   * groups are beside it, tab-separated.
+   * groups are beside it, tab-separated. Every tab, line feed and carriage return in the label is
+   * written as a single space, so a line is always four tab-separated fields and one act is always
+   * one line.
    *
    * @return how many of them the graph holds no label for, and so were written as their qid
    */
@@ -64,6 +66,8 @@ final class IsolatedFile {
       if (label.isBlank()) {
         label = qid;
         unnamed++;
+      } else {
+        label = label.replace('\t', ' ').replace('\n', ' ').replace('\r', ' ');
       }
       out.write(qid);
       out.write('\t');
