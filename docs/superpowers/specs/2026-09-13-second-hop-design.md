@@ -53,7 +53,9 @@ It answers three questions, each about the population it was given:
   in the constant and that `Expanded` does not cover. A set; an id of any other kind, or of a
   covered node, is not in it. Asking about an id that is not isolated is a caller error and throws.
 - **`toExpand()`** — the union of the above over every isolated member, distinct, in first-seen
-  order over `isolated()`. A neighbour shared by two isolated acts is in it once.
+  order over `isolated()`. At the current hop limit no isolated act shares a neighbour with another
+  member, since a shared neighbour is two hops and places both; the union is a set so the answer
+  does not depend on the hop limit (correction found at implementation, 2026-09-13).
 
 Nothing here reads a rating, a timestamp or a label. The type is a pure function of its four
 inputs, so it takes ordinary unit tests on invented graphs (see *Testing*).
@@ -211,8 +213,9 @@ Pure TDD, red seen for the right reason before every green, invented ids only (`
   unexpanded person is isolated and the person is to expand; beside an expanded person it is
   isolated with no one to expand; an act with a member within `MAX_HOPS` is not isolated and
   contributes nothing even though it has unexpanded neighbours (the planted control for the
-  "isolated first" guard); a neighbour of a kind outside the constant is not to expand; an
-  unexpanded neighbour shared by two isolated acts is counted once; edge direction does not matter;
+  "isolated first" guard); a neighbour of a kind outside the constant is not to expand;
+  two isolated acts far apart each contribute their own neighbours, in isolated order; edge
+  direction does not matter;
   a member not in the graph is neither isolated nor an error; `toExpandBeside` on a non-isolated id
   throws. `NeighboursTest`'s cases come across unchanged.
 - **`KnownListCensusTest`** extends `InventedCensus` for the three rows under both populations, with

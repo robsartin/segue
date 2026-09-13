@@ -467,7 +467,7 @@ still calls them, and the build must stay green. Task 3 removes them once the ce
 
 The ids this task introduces, all ADR 58 stand-ins: `ACT` `Q0901401`, `PLACED` `Q0901402`,
 `BANDMATE` `Q0901403`, `PRODUCER` `Q0901404`, `RECORD` `Q0901405`, `SECOND_ACT` `Q0901406`,
-`SHARED` `Q0901407`, `ABSENT` `Q0901408`.
+`OTHER_BAND` `Q0901407`, `ABSENT` `Q0901408`.
 
 - [ ] **Step 1 — move the walk into `domain`, with its signature changed.**
 
@@ -743,7 +743,11 @@ The ids this task introduces, all ADR 58 stand-ins: `ACT` `Q0901401`, `PLACED` `
 
     /**
      * The union of {@link #toExpandBeside} over every isolated member, distinct, in first-seen
-     * order over {@link #isolated()} — so a neighbour beside two isolated acts is in it once.
+     * order over {@link #isolated()}.
+     *
+     * <p>At the current hop limit no isolated act can share a neighbour with another member — a
+     * shared neighbour puts them two hops apart, which places both — so the union is distinct by
+     * construction. It is kept a set so the answer does not depend on the hop limit.
      */
     public List<String> toExpand() {
       return List.of();
@@ -790,11 +794,11 @@ The ids this task introduces, all ADR 58 stand-ins: `ACT` `Q0901401`, `PLACED` `
     /** A WORK beside {@link #ACT} — a kind WORTH_EXPANDING does not name. */
     private static final String RECORD = "Q0901405";
 
-    /** A second isolated act on the list, sharing {@link #SHARED} with the first. */
+    /** A second isolated act on the list, far apart from {@link #ACT} — no path connects them. */
     private static final String SECOND_ACT = "Q0901406";
 
-    /** An unexpanded PERSON beside both isolated acts. */
-    private static final String SHARED = "Q0901407";
+    /** An unexpanded GROUP beside {@link #SECOND_ACT}. */
+    private static final String OTHER_BAND = "Q0901407";
 
     /** Named by the list and never claimed as a node. */
     private static final String ABSENT = "Q0901408";
@@ -881,26 +885,30 @@ The ids this task introduces, all ADR 58 stand-ins: `ACT` `Q0901401`, `PLACED` `
     }
 
     @Test
-    @DisplayName("a neighbour beside two isolated acts is in the population once")
-    void shouldCountTheSharedNeighbourOnceWhenTwoIsolatedActsBothTouchIt() {
+    @DisplayName(
+        "two isolated acts far apart each contribute their own neighbours, in isolated order")
+    void shouldListEachActsNeighboursInIsolatedOrderWhenTwoIsolatedActsAreApart() {
       SecondHop rule =
           SecondHop.of(
               nodes(
                   new LinkedHashMap<>(
                       Map.of(
                           ACT, NodeKind.GROUP,
+                          BANDMATE, NodeKind.PERSON,
                           SECOND_ACT, NodeKind.GROUP,
-                          SHARED, NodeKind.PERSON))),
-              List.of(edge(ACT, SHARED), edge(SECOND_ACT, SHARED)),
+                          OTHER_BAND, NodeKind.GROUP))),
+              List.of(edge(ACT, BANDMATE), edge(SECOND_ACT, OTHER_BAND)),
               List.of(ACT, SECOND_ACT),
               new Expanded(Set.of()));
 
       assertThat(rule.isolated())
-          .as("two hops apart through SHARED, which is not on the list, so neither places the other")
+          .as("no path connects the two acts, so each is isolated from the other")
           .containsExactly(ACT, SECOND_ACT);
-      assertThat(rule.toExpandBeside(ACT)).containsExactly(SHARED);
-      assertThat(rule.toExpandBeside(SECOND_ACT)).containsExactly(SHARED);
-      assertThat(rule.toExpand()).as("distinct, in first-seen order").containsExactly(SHARED);
+      assertThat(rule.toExpandBeside(ACT)).containsExactly(BANDMATE);
+      assertThat(rule.toExpandBeside(SECOND_ACT)).containsExactly(OTHER_BAND);
+      assertThat(rule.toExpand())
+          .as("each act's own neighbour, in isolated order")
+          .containsExactly(BANDMATE, OTHER_BAND);
     }
 
     @Test

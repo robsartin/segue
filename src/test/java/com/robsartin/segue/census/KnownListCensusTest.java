@@ -8,6 +8,7 @@ import com.robsartin.segue.domain.KnownList;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.domain.SecondHop;
 import com.robsartin.segue.ingest.LogProjection;
 import com.robsartin.segue.support.KnownListInput;
 import com.robsartin.segue.wikidata.KindMapper;
@@ -143,6 +144,29 @@ class KnownListCensusTest {
     assertThat(census(List.of(SEEN, LINK_B)).fromFile().noKnownNeighbourWithinMaxHops())
         .as("the control: exactly two hops apart, so both are reached")
         .isZero();
+  }
+
+  @Test
+  @DisplayName("an act whose only known neighbour was retracted is isolated")
+  void shouldReportTheActAsIsolatedWhenARetractionTookAwayItsOnlyKnownNeighbour() {
+    // Restated here from NeighboursTest (#319): the walk no longer takes a LogProjection, so the
+    // property "the fold's retraction reaches the walk" is asserted where a fold is in scope, and
+    // against the rule's own answer rather than against an adjacency map.
+    List<LoggedAssertion> log =
+        List.of(
+            InventedCensus.node(SEEN, NodeKind.PERSON, "An Invented Performer"),
+            InventedCensus.node(BAND, NodeKind.GROUP, "An Invented Band"),
+            InventedCensus.edge(SEEN, BAND, "MEMBER_OF", InventedCensus.sourced()),
+            InventedCensus.retract(BAND));
+    Fold fold = Fold.of(log, KindMapper::rederive);
+    LogProjection projection = LogProjection.of(log, fold);
+
+    SecondHop rule =
+        SecondHop.of(projection.nodes(), projection.edges(), List.of(SEEN, BAND), Expanded.in(log));
+
+    assertThat(rule.isolated())
+        .as("the retraction removed BAND's node claim and every edge touching it")
+        .containsExactly(SEEN);
   }
 
   @Test
