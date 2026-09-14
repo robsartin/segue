@@ -1,5 +1,5 @@
 [versions]
-tinkerpop = "3.8.1"
+tinkerpop = "3.8.2"
 jena = "6.2.0"
 junit = "6.1.3"
 assertj = "3.27.7"
