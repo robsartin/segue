@@ -1871,7 +1871,12 @@ row is it what a `--second-hop` run would visit — the distinct people and grou
 the first of those two, counted before any run, over the same population the run itself composes.
 The labels name no kind on purpose —
 `domain.SecondHop.WORTH_EXPANDING` is the one statement of which kinds count, and the labels cite it
-rather than restating it.
+rather than restating it. **All three inherit `never expanded`'s floor**, for the same reason: a
+neighbour a `--second-hop` run visited and expanded, but whose recorded reference `Expanded.seedOf`
+cannot read a seed out of, stays counted.
+[Expanding every promotion](#expanding-every-promotion) says how to tell a `--second-hop` run has
+reached it
+([ADR 63](adr/0063-a-read-only-census-of-the-graph.md)'s 2026-09-14 amendment for #326).
 
 ### Why the output is safe to paste
 
@@ -3409,7 +3414,10 @@ own three rows, but only the `file and promotions` sub-section's `distinct to ex
 `--second-hop` run would visit, counted before any run — the same `SecondHop.toExpand()` the run
 itself visits, over the same with-promotions population. An act under `with no one` is one nothing
 here can help: either its ring is fully fetched already, or its ring is works and places rather than
-people and groups.
+people and groups. **All three inherit the floor `never expanded` already has**, because
+`SecondHop.toExpandBeside` excludes a neighbour only once `Expanded` already covers it — the same
+rule and the same residual
+([ADR 63](adr/0063-a-read-only-census-of-the-graph.md)'s 2026-09-14 amendment for #326).
 
 **The file is personal data.** Write it outside the working tree, and never attach it to an issue.
 `*.txt` is gitignored beside `*.csv` and `*.db`, but the protection is where the file lives, not
@@ -3432,10 +3440,24 @@ because that composition is the recommender's own notion of known
 where a `--known` run does not** — the same read the no-flag run already makes, logged as a count and
 nothing else about them.
 
-Take the census again, with the same file, and compare it against the one you took first:
-`no known neighbour` should be down, `distinct to expand` should be down, and `nodes` and `edges`
-should be up. **A smaller run is a later run** — the dry run's `considered` is the only bound, and
-there is no `--limit`.
+Take the census again, with the same file, and compare it against the one you took first: `nodes`
+and `edges` should be up.
+
+**When to stop running this at all.** Read the run's own block before you take that second census.
+With `added nothing`, `refused` and `failed` all zero and no source named under `unavailable`, every
+entity `considered` named was visited and recorded something, so whatever `distinct to expand` still
+counts afterwards was visited too and is Wikidata-thin: `SecondHop.toExpandBeside` excludes a
+neighbour only once `Expanded` covers it, the same rule and the same residual the `--known` variant's
+stopping rule above reads — a neighbour this run recorded only a MusicBrainz-backed edge or a
+Wikidata forward claim with no id for leaves no seed reference and stays counted for good
+([ADR 63](adr/0063-a-read-only-census-of-the-graph.md)'s 2026-09-14 amendment for #326). Stop there;
+a second run visits the same neighbours, calls the same public APIs and moves neither row. **When
+the block named a `failed` entity or a source under `unavailable`**, that guarantee does not hold,
+and the `--known` variant's own rule applies instead: compare this dry run's `considered` against
+the previous `--second-hop` dry run's, over the same file — a fall means the last run reached
+something and another is worth taking, and an unchanged count means the rest is thin only once a run
+reporting no failure and no unavailable source has read it. There is still no `--limit`: the dry
+run's `considered` is the only bound.
 
 This chapter's own reading is a census, not an evaluation. Whether growing the pool this way is
 enough to warrant the next entry under the recommender's own calibration rule is decided there, not
@@ -3463,10 +3485,11 @@ This run changes no code. What it produces is issues, and these are the ones to 
 - **Anything a tool printed that you had to stop and think about.** A refusal that did not tell you
   what to type next is a defect in the sentence, not in you.
 - **Anything this chapter got wrong.** It was written against the code and checked against the
-  parser, and it has been run — the expander's first run over the promotions (#284) and the first
-  `--known` run (#313) among them. Each of those two sent something back: #293 corrected a label out
-  of the first, and #315 corrected what this chapter says about the `--known` variant's stopping
-  rule. The next run is what keeps it true.
+  parser, and it has been run — the expander's first run over the promotions (#284), the first
+  `--known` run (#313) and the first `--second-hop` run (#319) among them. Each of those runs sent
+  something back: #293 corrected a label out of the first, #315 corrected what this chapter says
+  about the `--known` variant's stopping rule, and #326 corrected what it says about the
+  `--second-hop` variant's. The next run is what keeps it true.
 
 ## How to read an ADR against the code
 
