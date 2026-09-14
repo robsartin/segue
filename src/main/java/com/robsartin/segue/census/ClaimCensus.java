@@ -7,7 +7,7 @@ import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.Retraction;
 import com.robsartin.segue.domain.Retractions;
 import com.robsartin.segue.domain.SameAs;
-import com.robsartin.segue.export.LogProjection;
+import com.robsartin.segue.ingest.LogProjection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;

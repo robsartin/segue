@@ -2,7 +2,7 @@ package com.robsartin.segue.census;
 
 import com.robsartin.segue.domain.EdgeRecord;
 import com.robsartin.segue.domain.Provenance;
-import com.robsartin.segue.export.LogProjection;
+import com.robsartin.segue.ingest.LogProjection;
 import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;

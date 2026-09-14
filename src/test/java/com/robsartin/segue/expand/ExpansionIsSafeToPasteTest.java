@@ -202,6 +202,47 @@ class ExpansionIsSafeToPasteTest {
   }
 
   @Test
+  @DisplayName("the guard fires when a second-hop file's own basename is itself qid-shaped")
+  void shouldFireTheGuardWhenTheSecondHopFileNameIsItselfQidShaped() throws Exception {
+    // Unlike every case above, this deliberately does NOT call assertEverySafe: the operator can
+    // point --second-hop at any file, and Population's own javadoc names this test as the
+    // positive control for a basename that happens to be qid-shaped — asserting the block is
+    // clean here would red on the one leak the design already accepts (confirmed below: it did,
+    // on exactly the clause line, before this assertion was written this way). So this asserts
+    // the opposite of the known-list case's structure — that the guard actually FIRES on it,
+    // rather than being blind to this clause, which is what "the paste guard reaches the new
+    // clause" is checking.
+    Path db = home.resolve("second-hop-shape.db");
+    try (SqliteAssertionLog log = new SqliteAssertionLog(db)) {
+      assertThat(log.readAll()).as("the log is deliberately empty").isEmpty();
+    }
+    Path file = Files.writeString(home.resolve(RATED + ".csv"), RATED + "\n");
+    captured.list.clear();
+
+    ExpandCli.main(
+        new String[] {"--db", db.toString(), "--dry-run", "--second-hop", file.toString()});
+
+    assertThat(lines())
+        .as("the second-hop clause really was printed, or the assertion below is vacuous")
+        .anyMatch(
+            line ->
+                line.startsWith("# only the unexpanded people and groups beside")
+                    && line.contains(RATED + ".csv"));
+    List<ILoggingEvent> flagged =
+        List.copyOf(captured.list).stream()
+            .filter(ExpansionIsSafeToPasteTest::carriesAnIdItMayNot)
+            .toList();
+    assertThat(flagged)
+        .as(
+            "the guard fires exactly once — on the clause carrying the basename — and on nothing"
+                + " else, so the qid-shaped basename is the only qid-shaped token any line carries")
+        .hasSize(1);
+    assertThat(flagged.get(0).getFormattedMessage())
+        .as("and it is the second-hop clause that trips it")
+        .startsWith("# only the unexpanded people and groups beside");
+  }
+
+  @Test
   @DisplayName("a real run over a promotion the graph never saw reaches the whole block, offline")
   void shouldEmitCountsAndNothingElseWhenTheOnlyPromotionIsRefused() {
     Path db = home.resolve("refused.db");

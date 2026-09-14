@@ -10,6 +10,7 @@ import ch.qos.logback.core.read.ListAppender;
 import com.robsartin.segue.domain.AffinityRecord;
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.KnownList;
+import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.Provenance;
@@ -332,6 +333,78 @@ class ExpandCliTest {
   }
 
   @Test
+  @DisplayName("--second-hop is carried as the path when one is given, and the file is not read")
+  void shouldCarryTheSecondHopFileWhenTheFlagIsGiven() {
+    assertThat(
+            ExpandCli.parse(
+                    new String[] {"--db", "db.sqlite", "--second-hop", "known.csv"},
+                    null,
+                    home.toString())
+                .secondHop())
+        .contains(Path.of("known.csv"));
+  }
+
+  @Test
+  @DisplayName("no second-hop file is carried when the flag is absent, which is every run so far")
+  void shouldCarryNoSecondHopFileWhenTheFlagIsAbsent() {
+    assertThat(
+            ExpandCli.parse(new String[] {"--db", "db.sqlite"}, null, home.toString()).secondHop())
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("--second-hop and --known together are refused: they name different populations")
+  void shouldRefuseBothFlagsWhenASecondHopFileAndAKnownFileAreGiven() {
+    assertThatThrownBy(
+            () ->
+                ExpandCli.parse(
+                    new String[] {
+                      "--db", "db.sqlite", "--known", "known.csv", "--second-hop", "known.csv"
+                    },
+                    null,
+                    home.toString()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("--second-hop and --known name different populations")
+        .hasMessageContaining("--db <segue.db>");
+  }
+
+  @Test
+  @DisplayName("--second-hop and --rated-since together are refused for the same reason")
+  void shouldRefuseBothFlagsWhenASecondHopFileAndAnInstantAreGiven() {
+    assertThatThrownBy(
+            () ->
+                ExpandCli.parse(
+                    new String[] {
+                      "--db", "db.sqlite",
+                      "--second-hop", "known.csv",
+                      "--rated-since", "2026-09-13T00:00:00Z"
+                    },
+                    null,
+                    home.toString()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("--second-hop and --rated-since name different populations");
+  }
+
+  @Test
+  @DisplayName(
+      "all three flags together meet the first refusal on record: --known and --rated-since")
+  void shouldRefuseWithTheFirstRefusalWhenAllThreeFlagsAreGiven() {
+    assertThatThrownBy(
+            () ->
+                ExpandCli.parse(
+                    new String[] {
+                      "--db", "db.sqlite",
+                      "--known", "known.csv",
+                      "--rated-since", "2026-09-13T00:00:00Z",
+                      "--second-hop", "known.csv"
+                    },
+                    null,
+                    home.toString()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("--known and --rated-since name different populations");
+  }
+
+  @Test
   @DisplayName("--rated-since that is not an instant is refused with this tool's usage error")
   void shouldRefuseTheInstantWhenItIsNotAnInstant() {
     assertThatThrownBy(
@@ -562,6 +635,112 @@ class ExpandCliTest {
     assertThat(countOn(lines(), "considered")).isEqualTo(1);
     assertThat(countOn(lines(), "unknown entity"))
         .as("the same refusal a promotion with no node already gets, counted the same way")
+        .isEqualTo(1);
+  }
+
+  /** On the file, in the graph, and nothing else on the file is within the hop limit of it. */
+  private static final String ISOLATED_ACT = "Q0901412";
+
+  /**
+   * Two invented entities and one edge: an act the file names, and an unexpanded PERSON beside it.
+   */
+  private Path secondHopGraph(String name) {
+    Path db = home.resolve(name);
+    Provenance plain = new Provenance("invented", "invented:7", WHEN, 1.0);
+    try (SqliteAssertionLog log = new SqliteAssertionLog(db)) {
+      log.append(new NodeAssertion(ISOLATED_ACT, NodeKind.GROUP, "an invented act", plain));
+      log.append(new NodeAssertion(NEVER_EXPANDED, NodeKind.PERSON, "a bandmate", plain));
+      log.append(new AssertionRecord(ISOLATED_ACT, NEVER_EXPANDED, "MEMBER_OF", null, null, plain));
+    }
+    return db;
+  }
+
+  @Test
+  @DisplayName("a second-hop run considers the unexpanded people beside the isolated acts")
+  void shouldConsiderTheRingWhenTheFileNamesAnActTheGraphCannotPlace() throws Exception {
+    Path db = secondHopGraph("second-hop.db");
+    Path file = Files.writeString(home.resolve("second-hop.csv"), ISOLATED_ACT + "\n");
+    captured.list.clear();
+
+    ExpandCli.main(
+        new String[] {"--db", db.toString(), "--dry-run", "--second-hop", file.toString()});
+
+    assertThat(countOn(lines(), "considered"))
+        .as("one isolated act, one unexpanded PERSON beside it")
+        .isEqualTo(1);
+    assertThat(lines())
+        .as("and the block says which population it covered, naming the basename and the count")
+        .anyMatch(
+            line ->
+                line.startsWith("# only the unexpanded people and groups beside")
+                    && line.contains("second-hop.csv")
+                    && line.contains("1 act(s)"));
+    assertThat(lines())
+        .as("the ratings read count is logged, and no qid and no score with it")
+        .anyMatch(line -> line.matches("^read \\d+ rating\\(s\\)$"));
+  }
+
+  @Test
+  @DisplayName("an act the graph can place contributes nothing to a second-hop run")
+  void shouldConsiderNothingWhenEveryActOnTheFileHasAKnownNeighbour() throws Exception {
+    // The planted control for the test above: the same graph and the same rule, with BOTH ids on
+    // the file — so each is one hop from the other, neither is isolated, and the ring beside them
+    // is not the question. If this reported 1 as well, the count above would not be the rule
+    // firing.
+    Path db = secondHopGraph("placed.db");
+    Path file =
+        Files.writeString(home.resolve("placed.csv"), ISOLATED_ACT + "\n" + NEVER_EXPANDED + "\n");
+    captured.list.clear();
+
+    ExpandCli.main(
+        new String[] {"--db", db.toString(), "--dry-run", "--second-hop", file.toString()});
+
+    assertThat(countOn(lines(), "considered")).isZero();
+    assertThat(lines()).anyMatch(line -> line.contains("0 act(s)"));
+  }
+
+  /** Isolated, with a minted local PERSON beside it, and nothing else on the file. */
+  private static final String LOCAL_NEIGHBOUR_ACT = "Q0901413";
+
+  /**
+   * The owner's own minted entity, beside {@link #LOCAL_NEIGHBOUR_ACT}.
+   *
+   * <p>{@code EntityExpansion.expand} refuses {@code LocalEntity.isLocal} before any adapter runs
+   * (#92).
+   */
+  private static final String LOCAL_NEIGHBOUR = "Q00901413";
+
+  private Path secondHopLocalGraph(String name) {
+    Path db = home.resolve(name);
+    Provenance plain = new Provenance("invented", "invented:8", WHEN, 1.0);
+    try (SqliteAssertionLog log = new SqliteAssertionLog(db)) {
+      log.append(new NodeAssertion(LOCAL_NEIGHBOUR_ACT, NodeKind.GROUP, "an invented act", plain));
+      log.append(LocalEntity.minted(LOCAL_NEIGHBOUR, NodeKind.PERSON, "a minted bandmate", WHEN));
+      log.append(
+          new AssertionRecord(
+              LOCAL_NEIGHBOUR_ACT, LOCAL_NEIGHBOUR, "MEMBER_OF", null, null, plain));
+    }
+    return db;
+  }
+
+  @Test
+  @DisplayName("a real second-hop run refuses a minted local neighbour without reaching an adapter")
+  void shouldRefuseTheMintedNeighbourWhenASecondHopRunVisitsIt() throws Exception {
+    // A REAL run (no --dry-run), and it reaches no network: EntityExpansion.expand
+    // (src/main/java/com/robsartin/segue/expansion/EntityExpansion.java) checks
+    // LocalEntity.isLocal(qid) and returns Refused(LOCAL_ENTITY) before ExpandContext is built or
+    // any adapter is asked — see this task's report for the confirmed line numbers.
+    Path db = secondHopLocalGraph("second-hop-local.db");
+    Path file = Files.writeString(home.resolve("second-hop-local.csv"), LOCAL_NEIGHBOUR_ACT + "\n");
+    captured.list.clear();
+
+    ExpandCli.main(new String[] {"--db", db.toString(), "--second-hop", file.toString()});
+
+    assertThat(countOn(lines(), "considered"))
+        .as("one isolated act, one minted PERSON beside it")
+        .isEqualTo(1);
+    assertThat(countOn(lines(), "local entity"))
+        .as("the minted neighbour is refused before any adapter runs, never expanded")
         .isEqualTo(1);
   }
 

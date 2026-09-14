@@ -2,7 +2,7 @@ package com.robsartin.segue.census;
 
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
-import com.robsartin.segue.export.LogProjection;
+import com.robsartin.segue.ingest.LogProjection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;

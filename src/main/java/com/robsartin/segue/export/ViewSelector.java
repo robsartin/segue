@@ -6,6 +6,7 @@ import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.PathRanking;
 import com.robsartin.segue.domain.PathResult;
 import com.robsartin.segue.domain.Provenance;
+import com.robsartin.segue.ingest.LogProjection;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.GraphStore;
 import com.robsartin.segue.wikidata.RecognitionInstitutions;

@@ -1,11 +1,8 @@
-package com.robsartin.segue.census;
+package com.robsartin.segue.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.robsartin.segue.domain.EdgeRecord;
-import com.robsartin.segue.domain.NodeKind;
-import com.robsartin.segue.domain.NodeRecord;
-import com.robsartin.segue.export.LogProjection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -34,26 +31,28 @@ class NeighboursTest {
   /** Named as an edge endpoint and never claimed as a node — {@code Neighbours.link}'s guard. */
   private static final String UNCLAIMED = "Q0901099";
 
-  private static LogProjection line() {
-    return LogProjection.of(
-        new InventedCensus.FakeAssertionLog()
-            .with(
-                InventedCensus.node(A, NodeKind.PERSON, "A"),
-                InventedCensus.node(B, NodeKind.PERSON, "B"),
-                InventedCensus.node(C, NodeKind.PERSON, "C"),
-                InventedCensus.node(D, NodeKind.PERSON, "D"),
-                InventedCensus.node(E, NodeKind.PERSON, "E"),
-                InventedCensus.node(F, NodeKind.PERSON, "F"),
-                InventedCensus.edge(A, B, "MEMBER_OF", InventedCensus.sourced()),
-                InventedCensus.edge(B, C, "MEMBER_OF", InventedCensus.sourced()),
-                InventedCensus.edge(C, D, "MEMBER_OF", InventedCensus.sourced()),
-                InventedCensus.edge(D, E, "MEMBER_OF", InventedCensus.sourced())));
+  private static Map<String, NodeRecord> nodes(String... qids) {
+    Map<String, NodeRecord> nodes = new LinkedHashMap<>();
+    for (String qid : qids) {
+      nodes.put(qid, new NodeRecord(qid, NodeKind.PERSON, qid));
+    }
+    return nodes;
+  }
+
+  private static EdgeRecord edge(String from, String to) {
+    return new EdgeRecord(from, to, "MEMBER_OF", null, null, List.of());
+  }
+
+  /** A — B — C — D — E, and F with no edge at all. */
+  private static Map<String, Set<String>> line() {
+    return Neighbours.in(
+        nodes(A, B, C, D, E, F), List.of(edge(A, B), edge(B, C), edge(C, D), edge(D, E)));
   }
 
   @Test
   @DisplayName("every node is a key and an edge is read from both ends")
   void shouldHoldBothEndsOfEveryEdgeWhenTheFoldIsRead() {
-    Map<String, Set<String>> adjacency = Neighbours.in(line());
+    Map<String, Set<String>> adjacency = line();
 
     assertThat(adjacency).containsOnlyKeys(A, B, C, D, E, F);
     assertThat(adjacency.get(A)).containsExactly(B);
@@ -63,7 +62,7 @@ class NeighboursTest {
   @Test
   @DisplayName("an isolated node is a key with an empty set, not omitted")
   void shouldKeyAnIsolatedNodeToAnEmptySetWhenNothingReachesIt() {
-    Map<String, Set<String>> adjacency = Neighbours.in(line());
+    Map<String, Set<String>> adjacency = line();
 
     assertThat(adjacency).containsKey(F);
     assertThat(adjacency.get(F))
@@ -74,17 +73,9 @@ class NeighboursTest {
   @Test
   @DisplayName("an edge naming an endpoint that is not a node is linked from neither end")
   void shouldLinkFromNeitherEndWhenAnEdgesEndpointIsNotANode() {
-    // Hand-built rather than folded from a log: LogProjection.of already drops a dangling edge
-    // before Neighbours ever sees it (danglingEdges), so this is the one way to exercise
-    // Neighbours.link's own defensive guard directly, as the review of issue #311 asked.
-    LogProjection projection =
-        new LogProjection(
-            Map.of(A, new NodeRecord(A, NodeKind.PERSON, "A")),
-            List.of(new EdgeRecord(A, UNCLAIMED, "MEMBER_OF", null, null, List.of())),
-            0,
-            0);
-
-    Map<String, Set<String>> adjacency = Neighbours.in(projection);
+    Map<String, Set<String>> adjacency =
+        Neighbours.in(
+            Map.of(A, new NodeRecord(A, NodeKind.PERSON, "A")), List.of(edge(A, UNCLAIMED)));
 
     assertThat(adjacency).containsOnlyKeys(A);
     assertThat(adjacency.get(A))
@@ -93,31 +84,9 @@ class NeighboursTest {
   }
 
   @Test
-  @DisplayName("a retracted node's edges are absent from the adjacency the fold hands over")
-  void shouldExcludeARetractedNodesEdgesWhenTheFoldReflectsARetraction() {
-    LogProjection projection =
-        LogProjection.of(
-            new InventedCensus.FakeAssertionLog()
-                .with(
-                    InventedCensus.node(A, NodeKind.PERSON, "A"),
-                    InventedCensus.node(B, NodeKind.PERSON, "B"),
-                    InventedCensus.node(C, NodeKind.PERSON, "C"),
-                    InventedCensus.edge(A, B, "MEMBER_OF", InventedCensus.sourced()),
-                    InventedCensus.edge(B, C, "MEMBER_OF", InventedCensus.sourced()),
-                    InventedCensus.retract(C)));
-
-    Map<String, Set<String>> adjacency = Neighbours.in(projection);
-
-    assertThat(adjacency).doesNotContainKey(C);
-    assertThat(adjacency.get(B))
-        .as("the retraction removed C's node claim and every edge touching it")
-        .doesNotContain(C);
-  }
-
-  @Test
   @DisplayName("a member of the population two hops away is reached and one three hops away is not")
   void shouldReachAtTwoHopsAndMissAtThreeWhenTheWalkIsBounded() {
-    Map<String, Set<String>> adjacency = Neighbours.in(line());
+    Map<String, Set<String>> adjacency = line();
 
     assertThat(Neighbours.reaches(adjacency, A, Set.of(A, C), 2))
         .as("C is exactly two hops from A")
@@ -130,7 +99,7 @@ class NeighboursTest {
   @Test
   @DisplayName("a neighbour outside the population is walked through and never counted")
   void shouldIgnoreANeighbourWhenItIsNotInThePopulation() {
-    Map<String, Set<String>> adjacency = Neighbours.in(line());
+    Map<String, Set<String>> adjacency = line();
 
     assertThat(Neighbours.reaches(adjacency, A, Set.of(A), 2))
         .as("B and C are there, and neither is in the population")
@@ -143,8 +112,21 @@ class NeighboursTest {
   @Test
   @DisplayName("the entity itself is never its own known neighbour")
   void shouldNotReachItselfWhenItIsTheOnlyMemberOfThePopulation() {
-    Map<String, Set<String>> adjacency = Neighbours.in(line());
+    Map<String, Set<String>> adjacency = line();
 
     assertThat(Neighbours.reaches(adjacency, E, Set.of(E), 2)).isFalse();
+  }
+
+  @Test
+  @DisplayName("a self-loop edge on the start node still does not make it its own neighbour")
+  void shouldNotReachItselfWhenASelfLoopEdgeExists() {
+    // Unlike the test above, A has no OTHER edge at all here — the only thing adjacency holds for
+    // it is the self-loop — so a `reaches` that forgot to mark `from` seen before walking would
+    // find A one hop from itself and answer true (#319 review, minor 14: "deliberately does not
+    // count at all").
+    Map<String, Set<String>> adjacency = Neighbours.in(nodes(A), List.of(edge(A, A)));
+
+    assertThat(adjacency.get(A)).as("the self-loop is recorded in the adjacency").contains(A);
+    assertThat(Neighbours.reaches(adjacency, A, Set.of(A), 2)).isFalse();
   }
 }

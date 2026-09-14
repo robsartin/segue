@@ -3,11 +3,14 @@ package com.robsartin.segue.expand;
 import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.Expanded;
 import com.robsartin.segue.domain.KnownList;
+import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.RatingAge;
+import com.robsartin.segue.domain.SecondHop;
 import com.robsartin.segue.expansion.EntityExpansion;
 import com.robsartin.segue.expansion.ExpansionSources;
 import com.robsartin.segue.ingest.GraphProjector;
 import com.robsartin.segue.ingest.IngestService;
+import com.robsartin.segue.ingest.LogProjection;
 import com.robsartin.segue.ingest.Replay;
 import com.robsartin.segue.port.ExpandContext;
 import com.robsartin.segue.port.IdentityMerge;
@@ -56,6 +59,15 @@ import org.slf4j.LoggerFactory;
  * which the census reads too, so the two tools cannot disagree about who has been expanded (#311,
  * #313). A run given a file composes no promotions and reads no rating at all. The two flags are
  * exclusive: they name different populations, and the block names one.
+ *
+ * <p><b>It reads a known-list file's second-hop neighbours, and only when {@code --second-hop}
+ * asks.</b> This third population composes the file's ids with the owner's promotions, folds them
+ * onto their canonical side, and visits the acts the graph holds a node for that no other member of
+ * that composed population is within the recommender's hop limit of — {@code domain.SecondHop} is
+ * the rule and {@code graphCensus --known --isolated} is its other reader. Unlike a {@code --known}
+ * run, this one <b>does</b> read ratings: the population it composes with is the recommender's own
+ * notion of known, promotions and all. {@code --second-hop} is exclusive with both {@code --known}
+ * and {@code --rated-since} — all three name a different population, and the block names one.
  */
 public final class ExpandCli {
 
@@ -63,7 +75,7 @@ public final class ExpandCli {
 
   private static final String USAGE =
       "usage: --db <segue.db> [--max-new-edges <n>] [--dry-run] [--rated-since <ISO-8601 instant,"
-          + " e.g. 2026-09-06T15:00:00Z>] [--known <file of QIDs>]";
+          + " e.g. 2026-09-06T15:00:00Z>] [--known <file of QIDs>] [--second-hop <file of QIDs>]";
 
   private ExpandCli() {}
 
@@ -77,13 +89,16 @@ public final class ExpandCli {
    * @param ratedSince the instant to filter promotions by, or empty for no filter
    * @param known the known-list file whose never-expanded entities are the population, or empty for
    *     the promotions. Never read here: the guide's examples are parsed with an invented home
+   * @param secondHop the known-list file whose second-hop neighbours are the population, or empty
+   *     for the promotions. Never read here, exactly as {@link #known} is not
    */
   record Options(
       Path database,
       int maxNewEdges,
       boolean dryRun,
       Optional<Instant> ratedSince,
-      Optional<Path> known) {}
+      Optional<Path> known,
+      Optional<Path> secondHop) {}
 
   /** Parse and validate, refusing anything that could not work before a store is opened. */
   static Options parse(String[] args, String envDatabase, String userHome) {
@@ -132,11 +147,24 @@ public final class ExpandCli {
       known = Path.of(knownValue);
     }
 
+    Path secondHop = null;
+    String secondHopValue = values.remove("--second-hop");
+    if (secondHopValue != null) {
+      secondHop = Path.of(secondHopValue);
+    }
+
     if (known != null && ratedSince != null) {
       // Two populations, not two filters over one: --rated-since narrows the promotions and
       // --known replaces them. A run that took both would have to say which one it covered, and
       // the block says exactly one thing (#313).
       throw usage("--known and --rated-since name different populations — give one or neither");
+    }
+    if (secondHop != null && known != null) {
+      throw usage("--second-hop and --known name different populations — give one or neither");
+    }
+    if (secondHop != null && ratedSince != null) {
+      throw usage(
+          "--second-hop and --rated-since name different populations — give one or neither");
     }
 
     if (!values.isEmpty()) {
@@ -144,7 +172,12 @@ public final class ExpandCli {
     }
 
     return new Options(
-        database, maxNewEdges, dryRun, Optional.ofNullable(ratedSince), Optional.ofNullable(known));
+        database,
+        maxNewEdges,
+        dryRun,
+        Optional.ofNullable(ratedSince),
+        Optional.ofNullable(known),
+        Optional.ofNullable(secondHop));
   }
 
   private static int number(String value) {
@@ -233,6 +266,34 @@ public final class ExpandCli {
         covered =
             Optional.of(new KnownNeverExpanded(known.name(), named.size() - population.size()));
         log.info("{} known-list entity(s) to visit", population.size());
+      } else if (options.secondHop().isPresent()) {
+        // The population is composed ONCE, here, and nothing in the run re-reads it: a run that
+        // expands its first entity must not shrink its own list mid-way. The NEXT run is smaller
+        // by the rule alone — every entity this run expanded is covered by Expanded, and an
+        // isolated act the new edges connected to something known is no longer isolated. No
+        // state, no ledger, no --limit: the dry run's `considered` is the bound (#319).
+        KnownListInput named = KnownListInput.read(options.secondHop().get());
+        // Resolved before the threshold is applied, exactly as the promotions branch does it: a
+        // merge leaves two affinity rows naming one thing. A count, never a qid and never a
+        // score (ADR 33).
+        Map<String, Integer> ratings = merges.resolve(affinity.readRatings());
+        log.info("read {} rating(s)", ratings.size());
+        // The population with promotions, because that is the recommender's own notion of known
+        // (KnownList.promoted is what recommend seeds from) and an act one hop from a promotion
+        // is not one the graph cannot place.
+        List<String> promoted = KnownList.promoted(merges.canonical(named.qids()), ratings);
+        // The log read once, and both answers taken from it — the fold is the boot's own
+        // (theReplayingToolsTakeTheBootsFold), never rebuilt through Fold.of.
+        List<LoggedAssertion> logged = assertions.readAll();
+        Expanded expanded = Expanded.in(logged).onTheCanonicalSide(merges);
+        LogProjection projection = LogProjection.of(logged, replay.fold());
+        SecondHop rule = SecondHop.of(projection.nodes(), projection.edges(), promoted, expanded);
+        population = rule.toExpand();
+        covered = Optional.of(new SecondHopNeighbours(named.name(), rule.isolated().size()));
+        log.info(
+            "{} entity(s) to visit beside {} act(s) the graph cannot place",
+            population.size(),
+            rule.isolated().size());
       } else {
         // Resolved before the threshold is applied: a merge leaves two affinity rows naming one
         // thing, and promoting both would expand the id the owner retired as well as the one he

@@ -7,14 +7,14 @@ import com.robsartin.segue.domain.KnownList;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.Recommendations;
-import com.robsartin.segue.export.LogProjection;
+import com.robsartin.segue.domain.SecondHop;
+import com.robsartin.segue.ingest.LogProjection;
 import com.robsartin.segue.support.KnownListInput;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 
 /**
  * How much of the owner's own list the graph actually covers (issue #311).
@@ -48,6 +48,11 @@ import java.util.Set;
  *
  * <p><b>No entity is named.</b> Every component is an integer or a map of integers, and the only
  * text is the file's basename, which {@link KnownListInput} is the one home of.
+ *
+ * <p><b>The isolated row is read off {@link SecondHop}, not walked here.</b> On {@link Expanded}'s
+ * own precedent, this section asks the rule its own question rather than keeping a second copy of
+ * the walk that answers it — {@code expandPromotions}'s {@code --second-hop} population is the
+ * other reader, and a copy here is how the two come to disagree.
  */
 public record KnownListCensus(String file, Population fromFile, Population withPromotions) {
 
@@ -71,6 +76,15 @@ public record KnownListCensus(String file, Population fromFile, Population withP
    *     within {@link Recommendations#MAX_HOPS} — the recommender's own route limit, read by
    *     reference here and named after it rather than after its current value, so that moving the
    *     constant cannot leave this component's name saying something else
+   * @param isolatedWithSomeoneToExpand of those, the ones with at least one person or group beside
+   *     them that no expansion has covered — {@code SecondHop.WORTH_EXPANDING} is the one statement
+   *     of which kinds those are, cited rather than restated
+   * @param isolatedWithNoOne of those, the ones with none. These two partition the row above them,
+   *     so a reader can add them and check
+   * @param distinctToExpand the distinct people and groups to expand across every isolated member
+   *     of this population, counted before any run. Only on the with-promotions population is this
+   *     the spend a {@code --second-hop} run would make, since that is the population the run
+   *     itself composes (#319)
    * @param inTheGraphByKind the same in-graph count per kind, all six emitted in {@code NodeKind}
    *     declaration order. {@code NodeCensus} gives the reason it is an {@code EnumMap} rather than
    *     {@code Map.copyOf}: that factory's order is salted per JVM, and ADR 43's byte-identical
@@ -82,6 +96,9 @@ public record KnownListCensus(String file, Population fromFile, Population withP
       int inTheGraph,
       int neverExpanded,
       int noKnownNeighbourWithinMaxHops,
+      int isolatedWithSomeoneToExpand,
+      int isolatedWithNoOne,
+      int distinctToExpand,
       Map<NodeKind, Integer> inTheGraphByKind,
       Map<NodeKind, Integer> neverExpandedByKind) {
 
@@ -112,37 +129,94 @@ public record KnownListCensus(String file, Population fromFile, Population withP
       LogProjection projection,
       Fold fold,
       Map<String, Integer> ratings) {
+    return withIsolation(known, expanded, projection, fold, ratings).knownListCensus();
+  }
+
+  /**
+   * {@link #of}'s census, plus the with-promotions {@link SecondHop} it already built — so a caller
+   * that also needs that rule, such as {@link Census#reading} for the {@code --isolated} file,
+   * takes this one rather than building a second copy of it (#319 review, minor 7).
+   */
+  public record WithIsolation(KnownListCensus knownListCensus, SecondHop withPromotionsIsolation) {
+    public WithIsolation {
+      Objects.requireNonNull(knownListCensus, "knownListCensus");
+      Objects.requireNonNull(withPromotionsIsolation, "withPromotionsIsolation");
+    }
+  }
+
+  /**
+   * {@link #of}, exposing the with-promotions {@link SecondHop} beside the census it is folded
+   * into, rather than building it and discarding it.
+   *
+   * @param known the file, as a basename and a list of ids
+   * @param expanded this log's one answer to who has been expanded, unresolved; this method reads
+   *     its seeds through the fold
+   * @param projection the fold this census already built — the only source of nodes and edges here
+   * @param fold this census's one fold (#246) — its equivalences are the only thing read here
+   * @param ratings the note-free bulk read, unresolved; this method resolves it
+   */
+  public static WithIsolation withIsolation(
+      KnownListInput known,
+      Expanded expanded,
+      LogProjection projection,
+      Fold fold,
+      Map<String, Integer> ratings) {
     Objects.requireNonNull(known, "known");
     Objects.requireNonNull(expanded, "expanded");
     Objects.requireNonNull(projection, "projection");
     Objects.requireNonNull(fold, "fold");
     Objects.requireNonNull(ratings, "ratings");
 
+    Populations populations = populationsOf(known, fold, ratings);
+    List<String> fromFile = populations.fromFile();
+    List<String> withPromotions = populations.withPromotions();
+    Expanded seeds = expanded.onTheCanonicalSide(fold.equivalences());
+    SecondHop fromFileHop = secondHop(projection, fromFile, seeds);
+    SecondHop withPromotionsHop = secondHop(projection, withPromotions, seeds);
+    KnownListCensus census =
+        new KnownListCensus(
+            known.name(),
+            read(fromFile, seeds, projection, fromFileHop),
+            read(withPromotions, seeds, projection, withPromotionsHop));
+    return new WithIsolation(census, withPromotionsHop);
+  }
+
+  /**
+   * The file's population, and that same population with promotions folded in — composed once so
+   * {@link Census#reading} can ask for the with-promotions population without deriving it a second
+   * way (#319).
+   *
+   * @param known the file, as a basename and a list of ids
+   * @param fold this census's one fold — its equivalences are the only thing read here
+   * @param ratings the note-free bulk read, unresolved; this method resolves it
+   */
+  static Populations populationsOf(KnownListInput known, Fold fold, Map<String, Integer> ratings) {
+    Objects.requireNonNull(known, "known");
+    Objects.requireNonNull(fold, "fold");
+    Objects.requireNonNull(ratings, "ratings");
     Equivalences merges = fold.equivalences();
     List<String> fromFile = merges.canonical(known.qids());
     // KnownList.promoted appends the ratings map's own keys, which resolve() has already moved
     // onto their canonical side, so nothing here canonicalises a second time.
     List<String> withPromotions = KnownList.promoted(fromFile, merges.resolve(ratings));
-    Map<String, Set<String>> adjacency = Neighbours.in(projection);
-    Expanded seeds = expanded.onTheCanonicalSide(merges);
-    return new KnownListCensus(
-        known.name(),
-        read(fromFile, seeds, projection, adjacency),
-        read(withPromotions, seeds, projection, adjacency));
+    return new Populations(fromFile, withPromotions);
   }
 
-  /** One population's figures, by one rule rather than two — {@code DegreeCensus}'s shape. */
+  /** The two populations {@link #populationsOf} composes, named for {@link #read}'s two calls. */
+  record Populations(List<String> fromFile, List<String> withPromotions) {}
+
+  /** One population's answer to "which acts can the graph not place, and what is beside them". */
+  private static SecondHop secondHop(
+      LogProjection projection, List<String> population, Expanded seeds) {
+    return SecondHop.of(projection.nodes(), projection.edges(), population, seeds);
+  }
+
   private static Population read(
-      List<String> population,
-      Expanded expanded,
-      LogProjection projection,
-      Map<String, Set<String>> adjacency) {
-    Set<String> members = Set.copyOf(population);
+      List<String> population, Expanded expanded, LogProjection projection, SecondHop secondHop) {
     Map<NodeKind, Integer> inTheGraphByKind = zeroed();
     Map<NodeKind, Integer> neverExpandedByKind = zeroed();
     int inTheGraph = 0;
     int neverExpanded = 0;
-    int alone = 0;
     for (String qid : population) {
       NodeRecord node = projection.nodes().get(qid);
       if (node == null) {
@@ -154,12 +228,24 @@ public record KnownListCensus(String file, Population fromFile, Population withP
         neverExpanded++;
         neverExpandedByKind.merge(node.kind(), 1, Integer::sum);
       }
-      if (!Neighbours.reaches(adjacency, qid, members, Recommendations.MAX_HOPS)) {
-        alone++;
+    }
+    List<String> isolated = secondHop.isolated();
+    int withSomeone = 0;
+    for (String qid : isolated) {
+      if (!secondHop.toExpandBeside(qid).isEmpty()) {
+        withSomeone++;
       }
     }
     return new Population(
-        population.size(), inTheGraph, neverExpanded, alone, inTheGraphByKind, neverExpandedByKind);
+        population.size(),
+        inTheGraph,
+        neverExpanded,
+        isolated.size(),
+        withSomeone,
+        isolated.size() - withSomeone,
+        secondHop.toExpand().size(),
+        inTheGraphByKind,
+        neverExpandedByKind);
   }
 
   private static Map<NodeKind, Integer> zeroed() {

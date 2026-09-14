@@ -18,9 +18,9 @@ import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.domain.Retractions;
 import com.robsartin.segue.domain.SameAs;
 import com.robsartin.segue.expansion.EntityExpansion;
-import com.robsartin.segue.export.LogProjection;
 import com.robsartin.segue.ingest.GraphProjector;
 import com.robsartin.segue.ingest.IngestService;
+import com.robsartin.segue.ingest.LogProjection;
 import com.robsartin.segue.musicbrainz.BridgedIdentity;
 import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
@@ -801,18 +801,14 @@ class ArchitectureTest {
    * {@code recommend}, because this tool holds the whole score map and affinity is the one part of
    * segue that cannot be regenerated from a source.
    *
-   * <p><b>{@code export} is the one sibling this tool may reach, and that is a decision rather than
-   * an oversight.</b> The fold is what the sections count: {@code Census}'s components are the list
-   * and say which reads what — most take a {@code LogProjection} and nothing else, {@code
-   * ClaimCensus} takes the raw log rows beside it, and {@code TasteCensus} takes the score map read
-   * through {@code AffinityStore.readRatings} as well as both. There are two ways to have a fold:
-   * read {@code LogProjection}, or write a third one. {@code BothFoldsAgreeTest} exists because two
-   * folds of one log drifted, and {@code Equivalences.foldEndpoints} and {@code
-   * Retractions.survives} were both moved into {@code domain} to stop it recurring — so a census
-   * that disagreed with the export about how many nodes there are would be exactly the defect this
-   * repository has spent three issues preventing. The borrowed fence is bounded the way {@code rate
-   * → recommend} is bounded (ADR 46): {@link #theExporterOnlyReads} makes {@code export} read-only,
-   * so nothing reachable through it can write.
+   * <p><b>No sibling dev tool is permitted any more, since #319.</b> {@code export} used to be the
+   * one sibling this tool could reach, for the fold: reading {@code LogProjection} is one way to
+   * have it, writing a third one is the other, and {@code BothFoldsAgreeTest} is what stops a
+   * census that disagreed with the export about how many nodes there are. That argument no longer
+   * needs a sibling dependency. {@code LogProjection} moved to {@code ingest}, so the census now
+   * reads it as the one carved-out {@code ingest} class ({@link #theCensusOpensNothingElse})
+   * instead of depending on {@code export}, and the permitted-sibling exception this rule used to
+   * carry is gone rather than merely unused.
    */
   @ArchTest
   static final ArchRule theCensusOnlyReads =
@@ -830,11 +826,12 @@ class ArchitectureTest {
                   .or(
                       ArchConditions.dependOnClassesThat(
                           JavaClass.Predicates.resideInAnyPackage(
-                              otherDevToolsAnd(List.of("census", "export"))))))
+                              otherDevToolsAnd(List.of("census"))))))
           .because(
               "ADR 63: counting is a read — the census never appends to the log, never writes the"
-                  + " graph, never writes a rating, and reaches exactly one sibling, export, so"
-                  + " that there is one fold of the log rather than two");
+                  + " graph, never writes a rating, and since #319 reaches no sibling dev tool at"
+                  + " all: the fold it counts moved to ingest, so the one permitted sibling this"
+                  + " rule used to name is gone rather than merely unused");
 
   /**
    * ADR 63: the census opens the two stores in one file, folds the log, and reaches nothing else.
@@ -851,6 +848,14 @@ class ArchitectureTest {
    * <p>{@link #REACHES_A_NETWORK} is the clause that names no client, and it is here for issue
    * #139's reason: a census is a pure function of one local file, and the entity a count is short
    * of is exactly the row that makes fetching one look like an improvement.
+   *
+   * <p><b>{@code ingest} is banned, with one class carved out of it.</b> {@code LogProjection}
+   * moved there in #319 so the promotion expander could read the fold without opening a dev-tool
+   * package, and the census counts that fold rather than writing a third one. The carve-out is by
+   * class rather than by package precisely so that the clause this rule exists for — no replay —
+   * still holds: {@code GraphProjector}, {@code Replay} and {@code IngestService} are each still
+   * refused, and the positive control for #319 planted a {@code GraphProjector} dependency in
+   * {@code CensusRun} and watched this rule fire.
    */
   @ArchTest
   static final ArchRule theCensusOpensNothingElse =
@@ -866,11 +871,16 @@ class ArchitectureTest {
                       "..mcp..",
                       "..app..",
                       "..musicbrainz..")
+                  .and(
+                      DescribedPredicate.not(
+                          JavaClass.Predicates.equivalentTo(LogProjection.class)))
                   .or(ON_A_NETWORK_API)
                   .or(REACHES_A_NETWORK))
           .because(
               "ADR 63: the census folds the log and counts what comes out — it needs no engine, no"
-                  + " replay and no network, and cannot become an MCP tool by accident");
+                  + " replay and no network, and cannot become an MCP tool by accident. The one"
+                  + " ingest class it may name is LogProjection, which is the fold it counts and"
+                  + " not a replay (#319): GraphProjector, Replay and IngestService stay banned");
 
   /**
    * ADR 43: the ratings tool reads, and it cannot write either layer.
@@ -1301,20 +1311,24 @@ class ArchitectureTest {
    * every note) would each be a way around a rule this package is otherwise held to.
    *
    * <p><b>{@code recommend} is deliberately NOT banned, and it is one of the two dependencies
-   * between dev tools that are left open — the other is {@code census → export} ({@link
-   * #theCensusOnlyReads}, ADR 63).</b> No arithmetic over the pairs is given here on purpose: the
-   * number of them changes with every tool the build registers, and it was already stale once.
-   * {@link #DEV_TOOL_PACKAGES} and {@link #otherDevToolsAnd} are the authority — each rule's {@code
-   * permitted} list is the whole of its exception, and {@code otherDevToolsAnd} throws on a name
+   * between dev tools left open.</b> {@link #theEvaluationHarnessOpensNothingElse} (ADR 65) is the
+   * other, {@code evaluate → recommend}. {@code census → export} was the third, and is gone since
+   * #319: the fold {@code census} read moved to {@code ingest}, so that dependency is refused now
+   * rather than merely one this rule never claimed. No arithmetic over the remaining pairs is given
+   * here on purpose: the number of them changes with every tool the build registers, and it was
+   * already stale once. {@link #DEV_TOOL_PACKAGES} and {@link #otherDevToolsAnd} are the authority
+   * — each rule's {@code permitted} list is the whole of its exception, and it throws on a name
    * that is not a dev tool, so the two open pairs cannot quietly become three. It is expressed as
    * the second entry in this rule's {@code permitted} list rather than as an omission from a
    * hand-written denylist, which is what makes it reviewable: the exception is the thing a reader
-   * has to justify. The candidate half of the deck is the recommender's own {@code CandidateSweep},
-   * {@code Routes} and {@code Sweep}, so that a card's routes are the routes that tool would give
-   * for the same pair rather than a second implementation that can drift. ADR 46 argues that
-   * dependency and ADR 45 moved {@code QidList} into {@code support} rather than let a shared
-   * reader create it by accident. It runs one way only: {@link #theRecommenderOpensNothingElse}
-   * bans the return trip.
+   * has to justify.
+   *
+   * <p>Its candidate half is the recommender's own sweep and routing, so a card's routes are the
+   * routes that tool would give for the same pair rather than a second implementation that can
+   * drift: {@code CandidateSweep}, {@code Routes} and {@code Sweep}. ADR 46 argues that dependency
+   * and ADR 45 moved {@code QidList} into {@code support} rather than let a shared reader create it
+   * by accident. {@link #theRecommenderOpensNothingElse} bans the return trip: it runs one way
+   * only.
    *
    * <p><b>{@code java.net} is deliberately NOT banned either</b>, and this was the one dev tool
    * that could not carry that clause until issue #284's {@link #theExpanderOpensNothingElse} joined
@@ -1402,12 +1416,13 @@ class ArchitectureTest {
   /**
    * ADR 65: the harness needs a log, an engine and the recommender, and nothing else.
    *
-   * <p><b>{@code recommend} is the permitted sibling, and it is the third such exception this
-   * project has</b> — after {@code rate → recommend} (ADR 46) and {@code census → export} (ADR 63).
-   * It is the whole design: the harness measures the shipped {@code CandidateSweep}, and a harness
-   * with a walk of its own would answer a question about itself. It runs one way only — {@link
-   * #theRecommenderOpensNothingElse} bans the return trip, over {@link #DEV_TOOL_PACKAGES}, from
-   * the moment {@code evaluate} joins that list.
+   * <p><b>{@code recommend} is the permitted sibling, and it is the second such exception this
+   * project has</b> — after {@code rate → recommend} (ADR 46). {@code census → export} (ADR 63) was
+   * the third, and is gone since #319: the fold {@code census} read moved to {@code ingest}, so
+   * that dependency no longer exists to except. It is the whole design: the harness measures the
+   * shipped {@code CandidateSweep}, and a harness with a walk of its own would answer a question
+   * about itself. It runs one way only — {@link #theRecommenderOpensNothingElse} bans the return
+   * trip, over {@link #DEV_TOOL_PACKAGES}, from the moment {@code evaluate} joins that list.
    *
    * <p>{@code java.net} because a measurement is a pure function of one local file; {@code jena} as
    * the reference adapter nothing outside the bake-off reaches; {@code tinker} deliberately not,
@@ -1984,14 +1999,19 @@ class ArchitectureTest {
    * the thing a second class would use to build a second fold. A statics-only rule would be green
    * while ViewSelector folded the whole log again through the type this issue introduced to stop
    * exactly that.
+   *
+   * <p><b>No exempt class since #319.</b> This rule used to carve out {@code LogProjection} itself
+   * — the one class in the package allowed to call {@code Fold.of} and the seven statics, because
+   * it was the fold. {@code LogProjection} left the package in #319, so the exemption named a class
+   * never again a member of {@code com.robsartin.segue.export..} — naming an absent member is
+   * vacuous rather than harmless, and the rule reads more strongly with it gone: every class
+   * residing in {@code export} now, with no exception, takes what {@code LogProjection.of} holds.
    */
   @ArchTest
   static final ArchRule theExportFoldsOnce =
       noClasses()
           .that()
           .resideInAPackage("com.robsartin.segue.export..")
-          .and()
-          .doNotBelongToAnyOf(LogProjection.class)
           .should()
           .accessTargetWhere(
               callTo("in", Equivalences.class)
@@ -2003,8 +2023,9 @@ class ArchitectureTest {
                   .or(callTo("in", Retractions.class))
                   .or(callTo("of", Fold.class)))
           .because(
-              "issue #246: LogProjection is the export's one fold — every other class in the"
-                  + " package takes what it holds, and may not build a second one through"
+              "issue #246, and #319: the export reads one fold and builds none. LogProjection is"
+                  + " that fold and is no longer in this package, so no class here is exempt —"
+                  + " every one of them takes what LogProjection.of holds, and may not reach"
                   + " Fold.of either");
 
   /**
@@ -2043,8 +2064,8 @@ class ArchitectureTest {
    * {@code GraphProjector.project}, which builds the whole fold, and each then read the log a
    * second time and rebuilt the merges from it. Since #246 the fold comes back from {@code
    * GraphProjector.replay}, so no class in any of the three has any business folding — there is no
-   * exempt class here, unlike theBootFoldsOnce and theExportFoldsOnce, because the one home of
-   * these tools' fold is not in these packages at all.
+   * exempt class here, unlike theBootFoldsOnce, because the one home of these tools' fold is not in
+   * these packages at all.
    *
    * <p>{@code evaluate} is in the list although issue #246 does not name it: it grew the same shape
    * in #242, after ADR 64 was written, and a fence that skipped it would be green over a third copy
@@ -2168,10 +2189,11 @@ class ArchitectureTest {
    *
    * <p><b>What IS banned: every sibling dev tool, {@code mcp}, {@code app} and {@code jena}.</b>
    * The siblings come from {@link #DEV_TOOL_PACKAGES} with no exception at all — this tool borrows
-   * nobody's fence, and unlike {@code rate → recommend}, {@code census → export} and {@code
-   * evaluate → recommend} there is no sweep or view it reuses. {@code mcp} and {@code app} because
-   * a dev tool that could reach the facade could become a seventh MCP tool by accident, and {@code
-   * app} is Spring. {@code jena} as the reference adapter nothing outside the bake-off reaches.
+   * nobody's fence, and unlike {@code rate → recommend} and {@code evaluate → recommend} there is
+   * no sweep or view it reuses. ({@code census → export} was a third such pair, until #319 moved
+   * the fold it existed for into {@code ingest}.) {@code mcp} and {@code app} because a dev tool
+   * that could reach the facade could become a seventh MCP tool by accident, and {@code app} is
+   * Spring. {@code jena} as the reference adapter nothing outside the bake-off reaches.
    */
   @ArchTest
   static final ArchRule theExpanderOpensNothingElse =

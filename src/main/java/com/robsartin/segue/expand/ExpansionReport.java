@@ -12,11 +12,11 @@ import java.util.Optional;
  * shape, held to it for the same reason: {@link #lines} takes an {@link ExpansionTally} whose every
  * component is an {@code int} or a map keyed by {@code SourceAdapter#id()} or {@link
  * ExpansionOutcome.Reason}, and {@link #dryRunLines} takes a {@link Preflight} of three {@code
- * int}s. Each renderer's long arity also takes an {@code Optional<Population>}, whose two shapes
- * carry an {@code Instant} and an {@code int}, or a file's basename and an {@code int}. Every
- * component but that basename is an {@code int}, an {@code Instant}, or a map keyed by an adapter
- * id or a reason; the basename is the one operator-supplied string, narrowed by {@code
- * support.KnownListInput} and held by {@code ExpansionIsSafeToPasteTest}'s positive control.
+ * int}s. Each renderer's long arity also takes an {@code Optional<Population>}, whose three shapes
+ * carry an {@code Instant} and an {@code int}, or — for the other two — a file's basename and an
+ * {@code int}. Every component but that basename is an {@code int}, an {@code Instant}, or a map
+ * keyed by an adapter id or a reason; the basename is the one operator-supplied string, narrowed by
+ * {@code support.KnownListInput} and held by {@code ExpansionIsSafeToPasteTest}'s positive control.
  *
  * <p><b>Every section prints its heading, whether or not there is a row to show under it.</b> An
  * empty {@code edge assertions by source} means no edge assertion was recorded from any source, and
@@ -197,6 +197,7 @@ public final class ExpansionReport {
     return switch (covered) {
       case RatedSince since -> sinceLine(since);
       case KnownNeverExpanded known -> knownLine(known);
+      case SecondHopNeighbours beside -> secondHopLine(beside);
     };
   }
 
@@ -216,6 +217,24 @@ public final class ExpansionReport {
         + known.excluded()
         + " excluded (some row in the log cites them as an expansion's seed) — the file's ids are"
         + " read through the merge fold, so a merge's two sides count once.";
+  }
+
+  /**
+   * Said under the header only when a second-hop file was given — {@link #sinceLine}'s argument,
+   * which carries the reasoning for a clause rather than a row.
+   *
+   * <p>The hop clause is here rather than in the guide alone because the count beside it is misread
+   * without it: the acts are counted over the population <i>with promotions</i>, which is the
+   * recommender's own notion of known, so an act one hop from a promotion is not one of them.
+   */
+  private static String secondHopLine(SecondHopNeighbours beside) {
+    return "# only the unexpanded people and groups beside the acts your own list names that the"
+        + " graph cannot place, from "
+        + beside.file()
+        + ": "
+        + beside.isolated()
+        + " act(s) — an act is one no other entity on that list, with your promotions, is within"
+        + " the recommender's hop limit of.";
   }
 
   private static List<String> render(

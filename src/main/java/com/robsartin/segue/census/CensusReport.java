@@ -15,11 +15,11 @@ import java.util.function.ToIntFunction;
  * <p><b>It renders and does not order.</b> The order is the sections' own, and each section pins it
  * with {@code containsExactly} in its own test: kinds come out in {@code NodeKind} declaration
  * order because {@link NodeCensus} counts into an {@code EnumMap} ({@code NodeCensusTest}), and
- * edge types, source ids, corroboration counts and rating scores come out ascending because {@link
- * EdgeCensus} and {@link TasteCensus} count into {@code TreeMap}s ({@code EdgeCensusTest}, {@code
- * TasteCensusTest}). This method walks those maps in iteration order and adds nothing of its own,
- * so two runs over one unchanged log produce byte-identical text — ADR 43's contract, held where
- * the counting happens rather than announced a second time here.
+ * edge types, source ids, corroboration counts and rating scores come out ascending. That is
+ * because {@link EdgeCensus} and {@link TasteCensus} both count into a {@code TreeMap}, pinned by
+ * {@code EdgeCensusTest} and {@code TasteCensusTest}. This method walks those maps in iteration
+ * order and adds nothing of its own, so two runs over one unchanged log produce byte-identical text
+ * — ADR 43's contract, held where the counting happens rather than announced a second time here.
  *
  * <p><b>The column is derived from the census, twice over.</b> Labels are padded to the widest
  * counted label, then a two-space gap, then the count right-aligned in the width of the widest
@@ -45,6 +45,11 @@ import java.util.function.ToIntFunction;
  * anywhere" clause, and the class qids in the concept-classes rows, which ADR 63's 2026-09-04
  * amendment rules the same way and for which that clause is narrowed to the {@code class Q…} prefix
  * this block owns.
+ *
+ * <p>The three rows nested under "no known neighbour" — with someone to expand beside, with no one,
+ * and distinct to expand — are all integers too, so "every value is an integer" still holds and
+ * {@code CensusIsSafeToPasteTest}'s existing two cases cover them by running over the new rows,
+ * with no third case needed.
  */
 public final class CensusReport {
 
@@ -189,6 +194,12 @@ public final class CensusReport {
         nested(
             "no known neighbour within " + Recommendations.MAX_HOPS + " hops",
             population.noKnownNeighbourWithinMaxHops()));
+    // Nested one level under the row they break down: the first two partition it and the third
+    // is what a --second-hop run would visit. The labels name no kind — SecondHop.WORTH_EXPANDING
+    // is the one statement of which kinds those are, and ADR 63's amendment cites it (#319).
+    body.add(deeper("with someone to expand beside", population.isolatedWithSomeoneToExpand()));
+    body.add(deeper("with no one", population.isolatedWithNoOne()));
+    body.add(deeper("distinct to expand", population.distinctToExpand()));
     for (NodeKind kind : NodeKind.values()) {
       String of = kind.name() + " ";
       body.add(nested(of + "in the graph", population.inTheGraphByKind().get(kind)));
@@ -202,6 +213,11 @@ public final class CensusReport {
 
   private static Line nested(String label, int value) {
     return new Line("    " + label, value);
+  }
+
+  /** A row nested one level under {@link #nested} — the three that break the isolated row down. */
+  private static Line deeper(String label, int value) {
+    return new Line("      " + label, value);
   }
 
   /** The widest of one measurement over the counted lines; section headings are not padded. */

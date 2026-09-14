@@ -6,7 +6,8 @@ import com.robsartin.segue.domain.Expanded;
 import com.robsartin.segue.domain.Fold;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeKind;
-import com.robsartin.segue.export.LogProjection;
+import com.robsartin.segue.domain.SecondHop;
+import com.robsartin.segue.ingest.LogProjection;
 import com.robsartin.segue.support.KnownListInput;
 import com.robsartin.segue.wikidata.KindMapper;
 import java.util.ArrayList;
@@ -15,7 +16,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.Set;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -42,10 +42,11 @@ import org.junit.jupiter.api.Test;
  * each, a modest pool of "touched" nodes carries a low double-digit degree from edges among
  * themselves, and the great majority of the {@link #NODE_COUNT} nodes carry no edge at all — which
  * is the shape a real Wikidata-sourced graph has, not an even distribution. Four extra nodes are
- * wired by hand rather than drawn from the random pool, so the walk's bound has a fact only the
- * generator knows to check itself against: {@link #ISOLATED} carries no edge and must be reported
- * as having no known neighbour, and {@link #TWO_HOP_A} and {@link #TWO_HOP_B} sit exactly two hops
- * apart through {@link #BRIDGE} and must not be.
+ * wired by hand rather than drawn from the random pool, so {@code SecondHop} — the rule the planted
+ * facts are asked of, since #319 moved the walk it used to be asked of into {@code domain} — has a
+ * fact only the generator knows to check itself against: {@link #ISOLATED} carries no edge and must
+ * be reported isolated, and {@link #TWO_HOP_A} and {@link #TWO_HOP_B} sit exactly two hops apart
+ * through {@link #BRIDGE} and must not be.
  *
  * <p><b>Every hub is on the file, by construction rather than by the shuffle's luck.</b> The hubs
  * are the only entities any row in this log cites as an expansion's seed, so a population drawn
@@ -336,17 +337,23 @@ class KnownListCensusScaleTest {
         .as("the per-kind in-graph counts sum to in the graph, for this population too")
         .isEqualTo(promoted.inTheGraph());
 
-    // The planted facts: an isolated member is reported, and one exactly two hops from another is
-    // not — the same control KnownListCensusTest exercises by hand, reproduced at scale.
-    Map<String, Set<String>> adjacency = Neighbours.in(projection);
-    assertThat(Neighbours.reaches(adjacency, ISOLATED, Set.copyOf(file), 2))
-        .as("ISOLATED carries no edge at all")
-        .isFalse();
-    assertThat(Neighbours.reaches(adjacency, TWO_HOP_A, Set.copyOf(file), 2))
-        .as("TWO_HOP_A reaches TWO_HOP_B through BRIDGE, exactly two hops away")
-        .isTrue();
-    assertThat(Neighbours.reaches(adjacency, TWO_HOP_B, Set.copyOf(file), 2))
-        .as("and the reverse direction reaches it too")
-        .isTrue();
+    // The planted facts, through the rule rather than through the walk it moved into (#319):
+    // an isolated member is reported and one exactly two hops from another is not.
+    SecondHop rule = SecondHop.of(projection.nodes(), projection.edges(), file, Expanded.in(log));
+
+    assertThat(rule.isolated()).as("ISOLATED carries no edge at all").contains(ISOLATED);
+    assertThat(rule.isolated())
+        .as("TWO_HOP_A reaches TWO_HOP_B through BRIDGE, exactly two hops away, and back")
+        .doesNotContain(TWO_HOP_A, TWO_HOP_B);
+
+    assertThat(population.isolatedWithSomeoneToExpand() + population.isolatedWithNoOne())
+        .as("the two nested rows partition the isolated row")
+        .isEqualTo(population.noKnownNeighbourWithinMaxHops());
+    assertThat(population.distinctToExpand())
+        .as("at most the node count the fixture builds")
+        .isLessThanOrEqualTo(projection.nodes().size());
+    assertThat(promoted.isolatedWithSomeoneToExpand() + promoted.isolatedWithNoOne())
+        .as("and for the second population too")
+        .isEqualTo(promoted.noKnownNeighbourWithinMaxHops());
   }
 }

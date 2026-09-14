@@ -3,7 +3,8 @@ package com.robsartin.segue.census;
 import com.robsartin.segue.domain.Expanded;
 import com.robsartin.segue.domain.Fold;
 import com.robsartin.segue.domain.LoggedAssertion;
-import com.robsartin.segue.export.LogProjection;
+import com.robsartin.segue.domain.SecondHop;
+import com.robsartin.segue.ingest.LogProjection;
 import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.support.KnownListInput;
@@ -29,8 +30,8 @@ import java.util.Optional;
  * each of {@code LogProjection}, {@link ClaimCensus} and {@link TasteCensus} derived the
  * retractions, the merges and the stand-ins from the rows on its own account. The overload on
  * {@code LogProjection} that this class's earlier note rejected as "widening another package's
- * public API for a dev tool's convenience" is now taken, because it is what carries the {@link
- * Fold} as well as the rows; the second read went with it.
+ * public API for a dev tool's convenience" is now taken, since it also carries the {@link Fold};
+ * the second read went with it.
  *
  * <p>{@code ArchitectureTest.theCensusFoldsOnce} is what keeps this method the only fold here.
  */
@@ -65,6 +66,47 @@ public record Census(
    * @param known the known-list file, or empty where {@code --known} was not given
    */
   public static Census of(AssertionLog log, AffinityStore ratings, Optional<KnownListInput> known) {
+    return reading(log, ratings, known).census();
+  }
+
+  /**
+   * One run's answers: the block, the fold it counted, and — when a known-list file was named — the
+   * rule the isolated file is written from (#319).
+   *
+   * <p><b>A second type rather than a component of {@link Census}.</b>
+   *
+   * <p>This record carries a {@code SecondHop}, which holds entity ids, and {@code Census}'s own
+   * guarantee is that every component of it is an integer or a map of integers but for the class
+   * qids ADR 63's 2026-09-04 amendment allows. Widening that guarantee to let one dev-tool file be
+   * written would be paying for the file with the property the block's paste rule rests on.
+   *
+   * @param census what {@code CensusReport} renders
+   * @param projection the fold, for the labels and kinds the file's rows carry
+   * @param isolation the rule over the WITH-promotions population, or empty when no {@code --known}
+   *     file was given
+   */
+  public record Reading(Census census, LogProjection projection, Optional<SecondHop> isolation) {
+
+    public Reading {
+      Objects.requireNonNull(census, "census");
+      Objects.requireNonNull(projection, "projection");
+      Objects.requireNonNull(isolation, "isolation");
+    }
+  }
+
+  /**
+   * {@link #of}'s full answer, carrying the fold and the isolation rule alongside the block.
+   *
+   * <p><b>Takes the with-promotions isolation rule from {@link KnownListCensus#withIsolation}
+   * rather than building a second one</b>: that method already composes the with-promotions
+   * population exactly as {@link KnownListCensus#of} does and folds it into a {@link SecondHop}, so
+   * asking it again here would rebuild the whole-graph adjacency for an answer already in hand
+   * (#319 review, minor 7).
+   *
+   * @param known the known-list file, or empty where {@code --known} was not given
+   */
+  public static Reading reading(
+      AssertionLog log, AffinityStore ratings, Optional<KnownListInput> known) {
     Objects.requireNonNull(log, "log");
     Objects.requireNonNull(ratings, "ratings");
     Objects.requireNonNull(known, "known");
@@ -74,16 +116,27 @@ public record Census(
     // Read once and shared, where TasteCensus used to take it inline: the same answer, so the two
     // sections that read it cannot disagree about what the taste layer says.
     Map<String, Integer> scores = ratings.readRatings();
-    return new Census(
-        NodeCensus.of(projection),
-        EdgeCensus.of(projection),
-        ClaimCensus.of(logged, projection, fold),
-        TasteCensus.of(scores, fold, projection),
-        DegreeCensus.of(projection),
-        BridgeCensus.of(projection),
-        ConceptClassCensus.of(projection),
-        // Expanded.in is built inside the map, so a run without the flag never walks the rows
-        // for it at all.
-        known.map(file -> KnownListCensus.of(file, Expanded.in(logged), projection, fold, scores)));
+    // Expanded.in is built inside the map, so a run without the flag never walks the rows
+    // for it at all.
+    Optional<Expanded> seeds = known.map(file -> Expanded.in(logged));
+    Optional<KnownListCensus.WithIsolation> withIsolation =
+        known.map(
+            file ->
+                KnownListCensus.withIsolation(file, seeds.orElseThrow(), projection, fold, scores));
+    Optional<KnownListCensus> knownList =
+        withIsolation.map(KnownListCensus.WithIsolation::knownListCensus);
+    Optional<SecondHop> isolation =
+        withIsolation.map(KnownListCensus.WithIsolation::withPromotionsIsolation);
+    Census census =
+        new Census(
+            NodeCensus.of(projection),
+            EdgeCensus.of(projection),
+            ClaimCensus.of(logged, projection, fold),
+            TasteCensus.of(scores, fold, projection),
+            DegreeCensus.of(projection),
+            BridgeCensus.of(projection),
+            ConceptClassCensus.of(projection),
+            knownList);
+    return new Reading(census, projection, isolation);
   }
 }

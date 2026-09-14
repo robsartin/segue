@@ -450,3 +450,76 @@ behaviour changed and no test was written for behaviour. The verification of thi
 full gate over an otherwise unchanged tree: `AdrIndexTest`, `AdrCitationsTest`,
 `DocumentationLinksTest` for the relative link above, and `javadoc -Werror` inside
 `./gradlew check`.
+
+**Amendment (2026-09-13, issue #319): the `known list` section breaks its `no known neighbour` row
+into three, takes an optional `--isolated <file>`, and the walk and the fold it runs on both leave
+`census`.**
+
+Nothing above is withdrawn, no decision above is edited, and this ADR keeps `Accepted`.
+
+**The three rows.** Nested one level under `no known neighbour within N hops`, in the order the
+block prints them: how many of those acts have at least one person or group beside them that no
+expansion has covered, how many have none, and how many distinct such entities there are across all
+of them. The first two partition the row above them; the third is the spend a `--second-hop` run
+would make, before any run. All three are counts, so *Every value is an integer, and that is what
+makes ADR 51 testable here* above is untouched, and `CensusIsSafeToPasteTest`'s two existing cases
+cover them by running over the new rows — no third case was needed. **The labels name no kind:
+`domain.SecondHop.WORTH_EXPANDING` is the one statement of which kinds those are, and this amendment
+cites it rather than restating it.**
+
+**Why the rows are worth printing.** The census on #317 (2026-09-13) showed that the isolated
+population and the never-expanded population barely overlap — nearly every isolated act has already
+been expanded — so the census on its own could not tell an unfetched ring from one that really
+touches nothing known. No figure from that reading is restated here.
+
+**The file.** `--isolated <out>` writes the isolated members of the population **with promotions**,
+one per line, in the population's own order, four tab-separated fields — qid, label, kind, and how
+many unexpanded people or groups are beside it — with a `#` first line naming it as personal data
+under [ADR 33](0033-taste-layer-separation.md) and issue #37 and telling the owner to keep it
+outside the working tree. It is written after the report, so a run that could not produce a report
+writes nothing; an existing file at the same path is overwritten. `--isolated` given without
+`--known` is refused with the usage message, on the same precedent `RatingsCli`'s `--names` needing
+`--promotions-off` set: one output split across two flags, so half of it is a usage error rather
+than a silent no-op.
+
+**Why the file is not paste-safe, and why that is not a contradiction.** This decision's guarantee
+is about the census **block**, and it is unchanged: the block is byte-identical with and without the
+flag. What the flag adds is a separate line, printed after the block, naming two counts — how many
+isolated acts were written and how many of them are named only by their qid — and naming no path and
+no entity. The file holds entity ids and labels off the owner's own list, which is exactly what the
+block exists never to print. **`CensusIsSafeToPasteTest`'s discipline does not apply to it and must
+not be added by analogy**, the note `ratings.NamesFile` already carries for the same reason. What
+that test gains is one case: the block on the terminal is byte-identical with and without the flag.
+
+**The walk left `census`.** It is `domain.SecondHop`'s now, with the rule it serves, so the census
+and `expandPromotions --second-hop` ask one question rather than two that could drift — the same
+`Expanded` shape this decision's 2026-09-12 amendments for #311 and #313 already read, and the same
+`KindMapper.rederive` [ADR 42](0042-store-p31-and-rederive-kind-at-projection.md) puts behind both
+projections.
+
+**The fold left `export`.** `LogProjection` is in `ingest` now. This overtakes *It counts the
+exporter's fold, so `census` depends on `export`* above: the argument in it is unchanged — there
+are two ways to have a fold, read the one there is or write a third, and a census disagreeing with
+the picture about how many nodes there are is the defect `BothFoldsAgreeTest` exists to catch — and
+that is what the move serves. What is no longer true is the dependency: the expander may not open a
+dev-tool package at all, so the fold could not go on living in one. `census → export` was the second
+dependency between two dev tools, after `rate → recommend`, and there are still two —
+`rate → recommend` and `evaluate → recommend`. `theCensusOnlyReads` now permits no sibling dev tool,
+and `theCensusOpensNothingElse` names `LogProjection` as the one `ingest` class the census may open
+— the clause that rule exists for, no replay, is intact: `GraphProjector`, `Replay` and
+`IngestService` stay banned.
+
+**The alternatives rejected that belong to the census.** Printing the isolated acts on the
+terminal: rejected, because the block is pasted into public issues and holds no id and no label,
+and a file the owner asks for by flag is the ratings tool's own answer to the same need (#285). Rows
+only, with no file: rejected, because the count says how much and only the names say which. Sorting
+the file by id: rejected, because it is a second ordering rule, and a lexical sort of qids is not a
+numeric one anyway. Moving `LogProjection` to `domain`: rejected, because it reads
+`port.AssertionLog` and `wikidata.KindMapper`, and `domain` reads neither. Moving it to `support`:
+rejected, for the reason this decision already gives for not moving it there — `support` depends on
+nothing.
+
+**The closing paragraph, in this decision's own form.** What is unit-testable landed with its own
+tests, and the verification of this *document* is the full gate over an otherwise unchanged tree:
+`AdrIndexTest`, `AdrCitationsTest`, `DocumentationLinksTest` for the relative links above, and
+`javadoc -Werror` inside `./gradlew check`.

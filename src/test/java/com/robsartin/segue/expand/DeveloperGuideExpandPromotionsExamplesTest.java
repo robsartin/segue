@@ -132,8 +132,8 @@ class DeveloperGuideExpandPromotionsExamplesTest {
   @Test
   @DisplayName(
       "the chapter shows the census, the dry run, the run, the census, then the since-variant's"
-          + " own dry run and run, then the known-list variant's census, dry run and run, in that"
-          + " order")
+          + " own dry run and run, then the known-list variant's census, dry run and run, then"
+          + " the second-hop variant's census, dry run and run, in that order")
   void shouldRunEveryStepInOrderWhenTheChapterIsRead() {
     assertThat(steps())
         .as(
@@ -147,7 +147,10 @@ class DeveloperGuideExpandPromotionsExamplesTest {
                 + " flag comes first because the never expanded count it prints is the reading"
                 + " the run is measured against — a floor rather than a countdown, which is why"
                 + " the chapter compares one dry run's considered with the previous run's"
-                + " (#315). A parser cannot see any of that",
+                + " (#315). The three --second-hop entries are the third variant, and its census"
+                + " comes first for the same reason the --known variant's does — the three nested"
+                + " rows it prints are what the run is measured against (#319). A parser cannot"
+                + " see any of that",
             CHAPTER)
         .containsExactly(
             "graphCensus",
@@ -158,13 +161,17 @@ class DeveloperGuideExpandPromotionsExamplesTest {
             "expandPromotions --rated-since",
             "graphCensus --known",
             "expandPromotions --dry-run --known",
-            "expandPromotions --known");
+            "expandPromotions --known",
+            "graphCensus --known",
+            "expandPromotions --dry-run --second-hop",
+            "expandPromotions --second-hop");
   }
 
   /**
    * The chapter's {@code ./gradlew} lines, merged across the two tasks and put back into the order
    * the guide writes them, each reduced to its task name plus whichever of {@code " --dry-run"},
-   * {@code " --rated-since"} and {@code " --known"} are among its arguments.
+   * {@code " --rated-since"}, {@code " --known"} and {@code " --second-hop"} are among its
+   * arguments.
    */
   private static List<String> steps() {
     record Numbered(int line, String command) {}
@@ -180,6 +187,9 @@ class DeveloperGuideExpandPromotionsExamplesTest {
         }
         if (example.arguments().contains("--known")) {
           command += " --known";
+        }
+        if (example.arguments().contains("--second-hop")) {
+          command += " --second-hop";
         }
         found.add(new Numbered(example.line(), command));
       }

@@ -200,6 +200,22 @@ class ExpansionReportTest {
   }
 
   @Test
+  @DisplayName("a second-hop run says which file and how many acts it was read beside")
+  void shouldNameTheFileAndTheIsolatedCountWhenTheRunCoveredTheSecondHop() {
+    List<String> lines =
+        ExpansionReport.dryRunLines(
+            new Preflight(4, 4, 0), Optional.of(new SecondHopNeighbours("known.csv", 3)));
+
+    assertThat(lines.get(0)).isEqualTo(ExpansionReport.DRY_RUN_HEADER);
+    assertThat(lines.get(1))
+        .isEqualTo(
+            "# only the unexpanded people and groups beside the acts your own list names that"
+                + " the graph cannot place, from known.csv: 3 act(s) — an act is one no other"
+                + " entity on that list, with your promotions, is within the recommender's hop"
+                + " limit of.");
+  }
+
+  @Test
   @DisplayName("every column lines up, because the padding comes from the block's own widths")
   void shouldAlignEveryColumnWhenTheCountsDifferInWidth() {
     ExpansionTally tally =
