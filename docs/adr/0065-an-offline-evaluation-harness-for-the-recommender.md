@@ -492,3 +492,43 @@ positive control seen firing on the new call site before the rename, and a plant
 full gate over an otherwise unchanged tree: `AdrIndexTest`, `AdrCitationsTest`,
 `DocumentationLinksTest` for the relative links above, and `javadoc -Werror` inside
 `./gradlew check`.
+
+**Amendment (2026-09-14, issue #321): `census → export` is gone since #319, so `evaluate → recommend`
+is the second permitted dependency between two dev tools, not the third.**
+
+Nothing above is withdrawn and no decision above is edited, the amendments above included. The
+harness's fences, its grid, its fold count, its eligible population and its output contract are
+exactly as decided. What changes is one count in the Decision, and only because the thing it counted
+stopped existing.
+
+**What #319 changed.** `LogProjection` moved from `export` to `ingest`, so that the promotion
+expander could read the fold without opening a dev-tool package —
+[ADR 63](0063-a-read-only-census-of-the-graph.md)'s 2026-09-13 amendment records the move and its
+reasons, and this entry does not restate them. The census now reads that one carved-out `ingest`
+class rather than a sibling tool, `theCensusOnlyReads` permits no dev tool at all, and
+`census → export` is refused rather than merely unused. This overtakes *`evaluate → recommend` is
+the **third** permitted dependency between two dev tools, after `rate → recommend` and
+`census → export`* above: the two that remain are `rate → recommend`
+([ADR 46](0046-the-rating-deck.md)) and this one, so it is the second.
+
+**What is unchanged.** The reason. The harness must measure *the shipped sweep*, and a harness with
+a walk of its own would answer a question about itself; `theRecommenderOpensNothingElse` still keeps
+the trip one-way. Both surviving pairs are the same shape — a tool borrowing a read-only sibling's
+work rather than copying it — which is the argument ADR 63 made for the pair that is now gone, and
+losing that pair takes nothing from it.
+
+**Where the count lives, so this entry is the last correction of its kind rather than the next
+one.** The number is not restated anywhere it can be derived. `ArchitectureTest`'s
+`DEV_TOOL_PACKAGES` list and its `otherDevToolsAnd` helper are the authority: each `OpensNothingElse`
+rule's permitted list is the whole of its exception, and the helper throws on a name that is not a
+dev tool, so the open pairs are whatever those lists say on the day they are read. The developer
+guide's layering section restates the count for a reader and was corrected alongside #319; the
+rating deck's fence declines to count at all, because its count had already gone stale once. A
+reader who needs the number should grep the permitted lists rather than trust this paragraph or the
+one it corrects.
+
+**Nothing here is unit-testable, and that is said out loud rather than left implied.** This entry
+changes no code and records no new rule; the rule it cites was narrowed under #319 with its own
+controls, described in ADR 63's amendment. The verification of the *document* is the full gate over
+an otherwise unchanged tree: `AdrIndexTest`, `AdrCitationsTest`, `DocumentationLinksTest` for the
+relative links above, and `javadoc -Werror` inside `./gradlew check`.
