@@ -523,3 +523,61 @@ nothing.
 tests, and the verification of this *document* is the full gate over an otherwise unchanged tree:
 `AdrIndexTest`, `AdrCitationsTest`, `DocumentationLinksTest` for the relative links above, and
 `javadoc -Werror` inside `./gradlew check`.
+
+**Amendment (2026-09-14, issue #326): the three rows the 2026-09-13 amendment for #319 added
+inherit `never expanded`'s floor, and this records what the first `--second-hop` run measured.**
+
+Nothing above is edited and this ADR keeps `Accepted`. `with someone to expand beside`, `with no
+one` and `distinct to expand` are read off `domain.SecondHop.toExpandBeside`, which excludes a
+neighbour only once `Expanded.covers` it — the same call, and the same rule, the `never expanded`
+row and the 2026-09-12 amendments for #311, #313 and #315 above already govern. A `--second-hop` run
+expands exactly the neighbours `distinct to expand` names, so the question this amendment answers is
+the one the amendment for #315 above already answered for `--known`, asked of a different
+population: does expanding a neighbour make `Expanded` cover it afterwards?
+
+**Not always, and the census and run on issue #323 (2026-09-14) is where that was measured.** A
+neighbour whose expansion recorded only a MusicBrainz-backed edge, or a Wikidata forward claim
+carrying no statement id, leaves no reference `Expanded.seedOf` reads — the same residual the
+2026-09-12 amendment for #311 above already grouped into a small family of residuals that all err
+the same conservative way, met here on a population `--known` never visits. The run on #323 visited
+every neighbour `distinct to expand` named for that population and recorded something for each of
+them, and the row printed afterwards did not reach zero.
+
+**So the three rows are a floor once every entity `distinct to expand` names has been visited by a
+`--second-hop` run that reported `added nothing`, `refused` and `failed` all zero and named no
+source under `unavailable`** — and not a countdown. What is left at that point is neighbours
+Wikidata (and, for the residual above, MusicBrainz) recorded something for that carries no seed
+reference this rule reads — thin, not unfetched — and no further `--second-hop` run can move it. The
+developer guide's `--second-hop` chapter is the authority on the procedure this puts in the
+operator's hands, and it is not restated here.
+
+**Alternatives rejected.**
+
+- **A visited-marker row in the log.** Declined already, on #313 and #315: the reverse pass already
+  records each neighbour it discovers as a node claim carrying that neighbour's own bare qid, and a
+  rule phrased "the reference names this entity" would read every discovered neighbour as having
+  expanded itself — `Expanded`'s own class javadoc names this as the trap its shape is written to
+  avoid.
+- **Reading the MusicBrainz adapter's own references.** `MusicBrainzSourceAdapter.toAssertion`
+  builds `sourceRef` from the seed's MBID, never its qid, so a rule reading it would need a map back
+  from a MusicBrainz MBID to a Wikidata qid, and the fold holds none: `MusicBrainzIdentity`
+  (`expansion.WikidataMusicBrainzIdentity` in the shipped wiring) answers `mbidFor` and
+  `identitiesFor` at expansion time, and nothing stores what either call returned. Direction
+  compounds it — MusicBrainz reports `forward` or `backward` relative to the seed, and
+  `toAssertion` puts the seed on whichever end that names, so `from` and `to` swap with it and the
+  reference alone cannot say which end was the seed either.
+- **A "visited" count in the census.** Nothing in the log carries it. The log records what an
+  expansion asserted, not that it ran, and the residual above is exactly the case where it asserted
+  something that carries no reference this rule reads — the same gap a visited marker would need a
+  new claim type to close, declined for its own reason by the 2026-09-12 amendment above for #315.
+
+**Nothing about the rows, the rule or the sections changes.** `domain.SecondHop`, `KnownListCensus`
+and `CensusReport` emit exactly what they emitted before; the only edit under `src/main` this issue
+makes is one javadoc sentence on `KnownListCensus.Population`'s `distinctToExpand`.
+[ADR 66](0066-expand-every-promotion-from-a-dev-tool.md)'s 2026-09-14 amendment corrects the one
+sentence there this reading overtakes.
+
+**Nothing here is unit-testable on its own, and that is said out loud rather than left implied.** No
+behaviour changed and no test was written for behaviour. The verification of this *document* is the
+full gate over an otherwise unchanged tree: `AdrIndexTest`, `AdrCitationsTest`,
+`DocumentationLinksTest` for the relative link above, and `javadoc -Werror` inside `./gradlew check`.
