@@ -546,3 +546,50 @@ stands under the rule, the amendment says it stands and names the cells. If a ch
 clause 3, fifteen points at the shipped floor and dominance over the floors where the shipped
 scorer has hits, the rule selects it and the amendment says so in the rule's words. A near miss
 stands, as always.
+
+## Note added 2026-09-14, before the thirteenth reading (issue #323)
+
+The thirteenth reading follows the first `expandPromotions --second-hop` run on 2026-09-14
+(issue #319; the run's block and the census before and after it are on issue #323), and it is
+taken with the instant the tenth reading set, `2026-09-08T02:13:42Z`. This note is committed
+before the reading exists, so the rule's ordering property survives a thirteenth time.
+
+**No clause changes**, and the notes above apply as written. "The shipped scorer" is what
+`Recommendations.DEFAULT_SCORER` holds, `resource-allocation`; the shipped floor is unchanged. The
+rule reads the shipped row's whole-population `in pool` and `hits`; the half cells decide nothing.
+
+**What moved is the graph, not the taste layer.** Between the twelfth reading and this one the
+only run against the graph was the second-hop run: it visited the unexpanded people and groups
+beside the known-list acts the graph could not place, appended a few hundred nodes and edges, and
+placed one act. No rating changed. This is the eleventh's order of change, where the graph moved
+and the ratings held, not the twelfth's. The set of rated entities is therefore the twelfth's; what
+can differ is which of them the graph now reaches, so the eligible population is the twelfth's or
+larger by exactly those. The old half is the tenth's, eleventh's and twelfth's old half; the new
+half is the twelfth's new half. If the eligible count equals the twelfth's, the folds are the
+twelfth's and the shipped row's cells may be set beside the twelfth's row for row; if it is larger,
+the folds were redrawn over the larger population and the halves read as rates only, as the twelfth
+did.
+
+**The observations allowed, deciding nothing.** The shipped setting's whole-population rate set
+beside the twelfth's, and its cells row for row where the paragraph above allows it; the two halves'
+rates, with the caveat on the new half that it is the deck's own dealing read back; and, because the
+twelfth's amendment noted the adamic-adar setting one entity above the shipped one, the two
+settings' whole-population cells set beside each other, with clause 3 alone deciding what that gap
+means. Nothing per entity, and no claim about which acts the run placed or failed to place: the
+reading scores rated entities, and the isolated acts are a different population.
+
+**The sentences, written before the table is seen.** The run added neighbourhoods beside acts
+that touch nothing rated, so the sweep from the rated entities should reach little of what it
+added; the expected effect is small. If the shipped rate stayed within a few points of the
+twelfth's, the amendment says the run did not move the reading. If it rose by more than a few
+points, the amendment says the new ring gave the sweep routes it lacked, names the cells that moved,
+and draws no inference about the scorer from it. If it fell by more than a few points, the amendment
+says so and offers no explanation the aggregates do not support. If `in pool` rose at a floor while
+`hits` held, the amendment says the new edges brought rated entities into reach without placing
+them in the top five, and nothing more.
+
+**The two sentences of the rule, written before the table is seen.** If the shipped setting
+stands under the rule, the amendment says it stands and names the cells. If a challenger clears
+clause 3, fifteen points at the shipped floor and dominance over the floors where the shipped
+scorer has hits, the rule selects it and the amendment says so in the rule's words. A near miss
+stands, as always.
