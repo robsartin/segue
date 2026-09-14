@@ -84,7 +84,11 @@ public record KnownListCensus(String file, Population fromFile, Population withP
    * @param distinctToExpand the distinct people and groups to expand across every isolated member
    *     of this population, counted before any run. Only on the with-promotions population is this
    *     the spend a {@code --second-hop} run would make, since that is the population the run
-   *     itself composes (#319)
+   *     itself composes (#319). Once a run that reported {@code added nothing}, {@code refused} and
+   *     {@code failed} all zero, and no source under {@code unavailable}, has visited everything
+   *     this counts, what is left is neighbours carrying no seed {@link Expanded} reads — the same
+   *     floor {@link #neverExpanded} is, inherited because {@link SecondHop#toExpandBeside}
+   *     excludes a neighbour only once {@link Expanded#covers} it too (#326)
    * @param inTheGraphByKind the same in-graph count per kind, all six emitted in {@code NodeKind}
    *     declaration order. {@code NodeCensus} gives the reason it is an {@code EnumMap} rather than
    *     {@code Map.copyOf}: that factory's order is salted per JVM, and ADR 43's byte-identical
