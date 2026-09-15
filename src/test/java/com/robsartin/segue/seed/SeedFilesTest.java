@@ -43,6 +43,29 @@ class SeedFilesTest {
   }
 
   @Test
+  @DisplayName("a row with an empty status reads, because a hand-written list carries none")
+  void shouldReadTheRowWhenTheStatusFieldIsEmpty() throws IOException {
+    // The reading list is written by hand, and a tour status is a fact about scheduling that a
+    // hand list has nothing to say about. The column is carried through untouched, as SeedRow's
+    // own note says, so "untouched" has to include empty.
+    Path list =
+        write(
+            "reading.csv",
+            """
+            name,kind,status
+            The Salt Almanac,book,
+            Marguerite Vale,author,
+            """);
+
+    List<SeedRow> rows = SeedFiles.readList(list);
+
+    assertThat(rows).hasSize(2);
+    assertThat(rows.get(0).kind()).isEqualTo("book");
+    assertThat(rows.get(0).status()).isEmpty();
+    assertThat(rows.get(1).status()).isEmpty();
+  }
+
+  @Test
   @DisplayName("a file that is not this list is refused rather than misread")
   void rejectsAnUnexpectedHeader() throws IOException {
     Path list = write("wrong.csv", "artist,genre\nVelvet Ossuary,folk\n");
