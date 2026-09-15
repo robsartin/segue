@@ -20,13 +20,13 @@ import java.util.Objects;
  *   <li><b>The name.</b> The queried spelling must equal the entity's own label or one of its
  *       recorded aliases, folded. Search relevance alone is not evidence: the top hit for a band's
  *       name is regularly a film, a crater or a surname.
- *   <li><b>The kind, and for a person the occupation, and for a written work the class.</b> {@code
- *       P31} separates a person from a band from a film. It does not separate a musician from a
- *       minister — every human is {@code Q5} — so for a {@code PERSON} the input list's {@code
- *       kind} column is checked against {@code P106}. It does not separate a book from the film of
- *       the book either, because both fold to {@code WORK}, so a kind that names classes is checked
- *       against the raw {@code P31} as well. This is the signal that stops a confident wrong
- *       answer, which is the only kind of wrong answer that matters here.
+ *   <li><b>The kind, plus occupation for a person and class for a written work.</b> {@code P31}
+ *       separates a person from a band from a film. It does not separate a musician from a minister
+ *       — every human is {@code Q5} — so for a {@code PERSON} the input list's {@code kind} column
+ *       is checked against {@code P106}. It does not separate a book from the film of the book
+ *       either, because both fold to {@code WORK}, so a kind that names classes is checked against
+ *       the raw {@code P31} as well. This is the signal that stops a confident wrong answer, which
+ *       is the only kind of wrong answer that matters here.
  *   <li><b>The margin.</b> Two entities can both match the name exactly and both fit the kind.
  *       Unless one is markedly better known than the other, there is nothing to choose between them
  *       and a person should look.

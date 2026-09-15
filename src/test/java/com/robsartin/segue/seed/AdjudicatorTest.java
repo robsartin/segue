@@ -3,6 +3,7 @@ package com.robsartin.segue.seed;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.wikidata.KindMapper;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -324,7 +325,7 @@ class AdjudicatorTest {
     assertThat(refused.outcome()).isEqualTo(Outcome.REVIEW);
     assertThat(refused.reason())
         .as("the line a person reads has to say which signal refused it, and what it saw")
-        .contains("class")
+        .contains("the kind, class or occupation")
         .contains(FILM_CLASS);
     assertThat(refused.qid()).as("the candidate is still reported").isEqualTo("Q0901606");
 
@@ -337,6 +338,32 @@ class AdjudicatorTest {
             List.of(work("Q0901606", "The Salt Almanac", 300, WRITTEN_CLASS)));
 
     assertThat(accepted.outcome()).isEqualTo(Outcome.ACCEPTED);
+  }
+
+  @Test
+  @DisplayName("a book accepts a candidate stating KindMapper.BOOK through Expectations.forKinds")
+  void shouldAcceptTheWorkWhenExpectationsForKindsSuppliesTheRealBookClass() {
+    // Crosses the seam AdjudicatorTest's own BOOK constant never does: the real Expectations
+    // table, not a hand-built stand-in shaped like it, is what production actually calls.
+    Decision decision =
+        Adjudicator.decide(
+            "The Salt Almanac",
+            Expectations.forKinds(List.of("book")),
+            List.of(work("Q0901609", "The Salt Almanac", 9, KindMapper.BOOK)));
+
+    assertThat(decision.outcome()).isEqualTo(Outcome.ACCEPTED);
+  }
+
+  @Test
+  @DisplayName("a book refuses a film through Expectations.forKinds along the same path")
+  void shouldReviewTheFilmWhenExpectationsForKindsSuppliesTheRealBookClass() {
+    Decision decision =
+        Adjudicator.decide(
+            "The Salt Almanac",
+            Expectations.forKinds(List.of("book")),
+            List.of(work("Q0901610", "The Salt Almanac", 300, FILM_CLASS)));
+
+    assertThat(decision.outcome()).isEqualTo(Outcome.REVIEW);
   }
 
   @Test
