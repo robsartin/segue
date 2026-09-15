@@ -20,11 +20,13 @@ import java.util.Objects;
  *   <li><b>The name.</b> The queried spelling must equal the entity's own label or one of its
  *       recorded aliases, folded. Search relevance alone is not evidence: the top hit for a band's
  *       name is regularly a film, a crater or a surname.
- *   <li><b>The kind, and for a person the occupation.</b> {@code P31} separates a person from a
- *       band from a film. It does not separate a musician from a minister — every human is {@code
- *       Q5} — so for a {@code PERSON} the input list's {@code kind} column is checked against
- *       {@code P106}. This is the signal that stops a confident wrong answer, which is the only
- *       kind of wrong answer that matters here.
+ *   <li><b>The kind, plus occupation for a person and class for a written work.</b> {@code P31}
+ *       separates a person from a band from a film. It does not separate a musician from a minister
+ *       — every human is {@code Q5} — so for a {@code PERSON} the input list's {@code kind} column
+ *       is checked against {@code P106}. It does not separate a book from the film of the book
+ *       either, because both fold to {@code WORK}, so a kind that names classes is checked against
+ *       the raw {@code P31} as well. This is the signal that stops a confident wrong answer, which
+ *       is the only kind of wrong answer that matters here.
  *   <li><b>The margin.</b> Two entities can both match the name exactly and both fit the kind.
  *       Unless one is markedly better known than the other, there is nothing to choose between them
  *       and a person should look.
@@ -92,7 +94,8 @@ public final class Adjudicator {
           Outcome.REVIEW,
           closest.qid(),
           closest.label(),
-          "name matches but the kind or occupation does not: " + describeMismatch(named));
+          "name matches but the kind, class or occupation does not: "
+              + describeMismatch(expectation, named));
     }
 
     List<CandidateFacts> ranked =
@@ -144,22 +147,34 @@ public final class Adjudicator {
    *
    * <p>The occupation half applies to people only. A band has no {@code P106}, so requiring one
    * would reject every band, and a television series has none either.
+   *
+   * <p>The class half applies to whatever names one. {@code WORK} covers albums, films, episodes
+   * and books alike, so a kind that means a written work says which classes it will take — and it
+   * is checked HERE, inside the filter, rather than after the ranking: an edition or an adaptation
+   * is regularly the better known of the two, and a check that ran after the margin would be a
+   * check the margin had already lost.
    */
   private static boolean fits(Expectation expectation, CandidateFacts candidate) {
     if (!expectation.acceptsKind(candidate.kind())) {
+      return false;
+    }
+    if (!expectation.acceptsClass(candidate.classes())) {
       return false;
     }
     return candidate.kind() != NodeKind.PERSON
         || expectation.acceptsOccupation(candidate.occupations());
   }
 
-  private static String describeMismatch(List<CandidateFacts> named) {
+  private static String describeMismatch(Expectation expectation, List<CandidateFacts> named) {
     StringBuilder out = new StringBuilder();
     for (CandidateFacts candidate : named) {
       if (!out.isEmpty()) {
         out.append("; ");
       }
       out.append(candidate.describe()).append(" is ").append(candidate.kind());
+      if (expectation.checksClass()) {
+        out.append(" of classes ").append(candidate.classes());
+      }
       if (candidate.kind() == NodeKind.PERSON) {
         out.append(" with occupations ").append(candidate.occupations());
       }

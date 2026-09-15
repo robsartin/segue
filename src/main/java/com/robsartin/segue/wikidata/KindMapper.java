@@ -22,8 +22,22 @@ import java.util.Set;
  *
  * <p>An entity can state several classes this list knows, and when they disagree the {@code
  * PRECEDENCE} below decides which kind wins - never the order the classes arrived in.
+ *
+ * <p>Three rows below are named constants, because one other package reads exactly those three. The
+ * seed tool's {@code book} kind cites this table's written-work classes as {@code WORK} rather than
+ * deciding them a second time; the note above about a second copy of the list is the reason.
+ * Nothing else here is named, because nothing outside this file refers to one row.
  */
 public final class KindMapper {
+
+  /** The class Wikidata calls "book". */
+  public static final String BOOK = "Q571";
+
+  /** The class Wikidata calls "literary work". */
+  public static final String LITERARY_WORK = "Q7725634";
+
+  /** The class Wikidata calls "written work". */
+  public static final String WRITTEN_WORK = "Q47461344";
 
   private static final Map<String, NodeKind> BY_CLASS = new LinkedHashMap<>();
 
@@ -59,12 +73,12 @@ public final class KindMapper {
     // works
     put("Q11424", NodeKind.WORK); // film
     put("Q482994", NodeKind.WORK); // album
-    put("Q7725634", NodeKind.WORK); // literary work
-    put("Q571", NodeKind.WORK); // book
+    put(LITERARY_WORK, NodeKind.WORK); // literary work
+    put(BOOK, NodeKind.WORK); // book
     put("Q134556", NodeKind.WORK); // single
     put("Q7366", NodeKind.WORK); // song
     put("Q5398426", NodeKind.WORK); // television series
-    put("Q47461344", NodeKind.WORK); // written work
+    put(WRITTEN_WORK, NodeKind.WORK); // written work
     put("Q3305213", NodeKind.WORK); // painting
     put("Q2431196", NodeKind.WORK); // audiovisual work
     // Wikidata does not settle on "film" or "album" for works either, and the consequence is

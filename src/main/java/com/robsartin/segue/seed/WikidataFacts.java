@@ -1,6 +1,5 @@
 package com.robsartin.segue.seed;
 
-import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.wikidata.ClaimMapper;
 import com.robsartin.segue.wikidata.KindMapper;
 import com.robsartin.segue.wikidata.WikidataClient;
@@ -79,7 +78,7 @@ public final class WikidataFacts {
         // tool can conclude about the entity.
         continue;
       }
-      NodeKind kind = KindMapper.fromInstanceOf(ClaimMapper.instanceOf(entity));
+      List<String> classes = ClaimMapper.instanceOf(entity);
       out.put(
           qid,
           new CandidateFacts(
@@ -87,7 +86,8 @@ public final class WikidataFacts {
               label,
               ClaimMapper.description(entity),
               ClaimMapper.aliases(entity),
-              kind,
+              KindMapper.fromInstanceOf(classes),
+              classes,
               ClaimMapper.itemValues(entity, OCCUPATION),
               entity.path("sitelinks").size()));
     }

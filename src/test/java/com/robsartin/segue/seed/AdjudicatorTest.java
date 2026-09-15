@@ -3,7 +3,10 @@ package com.robsartin.segue.seed;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.wikidata.KindMapper;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -13,15 +16,40 @@ class AdjudicatorTest {
   private static final String MUSICIAN = "Q639669"; // musician
   private static final String FOOTBALLER = "Q937857"; // association football player
 
+  // Invented classes (ADR 58), because what is under test here is the check and not the
+  // vocabulary. Which real classes a book row takes is Expectations' decision, pinned in
+  // ExpectationsTest.
+  private static final String WRITTEN_CLASS = "Q0901601";
+  private static final String OTHER_WRITTEN_CLASS = "Q0901602";
+  private static final String FILM_CLASS = "Q0901603";
+  private static final String EDITION_CLASS = "Q0901604";
+
+  /** A kind that takes a work of either written class — the shape Expectations gives "book". */
+  private static final Expectation BOOK =
+      new Expectation(
+          EnumSet.of(NodeKind.WORK), Set.of(), Set.of(WRITTEN_CLASS, OTHER_WRITTEN_CLASS));
+
+  private static CandidateFacts work(String qid, String label, int sitelinks, String... classes) {
+    return new CandidateFacts(
+        qid, label, "a work", List.of(), NodeKind.WORK, List.of(classes), List.of(), sitelinks);
+  }
+
   private static CandidateFacts person(
       String qid, String label, int sitelinks, String... occupations) {
     return new CandidateFacts(
-        qid, label, "a description", List.of(), NodeKind.PERSON, List.of(occupations), sitelinks);
+        qid,
+        label,
+        "a description",
+        List.of(),
+        NodeKind.PERSON,
+        List.of(),
+        List.of(occupations),
+        sitelinks);
   }
 
   private static CandidateFacts group(String qid, String label, int sitelinks) {
     return new CandidateFacts(
-        qid, label, "a band", List.of(), NodeKind.GROUP, List.of(), sitelinks);
+        qid, label, "a band", List.of(), NodeKind.GROUP, List.of(), List.of(), sitelinks);
   }
 
   private static Decision decide(String query, String kind, List<CandidateFacts> candidates) {
@@ -73,6 +101,7 @@ class AdjudicatorTest {
             List.of("The Tin Lanterns"),
             NodeKind.GROUP,
             List.of(),
+            List.of(),
             40);
 
     Decision decision = decide("The Tin Lanterns", "musician", List.of(duo));
@@ -96,6 +125,7 @@ class AdjudicatorTest {
             "very famous singer",
             List.of("Marguerite Vale"),
             NodeKind.PERSON,
+            List.of(),
             List.of(MUSICIAN),
             300);
 
@@ -123,6 +153,7 @@ class AdjudicatorTest {
             "very famous singer",
             List.of("V"),
             NodeKind.PERSON,
+            List.of(),
             List.of(MUSICIAN),
             300);
 
@@ -170,7 +201,14 @@ class AdjudicatorTest {
   void theWrongKindIsSkipped() {
     CandidateFacts film =
         new CandidateFacts(
-            "Q090000008", "Velvet Ossuary", "1974 film", List.of(), NodeKind.WORK, List.of(), 300);
+            "Q090000008",
+            "Velvet Ossuary",
+            "1974 film",
+            List.of(),
+            NodeKind.WORK,
+            List.of(),
+            List.of(),
+            300);
 
     Decision decision =
         decide(
@@ -185,7 +223,14 @@ class AdjudicatorTest {
   void everyNameMatchTheWrongKind() {
     CandidateFacts film =
         new CandidateFacts(
-            "Q090000010", "Velvet Ossuary", "1974 film", List.of(), NodeKind.WORK, List.of(), 300);
+            "Q090000010",
+            "Velvet Ossuary",
+            "1974 film",
+            List.of(),
+            NodeKind.WORK,
+            List.of(),
+            List.of(),
+            300);
 
     Decision decision = decide("Velvet Ossuary", "musician", List.of(film));
 
@@ -253,5 +298,103 @@ class AdjudicatorTest {
 
     assertThat(decision.outcome()).isEqualTo(Outcome.ACCEPTED);
     assertThat(decision.reason()).isNotBlank();
+  }
+
+  @Test
+  @DisplayName("a work whose stated class is one the kind names is accepted")
+  void shouldAcceptTheWorkWhenItStatesAClassTheKindNames() {
+    Decision decision =
+        Adjudicator.decide(
+            "The Salt Almanac",
+            BOOK,
+            List.of(work("Q0901605", "The Salt Almanac", 9, WRITTEN_CLASS)));
+
+    assertThat(decision.outcome()).isEqualTo(Outcome.ACCEPTED);
+    assertThat(decision.qid()).isEqualTo("Q0901605");
+  }
+
+  @Test
+  @DisplayName("the film of the book is refused on its class, however well known it is")
+  void shouldReviewTheFilmWhenOnlyItsClassSeparatesItFromTheBook() {
+    Decision refused =
+        Adjudicator.decide(
+            "The Salt Almanac",
+            BOOK,
+            List.of(work("Q0901606", "The Salt Almanac", 300, FILM_CLASS)));
+
+    assertThat(refused.outcome()).isEqualTo(Outcome.REVIEW);
+    assertThat(refused.reason())
+        .as("the line a person reads has to say which signal refused it, and what it saw")
+        .contains("the kind, class or occupation")
+        .contains(FILM_CLASS);
+    assertThat(refused.qid()).as("the candidate is still reported").isEqualTo("Q0901606");
+
+    // The control, one field wide: the same title, the same sitelink count, the same identifier,
+    // one class changed. Without it, the refusal above could be about anything.
+    Decision accepted =
+        Adjudicator.decide(
+            "The Salt Almanac",
+            BOOK,
+            List.of(work("Q0901606", "The Salt Almanac", 300, WRITTEN_CLASS)));
+
+    assertThat(accepted.outcome()).isEqualTo(Outcome.ACCEPTED);
+  }
+
+  @Test
+  @DisplayName("a book accepts a candidate stating KindMapper.BOOK through Expectations.forKinds")
+  void shouldAcceptTheWorkWhenExpectationsForKindsSuppliesTheRealBookClass() {
+    // Crosses the seam AdjudicatorTest's own BOOK constant never does: the real Expectations
+    // table, not a hand-built stand-in shaped like it, is what production actually calls.
+    Decision decision =
+        Adjudicator.decide(
+            "The Salt Almanac",
+            Expectations.forKinds(List.of("book")),
+            List.of(work("Q0901609", "The Salt Almanac", 9, KindMapper.BOOK)));
+
+    assertThat(decision.outcome()).isEqualTo(Outcome.ACCEPTED);
+  }
+
+  @Test
+  @DisplayName("a book refuses a film through Expectations.forKinds along the same path")
+  void shouldReviewTheFilmWhenExpectationsForKindsSuppliesTheRealBookClass() {
+    Decision decision =
+        Adjudicator.decide(
+            "The Salt Almanac",
+            Expectations.forKinds(List.of("book")),
+            List.of(work("Q0901610", "The Salt Almanac", 300, FILM_CLASS)));
+
+    assertThat(decision.outcome()).isEqualTo(Outcome.REVIEW);
+  }
+
+  @Test
+  @DisplayName("an edition does not outrank the work it is an edition of")
+  void shouldPreferTheWorkWhenAnEditionSharesItsTitleAndIsBetterKnown() {
+    // The edition would win the margin outright. It never reaches it: the class check sits
+    // inside the same filter as the kind check, so the ranking only ever sees what fits.
+    Decision decision =
+        Adjudicator.decide(
+            "The Salt Almanac",
+            BOOK,
+            List.of(
+                work("Q0901607", "The Salt Almanac", 120, EDITION_CLASS),
+                work("Q0901605", "The Salt Almanac", 9, WRITTEN_CLASS)));
+
+    assertThat(decision.outcome()).isEqualTo(Outcome.ACCEPTED);
+    assertThat(decision.qid()).isEqualTo("Q0901605");
+  }
+
+  @Test
+  @DisplayName("two written works one title apart are a question for a person")
+  void shouldReviewWhenTwoWrittenWorksShareATitleWithinTheMargin() {
+    Decision decision =
+        Adjudicator.decide(
+            "The Salt Almanac",
+            BOOK,
+            List.of(
+                work("Q0901605", "The Salt Almanac", 20, WRITTEN_CLASS),
+                work("Q0901608", "The Salt Almanac", 17, OTHER_WRITTEN_CLASS)));
+
+    assertThat(decision.outcome()).isEqualTo(Outcome.REVIEW);
+    assertThat(decision.reason()).contains("margin");
   }
 }

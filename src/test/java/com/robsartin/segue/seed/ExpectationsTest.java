@@ -3,6 +3,7 @@ package com.robsartin.segue.seed;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.wikidata.KindMapper;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -101,5 +102,48 @@ class ExpectationsTest {
 
     assertThat(expectation.acceptsKind(NodeKind.EVENT)).isTrue();
     assertThat(expectation.checksOccupation()).isFalse();
+  }
+
+  @Test
+  @DisplayName("a book is a work of a written class, and the other work kind still names none")
+  void shouldExpectAWorkOfAWrittenClassWhenTheKindIsBook() {
+    Expectation expectation = Expectations.forKind("book");
+
+    assertThat(expectation.acceptsKind(NodeKind.WORK)).isTrue();
+    assertThat(expectation.acceptsKind(NodeKind.PERSON))
+        .as("an unrecognised kind constrains nothing, so this is also the test that it IS known")
+        .isFalse();
+    assertThat(expectation.checksClass()).isTrue();
+    assertThat(expectation.classes())
+        .as("the ids live in KindMapper and are cited, never restated")
+        .containsExactlyInAnyOrder(
+            KindMapper.BOOK, KindMapper.LITERARY_WORK, KindMapper.WRITTEN_WORK);
+    assertThat(Expectations.forKind("tv-show").checksClass())
+        .as("the other WORK kind is untouched")
+        .isFalse();
+  }
+
+  @Test
+  @DisplayName("one row's kind carries its classes through the union the resolver asks for")
+  void shouldCarryTheClassesThroughWhenTheOnlyRoleIsBook() {
+    // NameGroup.expectation() calls forKinds for every group, including a group of one row, so
+    // this — not forKind — is the path a book row is judged by.
+    Expectation expectation = Expectations.forKinds(List.of("book"));
+
+    assertThat(expectation.checksClass()).isTrue();
+    assertThat(expectation.classes()).isEqualTo(Expectations.forKind("book").classes());
+  }
+
+  @Test
+  @DisplayName("a name listed as both a book and an author checks no class")
+  void shouldCheckNoClassWhenAnotherRoleConstrainsNone() {
+    // The permissive rule the occupation union already follows, for the same reason: the author
+    // half resolves to a PERSON, which states none of the written classes, so intersecting would
+    // refuse the very row the union exists to serve.
+    Expectation expectation = Expectations.forKinds(List.of("book", "author"));
+
+    assertThat(expectation.acceptsKind(NodeKind.PERSON)).isTrue();
+    assertThat(expectation.acceptsKind(NodeKind.WORK)).isTrue();
+    assertThat(expectation.checksClass()).isFalse();
   }
 }
