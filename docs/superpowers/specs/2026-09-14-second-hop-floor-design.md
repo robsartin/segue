@@ -128,12 +128,15 @@ discipline #315's plan used, because nothing here can red on the prose itself.
 ## Premise corrections
 
 1. **No test in `src/test` restates the sentence being replaced.**
-   `grep -rn "should be down\|smaller run is a later run" docs/ src/test` finds the sentence only in
-   `docs/developer-guide.md` itself (twice, both lines of the one paragraph being replaced) and in
-   two already-committed planning documents for #319 (`docs/superpowers/plans/2026-09-13-second-hop.md`,
-   `docs/superpowers/specs/2026-09-13-second-hop-design.md`), which this issue does not touch — they
-   are the historical record of what #319 shipped, not live prose. Unlike #315's Task 3, this plan
-   needs no matching test-message edit.
+   `grep -rn "should be down\|smaller run is a later run" docs/ src/test` finds the sentence in
+   `docs/developer-guide.md` itself (twice, both lines of the one paragraph being replaced), in two
+   already-committed planning documents for #319 (`docs/superpowers/plans/2026-09-13-second-hop.md`,
+   `docs/superpowers/specs/2026-09-13-second-hop-design.md`), and in `docs/adr/0066-…`'s 2026-09-13
+   amendment for #319, above this issue's own 2026-09-14 amendment there. None of the three needs a
+   matching edit, for two different reasons: the two planning documents are the historical record of
+   what #319 shipped, not live prose, and the ADR occurrence predates this issue's amendment, so ADR
+   immutability forbids touching it — only a further dated amendment could correct it, and nothing
+   here asks for one. Unlike #315's Task 3, this plan needs no matching test-message edit.
 
 2. **ADR 66's 2026-09-13 amendment for #319 is not merely silent about the floor — one of its own
    clauses reads as false in the residual case.** The issue's *Shape* section asks only that ADR 63

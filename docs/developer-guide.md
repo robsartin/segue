@@ -1871,9 +1871,12 @@ row is it what a `--second-hop` run would visit — the distinct people and grou
 the first of those two, counted before any run, over the same population the run itself composes.
 The labels name no kind on purpose —
 `domain.SecondHop.WORTH_EXPANDING` is the one statement of which kinds count, and the labels cite it
-rather than restating it. **All three inherit `never expanded`'s floor**, for the same reason: a
-neighbour a `--second-hop` run visited and expanded, but whose recorded reference `Expanded.seedOf`
-cannot read a seed out of, stays counted.
+rather than restating it. **The same residual holds all three short of what a complete expansion
+would leave them at, but not the same way**: a neighbour a `--second-hop` run visited and expanded,
+but whose recorded reference `Expanded.seedOf` cannot read a seed out of, keeps its act counted
+under `with someone to expand beside` and out of `with no one` — so `with someone to expand beside`
+and `distinct to expand` sit at a floor they cannot fall below, and `with no one` sits at a ceiling
+it cannot rise past.
 [Expanding every promotion](#expanding-every-promotion) says how to tell a `--second-hop` run has
 reached it
 ([ADR 63](adr/0063-a-read-only-census-of-the-graph.md)'s 2026-09-14 amendment for #326).
@@ -3414,9 +3417,12 @@ own three rows, but only the `file and promotions` sub-section's `distinct to ex
 `--second-hop` run would visit, counted before any run — the same `SecondHop.toExpand()` the run
 itself visits, over the same with-promotions population. An act under `with no one` is one nothing
 here can help: either its ring is fully fetched already, or its ring is works and places rather than
-people and groups. **All three inherit the floor `never expanded` already has**, because
-`SecondHop.toExpandBeside` excludes a neighbour only once `Expanded` already covers it — the same
-rule and the same residual
+people and groups. **The three do not all move the same way.** `SecondHop.toExpandBeside` excludes a
+neighbour only once `Expanded` already covers it, and a neighbour a run visited and expanded without
+leaving a reference `Expanded` reads keeps its act counted under `with someone to expand beside` and
+out of `with no one` — so `with someone to expand beside` and `distinct to expand` sit at a floor
+they cannot fall below, and `with no one` sits at a ceiling it cannot rise past — the same rule and
+the same residual
 ([ADR 63](adr/0063-a-read-only-census-of-the-graph.md)'s 2026-09-14 amendment for #326).
 
 **The file is personal data.** Write it outside the working tree, and never attach it to an issue.
@@ -3444,20 +3450,30 @@ Take the census again, with the same file, and compare it against the one you to
 and `edges` should be up.
 
 **When to stop running this at all.** Read the run's own block before you take that second census.
-With `added nothing`, `refused` and `failed` all zero and no source named under `unavailable`, every
-entity `considered` named was visited and recorded something, so whatever `distinct to expand` still
-counts afterwards was visited too and is Wikidata-thin: `SecondHop.toExpandBeside` excludes a
-neighbour only once `Expanded` covers it, the same rule and the same residual the `--known` variant's
-stopping rule above reads — a neighbour this run recorded only a MusicBrainz-backed edge or a
-Wikidata forward claim with no id for leaves no seed reference and stays counted for good
-([ADR 63](adr/0063-a-read-only-census-of-the-graph.md)'s 2026-09-14 amendment for #326). Stop there;
-a second run visits the same neighbours, calls the same public APIs and moves neither row. **When
-the block named a `failed` entity or a source under `unavailable`**, that guarantee does not hold,
-and the `--known` variant's own rule applies instead: compare this dry run's `considered` against
-the previous `--second-hop` dry run's, over the same file — a fall means the last run reached
-something and another is worth taking, and an unchanged count means the rest is thin only once a run
-reporting no failure and no unavailable source has read it. There is still no `--limit`: the dry
-run's `considered` is the only bound.
+Check six cells: `added nothing`, `refused` and `failed` in `promotions`, `neighbours skipped` and
+`endpoints refused` under `shortfalls`, and no source named under `unavailable`. `added nothing` is
+summed over every source, so a neighbour whose Wikidata answer was nothing but whose MusicBrainz
+answer still recorded an edge is not under it; and `EntityExpansion.expand` catches a per-neighbour
+`WikidataUnavailableException` and an `UnknownEndpointException` on the append and folds each into
+`neighbours skipped` or `endpoints refused`, never into `unavailable`. So all six, not four, have to
+read zero — a `refused` entirely `local entity` aside, addressed below — before the block says every
+visited entity's Wikidata answer was recorded in full, and only then is whatever `distinct to
+expand` still counts afterwards known to be Wikidata-thin rather than merely unlucky on one source
+or one neighbour: `SecondHop.toExpandBeside` excludes a neighbour only once `Expanded` covers it,
+the same rule and the same residual the `--known` variant's stopping rule above reads — a neighbour
+this run recorded only a MusicBrainz-backed edge or a Wikidata forward claim with no id for leaves
+no seed reference and stays counted for good
+([ADR 63](adr/0063-a-read-only-census-of-the-graph.md)'s 2026-09-14 amendment for #326). A `refused`
+that is entirely `local entity` — the owner's own minted stand-ins, which no source will ever answer
+for — is permanent on its own and does not withhold this guarantee; it is the other five cells and
+the `unavailable` section that have to come back clean. Stop there; a second run visits the same
+neighbours, calls the same public APIs and moves neither `distinct to expand` nor `with someone to
+expand beside`. **When any of the checklist's six cells is not zero** (a `refused` that is entirely
+`local entity` aside), that guarantee does not hold, and the `--known` variant's own rule applies
+instead: compare this dry run's `considered` against the previous `--second-hop` dry run's, over the
+same file — a fall means the last run reached something and another is worth taking, and an
+unchanged count means the rest is thin only once a run reporting all six cells clean has read it.
+There is still no `--limit`: the dry run's `considered` is the only bound.
 
 This chapter's own reading is a census, not an evaluation. Whether growing the pool this way is
 enough to warrant the next entry under the recommender's own calibration rule is decided there, not
