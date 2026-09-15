@@ -3539,9 +3539,11 @@ the `--known` chapter states in full.
 ```
 
 **What the two blocks say that no other run's do.** The dry run gains a `to add` row, and
-`considered` is then exactly `in the graph` plus `minted` plus `to add` — read `to add` against
-step 2's `named` minus `in the graph` and they should agree; a disagreement is a defect in one of
-them. The real block gains an `added` row under `promotions`, counting entities this run
+`considered` is then exactly `in the graph` plus `minted` plus `to add` — read step 2's `named`
+minus `in the graph` against this run's `minted` plus `to add` and they should agree: an id shaped
+like one of the owner's own lands under `minted` here, never under `to add`, whatever the graph
+currently holds for it, and a disagreement beyond that is a defect in one of them. The real block
+gains an `added` row under `promotions`, counting entities this run
 recorded before expanding them, and `refused, by reason` may gain `no such entity` — an id your
 file names that Wikidata has no entity at, which is a different fault from `unknown entity` and
 is worth a look at the mapping row it came from. **Both rows print only when they are not zero**,
@@ -3555,8 +3557,12 @@ failure, and a later run reaches it.
 ./gradlew graphCensus --args="--db $HOME/.segue/segue.db --known $HOME/rejected.csv"
 ```
 
-`named` is unchanged, `in the graph` is up by what `added` said, and `never expanded` is down by
-what the run expanded.
+`named` is unchanged, `in the graph` is up by at least what `added` said — expanding one added
+entity can record a node for a neighbour the file also names before this run's own loop reaches
+that neighbour's row — and `never expanded` falls by at most what the run expanded: an entity
+Wikidata states nothing about in the vocabulary segue registers stays in the count however many
+times it is expanded, exactly as [What the two sub-sections mean](#what-the-two-sub-sections-mean)
+already says of the row in general.
 
 **5. A deck session with this file as the deck's own `--known`:**
 
