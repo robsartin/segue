@@ -154,34 +154,35 @@ public final class Expectations {
   static {
     // A musician on this list is as often a band as a person, so both kinds are allowed and the
     // occupation check only bites on the ones that turn out to be human.
-    put("musician", EnumSet.of(NodeKind.PERSON, NodeKind.GROUP), MUSIC);
-    put("composer", EnumSet.of(NodeKind.PERSON), MUSIC);
-    put("conductor", EnumSet.of(NodeKind.PERSON), MUSIC);
-    put("comedian", EnumSet.of(NodeKind.PERSON, NodeKind.GROUP), COMEDY);
-    put("author", EnumSet.of(NodeKind.PERSON), WRITING);
-    put("actor", EnumSet.of(NodeKind.PERSON), ACTING);
-    put("director", EnumSet.of(NodeKind.PERSON), DIRECTING);
-    put("broadcaster", EnumSet.of(NodeKind.PERSON), BROADCASTING);
+    put("musician", EnumSet.of(NodeKind.PERSON, NodeKind.GROUP), MUSIC, Set.of());
+    put("composer", EnumSet.of(NodeKind.PERSON), MUSIC, Set.of());
+    put("conductor", EnumSet.of(NodeKind.PERSON), MUSIC, Set.of());
+    put("comedian", EnumSet.of(NodeKind.PERSON, NodeKind.GROUP), COMEDY, Set.of());
+    put("author", EnumSet.of(NodeKind.PERSON), WRITING, Set.of());
+    put("actor", EnumSet.of(NodeKind.PERSON), ACTING, Set.of());
+    put("director", EnumSet.of(NodeKind.PERSON), DIRECTING, Set.of());
+    put("broadcaster", EnumSet.of(NodeKind.PERSON), BROADCASTING, Set.of());
     // Groups: no occupation exists to check, so the kind is the whole test.
-    put("a-cappella", EnumSet.of(NodeKind.GROUP), Set.of());
-    put("tribute", EnumSet.of(NodeKind.GROUP), Set.of());
-    put("orchestra", EnumSet.of(NodeKind.GROUP), Set.of());
-    put("choir", EnumSet.of(NodeKind.GROUP), Set.of());
-    put("ensemble", EnumSet.of(NodeKind.GROUP), Set.of());
-    put("org", EnumSet.of(NodeKind.GROUP), Set.of());
-    put("tv-show", EnumSet.of(NodeKind.WORK), Set.of());
+    put("a-cappella", EnumSet.of(NodeKind.GROUP), Set.of(), Set.of());
+    put("tribute", EnumSet.of(NodeKind.GROUP), Set.of(), Set.of());
+    put("orchestra", EnumSet.of(NodeKind.GROUP), Set.of(), Set.of());
+    put("choir", EnumSet.of(NodeKind.GROUP), Set.of(), Set.of());
+    put("ensemble", EnumSet.of(NodeKind.GROUP), Set.of(), Set.of());
+    put("org", EnumSet.of(NodeKind.GROUP), Set.of(), Set.of());
+    put("tv-show", EnumSet.of(NodeKind.WORK), Set.of(), Set.of());
     // A fictional character has no NodeKind of its own — ADR 21 has six and none of them is
     // "character" — so it lands in CONCEPT, which is what an unmapped P31 always becomes.
-    put("character", EnumSet.of(NodeKind.CONCEPT), Set.of());
+    put("character", EnumSet.of(NodeKind.CONCEPT), Set.of(), Set.of());
     // No usable occupation vocabulary, so these constrain the kind and nothing else.
-    put("public-figure", EnumSet.of(NodeKind.PERSON), Set.of());
-    put("puppeteer", EnumSet.of(NodeKind.PERSON), Set.of());
+    put("public-figure", EnumSet.of(NodeKind.PERSON), Set.of(), Set.of());
+    put("puppeteer", EnumSet.of(NodeKind.PERSON), Set.of(), Set.of());
   }
 
   private Expectations() {}
 
-  private static void put(String kind, Set<NodeKind> kinds, Set<String> occupations) {
-    Expectation prior = BY_KIND.put(kind, new Expectation(kinds, occupations));
+  private static void put(
+      String kind, Set<NodeKind> kinds, Set<String> occupations, Set<String> classes) {
+    Expectation prior = BY_KIND.put(kind, new Expectation(kinds, occupations, classes));
     if (prior != null) {
       throw new IllegalStateException("two expectations claim the kind " + kind);
     }
@@ -221,10 +222,10 @@ public final class Expectations {
         anyUnconstrained = true;
       }
     }
-    return new Expectation(nodeKinds, anyUnconstrained ? Set.of() : occupations);
+    return new Expectation(nodeKinds, anyUnconstrained ? Set.of() : occupations, Set.of());
   }
 
   private static Expectation unconstrained() {
-    return new Expectation(ANY_KIND, Set.of());
+    return new Expectation(ANY_KIND, Set.of(), Set.of());
   }
 }
