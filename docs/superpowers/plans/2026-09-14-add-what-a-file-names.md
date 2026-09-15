@@ -1730,7 +1730,7 @@ Nothing here runs the tool.
   > entities it does not: the rows the original names list carried that Setlist Scout rejected as
   > non-touring — the authors, thinkers and comedians `seed.SeedRow`'s note on `status` calls the
   > relations this graph is short of. The seed tool resolved them to ids in the same mapping as the
-  > touring acts ([ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)) and stopped there, because
+  > touring acts ([ADR 40](../../adr/0040-bulk-seeding-as-a-dev-tool.md)) and stopped there, because
   > nothing in this repository adds entities in bulk. `--add`, given beside `--known`, adds an id the
   > file names that the graph holds no node for — the same fetch-and-record the `add_entity` MCP tool
   > does, through the shared `expansion.EntityAddition` — and then expands it, in the same pass and
@@ -1756,7 +1756,7 @@ Nothing here runs the tool.
   > `QidList` reads that file exactly as it reads the mapping — the first comma-separated field that
   > is exactly a qid — so no reshaping is needed and the review rows, which carry no qid of their
   > own, are passed over. **The file is personal data**: a list of who someone reads and watches is
-  > what [ADR 33](adr/0033-taste-layer-separation.md) governs, `*.csv` is gitignored beside `*.db`,
+  > what [ADR 33](../../adr/0033-taste-layer-separation.md) governs, `*.csv` is gitignored beside `*.db`,
   > and the protection is where the file lives rather than what git ignores (issue #37).
   >
   > **2. The census over it**, before anything is written:
@@ -1808,7 +1808,7 @@ Nothing here runs the tool.
   > **6. Everything else keeps the touring file.** `recommend`, `graphCensus --known` and the
   > evaluation harness all keep taking the list they always took. Whichever of these new rows you
   > rated at or above `KnownList.PROMOTION_RATING` is on that list already, by the promotion rule
-  > ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)) — which is why there is no
+  > ([ADR 48](../../adr/0048-a-high-rating-counts-as-something-you-have.md)) — which is why there is no
   > second membership rule here and no merging of the two files.
   >
   > **7. The next reading** follows on the recommender's normal rule, with its own note, after the
@@ -1891,7 +1891,7 @@ Nothing here runs the tool.
   > make, so `theExpanderWritesThroughIngestAlone` holds unchanged, and no dev-tool package list
   > gains or loses a name.
   >
-  > **[ADR 26](0026-mcp-tool-surface.md) and [ADR 19](0019-assertion-log-source-of-truth.md) are
+  > **[ADR 26](../../adr/0026-mcp-tool-surface.md) and [ADR 19](../../adr/0019-assertion-log-source-of-truth.md) are
   > untouched, and this says so out loud.** The tool surface is still six tools: nothing was added to
   > it, nothing was removed from it, and `add_entity` returns the same result for the same input with
   > one exception named below. The single writer is still `IngestService`: the new rule appends
@@ -1953,7 +1953,7 @@ Nothing here runs the tool.
   >   "refuse what the graph lacks" the default, which is what the 2026-09-12 amendment chose.
   > - **Treating the added rows as known without rating them.** Rejected: the owner chose to rate
   >   first, and the promotion rule
-  >   ([ADR 48](0048-a-high-rating-counts-as-something-you-have.md)) already turns a high rating into
+  >   ([ADR 48](../../adr/0048-a-high-rating-counts-as-something-you-have.md)) already turns a high rating into
   >   membership, so a second membership rule would be two answers to one question.
   > - **Merging the rejected rows into the touring file.** Rejected: that is the alternative above
   >   reached from the other side — it would make them known to every tool at once — and it would put
