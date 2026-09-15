@@ -176,7 +176,8 @@ public final class SegueService {
   }
 
   /**
-   * The three sentences this method has always returned, byte for byte.
+   * The three sentences this method has always returned, byte for byte, plus a fourth added on
+   * #328.
    *
    * <p>{@link ExpansionOutcome.Refused} carries a reason and no number, deliberately — it is read
    * by a second caller that renders a tally label rather than a sentence. The one sentence that

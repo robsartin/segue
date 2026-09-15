@@ -154,7 +154,13 @@ class ExpansionReportTest {
         refusalsByReason);
   }
 
-  /** The golden tally with three entities added before they were expanded. */
+  /**
+   * The golden tally with three entities added before they were expanded.
+   *
+   * <p>{@code considered} is 16, not 12, to satisfy {@link ExpansionTally}'s documented identity:
+   * considered equals expanded plus refused plus failed, and {@code refusalsByReason} sums to 6, so
+   * 9 + 6 + 1 = 16.
+   */
   private static ExpansionTally tallyWithAdditions() {
     Map<String, Integer> edgesBySource = new LinkedHashMap<>();
     edgesBySource.put("wikidata", 60);
@@ -164,7 +170,7 @@ class ExpansionReportTest {
     refusalsByReason.put(ExpansionOutcome.Reason.LOCAL_ENTITY, 1);
     refusalsByReason.put(ExpansionOutcome.Reason.NO_SUCH_ENTITY, 4);
     return new ExpansionTally(
-        12,
+        16,
         3,
         9,
         2,
@@ -188,7 +194,7 @@ class ExpansionReportTest {
     assertThat(lines.subList(lines.indexOf("promotions"), lines.indexOf("promotions") + 7))
         .containsExactly(
             "promotions",
-            "  considered                12",
+            "  considered                16",
             "  added                      3",
             "  expanded                   9",
             "  added nothing              2",
@@ -206,7 +212,11 @@ class ExpansionReportTest {
   @Test
   @DisplayName("the block is byte-identical to today's when the run added nothing")
   void shouldPrintNoAddedRowWhenTheRunAddedNothing() {
-    assertThat(ExpansionReport.lines(goldenTally())).containsExactlyElementsOf(GOLDEN_BLOCK);
+    List<String> lines = ExpansionReport.lines(goldenTally());
+
+    assertThat(lines)
+        .noneMatch(line -> line.trim().matches("added\\s+\\d+"))
+        .containsExactlyElementsOf(GOLDEN_BLOCK);
   }
 
   @Test
@@ -258,9 +268,19 @@ class ExpansionReportTest {
   @Test
   @DisplayName("the dry run block is byte-identical to today's when nothing would be added")
   void shouldPrintNoToAddRowWhenTheRunWouldAddNothing() {
-    assertThat(ExpansionReport.dryRunLines(new Preflight(4, 2, 1, 0)))
+    List<String> lines = ExpansionReport.dryRunLines(new Preflight(4, 2, 1, 0));
+
+    assertThat(lines)
         .as("a run without --add can only ever pass zero here, so every pasted block survives")
-        .containsExactlyElementsOf(ExpansionReport.dryRunLines(new Preflight(4, 2, 1, 0)))
+        .noneMatch(line -> line.trim().matches("to add\\s+\\d+"))
+        .containsExactly(
+            "# segue promotion expansion — dry run: appends nothing. Aggregates only"
+                + " (ADR 51, ADR 63).",
+            "",
+            "promotions",
+            "  considered    4",
+            "  in the graph  2",
+            "  minted        1")
         .hasSize(6);
   }
 
