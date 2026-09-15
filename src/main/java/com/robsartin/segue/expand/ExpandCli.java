@@ -6,6 +6,7 @@ import com.robsartin.segue.domain.KnownList;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.RatingAge;
 import com.robsartin.segue.domain.SecondHop;
+import com.robsartin.segue.expansion.EntityAddition;
 import com.robsartin.segue.expansion.EntityExpansion;
 import com.robsartin.segue.expansion.ExpansionSources;
 import com.robsartin.segue.ingest.GraphProjector;
@@ -68,6 +69,15 @@ import org.slf4j.LoggerFactory;
  * run, this one <b>does</b> read ratings: the population it composes with is the recommender's own
  * notion of known, promotions and all. {@code --second-hop} is exclusive with both {@code --known}
  * and {@code --rated-since} — all three name a different population, and the block names one.
+ *
+ * <p><b>It adds what the file names that the graph lacks, and only when {@code --add} asks.</b> The
+ * population is composed exactly as a {@code --known} run composes it; what changes is that an id
+ * in it the graph holds no node for is added through {@code expansion.EntityAddition} and then
+ * expanded, rather than refused as an unknown entity. {@code --add} needs {@code --known}, refused
+ * without it and refused with either of the other two populations too, because both are drawn from
+ * the graph and nothing in them can be missing — only a file can name a missing entity. The
+ * addition still reaches the graph through {@code IngestService.record} alone, this package's only
+ * write (#328, ADR 19).
  */
 public final class ExpandCli {
 
@@ -286,11 +296,13 @@ public final class ExpandCli {
         List<String> named = merges.canonical(known.qids());
         Expanded expanded = Expanded.in(assertions.readAll()).onTheCanonicalSide(merges);
         population = named.stream().filter(qid -> !expanded.covers(qid)).toList();
-        // adding is false: this task renders the clause but no flag composes true yet — that is
-        // Task 4 (#328).
+        // #328. options.add() carried onto the population value: a --known run is the only
+        // population --add can name, and the clause is composed here, before the run, exactly as
+        // KnownNeverExpanded's own javadoc says it must be.
         covered =
             Optional.of(
-                new KnownNeverExpanded(known.name(), named.size() - population.size(), false));
+                new KnownNeverExpanded(
+                    known.name(), named.size() - population.size(), options.add()));
         log.info("{} known-list entity(s) to visit", population.size());
       } else if (options.secondHop().isPresent()) {
         // The population is composed ONCE, here, and nothing in the run re-reads it: a run that
@@ -359,7 +371,10 @@ public final class ExpandCli {
       EntityExpansion expansion =
           new EntityExpansion(resolver, graph, ingest, ExpansionSources.both(resolver, clock));
 
-      ExpandRun run = new ExpandRun(expansion, graph);
+      ExpandRun run =
+          options.add()
+              ? new ExpandRun(expansion, graph, new EntityAddition(resolver, ingest))
+              : new ExpandRun(expansion, graph);
       // The long arity when a filter was applied and the short one when none was, so both keep a
       // production caller rather than one of them being reachable from tests alone.
       if (options.dryRun()) {

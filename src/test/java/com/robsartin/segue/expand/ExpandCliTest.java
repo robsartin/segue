@@ -73,6 +73,20 @@ class ExpandCliTest {
   /** On the file, and deliberately given no node at all. */
   private static final String NO_NODE = "Q0901304";
 
+  /** On the {@code --add} file, and in the graph. */
+  private static final String ON_FILE_IN_GRAPH = "Q0901504";
+
+  /**
+   * On the {@code --add} file, and in the graph — a second one, so a count can fall short of it.
+   */
+  private static final String ALSO_IN_GRAPH = "Q0901510";
+
+  /** On the {@code --add} file, no node, the resolver would answer for it on a real run. */
+  private static final String ADDABLE = "Q0901505";
+
+  /** On the {@code --add} file, minted, never recorded — the graph holds no node for it either. */
+  private static final String MINTED_NO_NODE = "Q00901502";
+
   @TempDir private Path home;
 
   private Logger rootLogger;
@@ -721,6 +735,70 @@ class ExpandCliTest {
     assertThat(countOn(lines(), "unknown entity"))
         .as("the same refusal a promotion with no node already gets, counted the same way")
         .isEqualTo(1);
+  }
+
+  /**
+   * Two node claims for the {@code --add} dry-run tests below.
+   *
+   * <p>{@link #ON_FILE_IN_GRAPH} and {@link #ALSO_IN_GRAPH}, and nothing else — {@link #ADDABLE}
+   * and {@link #MINTED_NO_NODE} are deliberately absent, so the file can name an id the graph
+   * lacks.
+   */
+  private void seedForAdding(Path database) {
+    Provenance plain = new Provenance("invented", "invented:9", WHEN, 1.0);
+    try (SqliteAssertionLog log = new SqliteAssertionLog(database)) {
+      log.append(new NodeAssertion(ON_FILE_IN_GRAPH, NodeKind.GROUP, "an invented act", plain));
+      log.append(new NodeAssertion(ALSO_IN_GRAPH, NodeKind.GROUP, "another invented act", plain));
+    }
+  }
+
+  /** How many claims {@link #seedForAdding} appends — the dry run must append none beyond it. */
+  private static int claimsSeeded() {
+    return 2;
+  }
+
+  /** A known-list file naming exactly the given ids, one per line, in a @TempDir. */
+  private Path knownListNaming(String... qids) throws Exception {
+    return Files.writeString(home.resolve("adding.csv"), String.join("\n", qids) + "\n");
+  }
+
+  @Test
+  @DisplayName("a dry run with --add says how many it would add, and appends nothing")
+  void shouldSayHowManyItWouldAddWhenTheDryRunWasToldToAdd() throws Exception {
+    Path database = home.resolve("segue.db");
+    seedForAdding(database);
+    Path file = knownListNaming(ON_FILE_IN_GRAPH, ALSO_IN_GRAPH, ADDABLE, MINTED_NO_NODE);
+    captured.list.clear();
+
+    ExpandCli.run(
+        new String[] {
+          "--db", database.toString(), "--dry-run", "--known", file.toString(), "--add"
+        },
+        null,
+        home.toString());
+
+    assertThat(lines()).contains("  to add        1");
+    assertThat(lines()).anyMatch(line -> line.contains("--add was given"));
+    assertThat(new SqliteAssertionLog(database).readAll())
+        .as("a dry run appends nothing, --add or not")
+        .hasSize(claimsSeeded());
+  }
+
+  @Test
+  @DisplayName("a dry run without --add prints no to-add row, on the same file")
+  void shouldPrintNoToAddRowWhenTheSameDryRunWasNotToldToAdd() throws Exception {
+    Path database = home.resolve("segue.db");
+    seedForAdding(database);
+    Path file = knownListNaming(ON_FILE_IN_GRAPH, ALSO_IN_GRAPH, ADDABLE, MINTED_NO_NODE);
+    captured.list.clear();
+
+    ExpandCli.run(
+        new String[] {"--db", database.toString(), "--dry-run", "--known", file.toString()},
+        null,
+        home.toString());
+
+    assertThat(lines()).noneMatch(line -> line.contains("to add"));
+    assertThat(lines()).noneMatch(line -> line.contains("--add was given"));
   }
 
   /** On the file, in the graph, and nothing else on the file is within the hop limit of it. */
