@@ -1,6 +1,7 @@
 package com.robsartin.segue.seed;
 
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.wikidata.KindMapper;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
@@ -143,6 +144,22 @@ public final class Expectations {
   private static final Set<String> BROADCASTING =
       Set.of("Q2722764", "Q947873", "Q44508716", "Q1930187", "Q15077007", "Q15143191", "Q901");
 
+  /**
+   * The classes a work has to state for a {@code book} row to resolve to it.
+   *
+   * <p>Drawn from what {@code KindMapper} already maps to {@code WORK} and cited from it, so the
+   * three ids have one home. Nothing is added to that table: a class it does not map is not a
+   * {@code WORK}, so it could not pass the kind check either, and widening the mapper would change
+   * every projection (ADR 42) — a different decision from this one.
+   *
+   * <p><b>"Version, edition or translation" is deliberately outside this set.</b> The mapper makes
+   * it a {@code WORK}, and a title matches a printing as readily as it matches the work, so a row
+   * that finds only an edition fails the class check and goes to review — where a person can point
+   * it at the work — instead of resolving to a printing of the thing the owner meant.
+   */
+  private static final Set<String> WRITTEN =
+      Set.of(KindMapper.BOOK, KindMapper.LITERARY_WORK, KindMapper.WRITTEN_WORK);
+
   private static Set<String> union(Set<String> first, Set<String> second) {
     Set<String> out = new LinkedHashSet<>(first);
     out.addAll(second);
@@ -170,6 +187,9 @@ public final class Expectations {
     put("ensemble", EnumSet.of(NodeKind.GROUP), Set.of(), Set.of());
     put("org", EnumSet.of(NodeKind.GROUP), Set.of(), Set.of());
     put("tv-show", EnumSet.of(NodeKind.WORK), Set.of(), Set.of());
+    // The one kind that names classes. A book row is a WORK, and WORK alone is albums, films and
+    // episodes too — the kind check cannot separate a book from the film of the book. Issue #333.
+    put("book", EnumSet.of(NodeKind.WORK), Set.of(), WRITTEN);
     // A fictional character has no NodeKind of its own — ADR 21 has six and none of them is
     // "character" — so it lands in CONCEPT, which is what an unmapped P31 always becomes.
     put("character", EnumSet.of(NodeKind.CONCEPT), Set.of(), Set.of());
@@ -207,12 +227,18 @@ public final class Expectations {
    * people, so either role's vocabulary satisfies it. If any role is unrecognised the union
    * constrains no occupation at all — the alternative would let a known role narrow a name whose
    * other role this table cannot judge.
+   *
+   * <p>The class set follows the same rule for the same reason. A name listed as both a book and an
+   * author is one title and one person, and a person states none of the written classes — so a role
+   * that names no class widens the union to all of them rather than narrowing it to none.
    */
   public static Expectation forKinds(Collection<String> kinds) {
     Objects.requireNonNull(kinds, "kinds");
     Set<NodeKind> nodeKinds = EnumSet.noneOf(NodeKind.class);
     Set<String> occupations = new LinkedHashSet<>();
+    Set<String> classes = new LinkedHashSet<>();
     boolean anyUnconstrained = false;
+    boolean anyUnconstrainedClass = false;
     for (String kind : kinds) {
       Expectation expectation = forKind(kind);
       nodeKinds.addAll(expectation.kinds());
@@ -221,8 +247,16 @@ public final class Expectations {
       } else {
         anyUnconstrained = true;
       }
+      if (expectation.checksClass()) {
+        classes.addAll(expectation.classes());
+      } else {
+        anyUnconstrainedClass = true;
+      }
     }
-    return new Expectation(nodeKinds, anyUnconstrained ? Set.of() : occupations, Set.of());
+    return new Expectation(
+        nodeKinds,
+        anyUnconstrained ? Set.of() : occupations,
+        anyUnconstrainedClass ? Set.of() : classes);
   }
 
   private static Expectation unconstrained() {
