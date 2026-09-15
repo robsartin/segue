@@ -1342,11 +1342,13 @@ resume file rather than a conversation. ADR 40 is the decision.
 The list is three columns — `name,kind,status`. The `kind` column says what the row is — a role a
 person plays (`author`), a sort of group (`orchestra`), or, since #333, a work (`book`);
 `seed.Expectations` holds the whole list and is the authority on it, and a value it has never seen
-constrains nothing rather than rejecting everything. Output is a mapping file and a review file
-beside it, plus a summary in the log. **None of those files may enter this repository.** A list of who
-someone listens to, reads and watches is the personal data ADR 33 governs, this repository is
-public, and `*.csv` is gitignored beside `*.db`. Every name in a test, a fixture or a document here
-is invented, and that is not a style choice.
+constrains nothing rather than rejecting everything. A hand-written list, such as a reading list,
+has no tour status to give, so it is written with the status field left empty — the trailing comma
+is still needed, since the reader refuses a row with fewer than three fields. Output is a mapping
+file and a review file beside it, plus a summary in the log. **None of those files may enter this
+repository.** A list of who someone listens to, reads and watches is the personal data ADR 33
+governs, this repository is public, and `*.csv` is gitignored beside `*.db`. Every name in a test,
+a fixture or a document here is invented, and that is not a style choice.
 
 ### How it decides
 

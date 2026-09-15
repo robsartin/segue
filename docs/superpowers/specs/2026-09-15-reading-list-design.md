@@ -100,8 +100,9 @@ assertion, no test on the network.
   resolve. The review file already exists for the residue; this is the upgrade if the residue turns
   out large on the owner's list.
 - **Authors only, books picked from their expansions.** Sidesteps title matching but hands the
-  owner a picking step over lists of titles, which is the deck's job, and the deck deals people and
-  groups.
+  owner a picking step over lists of titles: books surfaced from author expansions would arrive as
+  candidates, and the deck offers only people and groups as candidates
+  (`CandidateSweep.couldBeExplored`), while a book on the list is dealt as a known card.
 - **Accept any `WORK` for a `book` row.** Albums and films are works; the kind alone resolves a
   title to the wrong thing whenever the film is better known than the book.
 - **Books known outright.** The owner chose rate-first; the promotion rule already turns a high

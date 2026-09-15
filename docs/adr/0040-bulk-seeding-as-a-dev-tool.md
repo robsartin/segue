@@ -182,8 +182,9 @@ amendment adds no second route to membership.
   the residue. This is the upgrade to reach for if the residue turns out large on a real list, and
   it is cheap to add later precisely because nothing here forecloses it.
 - **Authors only, with books picked out of their expansions.** Sidesteps title matching
-  altogether, and hands the owner a picking step over lists of titles — which is the deck's job,
-  and the deck deals people and groups.
+  altogether, and hands the owner a picking step over lists of titles: books surfaced from author
+  expansions would arrive as candidates, and the deck offers only people and groups as candidates
+  (`CandidateSweep.couldBeExplored`), while a book already on the list is dealt as a known card.
 - **Accept any `WORK` for a `book` row.** The cheapest change there is, and it is the confident
   wrong answer above: whenever the film is better known than the book, the film wins the margin.
 - **Books known outright, without a rating.** The owner chose rate-first, and the promotion rule
