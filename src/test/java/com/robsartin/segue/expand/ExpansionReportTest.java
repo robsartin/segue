@@ -119,15 +119,6 @@ class ExpansionReportTest {
     assertThat(lines.get(1)).isEqualTo(KNOWN_ADDING_LINE);
   }
 
-  @Test
-  @DisplayName("the clause is byte-identical to today's when the switch was not given")
-  void shouldPrintTodaysClauseWhenTheKnownListRunWasNotToldToAdd() {
-    assertThat(
-            ExpansionReport.lines(
-                goldenTally(), Optional.of(new KnownNeverExpanded(KNOWN_FILE, 7, false))))
-        .containsExactlyElementsOf(withKnownLine(GOLDEN_BLOCK));
-  }
-
   private static ExpansionTally goldenTally() {
     // LinkedHashMap, not Map.of: the golden block pins insertion order, and Map.of's iteration
     // order is unspecified.

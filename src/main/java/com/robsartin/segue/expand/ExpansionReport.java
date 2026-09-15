@@ -230,10 +230,8 @@ public final class ExpansionReport {
    * sides of a merge names one entity, and the excluded count is over that population and not over
    * the file's lines.
    *
-   * <p><b>A sentence and not a number, appended only when {@code --add} was given.</b> This value
-   * is composed before the run and is rendered into the dry-run block too, and the number is
-   * already a row. What a pasted block cannot otherwise tell is whether the switch was given at
-   * all, because both new rows are suppressed when they are zero — so that is what this says.
+   * <p><b>A sentence and not a number, appended only when {@code --add} was given</b> — the one
+   * home of why is {@link KnownNeverExpanded#adding()}'s own javadoc, cited rather than restated.
    */
   private static String knownLine(KnownNeverExpanded known) {
     String line =
@@ -246,10 +244,7 @@ public final class ExpansionReport {
     if (!known.adding()) {
       return line;
     }
-    // #328. A sentence and not a number: this value is composed before the run and is rendered
-    // into the dry-run block too, and the number is already a row. What a pasted block cannot
-    // otherwise tell is whether the switch was given at all, because both new rows are suppressed
-    // when they are zero — so that is what this says.
+    // #328. Why a sentence and not a number: KnownNeverExpanded.adding()'s javadoc.
     return line
         + " --add was given, so an id the file names that the graph holds no node for was added"
         + " before it was expanded; how many is the added row below, or to add on a dry run.";

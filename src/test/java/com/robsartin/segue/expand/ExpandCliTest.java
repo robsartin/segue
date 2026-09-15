@@ -779,9 +779,11 @@ class ExpandCliTest {
 
     assertThat(lines()).contains("  to add        1");
     assertThat(lines()).anyMatch(line -> line.contains("--add was given"));
-    assertThat(new SqliteAssertionLog(database).readAll())
-        .as("a dry run appends nothing, --add or not")
-        .hasSize(claimsSeeded());
+    try (SqliteAssertionLog log = new SqliteAssertionLog(database)) {
+      assertThat(log.readAll())
+          .as("a dry run appends nothing, --add or not")
+          .hasSize(claimsSeeded());
+    }
   }
 
   @Test
