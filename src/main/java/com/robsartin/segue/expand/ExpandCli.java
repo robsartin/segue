@@ -75,7 +75,8 @@ public final class ExpandCli {
 
   private static final String USAGE =
       "usage: --db <segue.db> [--max-new-edges <n>] [--dry-run] [--rated-since <ISO-8601 instant,"
-          + " e.g. 2026-09-06T15:00:00Z>] [--known <file of QIDs>] [--second-hop <file of QIDs>]";
+          + " e.g. 2026-09-06T15:00:00Z>] [--known <file of QIDs>] [--add] [--second-hop <file of"
+          + " QIDs>]";
 
   private ExpandCli() {}
 
@@ -86,6 +87,8 @@ public final class ExpandCli {
    * @param maxNewEdges the bound handed to every entity's expansion, defaulting to {@link
    *     ExpandContext#defaults()}
    * @param dryRun report what would be visited and touch no network and no log
+   * @param add compose additions from the known-list file alongside the population, or false for
+   *     none. Requires {@link #known}, because only a file can name an entity the graph lacks
    * @param ratedSince the instant to filter promotions by, or empty for no filter
    * @param known the known-list file whose never-expanded entities are the population, or empty for
    *     the promotions. Never read here: the guide's examples are parsed with an invented home
@@ -96,6 +99,7 @@ public final class ExpandCli {
       Path database,
       int maxNewEdges,
       boolean dryRun,
+      boolean add,
       Optional<Instant> ratedSince,
       Optional<Path> known,
       Optional<Path> secondHop) {}
@@ -104,11 +108,16 @@ public final class ExpandCli {
   static Options parse(String[] args, String envDatabase, String userHome) {
     Map<String, String> values = new LinkedHashMap<>();
     boolean dryRun = false;
+    boolean add = false;
 
     for (int i = 0; i < args.length; i++) {
       String flag = args[i];
       if ("--dry-run".equals(flag)) {
         dryRun = true;
+        continue;
+      }
+      if ("--add".equals(flag)) {
+        add = true;
         continue;
       }
       String value = valueOf(args, i, flag);
@@ -166,6 +175,19 @@ public final class ExpandCli {
       throw usage(
           "--second-hop and --rated-since name different populations — give one or neither");
     }
+    if (add && ratedSince != null) {
+      // Both of the graph-side populations are, by construction, entities the graph holds a node
+      // for — one is KnownList.promoted and the other is a ring read out of the fold's own nodes
+      // map — so nothing in either can be missing, and --add would have nothing to do. Only a
+      // file can name an entity the graph lacks (#328).
+      throw usage("--add and --rated-since name different populations — give one or neither");
+    }
+    if (add && secondHop != null) {
+      throw usage("--add and --second-hop name different populations — give one or neither");
+    }
+    if (add && known == null) {
+      throw usage("--add needs --known — only a file can name an entity the graph lacks");
+    }
 
     if (!values.isEmpty()) {
       throw usage("unknown option " + values.keySet().iterator().next());
@@ -175,6 +197,7 @@ public final class ExpandCli {
         database,
         maxNewEdges,
         dryRun,
+        add,
         Optional.ofNullable(ratedSince),
         Optional.ofNullable(known),
         Optional.ofNullable(secondHop));

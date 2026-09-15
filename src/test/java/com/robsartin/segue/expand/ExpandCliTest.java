@@ -333,6 +333,91 @@ class ExpandCliTest {
   }
 
   @Test
+  @DisplayName("--add is off unless it is given")
+  void shouldNotAddWhenTheSwitchIsAbsent() {
+    assertThat(ExpandCli.parse(new String[] {"--db", "db.sqlite"}, null, home.toString()).add())
+        .isFalse();
+  }
+
+  @Test
+  @DisplayName("--add is on when it is given beside a known-list file")
+  void shouldAddWhenTheSwitchIsGivenWithAKnownList() {
+    assertThat(
+            ExpandCli.parse(
+                    new String[] {"--db", "db.sqlite", "--known", "known.csv", "--add"},
+                    null,
+                    home.toString())
+                .add())
+        .isTrue();
+  }
+
+  @Test
+  @DisplayName(
+      "--add without --known is refused, because only a file can name what the graph lacks")
+  void shouldRefuseWhenAddIsGivenWithoutAKnownList() {
+    assertThatThrownBy(
+            () ->
+                ExpandCli.parse(new String[] {"--db", "db.sqlite", "--add"}, null, home.toString()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("--add needs --known")
+        .hasMessageContaining("only a file can name an entity the graph lacks");
+  }
+
+  @Test
+  @DisplayName(
+      "--add and --rated-since are refused together, because that population is in the graph")
+  void shouldRefuseWhenAddIsGivenWithRatedSince() {
+    assertThatThrownBy(
+            () ->
+                ExpandCli.parse(
+                    new String[] {"--db", "db.sqlite", "--rated-since", THE_INSTANT, "--add"},
+                    null,
+                    home.toString()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("--add and --rated-since name different populations");
+  }
+
+  @Test
+  @DisplayName("--add and --second-hop are refused together, for the same reason")
+  void shouldRefuseWhenAddIsGivenWithSecondHop() {
+    assertThatThrownBy(
+            () ->
+                ExpandCli.parse(
+                    new String[] {"--db", "db.sqlite", "--second-hop", "known.csv", "--add"},
+                    null,
+                    home.toString()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("--add and --second-hop name different populations");
+  }
+
+  @Test
+  @DisplayName("the usage message names the switch, so a refusal shows how to spell it")
+  void shouldNameTheSwitchInTheUsageWhenAnythingIsRefused() {
+    assertThatThrownBy(() -> ExpandCli.parse(new String[] {}, null, home.toString()))
+        .hasMessageContaining("[--add]");
+  }
+
+  @Test
+  @DisplayName("a run naming both populations is refused in the sentence already on record")
+  void shouldRefuseInTheOlderSentenceWhenBothPopulationsAreNamedBesideAdd() {
+    assertThatThrownBy(
+            () ->
+                ExpandCli.parse(
+                    new String[] {
+                      "--db",
+                      "db.sqlite",
+                      "--known",
+                      "known.csv",
+                      "--rated-since",
+                      THE_INSTANT,
+                      "--add"
+                    },
+                    null,
+                    home.toString()))
+        .hasMessageContaining("--known and --rated-since name different populations");
+  }
+
+  @Test
   @DisplayName("--second-hop is carried as the path when one is given, and the file is not read")
   void shouldCarryTheSecondHopFileWhenTheFlagIsGiven() {
     assertThat(
