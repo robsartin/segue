@@ -8,8 +8,6 @@ import com.robsartin.segue.wikidata.WikidataUnavailableException;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.regex.Pattern;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * One addition: check the id's shape, ask the resolver for the entity, and record the node claim
@@ -41,8 +39,6 @@ import org.slf4j.LoggerFactory;
  */
 public final class EntityAddition {
 
-  private static final Logger log = LoggerFactory.getLogger(EntityAddition.class);
-
   /** ADR 26/ADR 22: identity is a Wikidata QID, always of this shape. */
   private static final Pattern QID = Pattern.compile("Q\\d+");
 
@@ -72,14 +68,12 @@ public final class EntityAddition {
     try {
       fetched = resolver.fetch(qid);
     } catch (WikidataUnavailableException e) {
-      // Neither the qid nor e.getMessage() may go in the log line: this method is now reachable
-      // from a terminal-facing dev tool (#328's expandPromotions --add), which never names an
-      // entity on the terminal, and WikidataClient's own message can embed the qid itself — its
-      // non-transient-HTTP-status text carries the full request URI, and wbgetentities' URI
-      // always carries "ids=<qid>" (see WikidataEntityResolver.entity). The detail is still
-      // returned to the caller on the outcome, where the MCP tool's per-call sentence is allowed
-      // to name it.
-      log.warn("add() source unavailable");
+      // This method logs nothing (#328 review, minor 6): it has two callers with two different
+      // logging shapes — ExpandRun.run's per-position "addition N of M ..." for the dev-tool
+      // path and SegueService.addEntity's own detail-bearing line for the MCP path — and a
+      // third line here would be redundant with whichever one the caller already prints for the
+      // same outage. The detail still reaches the caller through the outcome, so nothing this
+      // method could tell an operator by logging is lost by staying silent.
       return new AdditionOutcome.Refused(
           qid, AdditionOutcome.Reason.SOURCE_UNAVAILABLE, e.getMessage());
     }

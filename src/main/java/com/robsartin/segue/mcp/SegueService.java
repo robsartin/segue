@@ -136,8 +136,32 @@ public final class SegueService {
           ToolResult.ok(
               "added " + added.qid() + " (" + added.node().label() + ")",
               ViewMapper.toNodeView(added.node().toNode()));
-      case AdditionOutcome.Refused refused -> error(refusalSentence(refused));
+      case AdditionOutcome.Refused refused -> {
+        if (refused.reason() == AdditionOutcome.Reason.SOURCE_UNAVAILABLE) {
+          // #328 review, minor 5. EntityAddition itself logs nothing for this outage (it has a
+          // second, terminal-facing caller that may never name an entity), but this arm is the
+          // MCP tool's own — its returned sentence already names the qid (ADR 27) — so the log
+          // line here may carry diagnostics, just never the qid itself: detail() is the source's
+          // own words, and WikidataClient's non-transient-HTTP-status message embeds the request
+          // URI, which for a fetch always carries "ids=<qid>" (WikidataEntityResolver.entity).
+          log.warn("addEntity() source unavailable: {}", withoutRequestUri(refused.detail()));
+        }
+        yield error(refusalSentence(refused));
+      }
     };
+  }
+
+  /**
+   * {@link AdditionOutcome.Refused#detail()}, minus the one clause it can carry a qid in.
+   *
+   * <p>Every shape {@link WikidataUnavailableException} builds names no entity except the one
+   * {@code WikidataClient.get} builds for a non-transient HTTP status, which appends {@code " for "
+   * + uri}. Cutting from that clause on is enough: nothing before it interpolates anything but the
+   * status code.
+   */
+  private static String withoutRequestUri(String detail) {
+    int forClause = detail.indexOf(" for ");
+    return forClause < 0 ? detail : detail.substring(0, forClause);
   }
 
   /** The four sentences this method has always returned, byte for byte, and the fifth (#328). */
