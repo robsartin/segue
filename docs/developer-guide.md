@@ -3488,13 +3488,13 @@ here: [the second-reading design](superpowers/specs/2026-09-04-second-reading-ru
 The three chapters above all expand something the graph already holds. This one covers the
 entities it does not: the rows the original names list carried that Setlist Scout rejected as
 non-touring — the authors, thinkers and comedians `seed.SeedRow`'s note on `status` calls the
-relations this graph is short of. The seed tool resolved them to ids in the same mapping as the
-touring acts ([ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)) and stopped there, because
-nothing in this repository adds entities in bulk. `--add`, given beside `--known`, adds an id the
-file names that the graph holds no node for — the same fetch-and-record the `add_entity` MCP tool
-does, through the shared `expansion.EntityAddition` — and then expands it, in the same pass and
-in the file's order. Without `--add` that id is refused as an unknown entity, exactly as it
-always has been.
+relations this graph is short of. The seed tool resolves each of those rows to an id of its own,
+on a run over just the rows this chapter wants
+([ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)), and stops there, because nothing in this
+repository adds entities in bulk. `--add`, given beside `--known`, adds an id the file names that
+the graph holds no node for — the same fetch-and-record the `add_entity` MCP tool does, through
+the shared `expansion.EntityAddition` — and then expands it, in the same pass and in the file's
+order. Without `--add` that id is refused as an unknown entity, exactly as it always has been.
 
 `--add` is refused without `--known`, and with `--rated-since` or `--second-hop`: both of those
 populations are drawn from the graph, so nothing in them can be missing, and only a file can name
@@ -3502,21 +3502,33 @@ an entity the graph lacks.
 
 **Step 0 applies unchanged**, and so does everything this chapter says about a single writer.
 
-**1. Derive the file.** The mapping the seed tool wrote has a `status` column, and the rejected
-rows are the ones you want. `SeedFiles` quotes a field only when it holds a comma, a quote or a
-newline, so `status` is never quoted and always sits between two commas — but a **name** with a
-comma in it is quoted, which shifts the columns of that row. Match the literal field, not the
-third comma-separated one, and write the result outside the working tree:
+**1. Derive the file.** The list is whatever names the owner holds for the domain, in the seed
+tool's own `name,kind,status` shape ([Bulk seeding](#bulk-seeding)). If it comes from a Setlist
+Scout export, reshape it first: the export's `category` column is the seed tool's `kind`, and only
+the rows whose `status` is the one you want belong in the reshaped file — `REJECTED` for the
+non-touring names this chapter is about. **A Setlist Scout export carries no id**, so nothing
+about it is a qid `QidList` or `--known` can read yet; resolving it is what this step is for.
 
 ```bash
-grep ',REJECTED,' "$HOME/names-resolved.csv" > "$HOME/rejected.csv"
+./gradlew resolveNames --args="--list $HOME/rejected-names.csv --mapping $HOME/rejected.csv"
 ```
 
-`QidList` reads that file exactly as it reads the mapping — the first comma-separated field that
-is exactly a qid — so no reshaping is needed and the review rows, which carry no qid of their
-own, are passed over. **The file is personal data**: a list of who someone reads and watches is
-what [ADR 33](adr/0033-taste-layer-separation.md) governs, `*.csv` is gitignored beside `*.db`,
-and the protection is where the file lives rather than what git ignores (issue #37).
+The run writes the mapping at `--mapping` and, beside the *list* rather than the mapping, a
+review file, plus a summary in the log, exactly as the seed tool always does. **Read the review
+file before anything past this step**: it is names, never pasted here, and each line is accepted
+or corrected by hand — only what lands in the mapping is what the rest of this chapter reads.
+`QidList` reads the mapping exactly as it reads a bare list — the first comma-separated field
+that is exactly a qid.
+
+**Why this is not a grep over an already-resolved mapping.** If the touring and non-touring rows
+had been resolved together in one run, the mapping's own `status`-`REJECTED` rows would already
+carry ids, and `QidList` reads the first field that is exactly a qid regardless of `status` — so
+a row like that is already on the known population the moment the mapping exists, with nothing
+left here to derive. What makes this a step at all is filtering *before* the resolution run: an
+export naming no id names nothing `QidList` can read, and `resolveNames` is what supplies one.
+**The file is personal data**: a list of who someone reads and watches is what
+[ADR 33](adr/0033-taste-layer-separation.md) governs, `*.csv` is gitignored beside `*.db`, and
+the protection is where the file lives rather than what git ignores (issue #37).
 
 **2. The census over it**, before anything is written:
 
