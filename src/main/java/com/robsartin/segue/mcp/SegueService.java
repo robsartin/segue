@@ -4,12 +4,13 @@ import com.robsartin.segue.domain.AffinityRecord;
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.Candidate;
 import com.robsartin.segue.domain.EdgeRecord;
-import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.PathRanking;
 import com.robsartin.segue.domain.PathResult;
 import com.robsartin.segue.domain.RatingScale;
+import com.robsartin.segue.expansion.AdditionOutcome;
+import com.robsartin.segue.expansion.EntityAddition;
 import com.robsartin.segue.expansion.EntityExpansion;
 import com.robsartin.segue.expansion.ExpansionOutcome;
 import com.robsartin.segue.ingest.IngestService;
@@ -76,6 +77,7 @@ public final class SegueService {
   private final AffinityStore affinity;
   private final Clock clock;
   private final EntityExpansion expansion;
+  private final EntityAddition addition;
 
   public SegueService(
       EntityResolver resolver,
@@ -93,6 +95,8 @@ public final class SegueService {
     // Built here rather than injected: every collaborator it needs is already a field, and a
     // seventh constructor parameter would move thirty-odd call sites for nothing. #284.
     this.expansion = new EntityExpansion(this.resolver, this.graph, this.ingest, this.adapters);
+    // The same argument one step earlier in the same story (#328).
+    this.addition = new EntityAddition(this.resolver, this.ingest);
   }
 
   /** Candidates for a free-text query, best match first. Writes nothing. */
@@ -113,26 +117,40 @@ public final class SegueService {
   /**
    * Fetch one entity's identity from the resolver and record it. Recording is an upsert, so a
    * second call with the same qid is idempotent — it refreshes the node rather than duplicating it.
+   *
+   * <p><b>The fetch-and-record itself is {@link EntityAddition}'s</b> (#328): the promotion
+   * expander's {@code --add} run needs it and does not need a {@code ToolResult}. What stays here
+   * is the shaping — the four sentences this method has always returned, byte for byte, and the one
+   * that is new.
+   *
+   * <p><b>The new one is the minted id.</b> Before #328 this method checked {@code Q\d+} and then
+   * fetched, so a qid the owner minted went to Wikidata and came back {@code no such entity} — a
+   * true-sounding sentence about the wrong thing, and a round trip spent to learn what ADR 58's
+   * grammar already says. The rule refuses it before the resolver is asked, and this is the
+   * sentence for it.
    */
   public ToolResult<NodeView> addEntity(String qid) {
     Objects.requireNonNull(qid, "qid");
-    if (!QID.matcher(qid).matches()) {
-      return error("not a QID: " + qid);
-    }
-    Optional<NodeAssertion> fetched;
-    try {
-      fetched = resolver.fetch(qid);
-    } catch (WikidataUnavailableException e) {
-      log.warn("addEntity({}) source unavailable: {}", qid, e.getMessage());
-      return error("wikidata unavailable: " + e.getMessage());
-    }
-    if (fetched.isEmpty()) {
-      return error("no such entity: " + qid);
-    }
-    NodeAssertion assertion = fetched.get();
-    ingest.record(assertion);
-    return ToolResult.ok(
-        "added " + qid + " (" + assertion.label() + ")", ViewMapper.toNodeView(assertion.toNode()));
+    return switch (addition.add(qid)) {
+      case AdditionOutcome.Added added ->
+          ToolResult.ok(
+              "added " + added.qid() + " (" + added.node().label() + ")",
+              ViewMapper.toNodeView(added.node().toNode()));
+      case AdditionOutcome.Refused refused -> error(refusalSentence(refused));
+    };
+  }
+
+  /** The four sentences this method has always returned, byte for byte, and the fifth (#328). */
+  private static String refusalSentence(AdditionOutcome.Refused refused) {
+    return switch (refused.reason()) {
+      case NOT_A_QID -> "not a QID: " + refused.qid();
+      case LOCAL_ENTITY ->
+          "local entity: "
+              + refused.qid()
+              + " — no source to add it from, because the owner minted it";
+      case SOURCE_UNAVAILABLE -> "wikidata unavailable: " + refused.detail();
+      case NO_SUCH_ENTITY -> "no such entity: " + refused.qid();
+    };
   }
 
   /**
