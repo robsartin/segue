@@ -1339,8 +1339,11 @@ resume file rather than a conversation. ADR 40 is the decision.
 ./gradlew resolveNames --args="--list $HOME/names.csv"
 ```
 
-The list is three columns — `name,kind,status`. Output is a mapping file and a review file beside
-it, plus a summary in the log. **None of those files may enter this repository.** A list of who
+The list is three columns — `name,kind,status`. The `kind` column says what the row is — a role a
+person plays (`author`), a sort of group (`orchestra`), or, since #333, a work (`book`);
+`seed.Expectations` holds the whole list and is the authority on it, and a value it has never seen
+constrains nothing rather than rejecting everything. Output is a mapping file and a review file
+beside it, plus a summary in the log. **None of those files may enter this repository.** A list of who
 someone listens to, reads and watches is the personal data ADR 33 governs, this repository is
 public, and `*.csv` is gitignored beside `*.db`. Every name in a test, a fixture or a document here
 is invented, and that is not a style choice.
@@ -1354,13 +1357,17 @@ suffix, a stripped honorific — is tried only if the literal one did not settle
 fallback is a guess about what the user meant.
 
 Auto-accept needs three independent signals to agree: the name (label or alias, with a label match
-outranking an alias match), the kind (`P31` for the `NodeKind`, and `P106` for a person's
-occupation), and a sitelink margin over the runner-up. Anything else goes to review with the reason
-and the best candidate, so a person can accept or correct a line without repeating the search.
+outranking an alias match), the kind (`P31` for the `NodeKind`, `P106` for a person's occupation,
+and for a `book` row the raw `P31` again — `WORK` is albums, films and episodes as well as books,
+so that kind names the classes it will take and an edition or an adaptation is refused on them),
+and a sitelink margin over the runner-up. Anything else goes to review with the reason and the best
+candidate, so a person can accept or correct a line without repeating the search.
 
 `P106` here is a **resolver filter, not an edge**. Issue #32 kept it out of the graph vocabulary
 because "novelist" is a 36,000-item hub; reading it to choose between six humans with one name
-creates no edge.
+creates no edge. `P31` read this way is the same: the graph already stores an entity's classes and
+re-derives its kind from them, and reading them again to choose between a book and the film of the
+book adds nothing to the graph either.
 
 ### Two things this is not allowed to do
 
