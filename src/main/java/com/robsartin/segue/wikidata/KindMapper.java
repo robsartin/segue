@@ -24,10 +24,9 @@ import java.util.Set;
  * PRECEDENCE} below decides which kind wins - never the order the classes arrived in.
  *
  * <p>Three rows below are named constants, because one other package reads exactly those three. The
- * seed tool's {@code book} kind takes the written-work classes this table already maps to {@code
- * WORK}, and it cites them rather than deciding them a second time; the note above about a second
- * copy of the list is the reason. Nothing else here is named, because nothing outside this file
- * refers to one row.
+ * seed tool's {@code book} kind cites this table's written-work classes as {@code WORK} rather than
+ * deciding them a second time; the note above about a second copy of the list is the reason.
+ * Nothing else here is named, because nothing outside this file refers to one row.
  */
 public final class KindMapper {
 
