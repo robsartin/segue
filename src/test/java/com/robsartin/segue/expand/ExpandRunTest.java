@@ -119,7 +119,7 @@ class ExpandRunTest {
 
     Preflight preflight = run.dryRun(PROMOTIONS, lines::add);
 
-    assertThat(preflight).isEqualTo(new Preflight(4, 2, 1));
+    assertThat(preflight).isEqualTo(new Preflight(4, 2, 1, 0));
     assertThat(neverAsked.get()).as("no adapter was called").isTrue();
     assertThat(lines).anyMatch(line -> line.contains("dry run"));
   }

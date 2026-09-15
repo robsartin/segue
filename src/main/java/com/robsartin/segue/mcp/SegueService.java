@@ -182,6 +182,10 @@ public final class SegueService {
    * by a second caller that renders a tally label rather than a sentence. The one sentence that
    * quotes a number quotes the caller's own argument, and this is the caller, so {@code
    * maxNewEdges} is passed in rather than travelling on the outcome.
+   *
+   * <p>{@code NO_SUCH_ENTITY} is handled here even though {@link EntityExpansion#expand} never
+   * returns it (#328) — {@link ExpansionOutcome.Reason} is one enum, and an unhandled constant is a
+   * compile error, not a judgement about which caller can see it.
    */
   private static String refusalSentence(ExpansionOutcome.Refused refused, int maxNewEdges) {
     return switch (refused.reason()) {
@@ -191,6 +195,8 @@ public final class SegueService {
               + refused.qid()
               + " — no source to expand from, because the owner minted it";
       case BOUND_NOT_POSITIVE -> "maxNewEdges must be positive, got " + maxNewEdges;
+      case NO_SUCH_ENTITY ->
+          "no such entity: " + refused.qid() + " — nothing could be added for it";
     };
   }
 

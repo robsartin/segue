@@ -32,7 +32,11 @@ public sealed interface ExpansionOutcome {
     /** The owner minted it, so no source has it and none ever will (ADR 58, ADR 59). */
     LOCAL_ENTITY,
     /** The caller asked for a bound of zero or less. */
-    BOUND_NOT_POSITIVE
+    BOUND_NOT_POSITIVE,
+    /**
+     * The id is well formed and no source has an entity at it, so nothing could be added (#328).
+     */
+    NO_SUCH_ENTITY
   }
 
   /** Refused before any adapter ran. Carries no sentence: see the interface's javadoc. */

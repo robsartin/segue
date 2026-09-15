@@ -263,8 +263,11 @@ public final class ExpandCli {
         List<String> named = merges.canonical(known.qids());
         Expanded expanded = Expanded.in(assertions.readAll()).onTheCanonicalSide(merges);
         population = named.stream().filter(qid -> !expanded.covers(qid)).toList();
+        // adding is false: this task renders the clause but no flag composes true yet — that is
+        // Task 4 (#328).
         covered =
-            Optional.of(new KnownNeverExpanded(known.name(), named.size() - population.size()));
+            Optional.of(
+                new KnownNeverExpanded(known.name(), named.size() - population.size(), false));
         log.info("{} known-list entity(s) to visit", population.size());
       } else if (options.secondHop().isPresent()) {
         // The population is composed ONCE, here, and nothing in the run re-reads it: a run that

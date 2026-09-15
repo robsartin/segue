@@ -99,6 +99,35 @@ class ExpansionReportTest {
     return List.copyOf(withIt);
   }
 
+  /**
+   * The clause a --known --add run prints, character for character. A literal — see GOLDEN_BLOCK.
+   */
+  private static final String KNOWN_ADDING_LINE =
+      "# only known-list entities from known.csv that no expansion has covered: 7 excluded (some"
+          + " row in the log cites them as an expansion's seed) — the file's ids are read through"
+          + " the merge fold, so a merge's two sides count once. --add was given, so an id the"
+          + " file names that the graph holds no node for was added before it was expanded; how"
+          + " many is the added row below, or to add on a dry run.";
+
+  @Test
+  @DisplayName("the clause says the switch was given when a known-list run was told to add")
+  void shouldSayTheSwitchWasGivenWhenTheKnownListRunWasToldToAdd() {
+    List<String> lines =
+        ExpansionReport.lines(
+            tallyWithAdditions(), Optional.of(new KnownNeverExpanded(KNOWN_FILE, 7, true)));
+
+    assertThat(lines.get(1)).isEqualTo(KNOWN_ADDING_LINE);
+  }
+
+  @Test
+  @DisplayName("the clause is byte-identical to today's when the switch was not given")
+  void shouldPrintTodaysClauseWhenTheKnownListRunWasNotToldToAdd() {
+    assertThat(
+            ExpansionReport.lines(
+                goldenTally(), Optional.of(new KnownNeverExpanded(KNOWN_FILE, 7, false))))
+        .containsExactlyElementsOf(withKnownLine(GOLDEN_BLOCK));
+  }
+
   private static ExpansionTally goldenTally() {
     // LinkedHashMap, not Map.of: the golden block pins insertion order, and Map.of's iteration
     // order is unspecified.
@@ -110,6 +139,7 @@ class ExpansionReportTest {
     refusalsByReason.put(ExpansionOutcome.Reason.LOCAL_ENTITY, 1);
     return new ExpansionTally(
         12,
+        0,
         9,
         2,
         1,
@@ -122,6 +152,61 @@ class ExpansionReportTest {
         Map.of("musicbrainz", 1),
         Map.of("wikidata", 2),
         refusalsByReason);
+  }
+
+  /** The golden tally with three entities added before they were expanded. */
+  private static ExpansionTally tallyWithAdditions() {
+    Map<String, Integer> edgesBySource = new LinkedHashMap<>();
+    edgesBySource.put("wikidata", 60);
+    edgesBySource.put("musicbrainz", 17);
+    Map<ExpansionOutcome.Reason, Integer> refusalsByReason = new LinkedHashMap<>();
+    refusalsByReason.put(ExpansionOutcome.Reason.UNKNOWN_ENTITY, 1);
+    refusalsByReason.put(ExpansionOutcome.Reason.LOCAL_ENTITY, 1);
+    refusalsByReason.put(ExpansionOutcome.Reason.NO_SUCH_ENTITY, 4);
+    return new ExpansionTally(
+        12,
+        3,
+        9,
+        2,
+        1,
+        34,
+        77,
+        5,
+        3,
+        1,
+        edgesBySource,
+        Map.of("musicbrainz", 1),
+        Map.of("wikidata", 2),
+        refusalsByReason);
+  }
+
+  @Test
+  @DisplayName("the block counts what the run added, under considered and above expanded")
+  void shouldCountWhatWasAddedWhenTheRunAddedSomething() {
+    List<String> lines = ExpansionReport.lines(tallyWithAdditions());
+
+    assertThat(lines.subList(lines.indexOf("promotions"), lines.indexOf("promotions") + 7))
+        .containsExactly(
+            "promotions",
+            "  considered                12",
+            "  added                      3",
+            "  expanded                   9",
+            "  added nothing              2",
+            "  refused                    6",
+            "  failed                     1");
+  }
+
+  @Test
+  @DisplayName("an id no source has an entity for is labelled no such entity")
+  void shouldLabelTheReasonWhenNothingCouldBeAddedForAnId() {
+    assertThat(ExpansionReport.lines(tallyWithAdditions()))
+        .contains("  no such entity             4");
+  }
+
+  @Test
+  @DisplayName("the block is byte-identical to today's when the run added nothing")
+  void shouldPrintNoAddedRowWhenTheRunAddedNothing() {
+    assertThat(ExpansionReport.lines(goldenTally())).containsExactlyElementsOf(GOLDEN_BLOCK);
   }
 
   @Test
@@ -140,7 +225,7 @@ class ExpansionReportTest {
   @Test
   @DisplayName("the dry run block states what would be visited, headed differently")
   void shouldRenderTheDryRunBlockWhenNothingIsAppended() {
-    List<String> lines = ExpansionReport.dryRunLines(new Preflight(4, 2, 1));
+    List<String> lines = ExpansionReport.dryRunLines(new Preflight(4, 2, 1, 0));
 
     assertThat(lines)
         .containsExactly(
@@ -154,10 +239,37 @@ class ExpansionReportTest {
   }
 
   @Test
+  @DisplayName("the dry run block adds a to-add row when the run would add something")
+  void shouldPrintTheToAddRowWhenTheDryRunWouldAddSomething() {
+    List<String> lines = ExpansionReport.dryRunLines(new Preflight(4, 2, 1, 1));
+
+    assertThat(lines)
+        .containsExactly(
+            "# segue promotion expansion — dry run: appends nothing. Aggregates only"
+                + " (ADR 51, ADR 63).",
+            "",
+            "promotions",
+            "  considered    4",
+            "  in the graph  2",
+            "  minted        1",
+            "  to add        1");
+  }
+
+  @Test
+  @DisplayName("the dry run block is byte-identical to today's when nothing would be added")
+  void shouldPrintNoToAddRowWhenTheRunWouldAddNothing() {
+    assertThat(ExpansionReport.dryRunLines(new Preflight(4, 2, 1, 0)))
+        .as("a run without --add can only ever pass zero here, so every pasted block survives")
+        .containsExactlyElementsOf(ExpansionReport.dryRunLines(new Preflight(4, 2, 1, 0)))
+        .hasSize(6);
+  }
+
+  @Test
   @DisplayName("the dry run block names the instant and what it excluded when a filter was applied")
   void shouldNameTheInstantWhenTheDryRunBlockCoversOnlyWhatWasRatedSince() {
     List<String> lines =
-        ExpansionReport.dryRunLines(new Preflight(4, 2, 1), Optional.of(new RatedSince(SINCE, 7)));
+        ExpansionReport.dryRunLines(
+            new Preflight(4, 2, 1, 0), Optional.of(new RatedSince(SINCE, 7)));
 
     assertThat(lines)
         .containsExactly(
@@ -176,7 +288,7 @@ class ExpansionReportTest {
   void shouldNameTheFileWhenTheBlockCoversOnlyWhatWasNeverExpanded() {
     assertThat(
             ExpansionReport.lines(
-                goldenTally(), Optional.of(new KnownNeverExpanded(KNOWN_FILE, 7))))
+                goldenTally(), Optional.of(new KnownNeverExpanded(KNOWN_FILE, 7, false))))
         .containsExactlyElementsOf(withKnownLine(GOLDEN_BLOCK));
   }
 
@@ -185,7 +297,7 @@ class ExpansionReportTest {
   void shouldNameTheFileWhenTheDryRunBlockCoversOnlyWhatWasNeverExpanded() {
     List<String> lines =
         ExpansionReport.dryRunLines(
-            new Preflight(4, 2, 1), Optional.of(new KnownNeverExpanded(KNOWN_FILE, 7)));
+            new Preflight(4, 2, 1, 0), Optional.of(new KnownNeverExpanded(KNOWN_FILE, 7, false)));
 
     assertThat(lines)
         .containsExactly(
@@ -204,7 +316,7 @@ class ExpansionReportTest {
   void shouldNameTheFileAndTheIsolatedCountWhenTheRunCoveredTheSecondHop() {
     List<String> lines =
         ExpansionReport.dryRunLines(
-            new Preflight(4, 4, 0), Optional.of(new SecondHopNeighbours("known.csv", 3)));
+            new Preflight(4, 4, 0, 0), Optional.of(new SecondHopNeighbours("known.csv", 3)));
 
     assertThat(lines.get(0)).isEqualTo(ExpansionReport.DRY_RUN_HEADER);
     assertThat(lines.get(1))
@@ -219,7 +331,8 @@ class ExpansionReportTest {
   @DisplayName("every column lines up, because the padding comes from the block's own widths")
   void shouldAlignEveryColumnWhenTheCountsDifferInWidth() {
     ExpansionTally tally =
-        new ExpansionTally(100_000, 1, 0, 0, 0, 0, 0, 0, 0, Map.of(), Map.of(), Map.of(), Map.of());
+        new ExpansionTally(
+            100_000, 0, 1, 0, 0, 0, 0, 0, 0, 0, Map.of(), Map.of(), Map.of(), Map.of());
 
     List<String> lines = ExpansionReport.lines(tally);
 
@@ -251,7 +364,7 @@ class ExpansionReportTest {
   void shouldStillPrintTheHeadingWhenASectionHasNoRows() {
     ExpansionTally tally =
         new ExpansionTally(
-            1, 1, 0, 0, 0, 0, 0, 0, 0, Map.of(), Map.of("musicbrainz", 1), Map.of(), Map.of());
+            1, 0, 1, 0, 0, 0, 0, 0, 0, 0, Map.of(), Map.of("musicbrainz", 1), Map.of(), Map.of());
 
     List<String> lines = ExpansionReport.lines(tally);
 

@@ -96,7 +96,8 @@ public final class ExpandRun {
         inTheGraph++;
       }
     }
-    Preflight preflight = new Preflight(promotions.size(), inTheGraph, minted);
+    // toAdd is 0: this task renders it but nothing composes it yet — that is Task 4 (#328).
+    Preflight preflight = new Preflight(promotions.size(), inTheGraph, minted, 0);
     ExpansionReport.dryRunLines(preflight, covered).forEach(lines);
     return preflight;
   }
@@ -187,6 +188,9 @@ public final class ExpandRun {
     ExpansionTally tally =
         new ExpansionTally(
             promotions.size(),
+            // added is 0: this task renders it but nothing composes it yet — that is Task 4
+            // (#328).
+            0,
             expanded,
             addedNothing,
             failed,
