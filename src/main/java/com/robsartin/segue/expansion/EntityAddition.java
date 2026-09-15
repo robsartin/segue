@@ -72,7 +72,14 @@ public final class EntityAddition {
     try {
       fetched = resolver.fetch(qid);
     } catch (WikidataUnavailableException e) {
-      log.warn("add({}) source unavailable: {}", qid, e.getMessage());
+      // Neither the qid nor e.getMessage() may go in the log line: this method is now reachable
+      // from a terminal-facing dev tool (#328's expandPromotions --add), which never names an
+      // entity on the terminal, and WikidataClient's own message can embed the qid itself — its
+      // non-transient-HTTP-status text carries the full request URI, and wbgetentities' URI
+      // always carries "ids=<qid>" (see WikidataEntityResolver.entity). The detail is still
+      // returned to the caller on the outcome, where the MCP tool's per-call sentence is allowed
+      // to name it.
+      log.warn("add() source unavailable");
       return new AdditionOutcome.Refused(
           qid, AdditionOutcome.Reason.SOURCE_UNAVAILABLE, e.getMessage());
     }

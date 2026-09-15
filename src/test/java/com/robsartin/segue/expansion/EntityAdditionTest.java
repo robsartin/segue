@@ -2,6 +2,10 @@ package com.robsartin.segue.expansion;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.ingest.IngestService;
 import com.robsartin.segue.port.AssertionLog;
@@ -16,6 +20,8 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -28,6 +34,9 @@ import org.junit.jupiter.api.io.TempDir;
  * from anybody's graph (ADR 33, issue #37), and no test in this class reaches a network.
  */
 class EntityAdditionTest {
+
+  /** Anything qid-shaped at all, wherever it appears — the standing dev-tool rule. */
+  private static final Pattern A_QID = Pattern.compile("\\bQ\\d+\\b");
 
   /** The stub answers for this one. */
   private static final String ANSWERED_FOR = "Q0901501";
@@ -153,6 +162,34 @@ class EntityAdditionTest {
                 assertThat(refused.detail()).contains("404");
               });
       assertThat(log.readAll()).isEmpty();
+    }
+  }
+
+  @Test
+  @DisplayName("a source outage on the add is logged without the entity id")
+  void shouldNameNoEntityInTheLogWhenTheSourceIsUnavailable() {
+    Logger entityAdditionLogger = (Logger) org.slf4j.LoggerFactory.getLogger(EntityAddition.class);
+    Level originalLevel = entityAdditionLogger.getLevel();
+    ListAppender<ILoggingEvent> captured = new ListAppender<>();
+    captured.start();
+    entityAdditionLogger.setLevel(Level.TRACE);
+    entityAdditionLogger.addAppender(captured);
+    try (StubWikidataServer stub = new StubWikidataServer()) {
+      // 404, not 5xx: WikidataClient.isTransient refuses it outright, so nothing here sleeps.
+      stub.enqueueStatus(404);
+
+      against(stub).add(UNREACHABLE);
+
+      assertThat(captured.list)
+          .as("the outage really was logged, or the assertion below is vacuous")
+          .isNotEmpty();
+      assertThat(List.copyOf(captured.list))
+          .extracting(ILoggingEvent::getFormattedMessage)
+          .as("no logged message names the entity — a dev tool never names one on the terminal")
+          .noneMatch(message -> A_QID.matcher(message).find());
+    } finally {
+      entityAdditionLogger.detachAppender(captured);
+      entityAdditionLogger.setLevel(originalLevel);
     }
   }
 
