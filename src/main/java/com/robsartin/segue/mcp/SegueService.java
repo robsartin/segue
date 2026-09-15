@@ -154,10 +154,9 @@ public final class SegueService {
   /**
    * {@link AdditionOutcome.Refused#detail()}, minus the one clause it can carry a qid in.
    *
-   * <p>Every shape {@link WikidataUnavailableException} builds names no entity except the one
-   * {@code WikidataClient.get} builds for a non-transient HTTP status, which appends {@code " for "
-   * + uri}. Cutting from that clause on is enough: nothing before it interpolates anything but the
-   * status code.
+   * <p>Only {@code WikidataClient.get}'s non-transient-status message names a qid: it appends
+   * {@code " for " + uri}. Cutting from that clause on is enough — nothing before it interpolates
+   * anything but the status code.
    */
   private static String withoutRequestUri(String detail) {
     int forClause = detail.indexOf(" for ");

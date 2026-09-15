@@ -16,7 +16,6 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -29,9 +28,6 @@ import org.junit.jupiter.api.io.TempDir;
  * from anybody's graph (ADR 33, issue #37), and no test in this class reaches a network.
  */
 class EntityAdditionTest {
-
-  /** Anything qid-shaped at all, wherever it appears — the standing dev-tool rule. */
-  private static final Pattern A_QID = Pattern.compile("\\bQ\\d+\\b");
 
   /** The stub answers for this one. */
   private static final String ANSWERED_FOR = "Q0901501";
