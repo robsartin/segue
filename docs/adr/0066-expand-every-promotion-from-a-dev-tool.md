@@ -778,3 +778,21 @@ with no promotions composed in: rejected above, for the reason given there.
 tests, and the verification of this *document* is the full gate over an otherwise unchanged tree:
 `AdrIndexTest`, `AdrCitationsTest`, `DocumentationLinksTest` for the relative links above, and
 `javadoc -Werror` inside `./gradlew check`.
+
+**Amendment (2026-09-14, issue #326): one clause in the paragraph above is overtaken — an entity a
+`--second-hop` run expanded is not always covered by `Expanded` afterwards.**
+
+Nothing above is withdrawn, no decision above is edited, and this ADR keeps `Accepted`. The
+2026-09-13 amendment's *Fixed at the start, and why re-runs need no state* paragraph says "an entity
+this run expanded is covered by `Expanded` on the next read of the log", as an unconditional fact.
+The census and run on issue #323 (2026-09-14) show it holds only when the expansion recorded a
+reference `Expanded.seedOf` reads, and not when it recorded only a MusicBrainz-backed edge or a
+Wikidata forward claim with no id — the same residual
+[ADR 63](0063-a-read-only-census-of-the-graph.md)'s 2026-09-14 amendment for #326 records on this
+population's own census rows. That amendment is the decision; this entry records which clause here
+it overtakes.
+
+**Nothing here is unit-testable on its own, and that is said out loud rather than left implied.** No
+behaviour changed and no test was written for behaviour. The verification of this *document* is the
+full gate over an otherwise unchanged tree: `AdrIndexTest`, `AdrCitationsTest`,
+`DocumentationLinksTest` for the relative link above, and `javadoc -Werror` inside `./gradlew check`.
