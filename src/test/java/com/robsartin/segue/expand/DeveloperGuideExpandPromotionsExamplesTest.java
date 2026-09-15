@@ -133,7 +133,8 @@ class DeveloperGuideExpandPromotionsExamplesTest {
   @DisplayName(
       "the chapter shows the census, the dry run, the run, the census, then the since-variant's"
           + " own dry run and run, then the known-list variant's census, dry run and run, then"
-          + " the second-hop variant's census, dry run and run, in that order")
+          + " the second-hop variant's census, dry run and run, then the add-variant's census,"
+          + " dry run, run, census and deck session, in that order")
   void shouldRunEveryStepInOrderWhenTheChapterIsRead() {
     assertThat(steps())
         .as(
@@ -149,8 +150,13 @@ class DeveloperGuideExpandPromotionsExamplesTest {
                 + " the chapter compares one dry run's considered with the previous run's"
                 + " (#315). The three --second-hop entries are the third variant, and its census"
                 + " comes first for the same reason the --known variant's does — the three nested"
-                + " rows it prints are what the run is measured against (#319). A parser cannot"
-                + " see any of that",
+                + " rows it prints are what the run is measured against (#319). The final five"
+                + " entries are sub-project 2(a) end to end (#328): its own census comes first"
+                + " because `named` against `in the graph` is the count a `--add` run would add —"
+                + " the same reading the `--known` variant's own census gives, over a different"
+                + " file — and the deck session comes last because the rows a run added are not"
+                + " known to the recommender until they are rated (ADR 48). A parser cannot see"
+                + " any of that",
             CHAPTER)
         .containsExactly(
             "graphCensus",
@@ -164,19 +170,25 @@ class DeveloperGuideExpandPromotionsExamplesTest {
             "expandPromotions --known",
             "graphCensus --known",
             "expandPromotions --dry-run --second-hop",
-            "expandPromotions --second-hop");
+            "expandPromotions --second-hop",
+            "graphCensus --known",
+            "expandPromotions --dry-run --known --add",
+            "expandPromotions --known --add",
+            "graphCensus --known",
+            "rate --known");
   }
 
   /**
-   * The chapter's {@code ./gradlew} lines, merged across the two tasks and put back into the order
-   * the guide writes them, each reduced to its task name plus whichever of {@code " --dry-run"},
-   * {@code " --rated-since"}, {@code " --known"} and {@code " --second-hop"} are among its
-   * arguments.
+   * The chapter's {@code ./gradlew} lines, merged across the three tasks and put back into the
+   * order the guide writes them, each reduced to its task name plus its own suffix for whichever of
+   * five flags are among its arguments: {@code --dry-run}, {@code --rated-since}, {@code --known},
+   * {@code --add} and {@code --second-hop} — each suffix a leading space plus the flag, matching
+   * what the code below actually appends.
    */
   private static List<String> steps() {
     record Numbered(int line, String command) {}
     List<Numbered> found = new ArrayList<>();
-    for (String task : List.of("graphCensus", "expandPromotions")) {
+    for (String task : List.of("graphCensus", "expandPromotions", "rate")) {
       for (Example example : GuideExamples.inChapter(CHAPTER, task).examples()) {
         String command = task;
         if (example.arguments().contains("--dry-run")) {
@@ -187,6 +199,9 @@ class DeveloperGuideExpandPromotionsExamplesTest {
         }
         if (example.arguments().contains("--known")) {
           command += " --known";
+        }
+        if (example.arguments().contains("--add")) {
+          command += " --add";
         }
         if (example.arguments().contains("--second-hop")) {
           command += " --second-hop";
