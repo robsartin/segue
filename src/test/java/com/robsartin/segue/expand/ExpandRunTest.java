@@ -7,6 +7,7 @@ import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.Candidate;
 import com.robsartin.segue.domain.EdgeTypes;
 import com.robsartin.segue.domain.LocalEntity;
+import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
@@ -333,6 +334,71 @@ class ExpandRunTest {
     // expansion below refuses it exactly as it always has.
     assertThat(tally.refusalsByReason())
         .containsExactly(entry(ExpansionOutcome.Reason.UNKNOWN_ENTITY, 1));
+  }
+
+  @Test
+  @DisplayName("a run continues when the addition's own write throws, and the block still prints")
+  void shouldContinueWhenTheAdditionsWriteThrows() throws Exception {
+    CountingResolver resolver = new CountingResolver().answering(ADDABLE, "an act nobody booked");
+    try (AssertionLog scriptLog =
+            new ThrowingOnAppendLog(new SqliteAssertionLog(dir.resolve("addition-throws.db")));
+        GraphStore scriptGraph = new TinkerGraphStore()) {
+      IngestService scriptIngest = new IngestService(scriptLog, scriptGraph, IdentityMerge.NONE);
+      EntityExpansion expansion =
+          new EntityExpansion(
+              resolver,
+              scriptGraph,
+              scriptIngest,
+              new SourceAdapters(List.of(new ScriptedAdapter("wikidata", Map.of()))));
+      ExpandRun adding =
+          new ExpandRun(expansion, scriptGraph, new EntityAddition(resolver, scriptIngest));
+      List<String> lines = new ArrayList<>();
+
+      ExpansionTally tally = adding.run(List.of(ADDABLE), Optional.empty(), 10, lines::add);
+
+      assertThat(tally.considered()).isOne();
+      assertThat(tally.failed()).isOne();
+      assertThat(tally.expanded()).isZero();
+      assertThat(tally.refusalsByReason()).isEmpty();
+      assertThat(tally.considered())
+          .as("considered == expanded + refused + failed, unchanged by the addition step")
+          .isEqualTo(tally.expanded() + refusedTotal(tally) + tally.failed());
+      assertThat(lines).anyMatch(line -> line.contains("promotions"));
+      assertThat(lines).noneMatch(line -> line.contains(ADDABLE));
+    }
+  }
+
+  private static int refusedTotal(ExpansionTally tally) {
+    return tally.refusalsByReason().values().stream().mapToInt(Integer::intValue).sum();
+  }
+
+  /**
+   * Wraps a real log and throws on every {@code append} — the smallest seam for a write that fails
+   * for a reason that has nothing to do with the claim, such as a busy SQLite file (#328 review,
+   * important 1). {@code readAll} and {@code close} delegate, so the wrapped log stays a real one
+   * for everything this test does not mean to break.
+   */
+  private static final class ThrowingOnAppendLog implements AssertionLog {
+    private final AssertionLog delegate;
+
+    ThrowingOnAppendLog(AssertionLog delegate) {
+      this.delegate = delegate;
+    }
+
+    @Override
+    public void append(LoggedAssertion assertion) {
+      throw new RuntimeException("simulated busy SQLite file");
+    }
+
+    @Override
+    public List<LoggedAssertion> readAll() {
+      return delegate.readAll();
+    }
+
+    @Override
+    public void close() {
+      delegate.close();
+    }
   }
 
   @Test

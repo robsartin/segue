@@ -32,6 +32,11 @@ import org.slf4j.LoggerFactory;
  * unreachable source and a truncation are all reported outcomes of an expansion that completed,
  * exactly as {@link EntityExpansion#expand} already treats them one level down, and retrying would
  * need a policy this tool does not own — the adapters' own clients already retry with backoff.
+ * <b>The same guard wraps the add call this run makes before expanding, for the same reason</b>
+ * (#328 review): {@link EntityAddition#add} catches a source outage itself, but not a write that
+ * fails for a reason that has nothing to do with the claim — a busy SQLite file, say — and without
+ * a second catch here that throw would propagate out of this method exactly as an unguarded
+ * expansion once did.
  *
  * <p><b>No progress line and no log line this class writes ever carries a qid.</b> A line per
  * promotion, over every promotion, in qid order, is the owner's whole promoted population
@@ -180,7 +185,26 @@ public final class ExpandRun {
       // says, and it would also break the dry run's arithmetic, where `minted` and `to add` are
       // kept disjoint by exactly this check. The expansion below refuses it as it always has.
       if (addition.isPresent() && !LocalEntity.isLocal(qid) && graph.node(qid).isEmpty()) {
-        AdditionOutcome outcome = addition.get().add(qid);
+        AdditionOutcome outcome;
+        try {
+          outcome = addition.get().add(qid);
+        } catch (RuntimeException thrown) {
+          // #328 review, important 1. EntityAddition.add catches WikidataUnavailableException
+          // itself and returns a Refused outcome for it, but the write below that — the
+          // ingest.record call, and specifically the log append — is not caught anywhere
+          // below this line. One entity's write failing (a busy SQLite file, say) is no more
+          // the run than one entity's EXPANSION throwing is — see the catch two blocks down
+          // and the class javadoc — so it gets the same treatment: counted, logged without a
+          // qid, and the loop carries on to the next promotion.
+          failed++;
+          log.warn(
+              "addition {} of {} threw: {}",
+              i + 1,
+              promotions.size(),
+              thrown.getClass().getSimpleName());
+          lines.accept(progress(i, promotions.size(), "failed"));
+          continue;
+        }
         if (outcome instanceof AdditionOutcome.Refused refused) {
           switch (refused.reason()) {
             case NO_SUCH_ENTITY -> {
