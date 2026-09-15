@@ -123,3 +123,83 @@ tell a musician from a minister, because every human is `Q5`.
     real list, not guessed, which is the growth path the class's own note describes.
 - The tool has no scheduled second use. If the list is re-imported it will be re-run, and
   the resume behaviour means that is cheap.
+
+**Amendment (2026-09-15, issue #333): a `book` kind, and a third signal — the classes a work may
+state.**
+
+Nothing above is withdrawn, no decision above is edited, and this ADR keeps `Accepted`. What
+changes is that the `kind` column may now name a work rather than only a person or a group, and
+that one kind checks a third property to do it. `seed.Expectations` is the authority on the
+column's current values.
+
+**Why the kind alone is not enough for a title.** "Auto-accept only when three independent signals
+agree" reads, for a person, as name plus kind plus occupation. A book row has no occupation to
+check, and its kind is `WORK` — which [ADR 21](0021-six-kind-ontology.md)'s six make the same kind
+as an album, a film, a television episode and a song. A title is regularly shared by the book, the
+film of the book and a dozen printings of the book, and the film is regularly the better known of
+them. Kind plus margin would resolve such a row confidently and wrongly, which is the one outcome
+this tool exists to avoid.
+
+**The third signal, the same shape as the second.** An expectation is a set of node kinds, a set
+of occupations and now a set of Wikidata classes; a kind whose class set is empty is checked
+exactly as it was before, which is every kind but `book`. `book` expects a `WORK` that states one
+of three classes — book, literary work, or written work — and those three are named where
+`KindMapper` already maps them to `WORK`, so the ids have one home and the seed table cites it
+rather than restating it. The check sits inside the same filter as the kind check, ahead of the
+sitelink ranking, so a better-known candidate of the wrong class never reaches the margin. A
+candidate refused on it goes to the review file with the classes it stated on the line, exactly as
+a person refused on occupation goes there with the occupations they stated.
+
+**"Version, edition or translation" is deliberately outside the set.** It is a `WORK` to the
+mapper, and the owner's row means the work, not a printing of it. Leaving it out costs a review
+line whenever a title finds only an edition — where a person can point it at the work in one look
+— and including it would buy an auto-accepted answer that is quietly the wrong entity.
+
+**No class is added to `KindMapper`.** The set is drawn from what that table already maps to
+`WORK`. A class it does not map is not a `WORK` at all, so it could not pass the kind check
+either; and widening the mapper would change every projection, which is
+[ADR 42](0042-store-p31-and-rederive-kind-at-projection.md)'s territory and a different decision
+from this one.
+
+**`P31` read this way is a resolver filter, not an edge** — the rule this ADR already states for
+`P106`, and for the same reason. The graph stores an entity's classes on the node and re-derives
+its kind from them; reading those same classes to decide which of several same-titled works the
+row meant creates no edge and adds nothing to the graph.
+
+**The list itself.** Three columns still, `name,kind,status`, with `author` or `book` in the kind
+column. A hand-written list carries no tour status, so the status field is empty on every row; the
+column is carried through untouched, as it always has been, and the reader takes an empty field.
+The file lives outside the working tree with every other list
+([ADR 33](0033-taste-layer-separation.md)), and a row becomes known only by being rated, through
+the rule [ADR 48](0048-a-high-rating-counts-as-something-you-have.md) already sets — this
+amendment adds no second route to membership.
+
+**Alternatives rejected.**
+
+- **A fourth column naming the author, and a tie-break on the author property.** Fewer review
+  lines, at the price of a four-column list, another property read in the facts pass, and a second
+  pass that cannot run until the authors themselves resolve. The review file already exists for
+  the residue. This is the upgrade to reach for if the residue turns out large on a real list, and
+  it is cheap to add later precisely because nothing here forecloses it.
+- **Authors only, with books picked out of their expansions.** Sidesteps title matching
+  altogether, and hands the owner a picking step over lists of titles — which is the deck's job,
+  and the deck deals people and groups.
+- **Accept any `WORK` for a `book` row.** The cheapest change there is, and it is the confident
+  wrong answer above: whenever the film is better known than the book, the film wins the margin.
+- **Books known outright, without a rating.** The owner chose rate-first, and the promotion rule
+  already turns a high rating into membership; a second membership rule would be a second answer
+  to one question.
+- **A `book` class added to `KindMapper`.** There is nothing to add: the set is what that table
+  already maps to `WORK`. Adding to it would change every projection for a resolver's benefit.
+
+**Nothing here is unit-testable on its own, and that is said out loud rather than left implied.**
+This entry records a decision whose code landed with its own tests: the class set and its two
+predicates seen red on a stub; the raw classes seen red against the stub server before they were
+kept; the film refused and the identical candidate with a written class accepted; the edition
+losing to the work it is an edition of; two written works within the margin sent to review; the
+table's entry and the union the resolver actually asks for driven out separately, because the
+first is green while the second is empty; and three planted controls — the review line's classes,
+the union's permissive rule, and a reader made to refuse a blank status — each seen to fire and
+then removed. The verification of the *document* is the full gate over an otherwise unchanged
+tree: `AdrIndexTest`, `AdrCitationsTest`, `DocumentationLinksTest` for the relative links above,
+and `javadoc -Werror` inside `./gradlew check`.
