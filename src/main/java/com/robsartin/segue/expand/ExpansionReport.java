@@ -11,12 +11,12 @@ import java.util.Optional;
  * what a person sees (ADR 51, ADR 63) — {@code CensusReport}'s and {@code EvaluationReport}'s
  * shape, held to it for the same reason: {@link #lines} takes an {@link ExpansionTally} whose every
  * component is an {@code int} or a map keyed by {@code SourceAdapter#id()} or {@link
- * ExpansionOutcome.Reason}, and {@link #dryRunLines} takes a {@link Preflight} of three {@code
- * int}s. Each renderer's long arity also takes an {@code Optional<Population>}, whose three shapes
- * carry an {@code Instant} and an {@code int}, or — for the other two — a file's basename and an
- * {@code int}. Every component but that basename is an {@code int}, an {@code Instant}, or a map
- * keyed by an adapter id or a reason; the basename is the one operator-supplied string, narrowed by
- * {@code support.KnownListInput} and held by {@code ExpansionIsSafeToPasteTest}'s positive control.
+ * ExpansionOutcome.Reason}, and {@link #dryRunLines} takes a {@link Preflight}. Each renderer's
+ * long arity takes an {@code Optional<Population>}, whose three shapes carry an {@code Instant} and
+ * an {@code int}, or — for the other two — a file's basename and an {@code int}. Every component
+ * but that basename is an {@code int}, an {@code Instant}, or a map keyed by an adapter id or a
+ * reason; the basename is the one operator string, narrowed by {@code support.KnownListInput} and
+ * held by {@code ExpansionIsSafeToPasteTest}'s positive control.
  *
  * <p><b>Every section prints its heading, whether or not there is a row to show under it.</b> An
  * empty {@code edge assertions by source} means no edge assertion was recorded from any source, and
@@ -108,12 +108,24 @@ public final class ExpansionReport {
     return render(DRY_RUN_HEADER, covered, dryRunBody(preflight));
   }
 
+  /**
+   * <b>The {@code to add} row prints only when it is not zero.</b> A run with no {@code --add} can
+   * never produce a non-zero value for it — {@link ExpandRun#dryRun} counts it only when it holds
+   * an addition — so suppressing the zero keeps every block already pasted into an issue
+   * byte-identical, which is the rule the two {@code #} clauses follow for the same reason. An
+   * {@code --add} run that found nothing to add prints no row either, and says so truthfully: it
+   * added nothing.
+   */
   private static List<Entry> dryRunBody(Preflight preflight) {
-    return List.of(
-        new Section("promotions"),
-        new Row("  considered", preflight.considered()),
-        new Row("  in the graph", preflight.inTheGraph()),
-        new Row("  minted", preflight.minted()));
+    List<Entry> body = new ArrayList<>();
+    body.add(new Section("promotions"));
+    body.add(new Row("  considered", preflight.considered()));
+    body.add(new Row("  in the graph", preflight.inTheGraph()));
+    body.add(new Row("  minted", preflight.minted()));
+    if (preflight.toAdd() > 0) {
+      body.add(new Row("  to add", preflight.toAdd()));
+    }
+    return List.copyOf(body);
   }
 
   private static List<Entry> body(ExpansionTally tally) {
@@ -121,6 +133,13 @@ public final class ExpansionReport {
 
     body.add(new Section("promotions"));
     body.add(new Row("  considered", tally.considered()));
+    // #328. Printed only when it is not zero, for dryRunBody's reason: a run with no --add can
+    // never make it non-zero, so no block already on record moves. Placed here and not beside
+    // `added nothing` because the order of these rows is the order of the work — an entity is
+    // added and then expanded — and because `refusedTotal` below already counts what could not be.
+    if (tally.added() > 0) {
+      body.add(new Row("  added", tally.added()));
+    }
     body.add(new Row("  expanded", tally.expanded()));
     body.add(new Row("  added nothing", tally.addedNothing()));
     body.add(new Row("  refused", refusedTotal(tally)));
@@ -162,6 +181,7 @@ public final class ExpansionReport {
       case UNKNOWN_ENTITY -> "unknown entity";
       case LOCAL_ENTITY -> "local entity";
       case BOUND_NOT_POSITIVE -> "bound not positive";
+      case NO_SUCH_ENTITY -> "no such entity";
     };
   }
 
@@ -209,14 +229,25 @@ public final class ExpansionReport {
    * misread without it: the file's ids are counted on their canonical side, so a file naming both
    * sides of a merge names one entity, and the excluded count is over that population and not over
    * the file's lines.
+   *
+   * <p><b>A sentence and not a number, appended only when {@code --add} was given</b> — the one
+   * home of why is {@link KnownNeverExpanded#adding()}'s own javadoc, cited rather than restated.
    */
   private static String knownLine(KnownNeverExpanded known) {
-    return "# only known-list entities from "
-        + known.file()
-        + " that no expansion has covered: "
-        + known.excluded()
-        + " excluded (some row in the log cites them as an expansion's seed) — the file's ids are"
-        + " read through the merge fold, so a merge's two sides count once.";
+    String line =
+        "# only known-list entities from "
+            + known.file()
+            + " that no expansion has covered: "
+            + known.excluded()
+            + " excluded (some row in the log cites them as an expansion's seed) — the file's ids"
+            + " are read through the merge fold, so a merge's two sides count once.";
+    if (!known.adding()) {
+      return line;
+    }
+    // #328. Why a sentence and not a number: KnownNeverExpanded.adding()'s javadoc.
+    return line
+        + " --add was given, so an id the file names that the graph holds no node for was added"
+        + " before it was expanded; how many is the added row below, or to add on a dry run.";
   }
 
   /**

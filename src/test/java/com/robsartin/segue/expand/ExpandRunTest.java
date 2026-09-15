@@ -1,15 +1,18 @@
 package com.robsartin.segue.expand;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.entry;
 
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.Candidate;
 import com.robsartin.segue.domain.EdgeTypes;
 import com.robsartin.segue.domain.LocalEntity;
+import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.Provenance;
+import com.robsartin.segue.expansion.EntityAddition;
 import com.robsartin.segue.expansion.EntityExpansion;
 import com.robsartin.segue.expansion.ExpansionOutcome;
 import com.robsartin.segue.ingest.IngestService;
@@ -23,13 +26,16 @@ import com.robsartin.segue.port.SourceAdapter;
 import com.robsartin.segue.port.SourceAdapters;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
 import com.robsartin.segue.tinker.TinkerGraphStore;
+import com.robsartin.segue.wikidata.WikidataUnavailableException;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterEach;
@@ -49,6 +55,18 @@ class ExpandRunTest {
   private static final String MINTED = "Q00900703";
   private static final String NOT_IN_GRAPH = "Q0900704";
 
+  /** On the file, no node, and the stub resolver answers for it. */
+  private static final String ADDABLE = "Q0901505";
+
+  /** Minted by the owner and never recorded, so the graph holds no node for it either. */
+  private static final String MINTED_NO_NODE = "Q00901502";
+
+  /** On the file, no node, the resolver answers nothing. */
+  private static final String NOTHING_THERE = "Q0901506";
+
+  /** On the file, no node, the resolver cannot be reached. */
+  private static final String UNREACHABLE_ON_ADD = "Q0901507";
+
   private static final List<String> PROMOTIONS =
       List.of(IN_GRAPH_ONE, IN_GRAPH_TWO, MINTED, NOT_IN_GRAPH);
 
@@ -64,6 +82,7 @@ class ExpandRunTest {
 
   private AssertionLog log;
   private GraphStore graph;
+  private IngestService ingest;
   private AtomicBoolean neverAsked;
   private ExpandRun run;
 
@@ -71,7 +90,7 @@ class ExpandRunTest {
   void setUp() {
     log = new SqliteAssertionLog(dir.resolve("scratch.db"));
     graph = new TinkerGraphStore();
-    IngestService ingest = new IngestService(log, graph, IdentityMerge.NONE);
+    ingest = new IngestService(log, graph, IdentityMerge.NONE);
 
     ingest.record(
         new NodeAssertion(IN_GRAPH_ONE, NodeKind.PERSON, "an act nobody signed", WIKIDATA));
@@ -112,6 +131,93 @@ class ExpandRunTest {
     log.close();
   }
 
+  /**
+   * {@code setUp}'s own {@link EntityExpansion}, over the given resolver rather than a stub that
+   * must never be called.
+   */
+  private EntityExpansion expansionOver(EntityResolver resolver) {
+    return new EntityExpansion(
+        resolver,
+        graph,
+        ingest,
+        new SourceAdapters(List.of(new ScriptedAdapter("wikidata", Map.of()))));
+  }
+
+  /** A resolver that answers for exactly what it was given, and counts what it was asked. */
+  private static final class CountingResolver implements EntityResolver {
+    private final Map<String, NodeAssertion> answers = new HashMap<>();
+    private final Set<String> unreachable = new HashSet<>();
+    private int fetches;
+
+    CountingResolver answering(String qid, String label) {
+      answers.put(qid, new NodeAssertion(qid, NodeKind.PERSON, label, WIKIDATA));
+      return this;
+    }
+
+    CountingResolver unreachableFor(String qid) {
+      unreachable.add(qid);
+      return this;
+    }
+
+    @Override
+    public String id() {
+      return "stub";
+    }
+
+    @Override
+    public List<Candidate> search(String query, NodeKind kind, int limit) {
+      throw new AssertionError("this run must not search");
+    }
+
+    @Override
+    public Optional<NodeAssertion> fetch(String qid) {
+      fetches++;
+      if (unreachable.contains(qid)) {
+        throw new WikidataUnavailableException("the stub was told this one is unreachable");
+      }
+      return Optional.ofNullable(answers.get(qid));
+    }
+
+    int fetches() {
+      return fetches;
+    }
+  }
+
+  @Test
+  @DisplayName("a dry run that may add counts what it would add and still asks no source anything")
+  void shouldCountWhatItWouldAddWhenTheDryRunMayAdd() {
+    CountingResolver resolver = new CountingResolver().answering(ADDABLE, "an act nobody booked");
+    ExpandRun adding =
+        new ExpandRun(expansionOver(resolver), graph, new EntityAddition(resolver, ingest));
+    List<String> lines = new ArrayList<>();
+
+    Preflight preflight =
+        adding.dryRun(
+            List.of(IN_GRAPH_ONE, MINTED, MINTED_NO_NODE, ADDABLE, NOT_IN_GRAPH),
+            Optional.of(new KnownNeverExpanded("rejected.csv", 0, true)),
+            lines::add);
+
+    assertThat(preflight).isEqualTo(new Preflight(5, 1, 2, 2));
+    assertThat(preflight.considered())
+        .as("considered == in the graph + minted + to add, exactly, on an --add run")
+        .isEqualTo(preflight.inTheGraph() + preflight.minted() + preflight.toAdd());
+    assertThat(resolver.fetches()).as("a dry run fetches nothing").isZero();
+    assertThat(neverAsked.get()).as("no adapter was called").isTrue();
+  }
+
+  @Test
+  @DisplayName("a dry run that may not add counts nothing to add, however many ids have no node")
+  void shouldCountNothingToAddWhenTheDryRunMayNotAdd() {
+    List<String> lines = new ArrayList<>();
+
+    Preflight preflight =
+        run.dryRun(List.of(IN_GRAPH_ONE, MINTED, MINTED_NO_NODE, NOT_IN_GRAPH), lines::add);
+
+    assertThat(preflight.toAdd())
+        .as("every block already pasted into an issue came from a run like this one")
+        .isZero();
+  }
+
   @Test
   @DisplayName("a dry run counts what would be visited and asks no source anything")
   void shouldCountWithoutExpandingWhenTheRunIsADryRun() {
@@ -119,7 +225,7 @@ class ExpandRunTest {
 
     Preflight preflight = run.dryRun(PROMOTIONS, lines::add);
 
-    assertThat(preflight).isEqualTo(new Preflight(4, 2, 1));
+    assertThat(preflight).isEqualTo(new Preflight(4, 2, 1, 0));
     assertThat(neverAsked.get()).as("no adapter was called").isTrue();
     assertThat(lines).anyMatch(line -> line.contains("dry run"));
   }
@@ -145,6 +251,154 @@ class ExpandRunTest {
         .as("the clause reaches the consumer, not just the renderer")
         .anyMatch(line -> line.startsWith("# only promotions rated on or after " + SINCE))
         .contains(ExpansionReport.DRY_RUN_HEADER);
+  }
+
+  @Test
+  @DisplayName("an id the graph lacks is added and then expanded when the run may add")
+  void shouldAddAndThenExpandWhenTheRunMayAddAndTheGraphLacksTheId() {
+    CountingResolver resolver = new CountingResolver().answering(ADDABLE, "an act nobody booked");
+    ExpandRun adding =
+        new ExpandRun(expansionOver(resolver), graph, new EntityAddition(resolver, ingest));
+    List<String> lines = new ArrayList<>();
+
+    ExpansionTally tally = adding.run(List.of(ADDABLE), Optional.empty(), 10, lines::add);
+
+    assertThat(tally.added()).isOne();
+    assertThat(tally.expanded()).as("added first, then expanded, in the same pass").isOne();
+    assertThat(tally.refusalsByReason()).isEmpty();
+    assertThat(graph.node(ADDABLE)).isPresent();
+  }
+
+  @Test
+  @DisplayName("the same id is refused as an unknown entity when the run may not add")
+  void shouldRefuseTheSameIdAsUnknownWhenTheRunMayNotAdd() {
+    List<String> lines = new ArrayList<>();
+
+    ExpansionTally tally = run.run(List.of(ADDABLE), Optional.empty(), 10, lines::add);
+
+    assertThat(tally.added()).isZero();
+    assertThat(tally.expanded()).isZero();
+    assertThat(tally.refusalsByReason())
+        .containsExactly(entry(ExpansionOutcome.Reason.UNKNOWN_ENTITY, 1));
+    assertThat(graph.node(ADDABLE)).isEmpty();
+  }
+
+  @Test
+  @DisplayName("an id no source has an entity for is refused as no such entity, not as unknown")
+  void shouldRefuseAsNoSuchEntityWhenNoSourceHasTheEntity() {
+    CountingResolver resolver = new CountingResolver();
+    ExpandRun adding =
+        new ExpandRun(expansionOver(resolver), graph, new EntityAddition(resolver, ingest));
+    List<String> lines = new ArrayList<>();
+
+    ExpansionTally tally = adding.run(List.of(NOTHING_THERE), Optional.empty(), 10, lines::add);
+
+    assertThat(tally.added()).isZero();
+    assertThat(tally.refusalsByReason())
+        .containsExactly(entry(ExpansionOutcome.Reason.NO_SUCH_ENTITY, 1));
+    assertThat(lines).anyMatch(line -> line.contains("refused: NO_SUCH_ENTITY"));
+    assertThat(lines).noneMatch(line -> line.contains(NOTHING_THERE));
+  }
+
+  @Test
+  @DisplayName("a source that cannot be reached on the add is a failure, not a refusal")
+  void shouldCountAFailureWhenTheSourceCannotBeReachedOnTheAdd() {
+    CountingResolver resolver = new CountingResolver().unreachableFor(UNREACHABLE_ON_ADD);
+    ExpandRun adding =
+        new ExpandRun(expansionOver(resolver), graph, new EntityAddition(resolver, ingest));
+    List<String> lines = new ArrayList<>();
+
+    ExpansionTally tally =
+        adding.run(List.of(UNREACHABLE_ON_ADD), Optional.empty(), 10, lines::add);
+
+    assertThat(tally.failed()).isOne();
+    assertThat(tally.refusalsByReason()).isEmpty();
+    assertThat(lines).noneMatch(line -> line.contains(UNREACHABLE_ON_ADD));
+  }
+
+  @Test
+  @DisplayName("a minted id the graph lacks is never handed to the add rule")
+  void shouldNeverAskTheAddRuleWhenTheIdWasMintedByTheOwner() {
+    CountingResolver resolver = new CountingResolver();
+    ExpandRun adding =
+        new ExpandRun(expansionOver(resolver), graph, new EntityAddition(resolver, ingest));
+    List<String> lines = new ArrayList<>();
+
+    ExpansionTally tally = adding.run(List.of(MINTED_NO_NODE), Optional.empty(), 10, lines::add);
+
+    assertThat(resolver.fetches()).as("the rule was never asked, so no source was").isZero();
+    // EntityExpansion.expand checks graph.node(qid) BEFORE LocalEntity.isLocal (see its lines
+    // 168-178), so an id with no node at all — minted or not — is refused UNKNOWN_ENTITY, never
+    // LOCAL_ENTITY. That is the ordinary case here too: ExpandRun's own guard skips the addition
+    // rule because isLocal is true, so the resolver is never asked (the assertion above), and the
+    // expansion below refuses it exactly as it always has.
+    assertThat(tally.refusalsByReason())
+        .containsExactly(entry(ExpansionOutcome.Reason.UNKNOWN_ENTITY, 1));
+  }
+
+  @Test
+  @DisplayName("a run continues when the addition's own write throws, and the block still prints")
+  void shouldContinueWhenTheAdditionsWriteThrows() throws Exception {
+    CountingResolver resolver = new CountingResolver().answering(ADDABLE, "an act nobody booked");
+    try (AssertionLog scriptLog =
+            new ThrowingOnAppendLog(new SqliteAssertionLog(dir.resolve("addition-throws.db")));
+        GraphStore scriptGraph = new TinkerGraphStore()) {
+      IngestService scriptIngest = new IngestService(scriptLog, scriptGraph, IdentityMerge.NONE);
+      EntityExpansion expansion =
+          new EntityExpansion(
+              resolver,
+              scriptGraph,
+              scriptIngest,
+              new SourceAdapters(List.of(new ScriptedAdapter("wikidata", Map.of()))));
+      ExpandRun adding =
+          new ExpandRun(expansion, scriptGraph, new EntityAddition(resolver, scriptIngest));
+      List<String> lines = new ArrayList<>();
+
+      ExpansionTally tally = adding.run(List.of(ADDABLE), Optional.empty(), 10, lines::add);
+
+      assertThat(tally.considered()).isOne();
+      assertThat(tally.failed()).isOne();
+      assertThat(tally.expanded()).isZero();
+      assertThat(tally.refusalsByReason()).isEmpty();
+      assertThat(tally.considered())
+          .as("considered == expanded + refused + failed, unchanged by the addition step")
+          .isEqualTo(tally.expanded() + refusedTotal(tally) + tally.failed());
+      assertThat(lines).anyMatch(line -> line.contains("promotions"));
+      assertThat(lines).noneMatch(line -> line.contains(ADDABLE));
+    }
+  }
+
+  private static int refusedTotal(ExpansionTally tally) {
+    return tally.refusalsByReason().values().stream().mapToInt(Integer::intValue).sum();
+  }
+
+  /**
+   * Wraps a real log and throws on every {@code append} — the smallest seam for a write that fails
+   * for a reason that has nothing to do with the claim, such as a busy SQLite file (#328 review,
+   * important 1). {@code readAll} and {@code close} delegate, so the wrapped log stays a real one
+   * for everything this test does not mean to break.
+   */
+  private static final class ThrowingOnAppendLog implements AssertionLog {
+    private final AssertionLog delegate;
+
+    ThrowingOnAppendLog(AssertionLog delegate) {
+      this.delegate = delegate;
+    }
+
+    @Override
+    public void append(LoggedAssertion assertion) {
+      throw new RuntimeException("simulated busy SQLite file");
+    }
+
+    @Override
+    public List<LoggedAssertion> readAll() {
+      return delegate.readAll();
+    }
+
+    @Override
+    public void close() {
+      delegate.close();
+    }
   }
 
   @Test

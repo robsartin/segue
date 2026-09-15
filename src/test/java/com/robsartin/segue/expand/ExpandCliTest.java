@@ -73,6 +73,20 @@ class ExpandCliTest {
   /** On the file, and deliberately given no node at all. */
   private static final String NO_NODE = "Q0901304";
 
+  /** On the {@code --add} file, and in the graph. */
+  private static final String ON_FILE_IN_GRAPH = "Q0901504";
+
+  /**
+   * On the {@code --add} file, and in the graph — a second one, so a count can fall short of it.
+   */
+  private static final String ALSO_IN_GRAPH = "Q0901510";
+
+  /** On the {@code --add} file, no node, the resolver would answer for it on a real run. */
+  private static final String ADDABLE = "Q0901505";
+
+  /** On the {@code --add} file, minted, never recorded — the graph holds no node for it either. */
+  private static final String MINTED_NO_NODE = "Q00901502";
+
   @TempDir private Path home;
 
   private Logger rootLogger;
@@ -330,6 +344,91 @@ class ExpandCliTest {
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("--known and --rated-since name different populations")
         .hasMessageContaining("--db <segue.db>");
+  }
+
+  @Test
+  @DisplayName("--add is off unless it is given")
+  void shouldNotAddWhenTheSwitchIsAbsent() {
+    assertThat(ExpandCli.parse(new String[] {"--db", "db.sqlite"}, null, home.toString()).add())
+        .isFalse();
+  }
+
+  @Test
+  @DisplayName("--add is on when it is given beside a known-list file")
+  void shouldAddWhenTheSwitchIsGivenWithAKnownList() {
+    assertThat(
+            ExpandCli.parse(
+                    new String[] {"--db", "db.sqlite", "--known", "known.csv", "--add"},
+                    null,
+                    home.toString())
+                .add())
+        .isTrue();
+  }
+
+  @Test
+  @DisplayName(
+      "--add without --known is refused, because only a file can name what the graph lacks")
+  void shouldRefuseWhenAddIsGivenWithoutAKnownList() {
+    assertThatThrownBy(
+            () ->
+                ExpandCli.parse(new String[] {"--db", "db.sqlite", "--add"}, null, home.toString()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("--add needs --known")
+        .hasMessageContaining("only a file can name an entity the graph lacks");
+  }
+
+  @Test
+  @DisplayName(
+      "--add and --rated-since are refused together, because that population is in the graph")
+  void shouldRefuseWhenAddIsGivenWithRatedSince() {
+    assertThatThrownBy(
+            () ->
+                ExpandCli.parse(
+                    new String[] {"--db", "db.sqlite", "--rated-since", THE_INSTANT, "--add"},
+                    null,
+                    home.toString()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("--add and --rated-since name different populations");
+  }
+
+  @Test
+  @DisplayName("--add and --second-hop are refused together, for the same reason")
+  void shouldRefuseWhenAddIsGivenWithSecondHop() {
+    assertThatThrownBy(
+            () ->
+                ExpandCli.parse(
+                    new String[] {"--db", "db.sqlite", "--second-hop", "known.csv", "--add"},
+                    null,
+                    home.toString()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("--add and --second-hop name different populations");
+  }
+
+  @Test
+  @DisplayName("the usage message names the switch, so a refusal shows how to spell it")
+  void shouldNameTheSwitchInTheUsageWhenAnythingIsRefused() {
+    assertThatThrownBy(() -> ExpandCli.parse(new String[] {}, null, home.toString()))
+        .hasMessageContaining("[--add]");
+  }
+
+  @Test
+  @DisplayName("a run naming both populations is refused in the sentence already on record")
+  void shouldRefuseInTheOlderSentenceWhenBothPopulationsAreNamedBesideAdd() {
+    assertThatThrownBy(
+            () ->
+                ExpandCli.parse(
+                    new String[] {
+                      "--db",
+                      "db.sqlite",
+                      "--known",
+                      "known.csv",
+                      "--rated-since",
+                      THE_INSTANT,
+                      "--add"
+                    },
+                    null,
+                    home.toString()))
+        .hasMessageContaining("--known and --rated-since name different populations");
   }
 
   @Test
@@ -636,6 +735,72 @@ class ExpandCliTest {
     assertThat(countOn(lines(), "unknown entity"))
         .as("the same refusal a promotion with no node already gets, counted the same way")
         .isEqualTo(1);
+  }
+
+  /**
+   * Two node claims for the {@code --add} dry-run tests below.
+   *
+   * <p>{@link #ON_FILE_IN_GRAPH} and {@link #ALSO_IN_GRAPH}, and nothing else — {@link #ADDABLE}
+   * and {@link #MINTED_NO_NODE} are deliberately absent, so the file can name an id the graph
+   * lacks.
+   */
+  private void seedForAdding(Path database) {
+    Provenance plain = new Provenance("invented", "invented:9", WHEN, 1.0);
+    try (SqliteAssertionLog log = new SqliteAssertionLog(database)) {
+      log.append(new NodeAssertion(ON_FILE_IN_GRAPH, NodeKind.GROUP, "an invented act", plain));
+      log.append(new NodeAssertion(ALSO_IN_GRAPH, NodeKind.GROUP, "another invented act", plain));
+    }
+  }
+
+  /** How many claims {@link #seedForAdding} appends — the dry run must append none beyond it. */
+  private static int claimsSeeded() {
+    return 2;
+  }
+
+  /** A known-list file naming exactly the given ids, one per line, in a @TempDir. */
+  private Path knownListNaming(String... qids) throws Exception {
+    return Files.writeString(home.resolve("adding.csv"), String.join("\n", qids) + "\n");
+  }
+
+  @Test
+  @DisplayName("a dry run with --add says how many it would add, and appends nothing")
+  void shouldSayHowManyItWouldAddWhenTheDryRunWasToldToAdd() throws Exception {
+    Path database = home.resolve("segue.db");
+    seedForAdding(database);
+    Path file = knownListNaming(ON_FILE_IN_GRAPH, ALSO_IN_GRAPH, ADDABLE, MINTED_NO_NODE);
+    captured.list.clear();
+
+    ExpandCli.run(
+        new String[] {
+          "--db", database.toString(), "--dry-run", "--known", file.toString(), "--add"
+        },
+        null,
+        home.toString());
+
+    assertThat(lines()).contains("  to add        1");
+    assertThat(lines()).anyMatch(line -> line.contains("--add was given"));
+    try (SqliteAssertionLog log = new SqliteAssertionLog(database)) {
+      assertThat(log.readAll())
+          .as("a dry run appends nothing, --add or not")
+          .hasSize(claimsSeeded());
+    }
+  }
+
+  @Test
+  @DisplayName("a dry run without --add prints no to-add row, on the same file")
+  void shouldPrintNoToAddRowWhenTheSameDryRunWasNotToldToAdd() throws Exception {
+    Path database = home.resolve("segue.db");
+    seedForAdding(database);
+    Path file = knownListNaming(ON_FILE_IN_GRAPH, ALSO_IN_GRAPH, ADDABLE, MINTED_NO_NODE);
+    captured.list.clear();
+
+    ExpandCli.run(
+        new String[] {"--db", database.toString(), "--dry-run", "--known", file.toString()},
+        null,
+        home.toString());
+
+    assertThat(lines()).noneMatch(line -> line.contains("to add"));
+    assertThat(lines()).noneMatch(line -> line.contains("--add was given"));
   }
 
   /** On the file, in the graph, and nothing else on the file is within the hop limit of it. */
