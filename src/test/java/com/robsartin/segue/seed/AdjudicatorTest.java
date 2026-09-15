@@ -16,12 +16,19 @@ class AdjudicatorTest {
   private static CandidateFacts person(
       String qid, String label, int sitelinks, String... occupations) {
     return new CandidateFacts(
-        qid, label, "a description", List.of(), NodeKind.PERSON, List.of(occupations), sitelinks);
+        qid,
+        label,
+        "a description",
+        List.of(),
+        NodeKind.PERSON,
+        List.of(),
+        List.of(occupations),
+        sitelinks);
   }
 
   private static CandidateFacts group(String qid, String label, int sitelinks) {
     return new CandidateFacts(
-        qid, label, "a band", List.of(), NodeKind.GROUP, List.of(), sitelinks);
+        qid, label, "a band", List.of(), NodeKind.GROUP, List.of(), List.of(), sitelinks);
   }
 
   private static Decision decide(String query, String kind, List<CandidateFacts> candidates) {
@@ -73,6 +80,7 @@ class AdjudicatorTest {
             List.of("The Tin Lanterns"),
             NodeKind.GROUP,
             List.of(),
+            List.of(),
             40);
 
     Decision decision = decide("The Tin Lanterns", "musician", List.of(duo));
@@ -96,6 +104,7 @@ class AdjudicatorTest {
             "very famous singer",
             List.of("Marguerite Vale"),
             NodeKind.PERSON,
+            List.of(),
             List.of(MUSICIAN),
             300);
 
@@ -123,6 +132,7 @@ class AdjudicatorTest {
             "very famous singer",
             List.of("V"),
             NodeKind.PERSON,
+            List.of(),
             List.of(MUSICIAN),
             300);
 
@@ -170,7 +180,14 @@ class AdjudicatorTest {
   void theWrongKindIsSkipped() {
     CandidateFacts film =
         new CandidateFacts(
-            "Q090000008", "Velvet Ossuary", "1974 film", List.of(), NodeKind.WORK, List.of(), 300);
+            "Q090000008",
+            "Velvet Ossuary",
+            "1974 film",
+            List.of(),
+            NodeKind.WORK,
+            List.of(),
+            List.of(),
+            300);
 
     Decision decision =
         decide(
@@ -185,7 +202,14 @@ class AdjudicatorTest {
   void everyNameMatchTheWrongKind() {
     CandidateFacts film =
         new CandidateFacts(
-            "Q090000010", "Velvet Ossuary", "1974 film", List.of(), NodeKind.WORK, List.of(), 300);
+            "Q090000010",
+            "Velvet Ossuary",
+            "1974 film",
+            List.of(),
+            NodeKind.WORK,
+            List.of(),
+            List.of(),
+            300);
 
     Decision decision = decide("Velvet Ossuary", "musician", List.of(film));
 
