@@ -251,7 +251,7 @@ class HeadlessChromeNetworkTest {
    * <p><b>This list is a debt, not a design.</b> The spec for issue #186 expected the flags
    * Puppeteer launches with to remove these attempts; measured one at a time against the NetLog on
    * Chrome 152.0.7977.65, <em>not one of them removed anything</em> (the flags tried are listed in
-   * {@code HeadlessChrome.flags}). Two flags outside that set did, and they are the two this
+   * {@code HeadlessChrome.flags}). The flags outside that set did, and they are the flags this
    * harness keeps.
    *
    * <p><b>Every entry names the platform it was measured on, because this list is per-platform as
