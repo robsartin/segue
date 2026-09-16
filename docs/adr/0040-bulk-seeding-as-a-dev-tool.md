@@ -228,13 +228,14 @@ And the generic audiovisual-work class, for the reason an edition was left out o
 is a `WORK` to the mapper and a supertype spanning both film and television, so admitting it would
 buy an auto-accepted answer that is quietly the wrong one of the two.
 
-**`tv-show` was registered before the first amendment with an empty class set, and this is a
-correction of that registration, not a second decision about the same thing.** Before this
-amendment a `tv-show` row resolved to any `WORK` at all — a film, an episode, an unclassified work
-— under the same title, because the kind alone was the whole check. That is the same gap the
-first amendment closed for `book`, left open here because #333 scoped to one list. Tightening it
-now makes the seed tool's own rule consistent across every `WORK` kind it knows, rather than
-leaving one kind checked and the other not.
+**`tv-show` was registered before any kind carried a class set at all, and this is a correction of
+what it became once one did, not a second decision about the same thing.** The row predates the
+class concept itself; the first amendment is what added the fourth parameter and, for `tv-show`,
+passed it an empty set. Before this amendment a `tv-show` row resolved to any `WORK` at all — a
+film, an episode, an unclassified work — under the same title, because the kind alone was the
+whole check. That is the same gap the first amendment closed for `book`, left open here because
+#333 scoped to one list. Tightening it now makes the seed tool's own rule consistent across every
+`WORK` kind it knows, rather than leaving one kind checked and the other not.
 
 **No class is added to `KindMapper`.** Both sets are drawn from what that table already maps to
 `WORK`. A class it does not map is not a `WORK` at all, so it could not pass the kind check
