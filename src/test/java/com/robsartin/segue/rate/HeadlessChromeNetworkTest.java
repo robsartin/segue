@@ -309,11 +309,26 @@ class HeadlessChromeNetworkTest {
    * it runs on, and nothing else.</b> Hosts that only <em>other</em> scenarios ask for are recorded
    * in {@code docs/loopback-only-evidence.md} §5, not admitted here — an entry taken on evidence
    * from a different scenario widens an {@code isSubsetOf} allowlist by one host for a red nobody
-   * can produce, and it is silent forever after. {@code update.googleapis.com}, first named at
-   * 2839–3090 ms across 80 deck-scenario NetLogs, is the standing example and stays out. A host a
-   * <em>different platform</em> asks for in this same scenario is a different case, and it is
-   * admitted — with the platform named, because the alternative is a guard that cannot be green on
-   * both.
+   * can produce, and it is silent forever after. A host a <em>different platform</em> asks for in
+   * this same scenario is a different case, and it is admitted — with the platform named, because
+   * the alternative is a guard that cannot be green on both.
+   *
+   * <p><b>That rule's standing example was {@code update.googleapis.com}, and Chrome 153 ended
+   * it.</b> The host stayed out because only the deck scenario asked for it, first named at
+   * 2839–3090 ms across 80 deck-scenario NetLogs — past the life of the browser this guard
+   * launches. On <b>Chrome 153.0.8010.47, macOS 26.6.2</b>, this guard's own scenario asked for it:
+   * the component updater's {@code /service/update2/json}, <b>168 ms</b> into the kept NetLog, in a
+   * log spanning 227 ms, at startup and nowhere near 2.8 s, with {@code --disable-component-update}
+   * on the command line the whole time (issue #336). It died at DNS like every other attempt and
+   * reached nothing. So it is no longer a host that only another scenario asks for, and this rule
+   * now has no standing example.
+   *
+   * <p><b>Still not admitted — a flag, not a judgement.</b> {@link HeadlessChrome} now also passes
+   * {@code --component-updater=url-source} pointed at loopback, measured on that build to stop the
+   * check being dispatched at all — so the guard's own scenario asks for nothing this list would
+   * have to admit. Remove that flag and this test reddens naming the host, which is the local
+   * positive control an allowlist entry never gets. The comment on {@code HeadlessChrome.flags} has
+   * what else was tried and removed nothing.
    *
    * <p><b>And the rule is what puts {@code android.clients.google.com} back.</b> It was taken out
    * under the same rule and that was right for the scenario as it then stood: absent below about
@@ -325,12 +340,13 @@ class HeadlessChromeNetworkTest {
    * list was re-derived against the scenario it now is, rather than left to red on a slow machine.
    *
    * <p>So <b>a red naming a host from §5 is not a flake to be silenced by adding it</b> — it means
-   * this scenario has changed again, most likely by keeping the browser alive longer still, and the
-   * list has to be re-derived against that scenario rather than extended to fit the failure. <b>A
-   * red naming a host on a platform not listed above is the other case</b>, and it is re-derived
-   * from that platform's own NetLog: every run now keeps its log at {@code build/reports/netlog/},
-   * which the CI workflow uploads as the {@code reports} artifact, so the next platform's host set
-   * is read off a file rather than out of an assertion message.
+   * either this scenario has changed again, by keeping the browser alive longer still, or the
+   * browser itself has, as Chrome 153 did; and the list has to be re-derived against the scenario
+   * as it now runs rather than extended to fit the failure. <b>A red naming a host on a platform
+   * not listed above is the other case</b>, and it is re-derived from that platform's own NetLog:
+   * every run now keeps its log at {@code build/reports/netlog/}, which the CI workflow uploads as
+   * the {@code reports} artifact, so the next platform's host set is read off a file rather than
+   * out of an assertion message.
    */
   private static final List<String> KNOWN_ATTEMPTS =
       List.of(
