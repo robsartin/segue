@@ -204,7 +204,7 @@ final class HeadlessChrome implements AutoCloseable {
         // Not --proxy-server to a dead port, which proxies loopback too unless bypassed, and the
         // bypass list would be a second place the loopback rule lives (issue #186).
         "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1",
-        // ON TOP OF THE GUARANTEE: the two flags that measurably stop an *attempt* being made,
+        // ON TOP OF THE GUARANTEE: the flags that measurably stop an *attempt* being made,
         // so there is less for a configuration change to tear down. Added one at a time against
         // the NetLog on Chrome 152.0.7977.65, keeping only what removed something:
         //
@@ -228,6 +228,32 @@ final class HeadlessChrome implements AutoCloseable {
         // profile has no DoH server configured). None is here, because a flag that removes
         // nothing is a flag nobody can explain later.
         "--disable-features=NetworkTimeServiceQuerying,SafeBrowsingHashPrefixRealTimeLookups",
+        // ADDED LATER, for a browser that changed: Chrome 153.0.8010.47 on macOS 26.6.2 posts
+        // https://update.googleapis.com/service/update2/json at *startup* — 168 ms into the
+        // guard's kept NetLog, in a log spanning 227 ms, headers X-Goog-Update-Interactivity: fg
+        // and X-Goog-Update-Updater: chrome-153.0.8010.47 — although --disable-component-update
+        // above is on the command line and is meant to be exactly that. It dies at DNS like every
+        // other attempt, so nothing is reached; but it is an attempt, and this is the group for
+        // attempts a flag removes (issue #336).
+        //
+        // What this flag does, measured rather than reasoned: the component updater's update-check
+        // URL is a launch switch, and this build dispatches NO check at all when it is given a
+        // source that is not HTTPS. Measured both ways — with url-source=https://127.0.0.1:1/ the
+        // check IS dispatched, to that loopback address; with the http form below no request is
+        // made to any host, in 3 launches of 3 and in this guard's own scenario. It is the scheme
+        // that decides, not the host: url-source=http://update.invalid.test/ stopped it too.
+        //
+        // Loopback rather than an invented hostname, because a future Chrome that accepts an http
+        // source could then only ever talk to this machine — an invented host would turn into an
+        // ask for a name no list carries, reddening the guard on the harness's own flag.
+        //
+        // Measured against this same request first, each alone, and each removed NOTHING:
+        // --simulate-outdated-no-au="Tue, 31 Dec 2099 23:59:59 GMT", --check-for-update-interval,
+        // --disable-component-extensions-with-background-pages, --component-updater=fast-update,
+        // --component-updater=test-request, and --disable-features= for MaskedDomainList,
+        // EnableIpProtectionProxy, PrivacySandboxAttestations, TpcdMetadataGrants,
+        // OptimizationHints, ComponentUpdaterOnDemand and CrxDownload.
+        "--component-updater=url-source=http://127.0.0.1:1/",
         "--remote-debugging-port=0",
         "--user-data-dir=" + userData);
   }

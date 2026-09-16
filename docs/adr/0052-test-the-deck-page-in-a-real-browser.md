@@ -342,3 +342,22 @@ whether the CI-required-browser property still reports it as skipped, is read fr
 
 Nothing else here is corrected: the mutation table, the guard, the posture, the flags and every
 other figure recorded above and in the two notes stand as written.
+
+**Amendment (2026-09-15, issue #336): "Of the 28 candidates measured that way … one removed
+anything" is now a mirror that went stale, not a correction.**
+
+Chrome 153.0.8010.47 started asking its own new question at startup — the component updater's
+`/service/update2/json`, dispatched roughly 170 ms into a launch, where `--disable-component-update`
+on the command line was meant to stop it and measurably did not. Issue #336 measured candidate flags
+against that question the same way the 28 above were measured: one at a time against a NetLog,
+keeping only what removed something. A second flag now survives that test and joins the first in the
+comment on `HeadlessChrome.flags`, which stays the list rather than this page. The candidates tried
+for #336, what each did, and how many there were are recorded in
+`docs/superpowers/specs/2026-09-15-chrome-153-update-host-design.md` §4, cited here rather than
+folded into a new running total that this page would only have to correct again next time a browser
+changes.
+
+**The decision stands.** A flag is still kept only when a NetLog justifies it, `KNOWN_ATTEMPTS` is
+still a per-scenario, per-platform inventory re-derived when the browser changes, and this browser's
+posture is still loopback-only. A new Chrome asked a new question; nothing here answers it
+differently than the rule already written above does.
