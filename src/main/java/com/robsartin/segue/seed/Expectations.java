@@ -174,6 +174,23 @@ public final class Expectations {
           KindMapper.TELEVISION_FILM,
           KindMapper.ANIMATED_SHORT_FILM);
 
+  /**
+   * The classes a work has to state for a {@code tv-show} row to resolve to it.
+   *
+   * <p>Registered here for the first time (issue #338). Before this, {@code tv-show} checked no
+   * class at all and accepted any {@code WORK} under a matching title — a film, an episode, an
+   * unclassified work. This is a correction of that pre-#333 registration, not a new decision: the
+   * same signal #333 gave {@code book}, applied to the other {@code WORK} kind that needed it.
+   * Drawn from what {@code KindMapper} already maps to {@code WORK} and cited from it, for the same
+   * reason {@link #WRITTEN} and {@link #FILM} are.
+   */
+  private static final Set<String> TELEVISION =
+      Set.of(
+          KindMapper.TELEVISION_SERIES,
+          KindMapper.MINISERIES,
+          KindMapper.TELEVISION_PROGRAM,
+          KindMapper.TELEVISION_SPECIAL);
+
   private static Set<String> union(Set<String> first, Set<String> second) {
     Set<String> out = new LinkedHashSet<>(first);
     out.addAll(second);
@@ -200,7 +217,7 @@ public final class Expectations {
     put("choir", EnumSet.of(NodeKind.GROUP), Set.of(), Set.of());
     put("ensemble", EnumSet.of(NodeKind.GROUP), Set.of(), Set.of());
     put("org", EnumSet.of(NodeKind.GROUP), Set.of(), Set.of());
-    put("tv-show", EnumSet.of(NodeKind.WORK), Set.of(), Set.of());
+    put("tv-show", EnumSet.of(NodeKind.WORK), Set.of(), TELEVISION);
     // The other WORK kind that names classes, beside book (#333). Issue #338; tv-show is
     // tightened the same way in the next commit.
     put("film", EnumSet.of(NodeKind.WORK), Set.of(), FILM);
