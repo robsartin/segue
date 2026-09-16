@@ -23,10 +23,13 @@ import java.util.Set;
  * <p>An entity can state several classes this list knows, and when they disagree the {@code
  * PRECEDENCE} below decides which kind wins - never the order the classes arrived in.
  *
- * <p>Three rows below are named constants, because one other package reads exactly those three. The
- * seed tool's {@code book} kind cites this table's written-work classes as {@code WORK} rather than
- * deciding them a second time; the note above about a second copy of the list is the reason.
- * Nothing else here is named, because nothing outside this file refers to one row.
+ * <p>Twelve rows below are named constants, because two other packages' kinds read exactly those
+ * twelve. The seed tool's {@code book} kind cites the three written-work classes (issue #333); its
+ * {@code film} and {@code tv-show} kinds cite the other nine (issue #338) — five film-shaped
+ * classes and four series-shaped ones. Each cites rather than decides a second time; the note above
+ * about a second copy of the list is the reason. Nothing else here is named, because nothing
+ * outside this file refers to one row — including the episode class and the generic
+ * audiovisual-work class, which neither seed kind wants.
  */
 public final class KindMapper {
 
@@ -38,6 +41,33 @@ public final class KindMapper {
 
   /** The class Wikidata calls "written work". */
   public static final String WRITTEN_WORK = "Q47461344";
+
+  /** The class Wikidata calls "film". */
+  public static final String FILM = "Q11424";
+
+  /** The class Wikidata calls "animated film". */
+  public static final String ANIMATED_FILM = "Q202866";
+
+  /** The class Wikidata calls "short film". */
+  public static final String SHORT_FILM = "Q24862";
+
+  /** The class Wikidata calls "television film". */
+  public static final String TELEVISION_FILM = "Q506240";
+
+  /** The class Wikidata calls "animated short film". */
+  public static final String ANIMATED_SHORT_FILM = "Q17517379";
+
+  /** The class Wikidata calls "television series". */
+  public static final String TELEVISION_SERIES = "Q5398426";
+
+  /** The class Wikidata calls "miniseries". */
+  public static final String MINISERIES = "Q1259759";
+
+  /** The class Wikidata calls "television program". */
+  public static final String TELEVISION_PROGRAM = "Q15416";
+
+  /** The class Wikidata calls "television special". */
+  public static final String TELEVISION_SPECIAL = "Q1261214";
 
   private static final Map<String, NodeKind> BY_CLASS = new LinkedHashMap<>();
 
@@ -71,13 +101,13 @@ public final class KindMapper {
     put("Q18510489", NodeKind.GROUP); // comedy troupe
     put("Q178790", NodeKind.GROUP); // labor union
     // works
-    put("Q11424", NodeKind.WORK); // film
+    put(FILM, NodeKind.WORK); // film
     put("Q482994", NodeKind.WORK); // album
     put(LITERARY_WORK, NodeKind.WORK); // literary work
     put(BOOK, NodeKind.WORK); // book
     put("Q134556", NodeKind.WORK); // single
     put("Q7366", NodeKind.WORK); // song
-    put("Q5398426", NodeKind.WORK); // television series
+    put(TELEVISION_SERIES, NodeKind.WORK); // television series
     put(WRITTEN_WORK, NodeKind.WORK); // written work
     put("Q3305213", NodeKind.WORK); // painting
     put("Q2431196", NodeKind.WORK); // audiovisual work
@@ -91,15 +121,15 @@ public final class KindMapper {
     put("Q105543609", NodeKind.WORK); // musical work/composition
     put("Q21191270", NodeKind.WORK); // television series episode
     put("Q110039749", NodeKind.WORK); // Saturday Night Live sketch
-    put("Q506240", NodeKind.WORK); // television film
-    put("Q24862", NodeKind.WORK); // short film
-    put("Q1261214", NodeKind.WORK); // television special
-    put("Q15416", NodeKind.WORK); // television program
+    put(TELEVISION_FILM, NodeKind.WORK); // television film
+    put(SHORT_FILM, NodeKind.WORK); // short film
+    put(TELEVISION_SPECIAL, NodeKind.WORK); // television special
+    put(TELEVISION_PROGRAM, NodeKind.WORK); // television program
     put("Q58483083", NodeKind.WORK); // dramatico-musical work
     put("Q55850593", NodeKind.WORK); // music track with vocals
     put("Q193977", NodeKind.WORK); // music video
-    put("Q1259759", NodeKind.WORK); // miniseries
-    put("Q202866", NodeKind.WORK); // animated film
+    put(MINISERIES, NodeKind.WORK); // miniseries
+    put(ANIMATED_FILM, NodeKind.WORK); // animated film
     put("Q10590726", NodeKind.WORK); // video album
     // The first census reading (issue #261, 2026-09-05) listed the ten Wikidata classes holding
     // most of the graph's CONCEPT nodes. Six of them are works or events the table had never
@@ -108,7 +138,7 @@ public final class KindMapper {
     put("Q3331189", NodeKind.WORK); // version, edition or translation
     put("Q169930", NodeKind.WORK); // extended play
     put("Q6128115", NodeKind.WORK); // 7-inch single
-    put("Q17517379", NodeKind.WORK); // animated short film
+    put(ANIMATED_SHORT_FILM, NodeKind.WORK); // animated short film
     put("Q7302866", NodeKind.WORK); // audio track
     // Issue #265, the second census reading: three more works.
     put("Q108352496", NodeKind.WORK); // single release
