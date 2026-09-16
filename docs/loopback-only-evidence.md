@@ -305,6 +305,57 @@ produce. Recorded here instead, which is where the next person will look.
 > and the CI workflow's artifact `path:` carries that directory. The next platform's host set is
 > read off the file.
 
+> **Note added 2026-09-15 (issue #336, Chrome 153).** The `update.googleapis.com` row above — and
+> the paragraph under it keeping that host out of `KNOWN_ATTEMPTS` — was measured on **Chrome
+> 152.0.7977.65**. On **Chrome 153.0.8010.47 / macOS 26.6.2** the same guard, unchanged, went red
+> naming it, and **not** for the 2.8 s reason this section gives:
+>
+> | | Chrome 152, 80 deck-scenario NetLogs | Chrome 153, the guard's own scenario |
+> |---|---|---|
+> | first named at | 2839–3090 ms | **168 ms** |
+> | in a log spanning | seconds | **227 ms** |
+> | asked for | `/service/update2/json` | `/service/update2/json`, as a `POST` |
+> | reached anything | no | **no** — `ERR_NAME_NOT_RESOLVED` at the resolver |
+>
+> Read off the guard's own kept log,
+> `build/reports/netlog/shouldContactOnlyLoopbackWhenTheDeckPageIsDriven.json`, from the red run of
+> 2026-09-15. The request carries `X-Goog-Update-Interactivity: fg`,
+> `X-Goog-Update-Updater: chrome-153.0.8010.47` and one component id,
+> `X-Goog-Update-AppId: ceofaddefefcbblgcgnibnonglccbfja` — which component that id names was not
+> established and is not claimed here. It ends `ERR_NAME_NOT_RESOLVED` in six places
+> (`HOST_RESOLVER_MANAGER_REQUEST`, `TCP_CONNECT_JOB_CONNECT`, `SSL_CONNECT_JOB_CONNECT`,
+> `SOCKET_POOL`, `URL_REQUEST_START_JOB`, `REQUEST_ALIVE`), and the log's own
+> `clientInfo.command_line` shows `--disable-component-update` was passed on that launch.
+> **Nothing was reached**: in that red run the zero-reached assertion and the instrument control
+> both passed, and only the inventory failed.
+>
+> **This is the browser changing, not the scenario.** Nothing in the tree moved between the green
+> runs earlier the same day and the red one; what moved was Chrome. The host is therefore no longer
+> an attempt "a different scenario provokes and the guard's scenario does not", and the sentence
+> above that says so describes Chrome 152.
+>
+> **A flag stops it, so no host was admitted.** `HeadlessChrome.flags` — which is the list of flags,
+> rather than this page — now also passes a `--component-updater=url-source` pointed at loopback.
+> The component updater's update-check URL is a launch switch, and this build dispatches no check at
+> all when the source is not HTTPS; with an `https://` loopback source the check *is* dispatched, to
+> loopback. Measured both ways, and the http form removed the request in 3 launches of 3 and in the
+> guard's own scenario, where the host set returns to `accounts.google.com`, `www.google.com`,
+> `~notfound` and `2001:4860:4860::8888`. Tried first against this same request, each alone, each
+> removing nothing: `--simulate-outdated-no-au`, `--check-for-update-interval`,
+> `--disable-component-extensions-with-background-pages`, `--component-updater=fast-update`,
+> `--component-updater=test-request`, and `--disable-features=` for `MaskedDomainList`,
+> `EnableIpProtectionProxy`, `PrivacySandboxAttestations`, `TpcdMetadataGrants`, `OptimizationHints`,
+> `ComponentUpdaterOnDemand` and `CrxDownload`. `--disable-background-networking` and
+> `--disable-component-update` were already on the command line and stop neither.
+>
+> **Linux is not touched by this.** Everything above was measured on macOS. The `redirector.gvt1.com`
+> note and the Linux host set stand exactly as written, measured on `ubuntu-latest` with its own
+> Chrome; a list is not trimmed on evidence from a platform that did not produce it. The new flag may
+> well remove that host too — it is the same component updater's download redirector, and a check
+> that is never dispatched downloads nothing — but that would leave the entry **over-listing**, which
+> `isSubsetOf` keeps green rather than red. Whether it does is read off the next CI run's `reports`
+> artifact, not decided here.
+
 ---
 
 ## 6. What is left
