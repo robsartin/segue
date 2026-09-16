@@ -98,6 +98,7 @@ Each was added alone to `HeadlessChrome.flags`, everything else unchanged.
 | `--component-updater=url-source=https://127.0.0.1:8899/update` | **retargets it** — no `update.googleapis.com`; the check goes to loopback instead |
 | `--component-updater=url-source=http://127.0.0.1:8899/update` | **stops it** — no request to any host |
 | `--component-updater=url-source=http://update.invalid.test/update` | **stops it** — no request to any host, not even the named one |
+| `--component-updater=url-source=https://127.0.0.1:1/` | **retargets it** — dispatches the check to `127.0.0.1:1` instead of `update.googleapis.com`, the same as the port-8899 form |
 | `--component-updater=url-source=http://127.0.0.1:1/` | **stops it**, 3 launches of 3, and green in the guard's own scenario |
 
 **The mechanism, stated honestly.** The component updater's update-check URL is a launch switch.

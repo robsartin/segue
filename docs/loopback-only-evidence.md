@@ -332,7 +332,10 @@ produce. Recorded here instead, which is where the next person will look.
 > **This is the browser changing, not the scenario.** Nothing in the tree moved between the green
 > runs earlier the same day and the red one; what moved was Chrome. The host is therefore no longer
 > an attempt "a different scenario provokes and the guard's scenario does not", and the sentence
-> above that says so describes Chrome 152.
+> above that says so describes Chrome 152. The 80-run table above and its "an attempt the *deck*
+> scenario provokes" paragraph are therefore historical on both counts, not one — captured on Chrome
+> 152 and under the "on top of the guarantee" group as it stood at two flags, before this issue's
+> third.
 >
 > **A flag stops it, so no host was admitted.** `HeadlessChrome.flags` — which is the list of flags,
 > rather than this page — now also passes a `--component-updater=url-source` pointed at loopback.
