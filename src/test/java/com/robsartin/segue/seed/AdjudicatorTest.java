@@ -397,4 +397,86 @@ class AdjudicatorTest {
     assertThat(decision.outcome()).isEqualTo(Outcome.REVIEW);
     assertThat(decision.reason()).contains("margin");
   }
+
+  @Test
+  @DisplayName("a series-classed work is refused for film, and a film-classed one is accepted")
+  void shouldReviewASeriesClassedWorkWhenTheRowIsTypedFilm() {
+    // The real Expectations table, not a hand-built stand-in — the seam #333's own fix wave
+    // proved through, reused here for the other work kind.
+    Decision refused =
+        Adjudicator.decide(
+            "The Salt Almanac",
+            Expectations.forKinds(List.of("film")),
+            List.of(work("Q0901701", "The Salt Almanac", 300, KindMapper.TELEVISION_SERIES)));
+
+    assertThat(refused.outcome()).isEqualTo(Outcome.REVIEW);
+    assertThat(refused.reason())
+        .as("the line a person reads has to say which signal refused it, and what it saw")
+        .contains("class")
+        .contains(KindMapper.TELEVISION_SERIES);
+
+    // The control, one field wide: same id, same title, same sitelink count, one class changed.
+    Decision accepted =
+        Adjudicator.decide(
+            "The Salt Almanac",
+            Expectations.forKinds(List.of("film")),
+            List.of(work("Q0901701", "The Salt Almanac", 300, KindMapper.FILM)));
+
+    assertThat(accepted.outcome()).isEqualTo(Outcome.ACCEPTED);
+  }
+
+  @Test
+  @DisplayName("a film-classed work is refused for tv-show, and a series-classed one is accepted")
+  void shouldReviewAFilmClassedWorkWhenTheRowIsTypedTvShow() {
+    // The tightening's red: before this commit's production change, tv-show accepts any WORK,
+    // so a film-classed candidate — a film, exactly the kind of confident wrong answer #338
+    // exists to stop — resolves. This is that resolution, caught.
+    Decision refused =
+        Adjudicator.decide(
+            "The Salt Almanac",
+            Expectations.forKinds(List.of("tv-show")),
+            List.of(work("Q0901702", "The Salt Almanac", 300, KindMapper.FILM)));
+
+    assertThat(refused.outcome()).isEqualTo(Outcome.REVIEW);
+    assertThat(refused.reason())
+        .as("the line a person reads has to say which signal refused it, and what it saw")
+        .contains("class")
+        .contains(KindMapper.FILM);
+
+    // The control, one field wide: same id, same title, same sitelink count, one class changed.
+    Decision accepted =
+        Adjudicator.decide(
+            "The Salt Almanac",
+            Expectations.forKinds(List.of("tv-show")),
+            List.of(work("Q0901702", "The Salt Almanac", 300, KindMapper.TELEVISION_SERIES)));
+
+    assertThat(accepted.outcome()).isEqualTo(Outcome.ACCEPTED);
+  }
+
+  @Test
+  @DisplayName("an episode-classed work is refused for both film and tv-show")
+  void shouldReviewAnEpisodeClassedWorkWhenTheRowIsTypedFilmOrTvShow() {
+    // Q21191270, television series episode: a real id, deliberately anonymous in KindMapper
+    // (neither seed kind wants it — see the class javadoc there), so it is written here as a
+    // literal rather than a constant. Allowed at this site in
+    // StandInQidsDenoteNothingTest.ALLOWED. An episode is not a show, and a title matching only
+    // an episode is a question for a person, not an answer the tool should guess.
+    String episodeClass = "Q21191270";
+
+    Decision refusedForFilm =
+        Adjudicator.decide(
+            "The Salt Almanac",
+            Expectations.forKinds(List.of("film")),
+            List.of(work("Q0901703", "The Salt Almanac", 300, episodeClass)));
+    assertThat(refusedForFilm.outcome()).isEqualTo(Outcome.REVIEW);
+    assertThat(refusedForFilm.reason()).contains("class").contains(episodeClass);
+
+    Decision refusedForTvShow =
+        Adjudicator.decide(
+            "The Salt Almanac",
+            Expectations.forKinds(List.of("tv-show")),
+            List.of(work("Q0901704", "The Salt Almanac", 300, episodeClass)));
+    assertThat(refusedForTvShow.outcome()).isEqualTo(Outcome.REVIEW);
+    assertThat(refusedForTvShow.reason()).contains("class").contains(episodeClass);
+  }
 }

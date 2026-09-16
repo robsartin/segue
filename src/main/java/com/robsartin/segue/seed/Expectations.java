@@ -160,6 +160,37 @@ public final class Expectations {
   private static final Set<String> WRITTEN =
       Set.of(KindMapper.BOOK, KindMapper.LITERARY_WORK, KindMapper.WRITTEN_WORK);
 
+  /**
+   * The classes a work has to state for a {@code film} row to resolve to it.
+   *
+   * <p>Drawn from what {@code KindMapper} already maps to {@code WORK} and cited from it, for the
+   * same reason {@link #WRITTEN} is (issue #333). Nothing is added to that table.
+   */
+  private static final Set<String> FILM =
+      Set.of(
+          KindMapper.FILM,
+          KindMapper.ANIMATED_FILM,
+          KindMapper.SHORT_FILM,
+          KindMapper.TELEVISION_FILM,
+          KindMapper.ANIMATED_SHORT_FILM);
+
+  /**
+   * The classes a work has to state for a {@code tv-show} row to resolve to it.
+   *
+   * <p>Registered here for the first time (issue #338). Before this, {@code tv-show} checked no
+   * class at all and accepted any {@code WORK} under a matching title — a film, an episode, an
+   * unclassified work. This is a correction of that pre-#333 registration, not a new decision: the
+   * same signal #333 gave {@code book}, applied to the other {@code WORK} kind that needed it.
+   * Drawn from what {@code KindMapper} already maps to {@code WORK} and cited from it, for the same
+   * reason {@link #WRITTEN} and {@link #FILM} are.
+   */
+  private static final Set<String> TELEVISION =
+      Set.of(
+          KindMapper.TELEVISION_SERIES,
+          KindMapper.MINISERIES,
+          KindMapper.TELEVISION_PROGRAM,
+          KindMapper.TELEVISION_SPECIAL);
+
   private static Set<String> union(Set<String> first, Set<String> second) {
     Set<String> out = new LinkedHashSet<>(first);
     out.addAll(second);
@@ -186,9 +217,13 @@ public final class Expectations {
     put("choir", EnumSet.of(NodeKind.GROUP), Set.of(), Set.of());
     put("ensemble", EnumSet.of(NodeKind.GROUP), Set.of(), Set.of());
     put("org", EnumSet.of(NodeKind.GROUP), Set.of(), Set.of());
-    put("tv-show", EnumSet.of(NodeKind.WORK), Set.of(), Set.of());
-    // The one kind that names classes. A book row is a WORK, and WORK alone is albums, films and
-    // episodes too — the kind check cannot separate a book from the film of the book. Issue #333.
+    // A WORK kind that names classes (TELEVISION), like film and book below. Issue #338.
+    put("tv-show", EnumSet.of(NodeKind.WORK), Set.of(), TELEVISION);
+    // Another WORK kind that names classes (FILM), beside book below and tv-show above. Issue #338.
+    put("film", EnumSet.of(NodeKind.WORK), Set.of(), FILM);
+    // The third WORK kind that names classes (WRITTEN), beside film and tv-show above. A book row
+    // is a WORK, and WORK alone is albums, films and episodes too — the kind check alone cannot
+    // separate a book from the film of the book. Issue #333.
     put("book", EnumSet.of(NodeKind.WORK), Set.of(), WRITTEN);
     // A fictional character has no NodeKind of its own — ADR 21 has six and none of them is
     // "character" — so it lands in CONCEPT, which is what an unmapped P31 always becomes.

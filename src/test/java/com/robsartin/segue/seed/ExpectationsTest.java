@@ -105,8 +105,10 @@ class ExpectationsTest {
   }
 
   @Test
-  @DisplayName("a book is a work of a written class, and the other work kind still names none")
+  @DisplayName("a book is a work of a written class")
   void shouldExpectAWorkOfAWrittenClassWhenTheKindIsBook() {
+    // tv-show's own class check is pinned by its own test,
+    // shouldExpectAWorkOfASeriesShapedClassWhenTheKindIsTvShow, rather than re-asserted here.
     Expectation expectation = Expectations.forKind("book");
 
     assertThat(expectation.acceptsKind(NodeKind.WORK)).isTrue();
@@ -118,9 +120,6 @@ class ExpectationsTest {
         .as("the ids live in KindMapper and are cited, never restated")
         .containsExactlyInAnyOrder(
             KindMapper.BOOK, KindMapper.LITERARY_WORK, KindMapper.WRITTEN_WORK);
-    assertThat(Expectations.forKind("tv-show").checksClass())
-        .as("the other WORK kind is untouched")
-        .isFalse();
   }
 
   @Test
@@ -145,5 +144,50 @@ class ExpectationsTest {
     assertThat(expectation.acceptsKind(NodeKind.PERSON)).isTrue();
     assertThat(expectation.acceptsKind(NodeKind.WORK)).isTrue();
     assertThat(expectation.checksClass()).isFalse();
+  }
+
+  @Test
+  @DisplayName("a film is a work of a film-shaped class")
+  void shouldExpectAWorkOfAFilmShapedClassWhenTheKindIsFilm() {
+    // tv-show's class tightening is pinned by its own test,
+    // shouldExpectAWorkOfASeriesShapedClassWhenTheKindIsTvShow, which also confirms film is
+    // untouched by it, the converse of this test.
+    Expectation expectation = Expectations.forKind("film");
+
+    assertThat(expectation.acceptsKind(NodeKind.WORK)).isTrue();
+    assertThat(expectation.acceptsKind(NodeKind.PERSON))
+        .as("an unrecognised kind constrains nothing, so this is also the test that it IS known")
+        .isFalse();
+    assertThat(expectation.checksClass()).isTrue();
+    assertThat(expectation.classes())
+        .as("the ids live in KindMapper and are cited, never restated")
+        .containsExactlyInAnyOrder(
+            KindMapper.FILM,
+            KindMapper.ANIMATED_FILM,
+            KindMapper.SHORT_FILM,
+            KindMapper.TELEVISION_FILM,
+            KindMapper.ANIMATED_SHORT_FILM);
+  }
+
+  @Test
+  @DisplayName(
+      "tv-show is tightened to series-shaped classes, correcting its pre-#333 registration")
+  void shouldExpectAWorkOfASeriesShapedClassWhenTheKindIsTvShow() {
+    Expectation expectation = Expectations.forKind("tv-show");
+
+    assertThat(expectation.acceptsKind(NodeKind.WORK)).isTrue();
+    assertThat(expectation.checksClass())
+        .as("tv-show used to check no class at all; this is the correction issue #338 makes")
+        .isTrue();
+    assertThat(expectation.classes())
+        .as("the ids live in KindMapper and are cited, never restated")
+        .containsExactlyInAnyOrder(
+            KindMapper.TELEVISION_SERIES,
+            KindMapper.MINISERIES,
+            KindMapper.TELEVISION_PROGRAM,
+            KindMapper.TELEVISION_SPECIAL);
+    assertThat(Expectations.forKind("film").checksClass())
+        .as("film, registered in the prior commit, is untouched by this one")
+        .isTrue();
   }
 }

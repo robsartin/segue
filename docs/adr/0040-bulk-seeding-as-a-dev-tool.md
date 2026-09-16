@@ -204,3 +204,73 @@ the union's permissive rule, and a reader made to refuse a blank status — each
 then removed. The verification of the *document* is the full gate over an otherwise unchanged
 tree: `AdrIndexTest`, `AdrCitationsTest`, `DocumentationLinksTest` for the relative links above,
 and `javadoc -Werror` inside `./gradlew check`.
+
+**Amendment (2026-09-16, issue #338): a `film` kind, and `tv-show` tightened to the same third
+signal.**
+
+Nothing above is withdrawn, no decision above — including the 2026-09-15 amendment — is edited,
+and this ADR keeps `Accepted`. The `kind` column gains a second work kind, `film`, and the
+`tv-show` kind gains the class check the first amendment gave `book`. `seed.Expectations` remains
+the authority on the column's current values.
+
+**The mechanism is the first amendment's, applied a second time.** A `film` row is a `WORK` that
+must state one of five classes — film, animated film, short film, television film, or animated
+short film. A `tv-show` row is a `WORK` that must state one of four — television series,
+miniseries, television program, or television special. Each set is drawn from what `KindMapper`
+already maps to `WORK` and named where that table already lists them, exactly as the three
+written-work classes were. Both checks sit inside the same filter as the kind check, ahead of the
+sitelink ranking, for the same reason: a better-known candidate of the wrong class must never
+reach the margin.
+
+**Deliberately in neither set.** The episode class — a title matching only a television episode
+is not the show, and the mismatch is a question for a person, not an answer the tool should give.
+And the generic audiovisual-work class, for the reason an edition was left out of `book`'s set: it
+is a `WORK` to the mapper and a supertype spanning both film and television, so admitting it would
+buy an auto-accepted answer that is quietly the wrong one of the two.
+
+**`tv-show` was registered before any kind carried a class set at all, and this is a correction of
+what it became once one did, not a second decision about the same thing.** The row predates the
+class concept itself; the first amendment is what added the fourth parameter and, for `tv-show`,
+passed it an empty set. Before this amendment a `tv-show` row resolved to any `WORK` at all — a
+film, an episode, an unclassified work — under the same title, because the kind alone was the
+whole check. That is the same gap the first amendment closed for `book`, left open here because
+#333 scoped to one list. Tightening it now makes the seed tool's own rule consistent across every
+`WORK` kind it knows, rather than leaving one kind checked and the other not.
+
+**No class is added to `KindMapper`.** Both sets are drawn from what that table already maps to
+`WORK`. A class it does not map is not a `WORK` at all, so it could not pass the kind check
+either; and widening the mapper would change every projection, which is
+[ADR 42](0042-store-p31-and-rederive-kind-at-projection.md)'s territory and a different decision
+from this one.
+
+**The list itself.** Unchanged: three columns, `name,kind,status`, now with `actor`, `director`,
+`film` or `tv-show` in the kind column for this list, and the status field empty on every
+hand-written row, as the first amendment already describes. A row becomes known only by being
+rated, through the rule [ADR 48](0048-a-high-rating-counts-as-something-you-have.md) already
+sets — this amendment adds no second route to membership.
+
+**Alternatives rejected.**
+
+- **A `series` kind beside a loose `tv-show`.** Two names for one thing, one exact and one loose,
+  and the loose one would go on accepting a film for a show.
+- **One `screen` kind spanning films and television.** Less typing, but a title typed as a film
+  would never be checked against being one — the check this amendment exists to add.
+- **Television under `film`.** The same objection with one name.
+- **Leaving `tv-show` as it was.** The class signal is what it was missing, and leaving it loose
+  after the first amendment would make the seed tool's own rule inconsistent across its work
+  kinds.
+- **The episode class inside the television set.** An episode is not a show; a list row naming an
+  episode is a mistake the review file should show, not an answer the tool should guess.
+
+**Nothing here is unit-testable on its own, and that is said out loud rather than left implied.**
+This entry records a decision whose code landed with its own tests: the nine classes named as a
+pure refactor with no behaviour change, checked by the mapper's own unedited suite; the `film`
+kind's class check driven out through the real adjudicator — a series-classed candidate refused
+and a film-classed one accepted, seen red before the kind existed to check anything at all; the
+`tv-show` tightening driven out the same way and in the same order, its own red observed and
+quoted while the kind still accepted any class, green only once the check was registered; an
+episode-classed candidate refused under both kinds, with the refusal naming the class it saw, its
+own planted control seen to fire; and one further planted control on each of the two new class
+sets. The verification of the *document* is the full gate over an otherwise unchanged tree:
+`AdrIndexTest`, `AdrCitationsTest`, `DocumentationLinksTest` for the relative links above, and
+`javadoc -Werror` inside `./gradlew check`.

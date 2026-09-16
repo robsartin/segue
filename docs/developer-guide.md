@@ -1360,10 +1360,11 @@ fallback is a guess about what the user meant.
 
 Auto-accept needs three independent signals to agree: the name (label or alias, with a label match
 outranking an alias match), the kind (`P31` for the `NodeKind`, `P106` for a person's occupation,
-and for a `book` row the raw `P31` again — `WORK` is albums, films and episodes as well as books,
-so that kind names the classes it will take and an edition or an adaptation is refused on them),
-and a sitelink margin over the runner-up. Anything else goes to review with the reason and the best
-candidate, so a person can accept or correct a line without repeating the search.
+and, for the kinds `seed.Expectations` registers with a class set, the raw `P31` again — `WORK` is
+albums, films and episodes as well as books, so one of those kinds names the classes it will take
+and an edition or an adaptation is refused on them), and a sitelink margin over the runner-up.
+Anything else goes to review with the reason and the best candidate, so a person can accept or
+correct a line without repeating the search.
 
 `P106` here is a **resolver filter, not an edge**. Issue #32 kept it out of the graph vocabulary
 because "novelist" is a 36,000-item hub; reading it to choose between six humans with one name

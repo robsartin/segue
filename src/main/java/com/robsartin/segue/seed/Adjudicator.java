@@ -20,13 +20,14 @@ import java.util.Objects;
  *   <li><b>The name.</b> The queried spelling must equal the entity's own label or one of its
  *       recorded aliases, folded. Search relevance alone is not evidence: the top hit for a band's
  *       name is regularly a film, a crater or a surname.
- *   <li><b>The kind, plus occupation for a person and class for a written work.</b> {@code P31}
+ *   <li><b>The kind, plus occupation for a person and class where one applies.</b> {@code P31}
  *       separates a person from a band from a film. It does not separate a musician from a minister
  *       — every human is {@code Q5} — so for a {@code PERSON} the input list's {@code kind} column
  *       is checked against {@code P106}. It does not separate a book from the film of the book
  *       either, because both fold to {@code WORK}, so a kind that names classes is checked against
- *       the raw {@code P31} as well. This is the signal that stops a confident wrong answer, which
- *       is the only kind of wrong answer that matters here.
+ *       the raw {@code P31} as well — {@link Expectations} is the authority on which kinds do. This
+ *       is the signal that stops a confident wrong answer, which is the only kind of wrong answer
+ *       that matters here.
  *   <li><b>The margin.</b> Two entities can both match the name exactly and both fit the kind.
  *       Unless one is markedly better known than the other, there is nothing to choose between them
  *       and a person should look.
@@ -149,10 +150,10 @@ public final class Adjudicator {
    * would reject every band, and a television series has none either.
    *
    * <p>The class half applies to whatever names one. {@code WORK} covers albums, films, episodes
-   * and books alike, so a kind that means a written work says which classes it will take — and it
-   * is checked HERE, inside the filter, rather than after the ranking: an edition or an adaptation
-   * is regularly the better known of the two, and a check that ran after the margin would be a
-   * check the margin had already lost.
+   * and books alike, so a kind that says which classes it will take — {@link Expectations} is the
+   * authority on which ones do — is checked HERE, inside the filter, rather than after the ranking:
+   * an edition or an adaptation is regularly the better known of the two, and a check that ran
+   * after the margin would be a check the margin had already lost.
    */
   private static boolean fits(Expectation expectation, CandidateFacts candidate) {
     if (!expectation.acceptsKind(candidate.kind())) {

@@ -16,7 +16,8 @@ import java.util.Set;
  *
  * <p>An empty {@code occupations} set means "this kind constrains no occupation" — a band has no
  * {@code P106} at all, and neither does a television series. An empty {@code classes} set says the
- * same about the classes, and every kind but {@code book} has one.
+ * same about the classes; {@link Expectations} is the authority on which kinds register a non-empty
+ * one.
  */
 public record Expectation(Set<NodeKind> kinds, Set<String> occupations, Set<String> classes) {
 
