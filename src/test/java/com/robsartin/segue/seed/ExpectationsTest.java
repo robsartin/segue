@@ -146,4 +146,27 @@ class ExpectationsTest {
     assertThat(expectation.acceptsKind(NodeKind.WORK)).isTrue();
     assertThat(expectation.checksClass()).isFalse();
   }
+
+  @Test
+  @DisplayName("a film is a work of a film-shaped class, and tv-show still names none")
+  void shouldExpectAWorkOfAFilmShapedClassWhenTheKindIsFilm() {
+    Expectation expectation = Expectations.forKind("film");
+
+    assertThat(expectation.acceptsKind(NodeKind.WORK)).isTrue();
+    assertThat(expectation.acceptsKind(NodeKind.PERSON))
+        .as("an unrecognised kind constrains nothing, so this is also the test that it IS known")
+        .isFalse();
+    assertThat(expectation.checksClass()).isTrue();
+    assertThat(expectation.classes())
+        .as("the ids live in KindMapper and are cited, never restated")
+        .containsExactlyInAnyOrder(
+            KindMapper.FILM,
+            KindMapper.ANIMATED_FILM,
+            KindMapper.SHORT_FILM,
+            KindMapper.TELEVISION_FILM,
+            KindMapper.ANIMATED_SHORT_FILM);
+    assertThat(Expectations.forKind("tv-show").checksClass())
+        .as("not tightened until Task 3")
+        .isFalse();
+  }
 }

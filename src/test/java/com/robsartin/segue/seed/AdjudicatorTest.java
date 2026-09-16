@@ -397,4 +397,31 @@ class AdjudicatorTest {
     assertThat(decision.outcome()).isEqualTo(Outcome.REVIEW);
     assertThat(decision.reason()).contains("margin");
   }
+
+  @Test
+  @DisplayName("a series-classed work is refused for film, and a film-classed one is accepted")
+  void shouldReviewASeriesClassedWorkForFilmThroughExpectationsForKinds() {
+    // The real Expectations table, not a hand-built stand-in — the seam #333's own fix wave
+    // proved through, reused here for the other work kind.
+    Decision refused =
+        Adjudicator.decide(
+            "The Salt Almanac",
+            Expectations.forKinds(List.of("film")),
+            List.of(work("Q0901701", "The Salt Almanac", 300, KindMapper.TELEVISION_SERIES)));
+
+    assertThat(refused.outcome()).isEqualTo(Outcome.REVIEW);
+    assertThat(refused.reason())
+        .as("the line a person reads has to say which signal refused it, and what it saw")
+        .contains("class")
+        .contains(KindMapper.TELEVISION_SERIES);
+
+    // The control, one field wide: same id, same title, same sitelink count, one class changed.
+    Decision accepted =
+        Adjudicator.decide(
+            "The Salt Almanac",
+            Expectations.forKinds(List.of("film")),
+            List.of(work("Q0901701", "The Salt Almanac", 300, KindMapper.FILM)));
+
+    assertThat(accepted.outcome()).isEqualTo(Outcome.ACCEPTED);
+  }
 }

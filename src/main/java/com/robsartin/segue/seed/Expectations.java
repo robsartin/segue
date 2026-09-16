@@ -160,6 +160,20 @@ public final class Expectations {
   private static final Set<String> WRITTEN =
       Set.of(KindMapper.BOOK, KindMapper.LITERARY_WORK, KindMapper.WRITTEN_WORK);
 
+  /**
+   * The classes a work has to state for a {@code film} row to resolve to it.
+   *
+   * <p>Drawn from what {@code KindMapper} already maps to {@code WORK} and cited from it, for the
+   * same reason {@link #WRITTEN} is (issue #333). Nothing is added to that table.
+   */
+  private static final Set<String> FILM =
+      Set.of(
+          KindMapper.FILM,
+          KindMapper.ANIMATED_FILM,
+          KindMapper.SHORT_FILM,
+          KindMapper.TELEVISION_FILM,
+          KindMapper.ANIMATED_SHORT_FILM);
+
   private static Set<String> union(Set<String> first, Set<String> second) {
     Set<String> out = new LinkedHashSet<>(first);
     out.addAll(second);
@@ -187,6 +201,9 @@ public final class Expectations {
     put("ensemble", EnumSet.of(NodeKind.GROUP), Set.of(), Set.of());
     put("org", EnumSet.of(NodeKind.GROUP), Set.of(), Set.of());
     put("tv-show", EnumSet.of(NodeKind.WORK), Set.of(), Set.of());
+    // The other WORK kind that names classes, beside book (#333). Issue #338; tv-show is
+    // tightened the same way in the next commit.
+    put("film", EnumSet.of(NodeKind.WORK), Set.of(), FILM);
     // The one kind that names classes. A book row is a WORK, and WORK alone is albums, films and
     // episodes too — the kind check cannot separate a book from the film of the book. Issue #333.
     put("book", EnumSet.of(NodeKind.WORK), Set.of(), WRITTEN);
