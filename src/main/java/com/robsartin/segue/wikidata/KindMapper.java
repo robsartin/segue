@@ -23,13 +23,13 @@ import java.util.Set;
  * <p>An entity can state several classes this list knows, and when they disagree the {@code
  * PRECEDENCE} below decides which kind wins - never the order the classes arrived in.
  *
- * <p>Twelve rows below are named constants, because two other packages' kinds read exactly those
- * twelve. The seed tool's {@code book} kind cites the three written-work classes (issue #333); its
- * {@code film} and {@code tv-show} kinds cite the other nine (issue #338) — five film-shaped
- * classes and four series-shaped ones. Each cites rather than decides a second time; the note above
- * about a second copy of the list is the reason. Nothing else here is named, because nothing
- * outside this file refers to one row — including the episode class and the generic
- * audiovisual-work class, which neither seed kind wants.
+ * <p>Twelve rows below are named constants, because one other package reads exactly those twelve —
+ * the seed tool's {@code Expectations}, through three of its kinds. The {@code book} kind cites the
+ * three written-work classes (issue #333); {@code film} and {@code tv-show} cite the other nine
+ * (issue #338) — five film-shaped classes and four series-shaped ones. Each cites rather than
+ * decides a second time; the note above about a second copy of the list is the reason. Nothing else
+ * here is named, because nothing outside this file refers to one row — including the episode class
+ * and the generic audiovisual-work class, which neither seed kind wants.
  */
 public final class KindMapper {
 

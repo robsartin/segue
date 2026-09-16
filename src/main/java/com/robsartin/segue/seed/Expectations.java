@@ -217,12 +217,13 @@ public final class Expectations {
     put("choir", EnumSet.of(NodeKind.GROUP), Set.of(), Set.of());
     put("ensemble", EnumSet.of(NodeKind.GROUP), Set.of(), Set.of());
     put("org", EnumSet.of(NodeKind.GROUP), Set.of(), Set.of());
+    // A WORK kind that names classes (TELEVISION), like film and book below. Issue #338.
     put("tv-show", EnumSet.of(NodeKind.WORK), Set.of(), TELEVISION);
-    // The other WORK kind that names classes, beside book (#333). Issue #338; tv-show is
-    // tightened the same way in the next commit.
+    // Another WORK kind that names classes (FILM), beside book below and tv-show above. Issue #338.
     put("film", EnumSet.of(NodeKind.WORK), Set.of(), FILM);
-    // The one kind that names classes. A book row is a WORK, and WORK alone is albums, films and
-    // episodes too — the kind check cannot separate a book from the film of the book. Issue #333.
+    // The third WORK kind that names classes (WRITTEN), beside film and tv-show above. A book row
+    // is a WORK, and WORK alone is albums, films and episodes too — the kind check alone cannot
+    // separate a book from the film of the book. Issue #333.
     put("book", EnumSet.of(NodeKind.WORK), Set.of(), WRITTEN);
     // A fictional character has no NodeKind of its own — ADR 21 has six and none of them is
     // "character" — so it lands in CONCEPT, which is what an unmapped P31 always becomes.
