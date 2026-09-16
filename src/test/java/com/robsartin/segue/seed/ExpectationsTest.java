@@ -107,10 +107,8 @@ class ExpectationsTest {
   @Test
   @DisplayName("a book is a work of a written class")
   void shouldExpectAWorkOfAWrittenClassWhenTheKindIsBook() {
-    // This test used to also assert that tv-show named no class at all - true when #333 wrote
-    // it, and again through #338's own Task 2. Issue #338's Task 3 tightens tv-show on purpose,
-    // which is pinned by its own test (shouldExpectAWorkOfASeriesShapedClassWhenTheKindIsTvShow)
-    // rather than re-asserted here.
+    // tv-show's own class check is pinned by its own test,
+    // shouldExpectAWorkOfASeriesShapedClassWhenTheKindIsTvShow, rather than re-asserted here.
     Expectation expectation = Expectations.forKind("book");
 
     assertThat(expectation.acceptsKind(NodeKind.WORK)).isTrue();
@@ -151,10 +149,9 @@ class ExpectationsTest {
   @Test
   @DisplayName("a film is a work of a film-shaped class")
   void shouldExpectAWorkOfAFilmShapedClassWhenTheKindIsFilm() {
-    // This test used to also assert that tv-show named no class at all, true only until Task 3
-    // of #338 tightened it on purpose - see
-    // shouldExpectAWorkOfASeriesShapedClassWhenTheKindIsTvShow,
-    // which pins that tightening and confirms film is untouched by it, the converse of this test.
+    // tv-show's class tightening is pinned by its own test,
+    // shouldExpectAWorkOfASeriesShapedClassWhenTheKindIsTvShow, which also confirms film is
+    // untouched by it, the converse of this test.
     Expectation expectation = Expectations.forKind("film");
 
     assertThat(expectation.acceptsKind(NodeKind.WORK)).isTrue();
