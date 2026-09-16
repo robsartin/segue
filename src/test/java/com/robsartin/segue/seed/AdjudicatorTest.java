@@ -452,4 +452,31 @@ class AdjudicatorTest {
 
     assertThat(accepted.outcome()).isEqualTo(Outcome.ACCEPTED);
   }
+
+  @Test
+  @DisplayName("an episode-classed work is refused for both film and tv-show")
+  void shouldReviewAnEpisodeClassedWorkForBothFilmAndTvShow() {
+    // Q21191270, television series episode: a real id, deliberately anonymous in KindMapper
+    // (neither seed kind wants it — see the class javadoc there), so it is written here as a
+    // literal rather than a constant. Allowed at this site in
+    // StandInQidsDenoteNothingTest.ALLOWED. An episode is not a show, and a title matching only
+    // an episode is a question for a person, not an answer the tool should guess.
+    String episodeClass = "Q21191270";
+
+    Decision refusedForFilm =
+        Adjudicator.decide(
+            "The Salt Almanac",
+            Expectations.forKinds(List.of("film")),
+            List.of(work("Q0901703", "The Salt Almanac", 300, episodeClass)));
+    assertThat(refusedForFilm.outcome()).isEqualTo(Outcome.REVIEW);
+    assertThat(refusedForFilm.reason()).contains("class").contains(episodeClass);
+
+    Decision refusedForTvShow =
+        Adjudicator.decide(
+            "The Salt Almanac",
+            Expectations.forKinds(List.of("tv-show")),
+            List.of(work("Q0901704", "The Salt Almanac", 300, episodeClass)));
+    assertThat(refusedForTvShow.outcome()).isEqualTo(Outcome.REVIEW);
+    assertThat(refusedForTvShow.reason()).contains("class").contains(episodeClass);
+  }
 }
