@@ -2576,9 +2576,10 @@ of, so the useful thing is the routes that reached it. Those come from `Routes.b
 same `PathRanking.rank`. The third is not shared. `SegueService.findPaths` hands the ranked routes
 to `ViewMapper.toPathViews` and returns structured `PathView` records; the deck calls
 `PathResult.render()`, whose only two callers in `src/main` are dev-side — `RecommendationReport`
-and `Deck.routeLines`. The route *set* differs too: `Recommendations.MAX_HOPS` is 2 where `find_paths`
-defaults to 4, and `bestFor` keeps only the top-ranked route per reaching entity. No card shape
-carries a note field; there is nowhere on a `Card` to put one, in any of the three.
+and `Deck.routeLines`. The route *set* differs too: the deck walks to `Recommendations.MAX_HOPS`,
+while `find_paths` falls back to `GraphTools.DEFAULT_MAX_HOPS` when a caller omits `maxHops`, and
+the two are set independently; `bestFor` keeps only the top-ranked route per reaching entity. No
+card shape carries a note field; there is nowhere on a `Card` to put one, in any of the three.
 
 ### No session file: the deck is "everything unrated", recomputed every run
 
@@ -3146,7 +3147,9 @@ This run changes no code. What it produces is issues, and these are the ones to 
 - **Anything a tool printed that you had to stop and think about.** A refusal that did not tell you
   what to type next is a defect in the sentence, not in you.
 - **Anything this chapter got wrong.** It was written against the code and checked against the
-  parsers, and it has never been run. The first run is what makes it true.
+  parsers, then run once by the owner under issue #249; issue #259 carried what that run found
+  back into the chapter. A later run that disagrees with it now is a finding to file, not a
+  reason to distrust the chapter.
 
 ## Expanding every promotion
 
