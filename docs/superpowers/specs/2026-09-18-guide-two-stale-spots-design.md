@@ -1,6 +1,6 @@
 # Two stale spots in the developer guide: the supervised-run bullet and the hop digits — design
 
-Issue #341. Written 2026-09-18 against the code on `main` after #339. Docs only, one file:
+Issue #341. Written 2026-09-18 against the code on `main`. Docs only, one file:
 `docs/developer-guide.md`. **No behaviour changes, and no production code changes.**
 
 ## What is wrong
