@@ -3146,7 +3146,9 @@ This run changes no code. What it produces is issues, and these are the ones to 
 - **Anything a tool printed that you had to stop and think about.** A refusal that did not tell you
   what to type next is a defect in the sentence, not in you.
 - **Anything this chapter got wrong.** It was written against the code and checked against the
-  parsers, and it has never been run. The first run is what makes it true.
+  parsers, then run once by the owner under issue #249; issue #259 carried what that run found
+  back into the chapter. A later run that disagrees with it now is a finding to file, not a
+  reason to distrust the chapter.
 
 ## Expanding every promotion
 
