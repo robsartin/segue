@@ -916,11 +916,15 @@ alone.**
 
 Nothing above is edited and this ADR keeps `Accepted`. `ExpandCli`'s `--known` population was the
 file's ids, on their canonical side, that `domain.Expanded` does not cover; it now also excludes an
-id `LocalEntity.isLocal` answers true for, composed in the same filter and before either the dry
-run's preflight or the run's loop ever sees the population — the same exclusion
-[ADR 63](0063-a-read-only-census-of-the-graph.md)'s amendment for this issue gives the census's
-`never expanded` row, so the two tools read one rule again rather than two that happen to agree on
-today's fixtures.
+id the graph holds a node for that `LocalEntity.isLocal` answers true for, composed in the same
+filter and before either the dry run's preflight or the run's loop ever sees the population — the
+same exclusion [ADR 63](0063-a-read-only-census-of-the-graph.md)'s amendment for this issue gives
+the census's `never expanded` row, so the two tools read one rule again rather than two that happen
+to agree on today's fixtures. **The shape alone never excludes.** An id `LocalEntity.isLocal`
+answers true for that the graph holds no node for — a hand-edited known-list row, or one written
+against another database — stays in the population exactly as it did before this amendment: no
+source will ever answer for it either, but the graph is what says whether it is one of the owner's
+own, not the shape by itself.
 
 **Before this issue, a `--known` run over a file naming a minted id visited it anyway** — nothing
 excluded a local id from the population, so it reached `EntityExpansion.expand`, which has refused
@@ -938,12 +942,15 @@ shape: a rating is a claim about the owner's own local entity exactly as it is a
 and excluding it there would refuse to expand something the owner asked this tool to visit rather
 than telling him it cannot be done. The refusal still fires, on the same call, for the same reason.
 
-**The runbook's `--known --add` derive step is true again.** `named` minus `in the graph` is still
-what a `--add` run would add — that arithmetic never involved `never expanded` — and `never
-expanded` is now, once more, what an `--add` run's own `--known` pass would then expand: before this
-issue a minted id already in the graph sat under `never expanded` and inflated a number the sentence
-promised was the next step's spend, when no `--add` run would ever visit it. Excluding it from the
-row is what makes the sentence true rather than merely close.
+**The runbook's `--known --add` derive step is true again.** `named` minus `in the graph` remains
+what a `--add` run would TRY — that arithmetic never involved `never expanded` — because the only id
+this amendment excludes is one the graph already holds; an id shaped like the owner's own that the
+graph holds no node for is not excluded, so it stays in that difference exactly as a Wikidata id
+with no node does, and reaches the run's own `unknown entity` refusal rather than the addition
+itself. `never expanded` is now, once more, what an `--add` run's own `--known` pass would then
+expand: before this issue a minted id already in the graph sat under `never expanded` and inflated a
+number the sentence promised was the next step's spend, when no `--add` run would ever visit it.
+Excluding it from the row is what makes that sentence true rather than merely close.
 
 **Alternatives rejected.**
 

@@ -1886,13 +1886,14 @@ next, and how to tell that another run would reach nothing (the run on #313;
 [ADR 66](adr/0066-expand-every-promotion-from-a-dev-tool.md)'s 2026-09-12 amendments for #315).
 
 **`local` is nested one level under `in the graph`, and only prints when it is not zero.** It
-counts the file's own ids, after the merge fold, that `LocalEntity.isLocal` answers true for — the
-owner's own minted entities, on ADR 59's shape — and the print-when-non-zero choice is the one
+counts the file's own ids, after the merge fold, that the graph holds a node for and that
+`LocalEntity.isLocal` answers true for — the owner's own minted entities, on ADR 59's shape — and
+the print-when-non-zero choice is the one
 [ADR 63](adr/0063-a-read-only-census-of-the-graph.md)'s 2026-09-19 amendment for #344 records, the
 same one issue #328 already made for `added` and `to add`: a file naming no local id prints the
 block byte for byte as it always has. `never expanded` excludes every id counted here — no source
 will ever write a seed reference against an id Wikidata will never allocate, so it was never a
-shortfall a further `--known` run could close, and counting it there understated the floor.
+shortfall a further `--known` run could close, and counting it there overstated the floor.
 `expand.ExpandCli`'s `--known` population excludes the same ids for the same reason
 ([ADR 66](adr/0066-expand-every-promotion-from-a-dev-tool.md)'s 2026-09-19 amendment for #344), so
 the row and the population the tool visits agree again.
@@ -2795,9 +2796,9 @@ mapping row is the seven-column shape with `MINTED` in the confidence column and
 **The mapping is where a local id lives for `--known`.** `support.QidList` reads the first
 comma-separated field on a line that is exactly a QID, and a local `Q00…` id is one — so a minted
 entity joins the `--known` population the moment its mapping row is written, with nothing else to
-do. `graphCensus --known <mapping>` counts it under `in the graph` and, since it is one of the owner's
-own, under `local` too — never under `never expanded`, and `expandPromotions --known` never visits
-it
+do. `graphCensus --known <mapping>` counts it under `in the graph` and, since it is one of the
+owner's own, under `local` too — never under `never expanded`, and `expandPromotions --known`
+never visits it
 ([ADR 63](adr/0063-a-read-only-census-of-the-graph.md)'s and
 [ADR 66](adr/0066-expand-every-promotion-from-a-dev-tool.md)'s 2026-09-19 amendments for #344).
 

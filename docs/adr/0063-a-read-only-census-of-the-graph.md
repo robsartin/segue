@@ -634,6 +634,15 @@ removed rather than left describing a case that cannot occur.
   Rejected: that row already counts every local entity the log has ever minted, whether or not it is
   on this file, and duplicating the count under a new heading answers a different question — which
   of *this file's* entities are local — under a name that invites confusing the two.
+- **One shared predicate — on `domain.Expanded`, or a filter shared by the census and the
+  expander — in place of three readers each citing `LocalEntity.isLocal` on their own.** Rejected:
+  `Expanded` answers who a source has been asked about, and reading an owner claim as covering
+  nothing is [ADR 59](0059-owner-claims-as-a-third-layer.md)'s own decision, not this issue's to
+  restate — folding "local" into it would make one word mean two things. The census's `local` row,
+  `ExpandCli`'s `--known` population and `SecondHop.toExpandBeside` compose three different
+  populations already, and a fourth type built to hold the rule would still have to be read by all
+  three call sites; citing `LocalEntity.isLocal` directly, its one statement, is the same sharing
+  with no fourth type to keep in step.
 
 **Nothing here is unit-testable on its own but for the counting rule and the row itself, and those
 are**: `SecondHopTest`, `KnownListCensusTest` and `CensusReportTest` carry the new cases, each seen
