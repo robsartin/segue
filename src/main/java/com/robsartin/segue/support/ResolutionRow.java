@@ -12,8 +12,9 @@ import java.util.Objects;
  * <p><b>In {@code support} because two tools read it</b> (#342). The seed tool writes it; the
  * owner-claim tool reads a review file to mint from and appends its own rows to the mapping. The
  * two may not depend on each other — each carries its own ArchUnit fence — so a shape neither owns
- * is the only way they read one file by one rule, exactly as {@code QidList} and {@code
- * KnownListInput} already do.
+ * is the only way they read one file by one rule.
+ *
+ * <p>{@code QidList} and {@code KnownListInput} already solve this the same way.
  */
 public record ResolutionRow(
     String name,

@@ -12,11 +12,11 @@ import java.util.Objects;
 /**
  * RFC 4180, in both directions, for the two readers that share it.
  *
- * <p><b>Its own class because two packages read the same rule</b> (#342). {@code
- * seed.SeedFiles.readList} reads the input list and {@link ResolutionFiles#readRows} reads the
- * seven-column mapping and review shape; a name with a comma in it is quoted in both, so a second
- * copy of this parser is a second place for that to be got wrong. The house rule is that the second
- * copy of a rule is the one a future editor misses.
+ * <p><b>Its own class because two packages read the same rule</b> (#342). {@code SeedFiles} reads
+ * the input list and {@link ResolutionFiles#readRows} reads the seven-column mapping and review
+ * shape; a name with a comma in it is quoted in both, so a second copy of this parser is a second
+ * place for that to be got wrong. The house rule is that the second copy of a rule is the one a
+ * future editor misses.
  */
 public final class CsvFile {
 

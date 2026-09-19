@@ -1,6 +1,7 @@
 package com.robsartin.segue.seed;
 
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.support.ListKinds;
 import com.robsartin.segue.wikidata.KindMapper;
 import java.util.Collection;
 import java.util.EnumSet;
@@ -202,41 +203,57 @@ public final class Expectations {
   static {
     // A musician on this list is as often a band as a person, so both kinds are allowed and the
     // occupation check only bites on the ones that turn out to be human.
-    put("musician", EnumSet.of(NodeKind.PERSON, NodeKind.GROUP), MUSIC, Set.of());
-    put("composer", EnumSet.of(NodeKind.PERSON), MUSIC, Set.of());
-    put("conductor", EnumSet.of(NodeKind.PERSON), MUSIC, Set.of());
-    put("comedian", EnumSet.of(NodeKind.PERSON, NodeKind.GROUP), COMEDY, Set.of());
-    put("author", EnumSet.of(NodeKind.PERSON), WRITING, Set.of());
-    put("actor", EnumSet.of(NodeKind.PERSON), ACTING, Set.of());
-    put("director", EnumSet.of(NodeKind.PERSON), DIRECTING, Set.of());
-    put("broadcaster", EnumSet.of(NodeKind.PERSON), BROADCASTING, Set.of());
+    put("musician", MUSIC, Set.of());
+    put("composer", MUSIC, Set.of());
+    put("conductor", MUSIC, Set.of());
+    put("comedian", COMEDY, Set.of());
+    put("author", WRITING, Set.of());
+    put("actor", ACTING, Set.of());
+    put("director", DIRECTING, Set.of());
+    put("broadcaster", BROADCASTING, Set.of());
     // Groups: no occupation exists to check, so the kind is the whole test.
-    put("a-cappella", EnumSet.of(NodeKind.GROUP), Set.of(), Set.of());
-    put("tribute", EnumSet.of(NodeKind.GROUP), Set.of(), Set.of());
-    put("orchestra", EnumSet.of(NodeKind.GROUP), Set.of(), Set.of());
-    put("choir", EnumSet.of(NodeKind.GROUP), Set.of(), Set.of());
-    put("ensemble", EnumSet.of(NodeKind.GROUP), Set.of(), Set.of());
-    put("org", EnumSet.of(NodeKind.GROUP), Set.of(), Set.of());
+    put("a-cappella", Set.of(), Set.of());
+    put("tribute", Set.of(), Set.of());
+    put("orchestra", Set.of(), Set.of());
+    put("choir", Set.of(), Set.of());
+    put("ensemble", Set.of(), Set.of());
+    put("org", Set.of(), Set.of());
     // A WORK kind that names classes (TELEVISION), like film and book below. Issue #338.
-    put("tv-show", EnumSet.of(NodeKind.WORK), Set.of(), TELEVISION);
+    put("tv-show", Set.of(), TELEVISION);
     // Another WORK kind that names classes (FILM), beside book below and tv-show above. Issue #338.
-    put("film", EnumSet.of(NodeKind.WORK), Set.of(), FILM);
+    put("film", Set.of(), FILM);
     // The third WORK kind that names classes (WRITTEN), beside film and tv-show above. A book row
     // is a WORK, and WORK alone is albums, films and episodes too — the kind check alone cannot
     // separate a book from the film of the book. Issue #333.
-    put("book", EnumSet.of(NodeKind.WORK), Set.of(), WRITTEN);
+    put("book", Set.of(), WRITTEN);
     // A fictional character has no NodeKind of its own — ADR 21 has six and none of them is
     // "character" — so it lands in CONCEPT, which is what an unmapped P31 always becomes.
-    put("character", EnumSet.of(NodeKind.CONCEPT), Set.of(), Set.of());
+    put("character", Set.of(), Set.of());
     // No usable occupation vocabulary, so these constrain the kind and nothing else.
-    put("public-figure", EnumSet.of(NodeKind.PERSON), Set.of(), Set.of());
-    put("puppeteer", EnumSet.of(NodeKind.PERSON), Set.of(), Set.of());
+    put("public-figure", Set.of(), Set.of());
+    put("puppeteer", Set.of(), Set.of());
+
+    // One copy of "which list kinds exist", in support.ListKinds (#342). This fails class
+    // initialisation rather than letting a kind registered in one table and not the other reach
+    // a run: the batch mint refuses a kind ListKinds does not hold, and an expectation for a
+    // kind this table alone knows would never be consulted.
+    if (!BY_KIND.keySet().equals(ListKinds.registered())) {
+      throw new IllegalStateException(
+          "the expectations and support.ListKinds disagree about which list kinds exist: "
+              + BY_KIND.keySet()
+              + " against "
+              + ListKinds.registered());
+    }
   }
 
   private Expectations() {}
 
-  private static void put(
-      String kind, Set<NodeKind> kinds, Set<String> occupations, Set<String> classes) {
+  private static void put(String kind, Set<String> occupations, Set<String> classes) {
+    Set<NodeKind> kinds = ListKinds.nodeKinds(kind);
+    if (kinds.isEmpty()) {
+      throw new IllegalStateException(
+          "the list kind " + kind + " is not registered in support.ListKinds");
+    }
     Expectation prior = BY_KIND.put(kind, new Expectation(kinds, occupations, classes));
     if (prior != null) {
       throw new IllegalStateException("two expectations claim the kind " + kind);

@@ -15,8 +15,9 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * The mapping and review files: the seven-column shape {@code
- * name,kind,status,qid,label,confidence,reason}, read and appended.
+ * The mapping and review files, read and appended.
+ *
+ * <p>{@code name,kind,status,qid,label,confidence,reason} is the seven-column shape.
  *
  * <p><b>None of these files is in this repository, and none of them may be.</b> A list of who
  * someone listens to, reads and watches is exactly the personal data this project treats as the
