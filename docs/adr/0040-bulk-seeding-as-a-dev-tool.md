@@ -298,8 +298,8 @@ a store, still reports rather than decides, and its tests changed only their imp
 **Alternatives rejected.**
 
 - **Copying the shape into the claim tool.** Two readers of one file, and the second copy of a
-  rule is the one a future editor misses — the mapping is read as a known-list by three other
-  tools already.
+  rule is the one a future editor misses — the mapping is read as a known list by every tool that
+  calls `QidList.read`.
 - **Letting the claim tool depend on this one.** The fence forbids it, and the fence is the
   decision: a tool that may not open a store and a tool whose whole job is appending to one have
   different fences for different reasons.

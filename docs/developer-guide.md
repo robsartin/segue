@@ -388,10 +388,12 @@ edge to it from — that half is derivation-checked by
 the edges rather than a count in this sentence, which nothing checks. Today they are:
 `mcp` (`UuidV7`), `export` and `rate` (`ClassLabels`), `export`, `ratings`, `recommend`, `evaluate`
 and `rate` (`QidList`), `export`, `ratings`, `recommend` and `rate` (`DefaultDatabase` — issue #179's
-one resolution for the four dev tools that keep a default), and `retract`, `own` and `expand`
+one resolution for the four dev tools that keep a default), `retract`, `own` and `expand`
 (`RequiredDatabase` — the sentence those three refuse with, since #179 gave the first two no default at all;
 it resolves the path it quotes back by calling `DefaultDatabase` itself, so the rule has one home
-and the two claim tools depend on neither a default nor the class that computes one). One thing a reader might expect and will
+and the two claim tools depend on neither a default nor the class that computes one), and `seed`
+and `own` (`ResolutionFiles`, `ResolutionRow`, `NameFold`, `Outcome` and `ListKinds` — the review
+and mapping shape, its name fold and the list-kind table, shared since #342). One thing a reader might expect and will
 not find: `app` does not import `jena` at
 all — the reference engine is reachable only from tests. **This paragraph used to name a second,
 that `app` imports nothing from `domain`; that stopped being true in ADR 54**, because
@@ -2811,16 +2813,17 @@ Two ids that look like qids — a local `Q00…` id is allowed on either side �
 code. There is no quoting, because every field is an id or a code.
 
 **Any refused row refuses the whole file, before any append.** A row with fewer than three fields,
-an id that is not qid-shaped, a code outside the vocabulary, an endpoint the projection does not
-hold and a local id you have already merged away are all whole-file refusals, each naming the line
-number. The reason is that there is no edge-level retraction
+an id that is not qid-shaped, or a code outside the vocabulary is a file-shape refusal and names
+the line; an endpoint the projection does not hold, or a local id you have already merged away, is
+a projection refusal and names the qid instead. The reason is that there is no edge-level retraction
 ([ADR 44](adr/0044-retraction-as-a-new-claim.md)): a wrong edge is undone only by
 retracting one of its endpoints, which takes that entity's other edges with it. Half a file is the one outcome worth refusing outright.
 
 **A row the log already carries as an owner edge is skipped**, with endpoints folded through the
-same `Equivalences` rule the projections use — so a row naming a local id and a row naming the
-canonical id it was merged into are the same edge. Both folds collapse two identical owner edges
-to one, so the second row would add noise to a log nobody may edit and nothing to the graph.
+same `Equivalences` rule the projections use: an edge logged against a local id folds to its
+canonical, so a row naming the canonical id is recognised as the same edge. Both folds collapse two
+identical owner edges to one, so the second row would add noise to a log nobody may edit and
+nothing to the graph.
 
 **The corroboration sentence is said once, at the end.** It is one fact about every owner edge in
 the run, and repeating it per row would bury the labels the report exists to show.
