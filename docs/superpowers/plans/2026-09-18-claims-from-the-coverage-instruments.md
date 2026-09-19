@@ -186,10 +186,11 @@ These bind every task. An implementer who sees only one task brief still gets al
   ```
 
 - **The only issue numbers this plan may cite are #342, #344, #311, #315, #326, #328, #319, #92,
-  #179 and #224, and the only ADR numbers are 40, 59, 60, 63 and 66.** Invent no others. The one
-  exception is the `(ADR 24)` inside the closing `appended.` sentence, which is a string literal
-  the tool already prints and which the spec requires the batches to reproduce **verbatim** — copy
-  it character for character rather than rewording it.
+  #179, #224 and #37, and the only ADR numbers are 19, 24, 33, 40, 44, 59, 60, 63 and 66.** Invent
+  no others; every one of these names a file in `docs/adr/` or an issue on the tracker today. The
+  `(ADR 24)` inside the closing `appended.` sentence is a string literal the tool already prints
+  and which the spec requires the batches to reproduce **verbatim** — copy it character for
+  character rather than rewording it.
 - **Never restate a count or a figure in prose.** Cite where it lives.
 - **YAGNI.** No parameter, overload or helper ahead of a real need.
 
