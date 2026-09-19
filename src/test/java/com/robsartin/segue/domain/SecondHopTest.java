@@ -41,6 +41,9 @@ class SecondHopTest {
   /** Named by the list and never claimed as a node. */
   private static final String ABSENT = "Q0901408";
 
+  /** A minted PERSON beside {@link #ACT} — LocalEntity.isLocal, so it is never to expand (#344). */
+  private static final String LOCAL_NEIGHBOUR = "Q00901409";
+
   private static Map<String, NodeRecord> nodes(Map<String, NodeKind> kinds) {
     Map<String, NodeRecord> nodes = new LinkedHashMap<>();
     kinds.forEach((qid, kind) -> nodes.put(qid, new NodeRecord(qid, kind, "a label for " + qid)));
@@ -164,6 +167,32 @@ class SecondHopTest {
             new Expanded(Set.of()));
 
     assertThat(rule.toExpandBeside(ACT)).containsExactly(BANDMATE);
+  }
+
+  @Test
+  @DisplayName(
+      "a minted local neighbour beside an isolated act is never to expand, and an ordinary"
+          + " unexpanded neighbour beside the same act still is")
+  void shouldExcludeTheLocalNeighbourWhenOneIsBesideAnIsolatedAct() {
+    // BANDMATE is the planted control: same act, same kind, no expansion — if this came back
+    // empty too, the assertion below would not prove the local id was what was excluded.
+    SecondHop rule =
+        SecondHop.of(
+            nodes(
+                new LinkedHashMap<>(
+                    Map.of(
+                        ACT, NodeKind.GROUP,
+                        LOCAL_NEIGHBOUR, NodeKind.PERSON,
+                        BANDMATE, NodeKind.PERSON))),
+            List.of(edge(ACT, LOCAL_NEIGHBOUR), edge(ACT, BANDMATE)),
+            List.of(ACT),
+            new Expanded(Set.of()));
+
+    assertThat(rule.isolated()).containsExactly(ACT);
+    assertThat(rule.toExpandBeside(ACT))
+        .as("the minted neighbour is excluded; BANDMATE is the control that this did not go blind")
+        .containsExactly(BANDMATE);
+    assertThat(rule.toExpand()).containsExactly(BANDMATE);
   }
 
   @Test
