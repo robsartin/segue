@@ -3,6 +3,7 @@ package com.robsartin.segue.expand;
 import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.Expanded;
 import com.robsartin.segue.domain.KnownList;
+import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.RatingAge;
 import com.robsartin.segue.domain.SecondHop;
@@ -295,7 +296,11 @@ public final class ExpandCli {
         KnownListInput known = KnownListInput.read(options.known().get());
         List<String> named = merges.canonical(known.qids());
         Expanded expanded = Expanded.in(assertions.readAll()).onTheCanonicalSide(merges);
-        population = named.stream().filter(qid -> !expanded.covers(qid)).toList();
+        population =
+            named.stream()
+                .filter(qid -> !LocalEntity.isLocal(qid))
+                .filter(qid -> !expanded.covers(qid))
+                .toList();
         // #328. options.add() carried onto the population value: a --known run is the only
         // population --add can name, and the clause is composed here, before the run, exactly as
         // KnownNeverExpanded's own javadoc says it must be.

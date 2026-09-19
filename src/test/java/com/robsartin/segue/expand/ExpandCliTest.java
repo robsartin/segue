@@ -10,6 +10,7 @@ import ch.qos.logback.core.read.ListAppender;
 import com.robsartin.segue.domain.AffinityRecord;
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.KnownList;
+import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.Provenance;
@@ -641,6 +642,20 @@ class ExpandCliTest {
     affinity.put(new AffinityRecord(RE_RATED, KnownList.PROMOTION_RATING, null, AGAIN));
   }
 
+  /** Minted, and never merged: a rating can still name it, so it can still reach the refusal. */
+  private static final String RATED_LOCAL = "Q00900799";
+
+  private Path ratedLocalGraph(String name) {
+    Path db = home.resolve(name);
+    try (SqliteAssertionLog log = new SqliteAssertionLog(db);
+        SqliteAffinityStore affinity = new SqliteAffinityStore(db)) {
+      log.append(
+          LocalEntity.minted(RATED_LOCAL, NodeKind.PERSON, "the owner's own minted entity", WHEN));
+      affinity.put(new AffinityRecord(RATED_LOCAL, KnownList.PROMOTION_RATING, null, AGAIN));
+    }
+    return db;
+  }
+
   /**
    * Three invented entities with nodes, one edge between two of them, and no rating anywhere.
    *
@@ -671,6 +686,23 @@ class ExpandCliTest {
         ALREADY_EXPANDED + "\n" + NEVER_EXPANDED + "\n" + ALSO_NEVER_EXPANDED + "\n");
   }
 
+  /** A normal, never-expanded act — the control that only the local id drops (#344). */
+  private static final String KNOWN_ORDINARY = "Q0901109";
+
+  /** Minted, unmerged: LocalEntity.isLocal, so it must never reach the `--known` population. */
+  private static final String KNOWN_LOCAL = "Q00901108";
+
+  private Path knownListWithLocalGraph(String name) {
+    Path db = home.resolve(name);
+    Provenance plain = new Provenance("invented", "invented:10", WHEN, 1.0);
+    try (SqliteAssertionLog log = new SqliteAssertionLog(db)) {
+      log.append(new NodeAssertion(KNOWN_ORDINARY, NodeKind.GROUP, "an invented act", plain));
+      log.append(
+          LocalEntity.minted(KNOWN_LOCAL, NodeKind.PERSON, "the owner's own minted entity", WHEN));
+    }
+    return db;
+  }
+
   @Test
   @DisplayName("only the known-list entities no row cites as a seed are considered")
   void shouldConsiderOnlyTheNeverExpandedEntitiesWhenAKnownFileIsGiven() throws Exception {
@@ -695,7 +727,8 @@ class ExpandCliTest {
             line ->
                 line.contains(
                     "that no expansion has covered: 1 excluded (some row in the log cites them"
-                        + " as an expansion's seed)"));
+                        + " as an expansion's seed, or they are the owner's own minted local"
+                        + " entities)"));
   }
 
   @Test
@@ -733,6 +766,56 @@ class ExpandCliTest {
     assertThat(countOn(lines(), "considered")).isEqualTo(1);
     assertThat(countOn(lines(), "unknown entity"))
         .as("the same refusal a promotion with no node already gets, counted the same way")
+        .isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName(
+      "a --known --dry-run over a file naming a local id excludes it from the population, and"
+          + " from the run's own `minted` bucket too")
+  void shouldExcludeTheLocalIdWhenAKnownDryRunNamesOne() throws Exception {
+    Path db = knownListWithLocalGraph("known-local.db");
+    Path file =
+        Files.writeString(
+            home.resolve("known-local.csv"), KNOWN_ORDINARY + "\n" + KNOWN_LOCAL + "\n");
+    captured.list.clear();
+
+    ExpandCli.main(new String[] {"--db", db.toString(), "--dry-run", "--known", file.toString()});
+
+    assertThat(countOn(lines(), "considered"))
+        .as("two ids on the file; the minted one is excluded before the population is composed")
+        .isEqualTo(1);
+    assertThat(countOn(lines(), "minted"))
+        .as("dryRun's own per-id classification never sees it either — filtered out upstream")
+        .isZero();
+    // countOn's own filter (line.strip().startsWith(label)) does not match this clause — it is a
+    // "# ..." comment line, not a labelled row — so this reads the clause's own text directly, as
+    // task-3-brief.md Step 1 anticipated as a fallback (task report has the confirmation).
+    assertThat(lines())
+        .as("excluded now also carries a reason other than \"cited as a seed\" — see the clause")
+        .anyMatch(line -> line.contains("1 excluded ("));
+  }
+
+  @Test
+  @DisplayName(
+      "--rated-since is where a rated local id still reaches the local-entity refusal, now that"
+          + " --known and --second-hop both exclude one")
+  void shouldRefuseTheRatedLocalIdWhenARatedSinceRunVisitsIt() throws Exception {
+    // A REAL run, and it reaches no network: EntityExpansion.expand checks LocalEntity.isLocal
+    // and returns Refused(LOCAL_ENTITY) before any adapter is asked (#92). This is the same fact
+    // the retired --second-hop test proved; a rating is a claim about the owner's own local entity
+    // exactly as it is about a Wikidata one, and KnownList.promoted does not filter by shape, so
+    // this population is the one left that can still carry one (#344).
+    Path db = ratedLocalGraph("rated-local.db");
+    captured.list.clear();
+
+    ExpandCli.main(new String[] {"--db", db.toString(), "--rated-since", THE_INSTANT});
+
+    assertThat(countOn(lines(), "considered"))
+        .as("the one rated local id — --rated-since does not filter it out")
+        .isEqualTo(1);
+    assertThat(countOn(lines(), "local entity"))
+        .as("EntityExpansion.expand refuses it before any adapter runs")
         .isEqualTo(1);
   }
 

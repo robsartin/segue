@@ -239,8 +239,9 @@ public final class ExpansionReport {
             + known.file()
             + " that no expansion has covered: "
             + known.excluded()
-            + " excluded (some row in the log cites them as an expansion's seed) — the file's ids"
-            + " are read through the merge fold, so a merge's two sides count once.";
+            + " excluded (some row in the log cites them as an expansion's seed, or they are the"
+            + " owner's own minted local entities) — the file's ids are read through the merge"
+            + " fold, so a merge's two sides count once.";
     if (!known.adding()) {
       return line;
     }
