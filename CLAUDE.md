@@ -139,8 +139,10 @@ rate/     The rating deck (ADR 46): a loopback page on 127.0.0.1:8090 that deals
           constructs what it writes. No un-rate: AffinityStore has no delete, so going back
           re-rates rather than withdrawing.
 ingest/   IngestService (the only write path) and GraphProjector (boot replay).
-support/  Plain-Java cross-cutting helpers with no project dependencies of their
-          own — UuidV7, the RFC 9562 v7 id generator used for request correlation;
+support/  Plain-Java cross-cutting helpers shared by more than one dev-side tool — that is the
+          criterion, not freedom from project dependencies: since #342 ListKinds lives here too,
+          reading `domain.NodeKind` because a list's `kind` column resolves to a node kind, so
+          `support` now has one `domain` import — UuidV7, the RFC 9562 v7 id generator used for request correlation;
           QidList, the QID-file reader `export`, `recommend` and `rate` share (it moved here
           from `export` in ADR 45, so a shared reader would not force a dependency between
           siblings that must not have one — `rate` depending on `recommend` directly, for its

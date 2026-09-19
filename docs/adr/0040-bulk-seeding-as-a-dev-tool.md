@@ -274,3 +274,37 @@ own planted control seen to fire; and one further planted control on each of the
 sets. The verification of the *document* is the full gate over an otherwise unchanged tree:
 `AdrIndexTest`, `AdrCitationsTest`, `DocumentationLinksTest` for the relative links above, and
 `javadoc -Werror` inside `./gradlew check`.
+
+**Amendment (2026-09-18, issue #342): the mapping and review shape is shared, and it lives in
+`support`.** The seven-column shape `name,kind,status,qid,label,confidence,reason`, its reader,
+its appender, the "already resolved" fold and the name fold underneath it have left this tool for
+`support`, alongside the list-kind table that says which node kinds a list's `kind` column may
+turn out to be. The occupation and class sets stay here: they exist to tell six same-named humans
+apart against Wikidata, and nothing outside this tool has anything to ask them.
+
+**The reason is a fence, not tidiness.** The owner-claim tool
+([ADR 59](0059-owner-claims-as-a-third-layer.md)) now reads a review file to mint from and
+appends to the mapping, and it may not depend on this tool — each carries its own ArchUnit fence,
+and a dependency on a sibling would let one inherit the other's. A shape neither owns is the only
+way the two read one file by one rule, which is the move the QID-file reader and the known-list
+reader each made before it.
+
+**A fourth outcome, `MINTED`, which this tool never writes.** It marks a row the owner minted
+under [ADR 59](0059-owner-claims-as-a-third-layer.md), written by the claim tool alone. The
+"already resolved" fold reads it as resolved like every other row, so a second run of either tool
+over the same files does nothing twice. Nothing else about this tool changes: it still never opens
+a store, still reports rather than decides, and its tests changed only their imports.
+
+**Alternatives rejected.**
+
+- **Copying the shape into the claim tool.** Two readers of one file, and the second copy of a
+  rule is the one a future editor misses — the mapping is read as a known-list by three other
+  tools already.
+- **Letting the claim tool depend on this one.** The fence forbids it, and the fence is the
+  decision: a tool that may not open a store and a tool whose whole job is appending to one have
+  different fences for different reasons.
+- **Moving the input-list reader and its row type too.** Only this tool reads the input list.
+  What moved is what two tools read; the RFC 4180 parser underneath both readers moved with it,
+  because a second copy of *that* is a second place for a name with a comma in it to be got wrong.
+- **A separate outcome file for minted rows.** The output files are already the resume ledger,
+  and a second file that can disagree with them is the bug this ADR's own reasoning rejects.

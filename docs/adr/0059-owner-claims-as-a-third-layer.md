@@ -612,3 +612,55 @@ applies nothing breaks no boot. `AnAcceptedOwnerEdgeThatAppliesNothingTest` pins
 2026-09-04 — the numbers are its, not restated here. That is the argument for the cheapest correct
 answer at each ruling rather than the most general one; it is not an argument for leaving any of
 them unfixed, since the log is append-only and the first instance of each is permanent.
+
+**Amendment (2026-09-18, issue #342): two batch shapes, and the mapping file as where a local id
+lives.** `ownClaim mint --review <review> --mapping <mapping>` mints every row of the seed tool's
+review file that resolved to nothing, and `ownClaim assert --file <claims>` claims every edge of a
+three-column file the owner writes. Both were built for the populations the coverage instruments
+name — the review file's unresolved rows, and `graphCensus --isolated`'s `with no one` acts — and
+the alternative in each case was a hand-typed command per row, which is the typing this project
+exists to remove.
+
+**"One operation per run" still holds, and it always meant one *kind* of claim.** A run is a mint
+or an edge or a merge, never two of them; the report is whole before the first append; and a
+refusal refuses the whole run rather than half of it. What changed is the number of rows, not the
+number of decisions. Minting an entity and then joining it up is still two commands, and the
+second sees the first because it replays the log.
+
+**All-or-nothing is a consequence of there being no edge-level retraction**
+([ADR 44](0044-retraction-as-a-new-claim.md)). A wrong edge is undone
+only by retracting one of its endpoints, which takes that entity's other edges with it — so a file half-applied is strictly worse than one refused. The
+batch mint refuses a list kind the table does not register for the same reason: such a file is not
+one the seed tool wrote, and nothing else in it can be trusted either.
+
+**`MINTED` is a fourth outcome on the seven-column shape** ([ADR 40](0040-bulk-seeding-as-a-dev-tool.md),
+amended the same day). The batch mint appends one mapping row per mint, carrying the allocated id
+and that outcome. **This is where a local id lives for `--known`**: the QID-file reader takes the
+first comma-separated field that is exactly a QID, and a local id is one, so a minted entity joins
+that population the moment its row is written. The census consequence — a local id counting under
+`never expanded` — is issue #344 and not this decision.
+
+**Alternatives rejected.**
+
+- **A hand-typed `mint` per row, plus a hand-edit of the mapping.** It works, and it is the
+  typing this project exists to remove. It also puts the id the tool allocated into the mapping by
+  hand, which is one transcription per entity into a file the graph is read against.
+- **Minting inside `resolveNames`.** The seed tool is fenced off every store, deliberately
+  ([ADR 40](0040-bulk-seeding-as-a-dev-tool.md)). Minting there would make a tool that needs no
+  database into one that writes the log.
+- **One `assert` per run for the isolated population.** It is dozens of acts, each a separate
+  invocation that replays the whole log.
+- **The tool proposing a neighbour to claim.** It covers one case — a book's author — and guesses
+  where the owner knows. An owner claim is exempt from the corroboration count by design, so a
+  guessed one is the one kind of structure that must never be laundered into that tier.
+- **Minting `REVIEW` rows too.** Each carries a plausible candidate; minting one puts a second
+  entity in the graph for something Wikidata already has, and the repair is a retraction plus a
+  merge on an append-only log (ADR 19).
+- **Refusing, rather than skipping, a row the mapping already carries.** A re-run over the same
+  review file is the ordinary case after a partial run, and refusing it would make the safe thing
+  the awkward one.
+- **Guessing the node kind for a list kind that folds to two.** `musician` and `comedian` are as
+  often a band as a person and nothing in a review file says which. The run prints the
+  single-`mint` command instead, with the kind left blank.
+- **An MCP tool for either batch.** Unchanged from this ADR's own reasoning: the caller of an MCP
+  tool is a language model, and an owner claim skips quarantine.
