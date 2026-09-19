@@ -81,6 +81,86 @@ class OwnCliTest {
   }
 
   @Test
+  @DisplayName("should read both files when minting from a review file")
+  void shouldReadBothFilesWhenMintingFromAReviewFile() {
+    OwnCli.MintBatch batch =
+        (OwnCli.MintBatch)
+            parse("mint", "--review", "/lists/review.csv", "--mapping", "/lists/qids.csv");
+
+    assertThat(batch.review()).isEqualTo(Path.of("/lists/review.csv"));
+    assertThat(batch.mapping()).isEqualTo(Path.of("/lists/qids.csv"));
+    assertThat(batch.dryRun()).isFalse();
+    assertThat(batch.database()).isEqualTo(Path.of(DATABASE));
+  }
+
+  @Test
+  @DisplayName("should refuse naming both flags when only the review file is named")
+  void shouldRefuseNamingBothFlagsWhenOnlyTheReviewFileIsNamed() {
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parse("mint", "--review", "/lists/review.csv"))
+        .withMessageContaining("--review and --mapping")
+        .withMessageContaining("--mapping was not given");
+  }
+
+  @Test
+  @DisplayName("should refuse naming both flags when only the mapping file is named")
+  void shouldRefuseNamingBothFlagsWhenOnlyTheMappingFileIsNamed() {
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parse("mint", "--mapping", "/lists/qids.csv"))
+        .withMessageContaining("--review and --mapping")
+        .withMessageContaining("--review was not given");
+  }
+
+  @Test
+  @DisplayName("should refuse when a single mint's kind is given with a review file")
+  void shouldRefuseWhenASingleMintsKindIsGivenWithAReviewFile() {
+    assertThatIllegalArgumentException()
+        .isThrownBy(
+            () ->
+                parse(
+                    "mint",
+                    "--kind",
+                    "WORK",
+                    "--review",
+                    "/lists/review.csv",
+                    "--mapping",
+                    "/lists/qids.csv"))
+        .withMessageContaining("--kind")
+        .withMessageContaining("--review and --mapping");
+  }
+
+  @Test
+  @DisplayName("should refuse when a single mint's label is given with a review file")
+  void shouldRefuseWhenASingleMintsLabelIsGivenWithAReviewFile() {
+    assertThatIllegalArgumentException()
+        .isThrownBy(
+            () ->
+                parse(
+                    "mint",
+                    "--label",
+                    "x",
+                    "--review",
+                    "/lists/review.csv",
+                    "--mapping",
+                    "/lists/qids.csv"))
+        .withMessageContaining("--label")
+        .withMessageContaining("--review and --mapping");
+  }
+
+  @Test
+  @DisplayName("should parse when the named files do not exist, because parse opens nothing")
+  void shouldParseWhenTheNamedFilesDoNotExist() {
+    Path absent = dir.resolve("nothing-here.csv");
+
+    OwnCli.MintBatch batch =
+        (OwnCli.MintBatch)
+            parse("mint", "--review", absent.toString(), "--mapping", absent.toString());
+
+    assertThat(batch.review()).isEqualTo(absent);
+    assertThat(Files.exists(absent)).isFalse();
+  }
+
+  @Test
   @DisplayName("should take no value when --dry-run is given")
   void shouldTakeNoValueWhenDryRunIsGiven() {
     assertThat(parse("mint", "--kind", "PERSON", "--label", "someone", "--dry-run").dryRun())
