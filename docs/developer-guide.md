@@ -33,6 +33,7 @@ Everything here was checked against the source in `src/main/java/com/robsartin/s
 - [Claiming something no source has](#claiming-something-no-source-has)
 - [A supervised first run](#a-supervised-first-run)
 - [Expanding every promotion](#expanding-every-promotion)
+- [What Wikidata lacks](#what-wikidata-lacks)
 - [How to read an ADR against the code](#how-to-read-an-adr-against-the-code)
 
 ## What segue is, in one pass
@@ -302,9 +303,11 @@ graph TD
   musicbrainz --> port
   musicbrainz --> domain
   port --> domain
+  support --> domain
   seed --> port
   seed --> domain
   seed --> wikidata
+  seed --> support
   export --> port
   export --> domain
   export --> ingest
@@ -377,8 +380,10 @@ one that had to declare its identity seam rather than import the adapter that co
 `KindMapper.rederive`, which is what makes a mapper improvement reach nodes the graph already holds
 ([ADR 42](adr/0042-store-p31-and-rederive-kind-at-projection.md)). `mcp` depends on `ingest`, `port`, `domain`
 and `support`, plus its own dotted edge to `wikidata` (explained below). `app` depends on almost
-everything, because wiring is its job. `support` depends on nothing, and the packages that use it
-are the ones the diagram below draws an edge to it from — that half is derivation-checked by
+everything, because wiring is its job. `support` depends on `domain` — `ListKinds` alone, for the
+`NodeKind` set the owner-claim tool's batch mint reads a review row's list kind into (#342) — and
+otherwise on nothing, and the packages that use `support` are the ones the diagram below draws an
+edge to it from — that half is derivation-checked by
 `DeveloperGuideEnumerationsTest.shouldDrawEveryImportEdgeWhenTheGuideDiagramsTheLayering`, so read
 the edges rather than a count in this sentence, which nothing checks. Today they are:
 `mcp` (`UuidV7`), `export` and `rate` (`ClassLabels`), `export`, `ratings`, `recommend`, `evaluate`
@@ -2729,6 +2734,102 @@ id, and `EdgeRecord.corroboration()` filters it out before counting distinct sou
 source asserted and you also claimed corroborates once and not twice. It is deliberately not
 prefixed `llm:`, so `PathRanking` does not demote it either.
 
+### Minting a whole review file: `mint --review … --mapping …`
+
+The seed tool's review file carries the rows Wikidata had nothing for: an entity the graph lacks
+entirely, under any spelling that was tried. Minting those one at a time is the typing this
+project exists to remove, so `mint` takes the pair of files instead.
+
+```bash
+# what would this mint, and under which ids? Nothing is written.
+./gradlew ownClaim --args="mint --db $HOME/.segue/segue.db --review $HOME/lists/reading-review.csv --mapping $HOME/lists/reading-qids.csv --dry-run"
+
+# do it — the mapping gains one MINTED row per mint, carrying the id it allocated
+./gradlew ownClaim --args="mint --db $HOME/.segue/segue.db --review $HOME/lists/reading-review.csv --mapping $HOME/lists/reading-qids.csv"
+```
+
+**Only `UNRESOLVED` rows are minted.** A `REVIEW` row carries a plausible candidate the
+adjudicator could not choose between, and minting one would put a second entity in the graph for
+something Wikidata already has — the one mistake this tool cannot take back, because the log is
+append-only (ADR 19) and never edited and the repair is a retraction plus a merge. The report says how many
+`REVIEW` rows it passed over, so the number is never silent.
+
+**A name the mapping already carries is skipped, folded rather than literal.** `support.NameFold`
+is the same fold the seed tool uses, so a row the first run minted under one spelling is not
+minted again under another. That is what makes a second run over the same review file safe.
+
+**A list kind that folds to two node kinds is yours to type.** `musician` and `comedian` are as
+often a band as a person — `support.ListKinds` is the authority on which kinds those are — and
+nothing in a review file says which. Those rows are skipped with the single-`mint` command
+printed out, `--kind` left as a choice for you to fill in.
+
+**A list kind the table does not register refuses the whole run**, before anything is appended and
+before anything is reported, naming the row. `support.ListKinds` holds every kind `resolveNames`
+writes, so a row carrying another one means the file is not one the seed tool wrote, and nothing
+else in it can be trusted to be what it looks like.
+
+**Ids are allocated in sequence from one read of the log**, each one the smallest `Q00…` number no
+row has ever named once this run's earlier mints are counted as named — the same membership rule
+[a single mint uses](#a-mint-costs-an-id-and-the-id-is-never-handed-back), applied across a batch.
+
+**The report is whole before the first append; the two appends are then interleaved per row** —
+the claim, then its mapping row. A failure between the two leaves at most one mint without its
+mapping row, and the report names the id it appended so you can write that row by hand. The
+mapping row is the seven-column shape with `MINTED` in the confidence column and the reason
+`minted by the owner — no Wikidata candidate under any spelling (ADR 59)`.
+
+**The mapping is where a local id lives for `--known`.** `support.QidList` reads the first
+comma-separated field on a line that is exactly a QID, and a local `Q00…` id is one — so a minted
+entity joins the `--known` population the moment its mapping row is written, with nothing else to
+do. `graphCensus --known <mapping>` counts it under `in the graph`, and, until issue #344 lands,
+under `never expanded` too, for the reason that issue states.
+
+### Claiming a file of edges: `assert --file …`
+
+An entity nothing else connects to is a node and not a segue. The `--isolated` file from
+`graphCensus` is a list of exactly those, and joining each one up by hand is a command per edge,
+so `assert` takes a file.
+
+```bash
+# both labels on every line, read from the projection. Nothing is written.
+./gradlew ownClaim --args="assert --db $HOME/.segue/segue.db --file $HOME/lists/claims.csv --dry-run"
+
+# do it — every row, in file order
+./gradlew ownClaim --args="assert --db $HOME/.segue/segue.db --file $HOME/lists/claims.csv"
+```
+
+The file is a header and one edge per row, with `#` comments so you can annotate a file that is
+personal data ([ADR 33](adr/0033-taste-layer-separation.md), issue #37):
+
+```
+from,to,type
+# the book's author, which nothing in the graph states
+Q00903301,Q0903301,AUTHORED
+```
+
+Two ids that look like qids — a local `Q00…` id is allowed on either side — and one `EdgeTypes`
+code. There is no quoting, because every field is an id or a code.
+
+**Any refused row refuses the whole file, before any append.** A row with fewer than three fields,
+an id that is not qid-shaped, a code outside the vocabulary, an endpoint the projection does not
+hold and a local id you have already merged away are all whole-file refusals, each naming the line
+number. The reason is that there is no edge-level retraction
+([ADR 44](adr/0044-retraction-as-a-new-claim.md)): a wrong edge is undone only by
+retracting one of its endpoints, which takes that entity's other edges with it. Half a file is the one outcome worth refusing outright.
+
+**A row the log already carries as an owner edge is skipped**, with endpoints folded through the
+same `Equivalences` rule the projections use — so a row naming a local id and a row naming the
+canonical id it was merged into are the same edge. Both folds collapse two identical owner edges
+to one, so the second row would add noise to a log nobody may edit and nothing to the graph.
+
+**The corroboration sentence is said once, at the end.** It is one fact about every owner edge in
+the run, and repeating it per row would bury the labels the report exists to show.
+
+**One kind of claim per run still holds.** This is many owner edges, never a mint and an edge
+together: [ADR 59](adr/0059-owner-claims-as-a-third-layer.md)'s rule is about the kind of claim,
+not the number of rows. Minting something and then joining it up is still two commands, and the
+second sees the first because it replays the log.
+
 ### A merge is said, not done — and it lands in two places at two times
 
 `merge` appends one `SameAs` and edits nothing. Its local side must be something **you** minted —
@@ -3644,6 +3745,54 @@ This run changes no code. What it produces is issues, and these are the ones to 
   something back: #293 corrected a label out of the first, #315 corrected what this chapter says
   about the `--known` variant's stopping rule, and #326 corrected what it says about the
   `--second-hop` variant's. The next run is what keeps it true.
+
+## What Wikidata lacks
+
+Two populations the coverage instruments name, claimed end to end. The first is the seed tool's
+review file: rows that resolved to nothing in Wikidata, so the graph lacks the entity entirely and
+both a mint and at least one edge are needed. The second is `graphCensus --isolated`'s `with no
+one` acts: in the graph, every neighbour expanded, connected to nothing you know — an edge and no
+mint.
+
+**0. Quit the client, and confirm nothing is holding the database.** Every writing run starts here,
+for the reason [the supervised first run](#0-quit-the-client-and-confirm-nothing-is-holding-the-database)
+gives: two writers on one SQLite file is not a configuration this project supports.
+
+**1. Mint the review file's unresolved rows.** Dry run first, and read the labels — the failure
+being guarded is a name that is not the entity you think it is.
+
+```bash
+./gradlew ownClaim --args="mint --db $HOME/.segue/segue.db --review $HOME/lists/reading-review.csv --mapping $HOME/lists/reading-qids.csv --dry-run"
+```
+
+Then the run, the same line without `--dry-run`. The mapping now carries the local ids, and
+`graphCensus --known <mapping>` counts them.
+
+**2. Write the claims file.** One row per edge: from a minted id, or from a `with no one` act's
+qid — the `--isolated` file puts each qid beside its label — to something the graph already holds,
+with a code from `EdgeTypes`. Comment the rows you want to remember the reason for.
+
+**3. Claim them.** Dry run first, read **both** labels on every line, then the run.
+
+```bash
+./gradlew ownClaim --args="assert --db $HOME/.segue/segue.db --file $HOME/lists/claims.csv --dry-run"
+```
+
+**4. The second population is step 3 again**, over the isolated file's acts. No mint: they are
+already in the graph.
+
+**5. A deck session with the mapping as its own `--known`.** A minted entity is dealt like any
+other in-graph unrated one, and a rating at or above `KnownList.PROMOTION_RATING` promotes it.
+
+**6. The census after**, and the reading that follows on the normal rule.
+
+**7. When Wikidata catches up**, `merge --local Q00… --canonical Q…`, as
+[A merge is said, not done](#a-merge-is-said-not-done--and-it-lands-in-two-places-at-two-times)
+already describes. The mapping keeps the local id and the fold resolves it.
+
+**8. Undoing.** `retractEntity` on the local id takes its node, its edges and its mapping row's
+meaning with it. The mapping row itself is yours to delete: nothing in this project edits a file
+the owner wrote.
 
 ## How to read an ADR against the code
 
