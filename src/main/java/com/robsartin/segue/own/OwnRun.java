@@ -116,7 +116,106 @@ public final class OwnRun {
     Objects.requireNonNull(notes, "notes");
     return switch (batch) {
       case MintBatch mint -> mintFromReview(mint, notes);
+      case OwnCli.AssertFile file -> claimFromFile(file, notes);
     };
+  }
+
+  /**
+   * Claim every edge one file names.
+   *
+   * <p><b>All or nothing.</b> Any row the projection refuses - an endpoint it does not hold, a
+   * local id merged away, a canonical id a later merge corrected - refuses the whole run, before
+   * the report is printed and long before anything is appended. There is no edge-level retraction:
+   * a wrong edge is undone only by retracting one of its endpoints, which takes that entity's other
+   * edges with it. Half a file is the one outcome worth refusing outright.
+   *
+   * <p><b>A duplicate is skipped rather than refused</b>, and it is the owner's own claim repeated:
+   * both projections fold two identical owner edges to one, so the second row would add noise to a
+   * log that is never edited and nothing to the graph. Endpoints are folded through the shared
+   * {@link Equivalences} first, so a row naming a local id and a row naming the canonical id it was
+   * merged into are the same edge.
+   *
+   * <p><b>The corroboration sentence is said once, at the end</b>, rather than after each line: it
+   * is one fact about every owner edge in the run, and repeating it per row would bury the labels
+   * the report exists to show.
+   */
+  private List<LoggedAssertion> claimFromFile(OwnCli.AssertFile batch, Consumer<String> notes) {
+    List<ClaimFile.Row> rows = ClaimFile.read(batch.file());
+    List<LoggedAssertion> logged = log.readAll();
+    Equivalences merges = Equivalences.in(logged);
+    Map<String, String> present = labelsInTheProjection(logged, merges);
+    Set<String> held = ownerEdgesTheProjectionKeeps(logged, merges);
+
+    List<String> claiming = new ArrayList<>();
+    List<String> skipped = new ArrayList<>();
+    List<LoggedAssertion> claims = new ArrayList<>();
+    for (ClaimFile.Row row : rows) {
+      String from = labelOrRefuse(logged, present, merges, row.fromQid());
+      String to = labelOrRefuse(logged, present, merges, row.toQid());
+      if (held.contains(edgeKey(merges, row.fromQid(), row.typeCode(), row.toQid()))) {
+        skipped.add(
+            "skipping "
+                + row.fromQid()
+                + " "
+                + row.typeCode()
+                + " "
+                + row.toQid()
+                + " — the log already carries this edge, and the projection folds a duplicate to"
+                + " one");
+        continue;
+      }
+      claiming.add(
+          "claiming "
+              + row.fromQid()
+              + " \""
+              + from
+              + "\" "
+              + row.typeCode()
+              + " "
+              + row.toQid()
+              + " \""
+              + to
+              + "\"");
+      claims.add(OwnerEdge.claimed(row.fromQid(), row.toQid(), row.typeCode(), clock.instant()));
+    }
+    claiming.forEach(notes);
+    skipped.forEach(notes);
+    notes.accept(claims.size() + " to claim, " + skipped.size() + " to skip");
+    notes.accept(
+        "this is your own claim, not a source's: it is exempt from the corroboration count, so it"
+            + " routes but never vouches for anything (#92)");
+
+    if (batch.dryRun()) {
+      notes.accept("dry run: nothing was appended");
+      return List.copyOf(claims);
+    }
+    for (LoggedAssertion claim : claims) {
+      IngestService.claim(log, claim);
+    }
+    notes.accept(APPENDED);
+    return List.copyOf(claims);
+  }
+
+  /** Every owner edge the projection still keeps, keyed on its folded endpoints and its code. */
+  private static Set<String> ownerEdgesTheProjectionKeeps(
+      List<LoggedAssertion> logged, Equivalences merges) {
+    Retractions retractions = Retractions.in(logged);
+    Set<String> held = new LinkedHashSet<>();
+    for (int i = 0; i < logged.size(); i++) {
+      LoggedAssertion assertion = logged.get(i);
+      if (retractions.survives(i, assertion) && assertion instanceof OwnerEdge edge) {
+        held.add(edgeKey(merges, edge.fromQid(), edge.typeCode(), edge.toQid()));
+      }
+    }
+    return held;
+  }
+
+  private static String edgeKey(Equivalences merges, String from, String code, String to) {
+    return canonical(merges, from) + "|" + code + "|" + canonical(merges, to);
+  }
+
+  private static String canonical(Equivalences merges, String qid) {
+    return merges.canonicalByLocal().getOrDefault(qid, qid);
   }
 
   /**

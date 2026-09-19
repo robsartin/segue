@@ -161,6 +161,46 @@ class OwnCliTest {
   }
 
   @Test
+  @DisplayName("should read the claims file when asserting from a file")
+  void shouldReadTheClaimsFileWhenAssertingFromAFile() {
+    OwnCli.AssertFile batch =
+        (OwnCli.AssertFile) parse("assert", "--file", "/lists/claims.csv", "--dry-run");
+
+    assertThat(batch.file()).isEqualTo(Path.of("/lists/claims.csv"));
+    assertThat(batch.dryRun()).isTrue();
+    assertThat(batch.database()).isEqualTo(Path.of(DATABASE));
+  }
+
+  @Test
+  @DisplayName("should refuse when a single assert's endpoint is given with a claims file")
+  void shouldRefuseWhenASingleAssertsEndpointIsGivenWithAClaimsFile() {
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parse("assert", "--file", "/lists/claims.csv", "--from", "Q0903301"))
+        .withMessageContaining("--from")
+        .withMessageContaining("--file");
+  }
+
+  @Test
+  @DisplayName("should refuse when a single assert's type is given with a claims file")
+  void shouldRefuseWhenASingleAssertsTypeIsGivenWithAClaimsFile() {
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> parse("assert", "--file", "/lists/claims.csv", "--type", "AUTHORED"))
+        .withMessageContaining("--type")
+        .withMessageContaining("--file");
+  }
+
+  @Test
+  @DisplayName("should parse when the claims file does not exist, because parse opens nothing")
+  void shouldParseWhenTheClaimsFileDoesNotExist() {
+    Path absent = dir.resolve("no-claims-here.csv");
+
+    OwnCli.AssertFile batch = (OwnCli.AssertFile) parse("assert", "--file", absent.toString());
+
+    assertThat(batch.file()).isEqualTo(absent);
+    assertThat(Files.exists(absent)).isFalse();
+  }
+
+  @Test
   @DisplayName("should take no value when --dry-run is given")
   void shouldTakeNoValueWhenDryRunIsGiven() {
     assertThat(parse("mint", "--kind", "PERSON", "--label", "someone", "--dry-run").dryRun())

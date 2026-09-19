@@ -75,6 +75,7 @@ public final class OwnCli {
           + "> --label \"<name>\""
           + " | mint --review <review.csv> --mapping <mapping.csv>"
           + " | assert --from <Q…> --to <Q…> --type <CODE>"
+          + " | assert --file <claims.csv>"
           + " | merge --local <Q00…> --canonical <Q…>"
           + " --db <segue.db> [--dry-run]";
 
@@ -122,8 +123,8 @@ public final class OwnCli {
   /** One operation claiming one thing: {@link Mint}, {@link Assert} or {@link Merge}. */
   public sealed interface Single extends Options permits Mint, Assert, Merge {}
 
-  /** One operation claiming many things from a file: {@link MintBatch}, for now. */
-  public sealed interface Batch extends Options permits MintBatch {}
+  /** One operation claiming many things from a file: {@link MintBatch} or {@link AssertFile}. */
+  public sealed interface Batch extends Options permits MintBatch, AssertFile {}
 
   /** "This exists, and Wikidata does not model it." The id is allocated by {@link OwnRun}. */
   public record Mint(Path database, NodeKind kind, String label, boolean dryRun) implements Single {
@@ -177,6 +178,20 @@ public final class OwnCli {
       Objects.requireNonNull(database, "database");
       Objects.requireNonNull(review, "review");
       Objects.requireNonNull(mapping, "mapping");
+    }
+  }
+
+  /**
+   * "Every edge in this file, claimed in one run."
+   *
+   * <p>One kind of claim per run still: this is many owner edges, never a mint and an edge
+   * together. ADR 59's "one operation per run" is about the kind of claim, not the number of rows.
+   */
+  public record AssertFile(Path database, Path file, boolean dryRun) implements Batch {
+
+    public AssertFile {
+      Objects.requireNonNull(database, "database");
+      Objects.requireNonNull(file, "file");
     }
   }
 
@@ -280,12 +295,22 @@ public final class OwnCli {
     }
   }
 
-  private static Assert assertion(Path database, Map<String, String> values, boolean dryRun) {
+  private static Options assertion(Path database, Map<String, String> values, boolean dryRun) {
+    if (values.containsKey("--file")) {
+      return assertFile(database, values, dryRun);
+    }
     String from = qid(values, "--from");
     String to = qid(values, "--to");
     String type = required(values, "--type");
     refuseTheRest(values);
     return new Assert(database, from, to, type, dryRun);
+  }
+
+  private static AssertFile assertFile(Path database, Map<String, String> values, boolean dryRun) {
+    refuseTheOtherShape(values, "a single assert, not to --file", "--from", "--to", "--type");
+    String file = required(values, "--file");
+    refuseTheRest(values);
+    return new AssertFile(database, Path.of(file), dryRun);
   }
 
   private static Merge merge(Path database, Map<String, String> values, boolean dryRun) {

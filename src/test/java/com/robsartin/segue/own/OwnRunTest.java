@@ -49,6 +49,7 @@ class OwnRunTest {
 
   private static final String SOURCED = "Q0900101";
   private static final String OTHER_SOURCED = "Q0900102";
+  private static final String THIRD_SOURCED = "Q0900104";
   private static final String CANONICAL = "Q10000000900";
   private static final String OTHER_CANONICAL = "Q10000000901";
   private static final String NEVER_CLAIMED = "Q0900999";
@@ -87,8 +88,24 @@ class OwnRunTest {
     log.append(new NodeAssertion(qid, NodeKind.PERSON, label, SOURCE));
   }
 
+  private void seedSourcedNodes(String... qids) {
+    for (String qid : qids) {
+      seedASourcedEntity(qid, "Entity " + qid);
+    }
+  }
+
   private String mintOne(String label) {
     return ((LocalEntity) run.run(mint(label, false), notes::add)).qid();
+  }
+
+  private Path claimsFile(String... rows) throws Exception {
+    Path path = dir.resolve("claims.csv");
+    Files.writeString(path, "from,to,type\n" + String.join("\n", rows) + "\n");
+    return path;
+  }
+
+  private OwnCli.AssertFile claims(Path file, boolean dryRun) {
+    return new OwnCli.AssertFile(UNUSED, file, dryRun);
   }
 
   private static final String REVIEW_HEADER = "name,kind,status,qid,label,confidence,reason";
@@ -544,5 +561,120 @@ class OwnRunTest {
             "nothing sourced was invented: the owner's edge is an OwnerEdge, not an AssertionRecord")
         .isEmpty();
     assertThat(log.readAll()).hasSize(3);
+  }
+
+  @Test
+  @DisplayName("should claim every row in file order when asserting from a file")
+  void shouldClaimEveryRowInFileOrderWhenAssertingFromAFile() throws Exception {
+    seedSourcedNodes(SOURCED, OTHER_SOURCED, THIRD_SOURCED);
+    Path file =
+        claimsFile(
+            SOURCED + "," + OTHER_SOURCED + ",INFLUENCED_BY",
+            OTHER_SOURCED + "," + THIRD_SOURCED + ",INFLUENCED_BY");
+
+    List<LoggedAssertion> claims = run.runBatch(claims(file, false), notes::add);
+
+    assertThat(claims).hasSize(2);
+    assertThat(((OwnerEdge) claims.get(0)).fromQid()).isEqualTo(SOURCED);
+    assertThat(((OwnerEdge) claims.get(1)).fromQid()).isEqualTo(OTHER_SOURCED);
+    assertThat(log.readAll()).filteredOn(OwnerEdge.class::isInstance).hasSize(2);
+  }
+
+  @Test
+  @DisplayName("should report both labels on every line when asserting from a file")
+  void shouldReportBothLabelsOnEveryLineWhenAssertingFromAFile() throws Exception {
+    seedSourcedNodes(SOURCED, OTHER_SOURCED);
+    Path file = claimsFile(SOURCED + "," + OTHER_SOURCED + ",INFLUENCED_BY");
+
+    run.runBatch(claims(file, true), notes::add);
+
+    assertThat(notes)
+        .anyMatch(note -> note.startsWith("claiming " + SOURCED + " \""))
+        .anyMatch(
+            note ->
+                note.equals(
+                    "this is your own claim, not a source's: it is exempt from the corroboration"
+                        + " count, so it routes but never vouches for anything (#92)"));
+  }
+
+  @Test
+  @DisplayName(
+      "should refuse the whole run before any append when an endpoint is not in the projection")
+  void shouldRefuseTheWholeRunBeforeAnyAppendWhenAnEndpointIsNotInTheProjection() throws Exception {
+    seedSourcedNodes(SOURCED, OTHER_SOURCED);
+    Path file =
+        claimsFile(
+            SOURCED + "," + OTHER_SOURCED + ",INFLUENCED_BY",
+            SOURCED + "," + NEVER_CLAIMED + ",INFLUENCED_BY");
+
+    assertThatThrownBy(() -> run.runBatch(claims(file, false), notes::add))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("nothing in the projection is " + NEVER_CLAIMED);
+    assertThat(log.readAll()).noneMatch(OwnerEdge.class::isInstance);
+  }
+
+  @Test
+  @DisplayName("should skip a row the log already carries as an owner edge")
+  void shouldSkipARowTheLogAlreadyCarriesAsAnOwnerEdge() throws Exception {
+    seedSourcedNodes(SOURCED, OTHER_SOURCED, THIRD_SOURCED);
+    run.run(claim(SOURCED, OTHER_SOURCED, false), notes::add);
+    notes.clear();
+    Path file =
+        claimsFile(
+            SOURCED + "," + OTHER_SOURCED + ",INFLUENCED_BY",
+            SOURCED + "," + THIRD_SOURCED + ",INFLUENCED_BY");
+
+    List<LoggedAssertion> claimed = run.runBatch(claims(file, false), notes::add);
+
+    assertThat(claimed).hasSize(1);
+    assertThat(((OwnerEdge) claimed.get(0)).toQid()).isEqualTo(THIRD_SOURCED);
+    assertThat(notes)
+        .anyMatch(
+            note ->
+                note.startsWith("skipping " + SOURCED + " INFLUENCED_BY " + OTHER_SOURCED)
+                    && note.contains("the log already carries this edge"));
+  }
+
+  @Test
+  @DisplayName("should append nothing when the batch assert is a dry run")
+  void shouldAppendNothingWhenTheBatchAssertIsADryRun() throws Exception {
+    seedSourcedNodes(SOURCED, OTHER_SOURCED);
+    Path file = claimsFile(SOURCED + "," + OTHER_SOURCED + ",INFLUENCED_BY");
+
+    run.runBatch(claims(file, true), notes::add);
+
+    assertThat(log.readAll()).noneMatch(OwnerEdge.class::isInstance);
+    assertThat(notes).contains("dry run: nothing was appended");
+  }
+
+  @Test
+  @DisplayName("should refuse the whole run before any append when a row names a merged-away id")
+  void shouldRefuseTheWholeRunBeforeAnyAppendWhenARowNamesAMergedAwayId() throws Exception {
+    // Reuses what shouldRefuseWhenAnEndpointOfAnAssertionIsALocalIdAlreadyMerged already does to
+    // mint and merge a local id - the single-assert test for the same refusal is the shape to
+    // copy, sentence for sentence.
+    seedASourcedEntity(SOURCED, "Ines Marlow");
+    String minted = mintOne("A Self-Pressed Record");
+    run.run(merge(minted, false), notes::add);
+    notes.clear();
+    Path file = claimsFile(SOURCED + "," + minted + ",INFLUENCED_BY");
+
+    assertThatThrownBy(() -> run.runBatch(claims(file, false), notes::add))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining(minted)
+        .hasMessageContaining(CANONICAL);
+    assertThat(log.readAll()).noneMatch(OwnerEdge.class::isInstance);
+  }
+
+  @Test
+  @DisplayName("should refuse the whole file before any append when a row is malformed")
+  void shouldRefuseTheWholeFileBeforeAnyAppendWhenARowIsMalformed() throws Exception {
+    seedSourcedNodes(SOURCED, OTHER_SOURCED);
+    Path file = claimsFile(SOURCED + "," + OTHER_SOURCED + ",INFLUENCED_BY", SOURCED + ",ADMIRES");
+
+    assertThatThrownBy(() -> run.runBatch(claims(file, false), notes::add))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("line 3");
+    assertThat(log.readAll()).noneMatch(OwnerEdge.class::isInstance);
   }
 }
