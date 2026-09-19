@@ -93,6 +93,9 @@ class KnownListCensusTest {
     return census(file, Map.of());
   }
 
+  /** Minted, and never merged — LocalEntity.isLocal on the population it is named in (#344). */
+  private static final String UNMERGED_LOCAL = "Q0032";
+
   @Test
   @DisplayName("a file qid the graph holds no node for counts under named and not under in-graph")
   void shouldCountUnderNamedAndNotInTheGraphWhenTheFileNamesAQidTheGraphLacks() {
@@ -116,6 +119,53 @@ class KnownListCensusTest {
     assertThat(population.inTheGraphByKind())
         .as("the stand-in the fold gives the canonical side is a WORK")
         .containsEntry(NodeKind.WORK, 1);
+  }
+
+  @Test
+  @DisplayName(
+      "a minted, unmerged local id counts under in-the-graph and local, and not under"
+          + " never-expanded")
+  void shouldCountTheLocalIdUnderLocalAndNotUnderNeverExpandedWhenTheFileNamesOne() {
+    // Its own log: InventedCensus's LOCAL is merged onto CANONICAL in this file's shared fixture,
+    // which is the case this file already covers (the test above). This test needs one that
+    // stays unmerged.
+    //
+    // Deviation from the task-2 brief's own copy (#344 task report): the brief's fixture gave
+    // SEEN plain InventedCensus.node(...) provenance, which Expanded.in does not read as a seed
+    // (sourced()'s reference is "invented:1", not a qid$... shape) — so SEEN itself would count
+    // under neverExpanded and the assertion below (isZero()) would not hold regardless of this
+    // task's fix, for a reason unrelated to local exclusion. SEEN's own class javadoc already
+    // documents it as "Expanded, by a forward claim whose reference is a statement id" (true of
+    // the shared log() fixture); giving it that same expandedFrom(SEEN) provenance here makes
+    // this test's own log consistent with that and isolates the assertion to what it is testing.
+    List<LoggedAssertion> log =
+        List.of(
+            new NodeAssertion(
+                SEEN, NodeKind.PERSON, "An Invented Performer", InventedCensus.expandedFrom(SEEN)),
+            InventedCensus.minted(UNMERGED_LOCAL, "A Thing The Owner Minted And Kept"));
+    Fold fold = Fold.of(log, KindMapper::rederive);
+    LogProjection projection = LogProjection.of(log, fold);
+
+    KnownListCensus.Population population =
+        KnownListCensus.of(
+                new KnownListInput("known.csv", List.of(SEEN, UNMERGED_LOCAL)),
+                Expanded.in(log),
+                projection,
+                fold,
+                Map.of())
+            .fromFile();
+
+    assertThat(population.named()).isEqualTo(2);
+    assertThat(population.inTheGraph())
+        .as("minting records a node, same as any other claim")
+        .isEqualTo(2);
+    assertThat(population.local()).as("one of the two is local").isEqualTo(1);
+    assertThat(population.neverExpanded())
+        .as("the local one is excluded from the shortfall row — no source will ever answer for it")
+        .isZero();
+    assertThat(population.neverExpandedByKind())
+        .as("and it never reaches its kind's row either")
+        .containsEntry(NodeKind.WORK, 0);
   }
 
   @Test
