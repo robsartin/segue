@@ -5,17 +5,27 @@ import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
+import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.OwnerEdge;
 import com.robsartin.segue.domain.Retraction;
 import com.robsartin.segue.domain.Retractions;
 import com.robsartin.segue.domain.SameAs;
 import com.robsartin.segue.ingest.IngestService;
 import com.robsartin.segue.own.OwnCli.Assert;
+import com.robsartin.segue.own.OwnCli.Batch;
 import com.robsartin.segue.own.OwnCli.Merge;
 import com.robsartin.segue.own.OwnCli.Mint;
-import com.robsartin.segue.own.OwnCli.Options;
+import com.robsartin.segue.own.OwnCli.MintBatch;
+import com.robsartin.segue.own.OwnCli.Single;
 import com.robsartin.segue.port.AssertionLog;
+import com.robsartin.segue.support.ListKinds;
+import com.robsartin.segue.support.NameFold;
+import com.robsartin.segue.support.Outcome;
+import com.robsartin.segue.support.ResolutionFiles;
+import com.robsartin.segue.support.ResolutionRow;
+import java.nio.file.Files;
 import java.time.Clock;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -23,6 +33,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 /**
  * Read, report, then append - {@code RetractRun}'s order, for {@code RetractRun}'s reason.
@@ -51,6 +62,14 @@ import java.util.function.Consumer;
  */
 public final class OwnRun {
 
+  /**
+   * The last line of every run that appended, single or batch, and ADR 24's contract in one
+   * sentence: the log is read at boot, not watched.
+   */
+  static final String APPENDED =
+      "appended. The running graph is rebuilt from the log at the next boot (ADR 24), so a"
+          + " server that is up does not see this claim until it restarts";
+
   private final AssertionLog log;
   private final Clock clock;
 
@@ -66,7 +85,7 @@ public final class OwnRun {
    *     it is what lets {@code mint} answer with the id it allocated without the caller re-reading
    *     the log to guess which row is new
    */
-  public LoggedAssertion run(Options options, Consumer<String> notes) {
+  public LoggedAssertion run(Single options, Consumer<String> notes) {
     Objects.requireNonNull(options, "options");
     Objects.requireNonNull(notes, "notes");
 
@@ -83,10 +102,277 @@ public final class OwnRun {
       return claim;
     }
     IngestService.claim(log, claim);
-    notes.accept(
-        "appended. The running graph is rebuilt from the log at the next boot (ADR 24), so a"
-            + " server that is up does not see this claim until it restarts");
+    notes.accept(APPENDED);
     return claim;
+  }
+
+  /**
+   * Make every claim one file asks for, of one kind.
+   *
+   * @return the claims that were appended - or, on a dry run, the ones that would have been
+   */
+  public List<LoggedAssertion> runBatch(Batch batch, Consumer<String> notes) {
+    Objects.requireNonNull(batch, "batch");
+    Objects.requireNonNull(notes, "notes");
+    return switch (batch) {
+      case MintBatch mint -> mintFromReview(mint, notes);
+      case OwnCli.AssertFile file -> claimFromFile(file, notes);
+    };
+  }
+
+  /**
+   * Claim every edge one file names.
+   *
+   * <p><b>All or nothing.</b> Any row the projection refuses - an endpoint it does not hold, a
+   * local id merged away, a canonical id a later merge corrected - refuses the whole run, before
+   * the report is printed and long before anything is appended. There is no edge-level retraction:
+   * a wrong edge is undone only by retracting one of its endpoints, which takes that entity's other
+   * edges with it. Half a file is the one outcome worth refusing outright.
+   *
+   * <p><b>A duplicate is skipped rather than refused</b>, and it is the owner's own claim repeated:
+   * both projections fold two identical owner edges to one, so the second row would add noise to a
+   * log that is never edited and nothing to the graph. Endpoints are folded through the shared
+   * {@link Equivalences} first: an edge logged against a local id folds to its canonical, so a row
+   * naming the canonical id is recognised as the same edge.
+   *
+   * <p><b>The corroboration sentence is said once, at the end</b>, rather than after each line: it
+   * is one fact about every owner edge in the run, and repeating it per row would bury the labels
+   * the report exists to show.
+   */
+  private List<LoggedAssertion> claimFromFile(OwnCli.AssertFile batch, Consumer<String> notes) {
+    List<ClaimFile.Row> rows = ClaimFile.read(batch.file());
+    List<LoggedAssertion> logged = log.readAll();
+    Equivalences merges = Equivalences.in(logged);
+    Map<String, String> present = labelsInTheProjection(logged, merges);
+    Set<String> held = ownerEdgesTheProjectionKeeps(logged, merges);
+    Set<String> heldByTheProjection = Set.copyOf(held);
+
+    List<String> claiming = new ArrayList<>();
+    List<String> skipped = new ArrayList<>();
+    List<LoggedAssertion> claims = new ArrayList<>();
+    for (ClaimFile.Row row : rows) {
+      String from = labelOrRefuse(logged, present, merges, row.fromQid());
+      String to = labelOrRefuse(logged, present, merges, row.toQid());
+      String key = edgeKey(merges, row.fromQid(), row.typeCode(), row.toQid());
+      if (heldByTheProjection.contains(key)) {
+        skipped.add(
+            "skipping "
+                + row.fromQid()
+                + " "
+                + row.typeCode()
+                + " "
+                + row.toQid()
+                + " — the log already carries this edge, and the projection folds a duplicate to"
+                + " one");
+        continue;
+      }
+      if (held.contains(key)) {
+        skipped.add("skipping line " + row.line() + " — this file already claims this edge");
+        continue;
+      }
+      claiming.add(
+          "claiming "
+              + row.fromQid()
+              + " \""
+              + from
+              + "\" "
+              + row.typeCode()
+              + " "
+              + row.toQid()
+              + " \""
+              + to
+              + "\"");
+      claims.add(OwnerEdge.claimed(row.fromQid(), row.toQid(), row.typeCode(), clock.instant()));
+      held.add(key);
+    }
+    claiming.forEach(notes);
+    skipped.forEach(notes);
+    notes.accept(claims.size() + " to claim, " + skipped.size() + " to skip");
+    notes.accept(
+        "this is your own claim, not a source's: it is exempt from the corroboration count, so it"
+            + " routes but never vouches for anything (#92)");
+
+    if (batch.dryRun()) {
+      notes.accept("dry run: nothing was appended");
+      return List.copyOf(claims);
+    }
+    for (LoggedAssertion claim : claims) {
+      IngestService.claim(log, claim);
+    }
+    notes.accept(APPENDED);
+    return List.copyOf(claims);
+  }
+
+  /** Every owner edge the projection still keeps, keyed on its folded endpoints and its code. */
+  private static Set<String> ownerEdgesTheProjectionKeeps(
+      List<LoggedAssertion> logged, Equivalences merges) {
+    Retractions retractions = Retractions.in(logged);
+    Set<String> held = new LinkedHashSet<>();
+    for (int i = 0; i < logged.size(); i++) {
+      LoggedAssertion assertion = logged.get(i);
+      if (retractions.survives(i, assertion) && assertion instanceof OwnerEdge edge) {
+        held.add(edgeKey(merges, edge.fromQid(), edge.typeCode(), edge.toQid()));
+      }
+    }
+    return held;
+  }
+
+  private static String edgeKey(Equivalences merges, String from, String code, String to) {
+    return canonical(merges, from) + "|" + code + "|" + canonical(merges, to);
+  }
+
+  private static String canonical(Equivalences merges, String qid) {
+    return merges.canonicalByLocal().getOrDefault(qid, qid);
+  }
+
+  /**
+   * Mint every row of a review file Wikidata had nothing for.
+   *
+   * <p><b>Selection is {@code UNRESOLVED} and nothing else.</b> A {@code REVIEW} row carries a
+   * plausible candidate the adjudicator could not choose, and minting one would put a second entity
+   * in the graph for something that is already in Wikidata - which is the one mistake this tool
+   * cannot take back, since the log is append-only and never edited and the repair is a retraction
+   * plus a merge.
+   *
+   * <p><b>The report is whole before the first append</b>, {@code run}'s rule for {@code run}'s
+   * reason, and the appends are then interleaved per row: the claim, then its mapping row. A
+   * failure between the two leaves at most one mint without its mapping row, and the note naming
+   * the id it appended is what lets the owner write that row by hand.
+   */
+  private List<LoggedAssertion> mintFromReview(MintBatch batch, Consumer<String> notes) {
+    if (!Files.exists(batch.review())) {
+      throw new IllegalArgumentException(
+          "no review file at " + batch.review() + " — nothing to mint from");
+    }
+    List<ResolutionRow> review = ResolutionFiles.readRows(batch.review());
+    refuseAnUnregisteredKind(batch, review);
+
+    Set<String> resolved =
+        new LinkedHashSet<>(ResolutionFiles.alreadyResolved(List.of(batch.mapping())));
+    Map<String, String> mintedThisRun = new LinkedHashMap<>();
+    Set<String> named = everNamed(log.readAll());
+
+    List<ResolutionRow> rows = new ArrayList<>();
+    List<String> ids = new ArrayList<>();
+    List<String> skipped = new ArrayList<>();
+    int reviewRows = 0;
+    for (ResolutionRow row : review) {
+      if (row.confidence() == Outcome.REVIEW) {
+        reviewRows++;
+        continue;
+      }
+      if (row.confidence() != Outcome.UNRESOLVED) {
+        continue;
+      }
+      String fold = NameFold.fold(row.name());
+      if (resolved.contains(fold)) {
+        String firstName = mintedThisRun.get(fold);
+        skipped.add(
+            firstName == null
+                ? "skipping \"" + row.name() + "\" — the mapping already carries a row for it"
+                : "skipping \""
+                    + row.name()
+                    + "\" — already minted in this run under \""
+                    + firstName
+                    + "\"");
+        continue;
+      }
+      Set<NodeKind> kinds = ListKinds.nodeKinds(row.kind());
+      if (kinds.size() > 1) {
+        skipped.add(
+            "skipping \""
+                + row.name()
+                + "\" — the list kind "
+                + row.kind()
+                + " folds to more than one node kind, so this row is yours to type:"
+                + " ./gradlew ownClaim --args=\"mint --db "
+                + batch.database()
+                + " --kind <"
+                + kinds.stream().map(Enum::name).sorted().collect(Collectors.joining("|"))
+                + "> --label '"
+                + row.name()
+                + "'\"");
+        continue;
+      }
+      String qid = anIdNothingHasNamed(named);
+      named.add(qid);
+      rows.add(row);
+      ids.add(qid);
+      resolved.add(fold);
+      mintedThisRun.put(fold, row.name());
+      notes.accept(
+          "minting "
+              + qid
+              + " \""
+              + row.name()
+              + "\" ("
+              + kinds.iterator().next()
+              + ") — no source claims this entity; you are the source");
+    }
+    skipped.forEach(notes);
+    notes.accept(
+        rows.size()
+            + " to mint, "
+            + skipped.size()
+            + " to skip; "
+            + reviewRows
+            + " REVIEW rows are not minted — each carries a plausible candidate, and minting one"
+            + " would duplicate a real item");
+
+    List<LoggedAssertion> claims = new ArrayList<>();
+    for (int i = 0; i < rows.size(); i++) {
+      claims.add(
+          LocalEntity.minted(
+              ids.get(i),
+              ListKinds.nodeKinds(rows.get(i).kind()).iterator().next(),
+              rows.get(i).name(),
+              clock.instant()));
+    }
+    if (batch.dryRun()) {
+      notes.accept("dry run: nothing was appended");
+      return List.copyOf(claims);
+    }
+    for (int i = 0; i < claims.size(); i++) {
+      IngestService.claim(log, claims.get(i));
+      notes.accept("appended " + ids.get(i));
+      ResolutionFiles.append(batch.mapping(), List.of(mappingRow(rows.get(i), ids.get(i))));
+    }
+    notes.accept(APPENDED);
+    return List.copyOf(claims);
+  }
+
+  /**
+   * Refuse the whole file, before any report and any append, for a kind the table has never seen.
+   *
+   * <p>Not a skip: {@code support.ListKinds} holds every kind the seed tool writes, so a row
+   * carrying another one means this is not a file {@code resolveNames} wrote, and nothing else in
+   * the file can be trusted to be what it looks like either.
+   */
+  private static void refuseAnUnregisteredKind(MintBatch batch, List<ResolutionRow> review) {
+    for (ResolutionRow row : review) {
+      if (ListKinds.nodeKinds(row.kind()).isEmpty()) {
+        throw new IllegalArgumentException(
+            batch.review()
+                + " has the row \""
+                + row.name()
+                + "\" with the list kind "
+                + row.kind()
+                + ", which support.ListKinds does not register — this is not a file resolveNames"
+                + " wrote; nothing was appended");
+      }
+    }
+  }
+
+  /** The mapping row one mint writes: the review row, plus the id and ADR 59's reason. */
+  private static ResolutionRow mappingRow(ResolutionRow row, String qid) {
+    return new ResolutionRow(
+        row.name(),
+        row.kind(),
+        row.status(),
+        qid,
+        row.name(),
+        Outcome.MINTED,
+        "minted by the owner — no Wikidata candidate under any spelling (ADR 59)");
   }
 
   /**
@@ -98,7 +384,7 @@ public final class OwnRun {
    * ownerClaimsAreMadeThroughTheirFactories}).
    */
   private LoggedAssertion mintEntity(List<LoggedAssertion> logged, Mint mint, Consumer<String> n) {
-    String qid = anIdNothingHasNamed(logged);
+    String qid = anIdNothingHasNamed(everNamed(logged));
     n.accept(
         "minting "
             + qid
@@ -338,9 +624,11 @@ public final class OwnRun {
    * digits after {@code Q00}, and {@code Q0010} and {@code Q00010} parse to the same number while
    * being different ids - so a padded id written by hand would collide silently. Asking whether a
    * candidate is taken cannot: it compares the strings that actually go in the column.
+   *
+   * <p>A batch passes the same set through every row, adding each id as it allocates it, so two
+   * mints in one run cannot be handed the same number.
    */
-  private static String anIdNothingHasNamed(List<LoggedAssertion> logged) {
-    Set<String> named = everNamed(logged);
+  private static String anIdNothingHasNamed(Set<String> named) {
     int n = 1;
     while (named.contains("Q00" + n)) {
       n++;

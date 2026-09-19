@@ -1,5 +1,7 @@
 package com.robsartin.segue.seed;
 
+import com.robsartin.segue.support.ResolutionFiles;
+import com.robsartin.segue.support.ResolutionRow;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -44,7 +46,7 @@ public final class SeedRun {
   public SeedSummary run(List<SeedRow> rows) {
     Objects.requireNonNull(rows, "rows");
     List<NameGroup> groups = NameGroup.of(rows);
-    Set<String> done = SeedFiles.alreadyResolved(List.of(mapping, review));
+    Set<String> done = ResolutionFiles.alreadyResolved(List.of(mapping, review));
     List<NameGroup> outstanding =
         groups.stream().filter(group -> !done.contains(group.key())).toList();
     log.info(
@@ -68,11 +70,11 @@ public final class SeedRun {
         }
         // One output row per input line, so several spellings of one act each carry the answer.
         for (SeedRow row : group.rows()) {
-          (decision.accepted() ? acceptedRows : reviewRows).add(ResolutionRow.of(row, decision));
+          (decision.accepted() ? acceptedRows : reviewRows).add(rowFor(row, decision));
         }
       }
-      SeedFiles.append(mapping, acceptedRows);
-      SeedFiles.append(review, reviewRows);
+      ResolutionFiles.append(mapping, acceptedRows);
+      ResolutionFiles.append(review, reviewRows);
       log.info(
           "resolved {} of {} acts",
           Math.min(from + chunkSize, outstanding.size()),
@@ -85,5 +87,22 @@ public final class SeedRun {
         accepted,
         needsReview,
         unresolved);
+  }
+
+  /**
+   * One output row from one input row and what was decided about it.
+   *
+   * <p>Here rather than on {@link ResolutionRow}, which moved to {@code support} in #342: this
+   * names {@code SeedRow} and {@code Decision}, which are this tool's and stay here.
+   */
+  private static ResolutionRow rowFor(SeedRow row, Decision decision) {
+    return new ResolutionRow(
+        row.name(),
+        row.kind(),
+        row.status(),
+        decision.qid(),
+        decision.label(),
+        decision.outcome(),
+        decision.reason());
   }
 }

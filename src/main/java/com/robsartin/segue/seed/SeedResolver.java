@@ -116,6 +116,11 @@ public final class SeedResolver {
       case ACCEPTED -> 2;
       case REVIEW -> 1;
       case UNRESOLVED -> 0;
+      // Decision is constructed only by Adjudicator.decide, which never returns MINTED — that
+      // outcome is written by the owner-claim tool directly onto a ResolutionRow, never through
+      // this type (#342). An exhaustive switch still has to name it; naming it as unreachable is
+      // more honest than picking it a rank in a comparison it can never enter.
+      case MINTED -> throw new IllegalStateException("a seed-tool Decision can never carry MINTED");
     };
   }
 }

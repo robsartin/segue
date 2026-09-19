@@ -139,8 +139,8 @@ rate/     The rating deck (ADR 46): a loopback page on 127.0.0.1:8090 that deals
           constructs what it writes. No un-rate: AffinityStore has no delete, so going back
           re-rates rather than withdrawing.
 ingest/   IngestService (the only write path) and GraphProjector (boot replay).
-support/  Plain-Java cross-cutting helpers with no project dependencies of their
-          own — UuidV7, the RFC 9562 v7 id generator used for request correlation;
+support/  Plain-Java cross-cutting helpers shared by more than one dev-side tool — that is the
+          criterion, not freedom from project dependencies: UuidV7, the RFC 9562 v7 id generator used for request correlation;
           QidList, the QID-file reader `export`, `recommend` and `rate` share (it moved here
           from `export` in ADR 45, so a shared reader would not force a dependency between
           siblings that must not have one — `rate` depending on `recommend` directly, for its
@@ -150,7 +150,9 @@ support/  Plain-Java cross-cutting helpers with no project dependencies of their
           basename-and-ids reading of the known-list file `census` and `expand` share, which moved
           here from `census` in #313 for the same reason again — the expander may not depend on a
           sibling dev tool, so a reader neither owns is the only way the two read one file by one
-          rule. NOT an exhaustive list — DefaultDatabase and RequiredDatabase live here too, and
+          rule. Since #342 ListKinds lives here too, reading `domain.NodeKind` because a list's
+          `kind` column resolves to a node kind, so `support` now has one `domain` import.
+          NOT an exhaustive list — DefaultDatabase and RequiredDatabase live here too, and
           the developer guide's package table is the maintained one.
 mcp/      The six MCP tools (EntityTools, GraphTools, TasteTools), SegueService
           (the facade they call), CorrelationId. Spring-only package (ADR 32) —

@@ -1,5 +1,6 @@
 package com.robsartin.segue.seed;
 
+import com.robsartin.segue.support.Outcome;
 import java.util.Objects;
 
 /**

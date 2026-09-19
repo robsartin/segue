@@ -14,6 +14,10 @@ import com.robsartin.segue.domain.Retraction;
 import com.robsartin.segue.domain.SameAs;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
+import com.robsartin.segue.support.Outcome;
+import com.robsartin.segue.support.ResolutionFiles;
+import com.robsartin.segue.support.ResolutionRow;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
@@ -24,6 +28,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * The owner-claim tool, against the real {@code SqliteAssertionLog} the way {@code RetractRunTest}
@@ -36,12 +41,15 @@ import org.junit.jupiter.api.Test;
  */
 class OwnRunTest {
 
+  @TempDir Path dir;
+
   private static final Instant NOW = Instant.parse("2026-08-31T20:00:00Z");
   private static final Provenance SOURCE =
       new Provenance("invented", "invented:1", Instant.parse("2026-01-01T00:00:00Z"), 1.0);
 
   private static final String SOURCED = "Q0900101";
   private static final String OTHER_SOURCED = "Q0900102";
+  private static final String THIRD_SOURCED = "Q0900104";
   private static final String CANONICAL = "Q10000000900";
   private static final String OTHER_CANONICAL = "Q10000000901";
   private static final String NEVER_CLAIMED = "Q0900999";
@@ -80,8 +88,198 @@ class OwnRunTest {
     log.append(new NodeAssertion(qid, NodeKind.PERSON, label, SOURCE));
   }
 
+  private void seedSourcedNodes(String... qids) {
+    for (String qid : qids) {
+      seedASourcedEntity(qid, "Entity " + qid);
+    }
+  }
+
   private String mintOne(String label) {
     return ((LocalEntity) run.run(mint(label, false), notes::add)).qid();
+  }
+
+  private Path claimsFile(String... rows) throws Exception {
+    Path path = dir.resolve("claims.csv");
+    Files.writeString(path, "from,to,type\n" + String.join("\n", rows) + "\n");
+    return path;
+  }
+
+  private OwnCli.AssertFile claims(Path file, boolean dryRun) {
+    return new OwnCli.AssertFile(UNUSED, file, dryRun);
+  }
+
+  private static final String REVIEW_HEADER = "name,kind,status,qid,label,confidence,reason";
+
+  private Path reviewFile(String... rows) throws Exception {
+    Path path = dir.resolve("review.csv");
+    Files.writeString(path, REVIEW_HEADER + "\n" + String.join("\n", rows) + "\n");
+    return path;
+  }
+
+  private OwnCli.MintBatch batch(Path review, Path mapping, boolean dryRun) {
+    return new OwnCli.MintBatch(UNUSED, review, mapping, dryRun);
+  }
+
+  @Test
+  @DisplayName("should mint only the unresolved rows when minting from a review file")
+  void shouldMintOnlyTheUnresolvedRowsWhenMintingFromAReviewFile() throws Exception {
+    Path review =
+        reviewFile(
+            "Ashgrove Rounders,author,,,,UNRESOLVED,no Wikidata candidate under any spelling",
+            "Velvet Ossuary,author,,Q0903301,Velvet Ossuary,REVIEW,two plausible candidates",
+            "Bramble Sons,author,,Q0903302,Bramble Sons,ACCEPTED,agreed");
+    Path mapping = dir.resolve("mapping.csv");
+
+    List<LoggedAssertion> claims = run.runBatch(batch(review, mapping, true), notes::add);
+
+    assertThat(claims).singleElement().isInstanceOf(LocalEntity.class);
+    assertThat(((LocalEntity) claims.get(0)).label()).isEqualTo("Ashgrove Rounders");
+    assertThat(((LocalEntity) claims.get(0)).kind()).isEqualTo(NodeKind.PERSON);
+    assertThat(notes)
+        .anyMatch(
+            note ->
+                note.contains("Ashgrove Rounders")
+                    && note.contains(
+                        "(PERSON) — no source claims this entity; you are the source"));
+    assertThat(notes).noneMatch(note -> note.startsWith("minting") && note.contains("Velvet"));
+  }
+
+  @Test
+  @DisplayName("should skip a name the mapping already carries when minting from a review file")
+  void shouldSkipANameTheMappingAlreadyCarriesWhenMintingFromAReviewFile() throws Exception {
+    Path review =
+        reviewFile(
+            "Ashgrove Rounders,author,,,,UNRESOLVED,no Wikidata candidate under any spelling");
+    Path mapping = dir.resolve("mapping.csv");
+    // The mapping's spelling differs; the fold is what makes it the same act.
+    Files.writeString(
+        mapping,
+        REVIEW_HEADER
+            + "\nThe Ashgrove Rounders,author,,Q001,The Ashgrove Rounders,MINTED,minted\n");
+
+    List<LoggedAssertion> claims = run.runBatch(batch(review, mapping, true), notes::add);
+
+    assertThat(claims).isEmpty();
+    assertThat(notes)
+        .contains("skipping \"Ashgrove Rounders\" — the mapping already carries a row for it");
+  }
+
+  @Test
+  @DisplayName(
+      "should print the single-mint command when the list kind folds to more than one node kind")
+  void shouldPrintTheSingleMintCommandWhenTheListKindFoldsToMoreThanOneNodeKind() throws Exception {
+    Path review =
+        reviewFile(
+            "Velvet Ossuary,musician,,,,UNRESOLVED,no Wikidata candidate under any spelling");
+    Path mapping = dir.resolve("mapping.csv");
+
+    List<LoggedAssertion> claims = run.runBatch(batch(review, mapping, true), notes::add);
+
+    assertThat(claims).isEmpty();
+    assertThat(notes)
+        .anyMatch(
+            note ->
+                note.startsWith("skipping \"Velvet Ossuary\"")
+                    && note.contains("--kind <GROUP|PERSON>")
+                    && note.contains("--label 'Velvet Ossuary'"));
+  }
+
+  @Test
+  @DisplayName("should refuse the whole run before any append when a list kind is not registered")
+  void shouldRefuseTheWholeRunBeforeAnyAppendWhenAListKindIsNotRegistered() throws Exception {
+    Path review =
+        reviewFile(
+            "Ashgrove Rounders,author,,,,UNRESOLVED,no Wikidata candidate under any spelling",
+            "A Luthier,luthier,,,,UNRESOLVED,no Wikidata candidate under any spelling");
+    Path mapping = dir.resolve("mapping.csv");
+
+    assertThatThrownBy(() -> run.runBatch(batch(review, mapping, false), notes::add))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("A Luthier")
+        .hasMessageContaining("luthier")
+        .hasMessageContaining("nothing was appended");
+    assertThat(log.readAll()).isEmpty();
+    assertThat(Files.exists(mapping)).isFalse();
+  }
+
+  @Test
+  @DisplayName("should allocate ids in sequence when several rows are minted")
+  void shouldAllocateIdsInSequenceWhenSeveralRowsAreMinted() throws Exception {
+    Path review =
+        reviewFile(
+            "Ashgrove Rounders,author,,,,UNRESOLVED,none",
+            "Bramble Sons,author,,,,UNRESOLVED,none",
+            "Halcyon Press,org,,,,UNRESOLVED,none");
+    Path mapping = dir.resolve("mapping.csv");
+
+    List<LoggedAssertion> claims = run.runBatch(batch(review, mapping, false), notes::add);
+
+    assertThat(claims).hasSize(3);
+    assertThat(claims.stream().map(c -> ((LocalEntity) c).qid()).toList())
+        .containsExactly("Q001", "Q002", "Q003");
+  }
+
+  @Test
+  @DisplayName("should write a MINTED mapping row for each mint when the run is not a dry run")
+  void shouldWriteAMintedMappingRowForEachMintWhenTheRunIsNotADryRun() throws Exception {
+    Path review = reviewFile("Ashgrove Rounders,author,ACTIVE,,,UNRESOLVED,none");
+    Path mapping = dir.resolve("mapping.csv");
+
+    run.runBatch(batch(review, mapping, false), notes::add);
+
+    assertThat(ResolutionFiles.readRows(mapping))
+        .containsExactly(
+            new ResolutionRow(
+                "Ashgrove Rounders",
+                "author",
+                "ACTIVE",
+                "Q001",
+                "Ashgrove Rounders",
+                Outcome.MINTED,
+                "minted by the owner — no Wikidata candidate under any spelling (ADR 59)"));
+    assertThat(notes).contains("appended Q001");
+  }
+
+  @Test
+  @DisplayName("should mint once when two review rows fold to the same name within one run")
+  void shouldMintOnceWhenTwoReviewRowsFoldToTheSameNameWithinOneRun() throws Exception {
+    Path review =
+        reviewFile(
+            "Ashgrove Rounders,author,,,,UNRESOLVED,no Wikidata candidate under any spelling",
+            "ASHGROVE ROUNDERS,author,,,,UNRESOLVED,no Wikidata candidate under any spelling");
+    Path mapping = dir.resolve("mapping.csv");
+
+    List<LoggedAssertion> claims = run.runBatch(batch(review, mapping, false), notes::add);
+
+    assertThat(claims).singleElement().isInstanceOf(LocalEntity.class);
+    assertThat(ResolutionFiles.readRows(mapping)).hasSize(1);
+    assertThat(notes)
+        .contains(
+            "skipping \"ASHGROVE ROUNDERS\" — already minted in this run under \"Ashgrove"
+                + " Rounders\"");
+  }
+
+  @Test
+  @DisplayName("should append nothing when the batch mint is a dry run")
+  void shouldAppendNothingWhenTheBatchMintIsADryRun() throws Exception {
+    Path review = reviewFile("Ashgrove Rounders,author,,,,UNRESOLVED,none");
+    Path mapping = dir.resolve("mapping.csv");
+
+    run.runBatch(batch(review, mapping, true), notes::add);
+
+    assertThat(log.readAll()).isEmpty();
+    assertThat(Files.exists(mapping)).isFalse();
+    assertThat(notes).contains("dry run: nothing was appended");
+  }
+
+  @Test
+  @DisplayName("should refuse when the review file is not there")
+  void shouldRefuseWhenTheReviewFileIsNotThere() {
+    Path absent = dir.resolve("no-such-review.csv");
+
+    assertThatThrownBy(() -> run.runBatch(batch(absent, dir.resolve("m.csv"), true), notes::add))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("no review file at");
   }
 
   @Test
@@ -382,5 +580,136 @@ class OwnRunTest {
             "nothing sourced was invented: the owner's edge is an OwnerEdge, not an AssertionRecord")
         .isEmpty();
     assertThat(log.readAll()).hasSize(3);
+  }
+
+  @Test
+  @DisplayName("should claim every row in file order when asserting from a file")
+  void shouldClaimEveryRowInFileOrderWhenAssertingFromAFile() throws Exception {
+    seedSourcedNodes(SOURCED, OTHER_SOURCED, THIRD_SOURCED);
+    Path file =
+        claimsFile(
+            SOURCED + "," + OTHER_SOURCED + ",INFLUENCED_BY",
+            OTHER_SOURCED + "," + THIRD_SOURCED + ",INFLUENCED_BY");
+
+    List<LoggedAssertion> claims = run.runBatch(claims(file, false), notes::add);
+
+    assertThat(claims).hasSize(2);
+    assertThat(((OwnerEdge) claims.get(0)).fromQid()).isEqualTo(SOURCED);
+    assertThat(((OwnerEdge) claims.get(1)).fromQid()).isEqualTo(OTHER_SOURCED);
+    assertThat(log.readAll()).filteredOn(OwnerEdge.class::isInstance).hasSize(2);
+  }
+
+  @Test
+  @DisplayName("should report both labels on every line when asserting from a file")
+  void shouldReportBothLabelsOnEveryLineWhenAssertingFromAFile() throws Exception {
+    seedSourcedNodes(SOURCED, OTHER_SOURCED);
+    Path file = claimsFile(SOURCED + "," + OTHER_SOURCED + ",INFLUENCED_BY");
+
+    run.runBatch(claims(file, true), notes::add);
+
+    assertThat(notes)
+        .anyMatch(note -> note.startsWith("claiming " + SOURCED + " \""))
+        .anyMatch(
+            note ->
+                note.equals(
+                    "this is your own claim, not a source's: it is exempt from the corroboration"
+                        + " count, so it routes but never vouches for anything (#92)"));
+  }
+
+  @Test
+  @DisplayName(
+      "should refuse the whole run before any append when an endpoint is not in the projection")
+  void shouldRefuseTheWholeRunBeforeAnyAppendWhenAnEndpointIsNotInTheProjection() throws Exception {
+    seedSourcedNodes(SOURCED, OTHER_SOURCED);
+    Path file =
+        claimsFile(
+            SOURCED + "," + OTHER_SOURCED + ",INFLUENCED_BY",
+            SOURCED + "," + NEVER_CLAIMED + ",INFLUENCED_BY");
+
+    assertThatThrownBy(() -> run.runBatch(claims(file, false), notes::add))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("nothing in the projection is " + NEVER_CLAIMED);
+    assertThat(log.readAll()).noneMatch(OwnerEdge.class::isInstance);
+  }
+
+  @Test
+  @DisplayName("should skip a row the log already carries as an owner edge")
+  void shouldSkipARowTheLogAlreadyCarriesAsAnOwnerEdge() throws Exception {
+    seedSourcedNodes(SOURCED, OTHER_SOURCED, THIRD_SOURCED);
+    run.run(claim(SOURCED, OTHER_SOURCED, false), notes::add);
+    notes.clear();
+    Path file =
+        claimsFile(
+            SOURCED + "," + OTHER_SOURCED + ",INFLUENCED_BY",
+            SOURCED + "," + THIRD_SOURCED + ",INFLUENCED_BY");
+
+    List<LoggedAssertion> claimed = run.runBatch(claims(file, false), notes::add);
+
+    assertThat(claimed).hasSize(1);
+    assertThat(((OwnerEdge) claimed.get(0)).toQid()).isEqualTo(THIRD_SOURCED);
+    assertThat(notes)
+        .anyMatch(
+            note ->
+                note.startsWith("skipping " + SOURCED + " INFLUENCED_BY " + OTHER_SOURCED)
+                    && note.contains("the log already carries this edge"));
+  }
+
+  @Test
+  @DisplayName("should skip a duplicate row within one file when asserting from a file")
+  void shouldSkipADuplicateRowWithinOneFileWhenAssertingFromAFile() throws Exception {
+    seedSourcedNodes(SOURCED, OTHER_SOURCED);
+    Path file =
+        claimsFile(
+            SOURCED + "," + OTHER_SOURCED + ",INFLUENCED_BY",
+            SOURCED + "," + OTHER_SOURCED + ",INFLUENCED_BY");
+
+    List<LoggedAssertion> claimed = run.runBatch(claims(file, false), notes::add);
+
+    assertThat(claimed).hasSize(1);
+    assertThat(notes).filteredOn(note -> note.startsWith("claiming " + SOURCED)).hasSize(1);
+    assertThat(notes).contains("skipping line 3 — this file already claims this edge");
+  }
+
+  @Test
+  @DisplayName("should append nothing when the batch assert is a dry run")
+  void shouldAppendNothingWhenTheBatchAssertIsADryRun() throws Exception {
+    seedSourcedNodes(SOURCED, OTHER_SOURCED);
+    Path file = claimsFile(SOURCED + "," + OTHER_SOURCED + ",INFLUENCED_BY");
+
+    run.runBatch(claims(file, true), notes::add);
+
+    assertThat(log.readAll()).noneMatch(OwnerEdge.class::isInstance);
+    assertThat(notes).contains("dry run: nothing was appended");
+  }
+
+  @Test
+  @DisplayName("should refuse the whole run before any append when a row names a merged-away id")
+  void shouldRefuseTheWholeRunBeforeAnyAppendWhenARowNamesAMergedAwayId() throws Exception {
+    // Reuses what shouldRefuseWhenAnEndpointOfAnAssertionIsALocalIdAlreadyMerged already does to
+    // mint and merge a local id - the single-assert test for the same refusal is the shape to
+    // copy, sentence for sentence.
+    seedASourcedEntity(SOURCED, "Ines Marlow");
+    String minted = mintOne("A Self-Pressed Record");
+    run.run(merge(minted, false), notes::add);
+    notes.clear();
+    Path file = claimsFile(SOURCED + "," + minted + ",INFLUENCED_BY");
+
+    assertThatThrownBy(() -> run.runBatch(claims(file, false), notes::add))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining(minted)
+        .hasMessageContaining(CANONICAL);
+    assertThat(log.readAll()).noneMatch(OwnerEdge.class::isInstance);
+  }
+
+  @Test
+  @DisplayName("should refuse the whole file before any append when a row is malformed")
+  void shouldRefuseTheWholeFileBeforeAnyAppendWhenARowIsMalformed() throws Exception {
+    seedSourcedNodes(SOURCED, OTHER_SOURCED);
+    Path file = claimsFile(SOURCED + "," + OTHER_SOURCED + ",INFLUENCED_BY", SOURCED + ",ADMIRES");
+
+    assertThatThrownBy(() -> run.runBatch(claims(file, false), notes::add))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("line 3");
+    assertThat(log.readAll()).noneMatch(OwnerEdge.class::isInstance);
   }
 }

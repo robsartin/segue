@@ -73,7 +73,9 @@ public final class OwnCli {
       "usage: mint --kind <"
           + kinds()
           + "> --label \"<name>\""
+          + " | mint --review <review.csv> --mapping <mapping.csv>"
           + " | assert --from <Q…> --to <Q…> --type <CODE>"
+          + " | assert --file <claims.csv>"
           + " | merge --local <Q00…> --canonical <Q…>"
           + " --db <segue.db> [--dry-run]";
 
@@ -82,13 +84,13 @@ public final class OwnCli {
   /**
    * Which operation, its arguments, and whether to stop short of appending.
    *
-   * <p><b>Three records rather than one with six unused components.</b> The operations share only
-   * the database and the dry run; a single {@code Options} carrying {@code kind}, {@code label},
-   * {@code fromQid}, {@code toQid}, {@code typeCode}, {@code localQid} and {@code canonicalQid}
-   * would leave five of seven null on every run and put the question "which of these is set?" in
-   * {@code OwnRun} rather than at the command line where it was answered. Sealed, so {@code
-   * OwnRun}'s switch is exhaustive and a fourth operation cannot be added without deciding what it
-   * does.
+   * <p><b>One record per operation rather than one record with unused components.</b> The
+   * operations share only the database and the dry run; a single {@code Options} carrying {@code
+   * kind}, {@code label}, {@code fromQid}, {@code toQid}, {@code typeCode}, {@code localQid} and
+   * {@code canonicalQid} would leave most of those null on every run and put the question "which of
+   * these is set?" in {@code OwnRun} rather than at the command line where it was answered. Sealed,
+   * so {@code OwnRun}'s switch is exhaustive and an operation cannot be added without deciding what
+   * it does.
    *
    * <p>{@code database} — the log to append to. Required, and named by {@code --db} on every
    * invocation: this tool has no default, because the default is what turned {@code ./gradlew own}
@@ -103,17 +105,29 @@ public final class OwnCli {
    * <p>{@code dryRun} — report what would be claimed and append nothing. Not decoration: every
    * operation here appends a row to a log that is never edited, and two of the three name qids by
    * hand.
+   *
+   * <p><b>{@link Single} and {@link Batch}, because one run claims one thing or many</b> (#342). A
+   * single operation goes to {@code OwnRun.run}, which returns the one claim it appended; a file
+   * goes to {@code OwnRun.runBatch}, which returns a list. Splitting the hierarchy is what keeps
+   * both switches total with no {@code default} arm: a fourth single operation or a third batch
+   * shape fails to compile until it is decided what it does, which is the reason {@code Options}
+   * was sealed in the first place.
    */
-  public sealed interface Options {
+  public sealed interface Options permits Single, Batch {
 
     Path database();
 
     boolean dryRun();
   }
 
+  /** One operation claiming one thing: {@link Mint}, {@link Assert} or {@link Merge}. */
+  public sealed interface Single extends Options permits Mint, Assert, Merge {}
+
+  /** One operation claiming many things from a file: {@link MintBatch} or {@link AssertFile}. */
+  public sealed interface Batch extends Options permits MintBatch, AssertFile {}
+
   /** "This exists, and Wikidata does not model it." The id is allocated by {@link OwnRun}. */
-  public record Mint(Path database, NodeKind kind, String label, boolean dryRun)
-      implements Options {
+  public record Mint(Path database, NodeKind kind, String label, boolean dryRun) implements Single {
 
     public Mint {
       Objects.requireNonNull(database, "database");
@@ -129,7 +143,7 @@ public final class OwnCli {
    * keyword, and not renameable to dodge that: the word is what the operator types.
    */
   public record Assert(Path database, String fromQid, String toQid, String typeCode, boolean dryRun)
-      implements Options {
+      implements Single {
 
     public Assert {
       Objects.requireNonNull(database, "database");
@@ -141,12 +155,43 @@ public final class OwnCli {
 
   /** "This local entity turned out to be that Wikidata item." */
   public record Merge(Path database, String localQid, String canonicalQid, boolean dryRun)
-      implements Options {
+      implements Single {
 
     public Merge {
       Objects.requireNonNull(database, "database");
       Objects.requireNonNull(localQid, "localQid");
       Objects.requireNonNull(canonicalQid, "canonicalQid");
+    }
+  }
+
+  /**
+   * "Everything in this review file that Wikidata had nothing for, minted in one run."
+   *
+   * <p>The two files together, never one: the review file says what to mint and the mapping file is
+   * both the skip list and where the minted ids go, so a run given one of them either mints what it
+   * has already minted or mints into nowhere.
+   */
+  public record MintBatch(Path database, Path review, Path mapping, boolean dryRun)
+      implements Batch {
+
+    public MintBatch {
+      Objects.requireNonNull(database, "database");
+      Objects.requireNonNull(review, "review");
+      Objects.requireNonNull(mapping, "mapping");
+    }
+  }
+
+  /**
+   * "Every edge in this file, claimed in one run."
+   *
+   * <p>One kind of claim per run still: this is many owner edges, never a mint and an edge
+   * together. ADR 59's "one operation per run" is about the kind of claim, not the number of rows.
+   */
+  public record AssertFile(Path database, Path file, boolean dryRun) implements Batch {
+
+    public AssertFile {
+      Objects.requireNonNull(database, "database");
+      Objects.requireNonNull(file, "file");
     }
   }
 
@@ -201,7 +246,14 @@ public final class OwnCli {
     };
   }
 
-  private static Mint mint(Path database, Map<String, String> values, boolean dryRun) {
+  private static Options mint(Path database, Map<String, String> values, boolean dryRun) {
+    // The batch is recognised by either of its two flags rather than by both, so naming one
+    // alone is refused as "you meant the batch and forgot a file" and never as "--kind is
+    // required" - which is the refusal a single mint would give, naming a flag that belongs to
+    // the other shape entirely.
+    if (values.containsKey("--review") || values.containsKey("--mapping")) {
+      return mintBatch(database, values, dryRun);
+    }
     NodeKind kind = kind(required(values, "--kind"));
     String label = required(values, "--label");
     if (label.isBlank()) {
@@ -211,12 +263,54 @@ public final class OwnCli {
     return new Mint(database, kind, label, dryRun);
   }
 
-  private static Assert assertion(Path database, Map<String, String> values, boolean dryRun) {
+  private static MintBatch mintBatch(Path database, Map<String, String> values, boolean dryRun) {
+    refuseTheOtherShape(
+        values, "a single mint, not to --review and --mapping", "--kind", "--label");
+    String review = values.remove("--review");
+    String mapping = values.remove("--mapping");
+    if (review == null || mapping == null) {
+      throw usage(
+          "--review and --mapping are required together — "
+              + (review == null ? "--review" : "--mapping")
+              + " was not given");
+    }
+    refuseTheRest(values);
+    return new MintBatch(database, Path.of(review), Path.of(mapping), dryRun);
+  }
+
+  /**
+   * Refuse a flag belonging to the other shape of the same operation.
+   *
+   * <p>{@link #refuseTheRest} would refuse these too, as "unknown option --kind for this operation"
+   * - and that sentence is wrong here, because {@code --kind} is an option for this operation, in
+   * its other shape. Naming both shapes is what tells the operator which of the two they typed half
+   * of.
+   */
+  private static void refuseTheOtherShape(
+      Map<String, String> values, String instead, String... flags) {
+    for (String flag : flags) {
+      if (values.containsKey(flag)) {
+        throw usage(flag + " belongs to " + instead);
+      }
+    }
+  }
+
+  private static Options assertion(Path database, Map<String, String> values, boolean dryRun) {
+    if (values.containsKey("--file")) {
+      return assertFile(database, values, dryRun);
+    }
     String from = qid(values, "--from");
     String to = qid(values, "--to");
     String type = required(values, "--type");
     refuseTheRest(values);
     return new Assert(database, from, to, type, dryRun);
+  }
+
+  private static AssertFile assertFile(Path database, Map<String, String> values, boolean dryRun) {
+    refuseTheOtherShape(values, "a single assert, not to --file", "--from", "--to", "--type");
+    String file = required(values, "--file");
+    refuseTheRest(values);
+    return new AssertFile(database, Path.of(file), dryRun);
   }
 
   private static Merge merge(Path database, Map<String, String> values, boolean dryRun) {
@@ -311,7 +405,11 @@ public final class OwnCli {
     }
 
     try (AssertionLog assertions = new SqliteAssertionLog(options.database())) {
-      new OwnRun(assertions, Clock.systemUTC()).run(options, log::info);
+      OwnRun runner = new OwnRun(assertions, Clock.systemUTC());
+      switch (options) {
+        case Single single -> runner.run(single, log::info);
+        case Batch batch -> runner.runBatch(batch, log::info);
+      }
     }
   }
 }
