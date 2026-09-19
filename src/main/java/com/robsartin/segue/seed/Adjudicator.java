@@ -1,6 +1,7 @@
 package com.robsartin.segue.seed;
 
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.support.NameFold;
 import com.robsartin.segue.support.Outcome;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -86,7 +87,9 @@ public final class Adjudicator {
     // CALLED this, the alias matches are set aside rather than outranked — otherwise the famous
     // one wins the sitelink margin every time.
     List<CandidateFacts> byLabel =
-        fitting.stream().filter(c -> Names.fold(c.label()).equals(Names.fold(query))).toList();
+        fitting.stream()
+            .filter(c -> NameFold.fold(c.label()).equals(NameFold.fold(query)))
+            .toList();
     if (!byLabel.isEmpty()) {
       fitting = byLabel;
     }
@@ -131,13 +134,13 @@ public final class Adjudicator {
 
   /** Candidates Wikidata itself calls by this name, whether as its label or as an alias. */
   private static List<CandidateFacts> byName(String query, List<CandidateFacts> candidates) {
-    String key = Names.fold(query);
+    String key = NameFold.fold(query);
     boolean aliasesCount = key.length() >= MINIMUM_ALIAS_LENGTH;
     List<CandidateFacts> named = new ArrayList<>();
     for (CandidateFacts candidate : candidates) {
-      if (Names.fold(candidate.label()).equals(key)
+      if (NameFold.fold(candidate.label()).equals(key)
           || (aliasesCount
-              && candidate.aliases().stream().map(Names::fold).anyMatch(key::equals))) {
+              && candidate.aliases().stream().map(NameFold::fold).anyMatch(key::equals))) {
         named.add(candidate);
       }
     }
