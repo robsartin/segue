@@ -84,13 +84,13 @@ public final class OwnCli {
   /**
    * Which operation, its arguments, and whether to stop short of appending.
    *
-   * <p><b>Three records rather than one with six unused components.</b> The operations share only
-   * the database and the dry run; a single {@code Options} carrying {@code kind}, {@code label},
-   * {@code fromQid}, {@code toQid}, {@code typeCode}, {@code localQid} and {@code canonicalQid}
-   * would leave five of seven null on every run and put the question "which of these is set?" in
-   * {@code OwnRun} rather than at the command line where it was answered. Sealed, so {@code
-   * OwnRun}'s switch is exhaustive and a fourth operation cannot be added without deciding what it
-   * does.
+   * <p><b>One record per operation rather than one record with unused components.</b> The
+   * operations share only the database and the dry run; a single {@code Options} carrying {@code
+   * kind}, {@code label}, {@code fromQid}, {@code toQid}, {@code typeCode}, {@code localQid} and
+   * {@code canonicalQid} would leave most of those null on every run and put the question "which of
+   * these is set?" in {@code OwnRun} rather than at the command line where it was answered. Sealed,
+   * so {@code OwnRun}'s switch is exhaustive and an operation cannot be added without deciding what
+   * it does.
    *
    * <p>{@code database} — the log to append to. Required, and named by {@code --db} on every
    * invocation: this tool has no default, because the default is what turned {@code ./gradlew own}

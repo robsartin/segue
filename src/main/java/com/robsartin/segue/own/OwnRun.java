@@ -132,8 +132,8 @@ public final class OwnRun {
    * <p><b>A duplicate is skipped rather than refused</b>, and it is the owner's own claim repeated:
    * both projections fold two identical owner edges to one, so the second row would add noise to a
    * log that is never edited and nothing to the graph. Endpoints are folded through the shared
-   * {@link Equivalences} first, so a row naming a local id and a row naming the canonical id it was
-   * merged into are the same edge.
+   * {@link Equivalences} first: an edge logged against a local id folds to its canonical, so a row
+   * naming the canonical id is recognised as the same edge.
    *
    * <p><b>The corroboration sentence is said once, at the end</b>, rather than after each line: it
    * is one fact about every owner edge in the run, and repeating it per row would bury the labels
@@ -145,6 +145,7 @@ public final class OwnRun {
     Equivalences merges = Equivalences.in(logged);
     Map<String, String> present = labelsInTheProjection(logged, merges);
     Set<String> held = ownerEdgesTheProjectionKeeps(logged, merges);
+    Set<String> heldByTheProjection = Set.copyOf(held);
 
     List<String> claiming = new ArrayList<>();
     List<String> skipped = new ArrayList<>();
@@ -152,7 +153,8 @@ public final class OwnRun {
     for (ClaimFile.Row row : rows) {
       String from = labelOrRefuse(logged, present, merges, row.fromQid());
       String to = labelOrRefuse(logged, present, merges, row.toQid());
-      if (held.contains(edgeKey(merges, row.fromQid(), row.typeCode(), row.toQid()))) {
+      String key = edgeKey(merges, row.fromQid(), row.typeCode(), row.toQid());
+      if (heldByTheProjection.contains(key)) {
         skipped.add(
             "skipping "
                 + row.fromQid()
@@ -162,6 +164,10 @@ public final class OwnRun {
                 + row.toQid()
                 + " — the log already carries this edge, and the projection folds a duplicate to"
                 + " one");
+        continue;
+      }
+      if (held.contains(key)) {
+        skipped.add("skipping line " + row.line() + " — this file already claims this edge");
         continue;
       }
       claiming.add(
@@ -177,6 +183,7 @@ public final class OwnRun {
               + to
               + "\"");
       claims.add(OwnerEdge.claimed(row.fromQid(), row.toQid(), row.typeCode(), clock.instant()));
+      held.add(key);
     }
     claiming.forEach(notes);
     skipped.forEach(notes);
@@ -240,7 +247,9 @@ public final class OwnRun {
     List<ResolutionRow> review = ResolutionFiles.readRows(batch.review());
     refuseAnUnregisteredKind(batch, review);
 
-    Set<String> resolved = ResolutionFiles.alreadyResolved(List.of(batch.mapping()));
+    Set<String> resolved =
+        new LinkedHashSet<>(ResolutionFiles.alreadyResolved(List.of(batch.mapping())));
+    Map<String, String> mintedThisRun = new LinkedHashMap<>();
     Set<String> named = everNamed(log.readAll());
 
     List<ResolutionRow> rows = new ArrayList<>();
@@ -255,8 +264,17 @@ public final class OwnRun {
       if (row.confidence() != Outcome.UNRESOLVED) {
         continue;
       }
-      if (resolved.contains(NameFold.fold(row.name()))) {
-        skipped.add("skipping \"" + row.name() + "\" — the mapping already carries a row for it");
+      String fold = NameFold.fold(row.name());
+      if (resolved.contains(fold)) {
+        String firstName = mintedThisRun.get(fold);
+        skipped.add(
+            firstName == null
+                ? "skipping \"" + row.name() + "\" — the mapping already carries a row for it"
+                : "skipping \""
+                    + row.name()
+                    + "\" — already minted in this run under \""
+                    + firstName
+                    + "\"");
         continue;
       }
       Set<NodeKind> kinds = ListKinds.nodeKinds(row.kind());
@@ -280,6 +298,8 @@ public final class OwnRun {
       named.add(qid);
       rows.add(row);
       ids.add(qid);
+      resolved.add(fold);
+      mintedThisRun.put(fold, row.name());
       notes.accept(
           "minting "
               + qid

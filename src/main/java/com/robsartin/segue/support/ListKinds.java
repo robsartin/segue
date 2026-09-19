@@ -67,7 +67,7 @@ public final class ListKinds {
     }
   }
 
-  /** Every list kind this table registers, in registration order. */
+  /** Every list kind this table registers. */
   public static Set<String> registered() {
     return Set.copyOf(BY_KIND.keySet());
   }

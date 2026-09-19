@@ -241,6 +241,25 @@ class OwnRunTest {
   }
 
   @Test
+  @DisplayName("should mint once when two review rows fold to the same name within one run")
+  void shouldMintOnceWhenTwoReviewRowsFoldToTheSameNameWithinOneRun() throws Exception {
+    Path review =
+        reviewFile(
+            "Ashgrove Rounders,author,,,,UNRESOLVED,no Wikidata candidate under any spelling",
+            "ASHGROVE ROUNDERS,author,,,,UNRESOLVED,no Wikidata candidate under any spelling");
+    Path mapping = dir.resolve("mapping.csv");
+
+    List<LoggedAssertion> claims = run.runBatch(batch(review, mapping, false), notes::add);
+
+    assertThat(claims).singleElement().isInstanceOf(LocalEntity.class);
+    assertThat(ResolutionFiles.readRows(mapping)).hasSize(1);
+    assertThat(notes)
+        .contains(
+            "skipping \"ASHGROVE ROUNDERS\" — already minted in this run under \"Ashgrove"
+                + " Rounders\"");
+  }
+
+  @Test
   @DisplayName("should append nothing when the batch mint is a dry run")
   void shouldAppendNothingWhenTheBatchMintIsADryRun() throws Exception {
     Path review = reviewFile("Ashgrove Rounders,author,,,,UNRESOLVED,none");
@@ -633,6 +652,22 @@ class OwnRunTest {
             note ->
                 note.startsWith("skipping " + SOURCED + " INFLUENCED_BY " + OTHER_SOURCED)
                     && note.contains("the log already carries this edge"));
+  }
+
+  @Test
+  @DisplayName("should skip a duplicate row within one file when asserting from a file")
+  void shouldSkipADuplicateRowWithinOneFileWhenAssertingFromAFile() throws Exception {
+    seedSourcedNodes(SOURCED, OTHER_SOURCED);
+    Path file =
+        claimsFile(
+            SOURCED + "," + OTHER_SOURCED + ",INFLUENCED_BY",
+            SOURCED + "," + OTHER_SOURCED + ",INFLUENCED_BY");
+
+    List<LoggedAssertion> claimed = run.runBatch(claims(file, false), notes::add);
+
+    assertThat(claimed).hasSize(1);
+    assertThat(notes).filteredOn(note -> note.startsWith("claiming " + SOURCED)).hasSize(1);
+    assertThat(notes).contains("skipping line 3 — this file already claims this edge");
   }
 
   @Test

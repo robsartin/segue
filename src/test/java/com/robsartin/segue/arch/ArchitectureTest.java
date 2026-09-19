@@ -1713,7 +1713,9 @@ class ArchitectureTest {
    * mistake it guards — the next helper to carry a path across would inherit nothing, exactly as
    * {@code ArchitectureTest}'s hand-written sibling lists kept missing the newest tool until issue
    * #105 derived them. The claim tools call nothing in {@code support} but {@code refusal} today,
-   * so the whole surface can be fenced at no cost to anything that exists.
+   * so the whole surface can be fenced at no cost to anything that exists. Since #342 {@code own}
+   * also reads the mapping shape, the name fold and the list-kind table from {@code support}, none
+   * of which hands out a {@code Path}, so the fence still costs nothing.
    *
    * <p><b>Three routes leave every rule in this class green</b>, all three measured rather than
    * reasoned about, and all three caught by the refusal tests instead: the env-or-home rule
