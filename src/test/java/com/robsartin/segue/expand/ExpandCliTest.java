@@ -692,6 +692,14 @@ class ExpandCliTest {
   /** Minted, unmerged: LocalEntity.isLocal, so it must never reach the `--known` population. */
   private static final String KNOWN_LOCAL = "Q00901108";
 
+  /**
+   * Local-shaped (two leading zeros) but never minted: the graph holds no node for it. A
+   * hand-edited known-list row, or one written against another database — the exclusion must not
+   * drop it, because no source will ever answer for it either, but the graph is what decides
+   * whether it is one of the owner's OWN entities rather than a stray shape (#344).
+   */
+  private static final String PHANTOM_LOCAL = "Q00901111";
+
   private Path knownListWithLocalGraph(String name) {
     Path db = home.resolve(name);
     Provenance plain = new Provenance("invented", "invented:10", WHEN, 1.0);
@@ -794,6 +802,61 @@ class ExpandCliTest {
     assertThat(lines())
         .as("excluded now also carries a reason other than \"cited as a seed\" — see the clause")
         .anyMatch(line -> line.contains("1 excluded ("));
+  }
+
+  @Test
+  @DisplayName(
+      "a --known --dry-run over a file naming a local id the graph holds no node for still"
+          + " considers it — only a local id the graph HOLDS is excluded (#344)")
+  void shouldConsiderThePhantomLocalIdOnADryRunWhenTheGraphHoldsNoNodeForIt() throws Exception {
+    // A REAL fixture with no node at all for the local-shaped id — a hand-edited known-list row,
+    // or one written against another database. The old blanket LocalEntity.isLocal filter dropped
+    // it before ExpandRun ever saw it; the fix narrows the exclusion to a local id the graph
+    // holds a node for.
+    Path db = home.resolve("phantom-local-dry.db");
+    try (SqliteAssertionLog log = new SqliteAssertionLog(db)) {
+      assertThat(log.readAll()).as("the log is deliberately empty").isEmpty();
+    }
+    Path file = Files.writeString(home.resolve("phantom-local-dry.csv"), PHANTOM_LOCAL + "\n");
+    captured.list.clear();
+
+    ExpandCli.main(new String[] {"--db", db.toString(), "--dry-run", "--known", file.toString()});
+
+    assertThat(countOn(lines(), "considered"))
+        .as("the phantom local id stays in the population — it is not silently dropped")
+        .isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName(
+      "a --known id shaped like a local entity, but with no node, is refused as unknown — the"
+          + " same refusal a non-local id with no node gets, not the local-entity one (#344)")
+  void shouldRefuseThePhantomLocalIdAsUnknownWhenTheGraphHoldsNoNodeForIt() throws Exception {
+    // A REAL run, and it reaches no network by construction, exactly like
+    // shouldRefuseTheKnownEntityWhenTheGraphHoldsNoNodeForIt above:
+    // EntityExpansion.expand asks the graph for a node BEFORE it asks LocalEntity.isLocal, so an
+    // id shaped like a local entity that the graph has never minted reaches UNKNOWN_ENTITY, not
+    // LOCAL_ENTITY. The file names that one id and nothing else, so nothing here could expand.
+    Path db = home.resolve("phantom-local.db");
+    try (SqliteAssertionLog log = new SqliteAssertionLog(db)) {
+      assertThat(log.readAll()).as("the log is deliberately empty").isEmpty();
+    }
+    Path file = Files.writeString(home.resolve("phantom-local.csv"), PHANTOM_LOCAL + "\n");
+    captured.list.clear();
+
+    ExpandCli.main(new String[] {"--db", db.toString(), "--known", file.toString()});
+
+    assertThat(countOn(lines(), "considered"))
+        .as("the phantom local id is not silently dropped from the population")
+        .isEqualTo(1);
+    assertThat(countOn(lines(), "unknown entity"))
+        .as("the graph holds no node for it, so it reaches the ordinary no-node refusal")
+        .isEqualTo(1);
+    assertThat(lines())
+        .as(
+            "and never the local-entity refusal — the graph check runs first in"
+                + " EntityExpansion.expand")
+        .noneMatch(line -> line.strip().startsWith("local entity"));
   }
 
   @Test

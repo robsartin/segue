@@ -296,9 +296,15 @@ public final class ExpandCli {
         KnownListInput known = KnownListInput.read(options.known().get());
         List<String> named = merges.canonical(known.qids());
         Expanded expanded = Expanded.in(assertions.readAll()).onTheCanonicalSide(merges);
+        // #344. The exclusion is of a local id the graph HOLDS a node for, never of the shape
+        // alone: a hand-edited row, or one written against another database, can name a local id
+        // the graph has never minted, and no source will ever answer for it either — but it is
+        // not one of the owner's own entities until the graph says so. "Holds" is asked the same
+        // way ExpandRun.dryRun already asks it for --add's own `to add` bucket (graph.node(qid)),
+        // so the two cannot come to disagree about what the graph has.
         population =
             named.stream()
-                .filter(qid -> !LocalEntity.isLocal(qid))
+                .filter(qid -> !(LocalEntity.isLocal(qid) && graph.node(qid).isPresent()))
                 .filter(qid -> !expanded.covers(qid))
                 .toList();
         // #328. options.add() carried onto the population value: a --known run is the only
