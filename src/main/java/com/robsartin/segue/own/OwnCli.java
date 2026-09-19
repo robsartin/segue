@@ -105,12 +105,12 @@ public final class OwnCli {
    * operation here appends a row to a log that is never edited, and two of the three name qids by
    * hand.
    *
-   * <p><b>{@link Single} and {@link Batch}, because one run claims one thing or many</b> (#342).
-   * {@code OwnRun.run} answers a single operation and returns the one claim it appended; {@code
-   * OwnRun.runBatch} answers a file and returns a list. Splitting the hierarchy is what keeps both
-   * switches total with no {@code default} arm: a fourth single operation or a third batch shape
-   * fails to compile until it is decided what it does, which is the reason {@code Options} was
-   * sealed in the first place.
+   * <p><b>{@link Single} and {@link Batch}, because one run claims one thing or many</b> (#342). A
+   * single operation goes to {@code OwnRun.run}, which returns the one claim it appended; a file
+   * goes to {@code OwnRun.runBatch}, which returns a list. Splitting the hierarchy is what keeps
+   * both switches total with no {@code default} arm: a fourth single operation or a third batch
+   * shape fails to compile until it is decided what it does, which is the reason {@code Options}
+   * was sealed in the first place.
    */
   public sealed interface Options permits Single, Batch {
 
