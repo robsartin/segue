@@ -18,8 +18,8 @@ import java.util.Objects;
  * {@code support.ResolutionFiles} live where they do because two tools read one file; this one has
  * a single reader, and moving it would put a shape in {@code support} that nothing there justifies.
  *
- * <p><b>No quoting, and the parser is {@code String.split}.</b> Every field is a qid or an {@code
- * EdgeTypes} code, so there is nothing a comma could be inside - which is why this does not go
+ * <p><b>No quoting, and the parser is {@code String.split}.</b> Every field is a qid or a code from
+ * {@code EdgeTypes}, so there is nothing a comma could be inside - which is why this does not go
  * through {@code support.CsvFile}. Reading the file a line at a time is also what keeps the line
  * NUMBER, and every refusal below names it: a file the owner typed by hand is a file they have to
  * open again.
