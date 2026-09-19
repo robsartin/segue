@@ -1,6 +1,6 @@
-package com.robsartin.segue.seed;
+package com.robsartin.segue.support;
 
-/** What the tool concluded about one name. */
+/** What a tool concluded about one name. */
 public enum Outcome {
   /** Independent signals agreed. Goes in the mapping file. */
   ACCEPTED,

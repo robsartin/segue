@@ -1,5 +1,7 @@
 package com.robsartin.segue.seed;
 
+import com.robsartin.segue.support.Outcome;
+import com.robsartin.segue.support.ResolutionRow;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;

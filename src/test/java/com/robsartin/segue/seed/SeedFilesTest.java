@@ -3,6 +3,8 @@ package com.robsartin.segue.seed;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.robsartin.segue.support.Outcome;
+import com.robsartin.segue.support.ResolutionRow;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

@@ -3,6 +3,7 @@ package com.robsartin.segue.seed;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.support.Outcome;
 import com.robsartin.segue.wikidata.KindMapper;
 import java.util.EnumSet;
 import java.util.List;

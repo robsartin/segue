@@ -1,6 +1,7 @@
 package com.robsartin.segue.seed;
 
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.support.Outcome;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;

@@ -1,5 +1,6 @@
 package com.robsartin.segue.seed;
 
+import com.robsartin.segue.support.ResolutionRow;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -68,7 +69,7 @@ public final class SeedRun {
         }
         // One output row per input line, so several spellings of one act each carry the answer.
         for (SeedRow row : group.rows()) {
-          (decision.accepted() ? acceptedRows : reviewRows).add(ResolutionRow.of(row, decision));
+          (decision.accepted() ? acceptedRows : reviewRows).add(rowFor(row, decision));
         }
       }
       SeedFiles.append(mapping, acceptedRows);
@@ -85,5 +86,22 @@ public final class SeedRun {
         accepted,
         needsReview,
         unresolved);
+  }
+
+  /**
+   * One output row from one input row and what was decided about it.
+   *
+   * <p>Here rather than on {@link ResolutionRow}, which moved to {@code support} in #342: this
+   * names {@code SeedRow} and {@code Decision}, which are this tool's and stay here.
+   */
+  private static ResolutionRow rowFor(SeedRow row, Decision decision) {
+    return new ResolutionRow(
+        row.name(),
+        row.kind(),
+        row.status(),
+        decision.qid(),
+        decision.label(),
+        decision.outcome(),
+        decision.reason());
   }
 }
