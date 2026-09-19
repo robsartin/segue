@@ -588,3 +588,64 @@ sentence there this reading overtakes.
 behaviour changed and no test was written for behaviour. The verification of this *document* is the
 full gate over an otherwise unchanged tree: `AdrIndexTest`, `AdrCitationsTest`,
 `DocumentationLinksTest` for the relative link above, and `javadoc -Werror` inside `./gradlew check`.
+
+**Amendment (2026-09-19, issue #344): a minted local id is no longer counted as a never-expanded
+shortfall, on either the row or the three rows that inherit its floor, and the known-list section
+gains one row that says how many of an entity's own were counted at all.**
+
+Nothing above is edited and this ADR keeps `Accepted`. `KnownListCensus.Population` gains `local` —
+the population's ids the fold holds a node for that `LocalEntity.isLocal` answers true for, on the
+canonical side exactly as every other count here is: a local id merged onto a canonical is counted
+as the canonical, never as local, because the canonical is what a source can answer for and the
+local id no longer is what the population names. `neverExpanded` and its by-kind rows now exclude a
+local id for the reason the 2026-09-12 amendment for #315 above already gave the row's own floor:
+`domain.Expanded` reads a seed out of Wikidata's own reference shapes, and no source will ever write
+one against an id Wikidata's own grammar refuses to allocate, on ADR 59's own decision. Before this
+issue such an id sat under `never expanded` forever, counted as a shortfall a further `--known` run
+could still close by finding a source. It never could; it is now counted where it belongs.
+
+`CensusReport` prints `local` nested one level under `in the graph`, in each sub-section, only when
+it is not zero — the print-when-non-zero choice issue #328 already made for `added` and `to add`,
+kept for the same reason: a file naming no local id prints the block byte for byte as before, and
+every block already pasted into an issue stays readable against this one.
+
+**The three second-hop rows move with it, from the one rule `SecondHop.toExpandBeside` already
+is.** A local neighbour beside an isolated act is now excluded from that rule outright —
+`domain.SecondHop`'s own change for this issue — so it is counted under neither `with someone to
+expand beside` nor `distinct to expand`, and an isolated act whose only unexpanded neighbour was a
+local one now counts under `with no one` instead. `distinctToExpand`'s own javadoc carried a clause
+that a `refused` reading of `local entity` from a `--second-hop` run is permanent and does not
+withhold the six-cell guarantee the 2026-09-14 amendment for #326 above describes; that clause is
+now vacuous rather than wrong — a `--second-hop` run can no longer produce that refusal at all,
+since the population it visits never contains a local neighbour to begin with — and the sentence is
+removed rather than left describing a case that cannot occur.
+
+**Alternatives rejected.**
+
+- **Counting a local id under `never expanded` and noting it in prose alone.** Rejected: the row's
+  own name is the claim, and the developer guide already reads the row as a floor a further
+  `--known` run could close (the 2026-09-12 amendment for #315 above). A number that cannot close is
+  not that floor, and a footnote does not change what the row says by itself when pasted without
+  one.
+- **Printing `local` unconditionally, zero or not.** Rejected on the same precedent issue #328 gave
+  `added` and `to add`: every block already pasted into an issue would gain a new zero row, which is
+  the byte-identity break this project has twice now declined to make.
+- **A separate top-level section for local entities, beside `claims`' `local entities minted`.**
+  Rejected: that row already counts every local entity the log has ever minted, whether or not it is
+  on this file, and duplicating the count under a new heading answers a different question — which
+  of *this file's* entities are local — under a name that invites confusing the two.
+- **One shared predicate — on `domain.Expanded`, or a filter shared by the census and the
+  expander — in place of three readers each citing `LocalEntity.isLocal` on their own.** Rejected:
+  `Expanded` answers who a source has been asked about, and reading an owner claim as covering
+  nothing is [ADR 59](0059-owner-claims-as-a-third-layer.md)'s own decision, not this issue's to
+  restate — folding "local" into it would make one word mean two things. The census's `local` row,
+  `ExpandCli`'s `--known` population and `SecondHop.toExpandBeside` compose three different
+  populations already, and a fourth type built to hold the rule would still have to be read by all
+  three call sites; citing `LocalEntity.isLocal` directly, its one statement, is the same sharing
+  with no fourth type to keep in step.
+
+**Nothing here is unit-testable on its own but for the counting rule and the row itself, and those
+are**: `SecondHopTest`, `KnownListCensusTest` and `CensusReportTest` carry the new cases, each seen
+red before the change that turns it green. The verification of this *document* is the full gate
+over an otherwise unchanged tree: `AdrIndexTest`, `AdrCitationsTest`, `DocumentationLinksTest` for
+the relative links above, and `javadoc -Werror` inside `./gradlew check`.

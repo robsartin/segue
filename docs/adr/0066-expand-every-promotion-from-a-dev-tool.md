@@ -908,3 +908,71 @@ pinned, beside the unchanged golden block; and the composition seen red on one f
 once with the switch and once without. The verification of the *document* is the full gate over an
 otherwise unchanged tree: `AdrIndexTest`, `AdrCitationsTest`, `DocumentationLinksTest` for the
 relative links above, and `javadoc -Werror` inside `./gradlew check`.
+
+**Amendment (2026-09-19, issue #344): a `--known` run's population excludes a local id, exactly as
+`--second-hop`'s already does from `domain.SecondHop`'s own change for the same issue, and the
+`local entity` refusal this ADR's earlier amendments describe is reachable from `--rated-since`
+alone.**
+
+Nothing above is edited and this ADR keeps `Accepted`. `ExpandCli`'s `--known` population was the
+file's ids, on their canonical side, that `domain.Expanded` does not cover; it now also excludes an
+id the graph holds a node for that `LocalEntity.isLocal` answers true for, composed in the same
+filter and before either the dry run's preflight or the run's loop ever sees the population — the
+same exclusion [ADR 63](0063-a-read-only-census-of-the-graph.md)'s amendment for this issue gives
+the census's `never expanded` row, so the two tools read one rule again rather than two that happen
+to agree on today's fixtures. **The shape alone never excludes.** An id `LocalEntity.isLocal`
+answers true for that the graph holds no node for — a hand-edited known-list row, or one written
+against another database — stays in the population exactly as it did before this amendment: no
+source will ever answer for it either, but the graph is what says whether it is one of the owner's
+own, not the shape by itself.
+
+**Before this issue, a `--known` run over a file naming a minted id visited it anyway** — nothing
+excluded a local id from the population, so it reached `EntityExpansion.expand`, which has refused
+`LOCAL_ENTITY` since issue #92 and refuses it still, before any adapter is asked. The round trip
+cost nothing over the network (the refusal fires first), but it spent a `refused` line and a pass of
+the loop learning what `LocalEntity.isLocal` already knew at the moment the population was composed.
+`domain.SecondHop.toExpandBeside`'s own change for this issue closes the same gap on the population
+`--second-hop` composes, so a `local entity` refusal can no longer arise from either of the two
+file-driven runs.
+
+**It can still arise from the third population, and that is unchanged.** A run given neither
+`--known` nor `--second-hop` composes its population from `KnownList.promoted` over the ratings map
+alone — narrowed by `--rated-since` when one is given — and nothing filters that population by
+shape: a rating is a claim about the owner's own local entity exactly as it is about a Wikidata one,
+and excluding it there would refuse to expand something the owner asked this tool to visit rather
+than telling him it cannot be done. The refusal still fires, on the same call, for the same reason.
+
+**The runbook's `--known --add` derive step is true again.** `named` minus `in the graph` remains
+what a `--add` run would TRY — that arithmetic never involved `never expanded` — because the only id
+this amendment excludes is one the graph already holds; an id shaped like the owner's own that the
+graph holds no node for is not excluded, so it stays in that difference exactly as a Wikidata id
+with no node does, and reaches the run's own `unknown entity` refusal rather than the addition
+itself. `never expanded` is now, once more, what an `--add` run's own `--known` pass would then
+expand: before this issue a minted id already in the graph sat under `never expanded` and inflated a
+number the sentence promised was the next step's spend, when no `--add` run would ever visit it.
+Excluding it from the row is what makes that sentence true rather than merely close.
+
+**Alternatives rejected.**
+
+- **Filtering at `EntityExpansion.expand` alone, and leaving the population composition unchanged.**
+  Rejected: the refusal there already exists and was never the gap — the population naming the id
+  at all is. A caller that composes a population still has to know not to count it, or the dry run's
+  `considered` keeps naming an entity no real run will ever expand.
+- **A `--known` refusal reason distinct from `LOCAL_ENTITY`.** Rejected: the two runs would then
+  give an operator two different words for one fact — the id is the owner's own and no source will
+  ever answer for it — which is the confusion issue #328's own addition-refusal reasons were
+  written to avoid repeating.
+- **Excluding a local id from `--rated-since`'s population too, for symmetry.** Rejected: this
+  population is not drawn from the graph the way the other two are — it is composed from ratings —
+  and a rating on a local entity is exactly as real a claim as a rating on anything else. Refusing to
+  even attempt it would hide the one honest answer this tool has for that population, which is the
+  refusal itself.
+
+**Nothing here is unit-testable on its own but for the exclusion and the refusal's remaining path,
+and those are**: `ExpandCliTest` carries a `--known --dry-run` case over a file naming a local id,
+seen red before the exclusion and green after, and a `--rated-since` case carrying the refusal this
+amendment says still fires — the same case an earlier `--second-hop` fixture used to carry, moved
+here because `--second-hop` can no longer produce it. The verification of this *document* is the
+full gate over an otherwise unchanged tree: `AdrIndexTest`, `AdrCitationsTest`,
+`DocumentationLinksTest` for the relative link above, and `javadoc -Werror` inside `./gradlew
+check`.

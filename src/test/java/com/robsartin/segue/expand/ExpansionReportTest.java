@@ -89,8 +89,9 @@ class ExpansionReportTest {
    */
   private static final String KNOWN_LINE =
       "# only known-list entities from known.csv that no expansion has covered: 7 excluded (some"
-          + " row in the log cites them as an expansion's seed) — the file's ids are read through"
-          + " the merge fold, so a merge's two sides count once.";
+          + " row in the log cites them as an expansion's seed, or they are the owner's own minted"
+          + " local entities) — the file's ids are read through the merge fold, so a merge's two"
+          + " sides count once.";
 
   /** The golden block with the known clause inserted under its header, and nothing else moved. */
   private static List<String> withKnownLine(List<String> block) {
@@ -104,10 +105,11 @@ class ExpansionReportTest {
    */
   private static final String KNOWN_ADDING_LINE =
       "# only known-list entities from known.csv that no expansion has covered: 7 excluded (some"
-          + " row in the log cites them as an expansion's seed) — the file's ids are read through"
-          + " the merge fold, so a merge's two sides count once. --add was given, so an id the"
-          + " file names that the graph holds no node for was added before it was expanded; how"
-          + " many is the added row below, or to add on a dry run.";
+          + " row in the log cites them as an expansion's seed, or they are the owner's own"
+          + " minted local entities) — the file's ids are read through the merge fold, so a"
+          + " merge's two sides count once. --add was given, so an id the file names that the"
+          + " graph holds no node for was added before it was expanded; how many is the added"
+          + " row below, or to add on a dry run.";
 
   @Test
   @DisplayName("the clause says the switch was given when a known-list run was told to add")

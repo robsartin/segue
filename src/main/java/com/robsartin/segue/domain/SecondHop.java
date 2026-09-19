@@ -29,6 +29,11 @@ import java.util.Set;
  * <p><b>{@link #WORTH_EXPANDING} is the one statement of which kinds are worth fetching.</b> The
  * census's rows, the expander's population and ADR 63's and ADR 66's amendments all cite it rather
  * than naming the kinds again.
+ *
+ * <p><b>A local neighbour is never to expand.</b> {@link LocalEntity#isLocal} is checked beside
+ * {@link #WORTH_EXPANDING} and {@link Expanded} in {@link #toExpandBeside}, for the reason the
+ * census's {@code local} row and {@code expand.ExpandCli}'s {@code --known} population exclude one
+ * too (#344): no source will ever answer for a minted id.
  */
 public final class SecondHop {
 
@@ -105,8 +110,21 @@ public final class SecondHop {
   }
 
   /**
-   * The nodes one folded edge from an isolated member whose kind is in {@link #WORTH_EXPANDING} and
-   * that {@link Expanded} does not cover.
+   * The nodes one folded edge from an isolated member whose kind is in {@link #WORTH_EXPANDING},
+   * that {@link Expanded} does not cover, and that is not local ({@link LocalEntity#isLocal}).
+   *
+   * <p><b>A local neighbour is excluded, never merely never-covered.</b> The owner minted it
+   * because no source models it, on ADR 59's own decision, so no source will ever answer for it —
+   * not now and not on any later run — and it is not a never-expanded shortfall a run could still
+   * close. Counting it here put it under the {@code with someone to expand beside} row and the
+   * {@code distinct to expand} row forever, and a {@code --second-hop} run visiting it spent a
+   * whole pass learning what this exclusion already knows: {@code EntityExpansion.expand} refuses a
+   * local id as {@code LOCAL_ENTITY} before any adapter runs (#92), and this exclusion means that
+   * refusal is one such a run can no longer produce at all (#344).
+   *
+   * <p>An isolated member that is itself local is unaffected by this — {@link #isolated()} still
+   * reports it exactly as it reports any other member the fold holds a node for and cannot place;
+   * only a <i>neighbour</i> is excluded here.
    *
    * @throws IllegalArgumentException if {@code isolated} is not one of {@link #isolated()} — the
    *     question is about an act the graph cannot place, and asking it about any other id is a
@@ -120,7 +138,10 @@ public final class SecondHop {
     Set<String> beside = new LinkedHashSet<>();
     for (String neighbour : adjacency.getOrDefault(isolated, Set.of())) {
       NodeRecord node = nodes.get(neighbour);
-      if (node != null && WORTH_EXPANDING.contains(node.kind()) && !expanded.covers(neighbour)) {
+      if (node != null
+          && WORTH_EXPANDING.contains(node.kind())
+          && !expanded.covers(neighbour)
+          && !LocalEntity.isLocal(neighbour)) {
         beside.add(neighbour);
       }
     }

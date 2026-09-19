@@ -1885,6 +1885,19 @@ next, and how to tell that another run would reach nothing (the run on #313;
 [ADR 63](adr/0063-a-read-only-census-of-the-graph.md)'s and
 [ADR 66](adr/0066-expand-every-promotion-from-a-dev-tool.md)'s 2026-09-12 amendments for #315).
 
+**`local` is nested one level under `in the graph`, and only prints when it is not zero.** It
+counts the file's own ids, after the merge fold, that the graph holds a node for and that
+`LocalEntity.isLocal` answers true for — the owner's own minted entities, on ADR 59's shape — and
+the print-when-non-zero choice is the one
+[ADR 63](adr/0063-a-read-only-census-of-the-graph.md)'s 2026-09-19 amendment for #344 records, the
+same one issue #328 already made for `added` and `to add`: a file naming no local id prints the
+block byte for byte as it always has. `never expanded` excludes every id counted here — no source
+will ever write a seed reference against an id Wikidata will never allocate, so it was never a
+shortfall a further `--known` run could close, and counting it there overstated the floor.
+`expand.ExpandCli`'s `--known` population excludes the same ids for the same reason
+([ADR 66](adr/0066-expand-every-promotion-from-a-dev-tool.md)'s 2026-09-19 amendment for #344), so
+the row and the population the tool visits agree again.
+
 **`no known neighbour` breaks into three nested rows, in each sub-section.** `with someone to
 expand beside` and `with no one` partition the row above them, so the two add up to it. `distinct to
 expand` prints under both `file` and `file and promotions`, but only in the `file and promotions`
@@ -2783,8 +2796,11 @@ mapping row is the seven-column shape with `MINTED` in the confidence column and
 **The mapping is where a local id lives for `--known`.** `support.QidList` reads the first
 comma-separated field on a line that is exactly a QID, and a local `Q00…` id is one — so a minted
 entity joins the `--known` population the moment its mapping row is written, with nothing else to
-do. `graphCensus --known <mapping>` counts it under `in the graph`, and, until issue #344 lands,
-under `never expanded` too, for the reason that issue states.
+do. `graphCensus --known <mapping>` counts it under `in the graph` and, since it is one of the
+owner's own, under `local` too — never under `never expanded`, and `expandPromotions --known`
+never visits it
+([ADR 63](adr/0063-a-read-only-census-of-the-graph.md)'s and
+[ADR 66](adr/0066-expand-every-promotion-from-a-dev-tool.md)'s 2026-09-19 amendments for #344).
 
 ### Claiming a file of edges: `assert --file …`
 
@@ -3576,25 +3592,27 @@ Check six cells: `added nothing`, `refused` and `failed` in `promotions`, `neigh
 summed over every source, so a neighbour whose Wikidata answer was nothing but whose MusicBrainz
 answer still recorded an edge is not under it; and `EntityExpansion.expand` catches a per-neighbour
 `WikidataUnavailableException` and an `UnknownEndpointException` on the append and folds each into
-`neighbours skipped` or `endpoints refused`, never into `unavailable`. So all six, not four, have to
-read zero — a `refused` entirely `local entity` aside, addressed below — before the block says every
-visited entity's Wikidata answer was recorded in full, and only then is whatever `distinct to
-expand` still counts afterwards known to be Wikidata-thin rather than merely unlucky on one source
-or one neighbour: `SecondHop.toExpandBeside` excludes a neighbour only once `Expanded` covers it,
-the same rule and the same residual the `--known` variant's stopping rule above reads — a neighbour
-this run recorded only a MusicBrainz-backed edge or a Wikidata forward claim with no id for leaves
-no seed reference and stays counted for good
-([ADR 63](adr/0063-a-read-only-census-of-the-graph.md)'s 2026-09-14 amendment for #326). A `refused`
-that is entirely `local entity` — the owner's own minted stand-ins, which no source will ever answer
-for — is permanent on its own and does not withhold this guarantee; it is the other five cells and
-the `unavailable` section that have to come back clean. Stop there; a second run visits the same
-neighbours, calls the same public APIs and moves neither `distinct to expand` nor `with someone to
-expand beside`. **When any of the checklist's six cells is not zero** (a `refused` that is entirely
-`local entity` aside), that guarantee does not hold, and the `--known` variant's own rule applies
-instead: compare this dry run's `considered` against the previous `--second-hop` dry run's, over the
-same file — a fall means the last run reached something and another is worth taking, and an
-unchanged count means the rest is thin only once a run reporting all six cells clean has read it.
-There is still no `--limit`: the dry run's `considered` is the only bound.
+`neighbours skipped` or `endpoints refused`, never into `unavailable`. So all six have to read zero
+before the block says every visited entity's Wikidata answer was recorded in full, and only then is
+whatever `distinct to expand` still counts afterwards known to be Wikidata-thin rather than merely
+unlucky on one source or one neighbour: `SecondHop.toExpandBeside` excludes a neighbour only once
+`Expanded` covers it, the same rule and the same residual the `--known` variant's stopping rule
+above reads — a neighbour this run recorded only a MusicBrainz-backed edge or a Wikidata forward
+claim with no id for leaves no seed reference and stays counted for good
+([ADR 63](adr/0063-a-read-only-census-of-the-graph.md)'s 2026-09-14 amendment for #326). **A
+`refused` reading `local entity` can no longer come from this run at all** — `SecondHop.toExpandBeside`
+now excludes the owner's own minted ids from what it offers before this run ever sees one
+([ADR 63](adr/0063-a-read-only-census-of-the-graph.md)'s and
+[ADR 66](adr/0066-expand-every-promotion-from-a-dev-tool.md)'s 2026-09-19 amendments for #344); that
+refusal can still fire on the no-flag and `--rated-since` runs below, where a rated entity can still
+be one of the owner's own. Stop there; a second run visits the same neighbours, calls the same
+public APIs and moves neither `distinct to expand` nor `with someone to expand beside`. **When any
+of the checklist's six cells is not zero**, that guarantee does not hold, and the `--known`
+variant's own rule applies instead: compare this dry run's `considered` against the previous
+`--second-hop` dry run's, over the same file — a fall means the last run reached something and
+another is worth taking, and an unchanged count means the rest is thin only once a run reporting
+all six cells clean has read it. There is still no `--limit`: the dry run's `considered` is the only
+bound.
 
 This chapter's own reading is a census, not an evaluation. Whether growing the pool this way is
 enough to warrant the next entry under the recommender's own calibration rule is decided there, not

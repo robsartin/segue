@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.robsartin.segue.domain.Expanded;
 import com.robsartin.segue.domain.Fold;
 import com.robsartin.segue.domain.LoggedAssertion;
+import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.ingest.LogProjection;
 import com.robsartin.segue.support.KnownListInput;
 import com.robsartin.segue.wikidata.KindMapper;
@@ -66,6 +67,9 @@ class CensusReportTest {
               InventedCensus.LEDGER,
               InventedCensus.CORRECTED,
               InventedCensus.REROUTED));
+
+  /** Minted, and never merged: the fixture for the new `local` row (#344). */
+  private static final String LOCAL_ONLY = "Q0091";
 
   /** The fixture's census, composed exactly as {@code Census.of} composes one. */
   private static Census census(Optional<KnownListInput> known) {
@@ -349,5 +353,73 @@ class CensusReportTest {
                 EVENT never expanded                   0
                 CONCEPT in the graph                   0
                 CONCEPT never expanded                 0""");
+  }
+
+  @Test
+  @DisplayName(
+      "a local id on the known-list file prints the `local` row, nested one level under `in the"
+          + " graph`, in both sub-sections")
+  void shouldPrintTheLocalRowWhenTheFileNamesAMintedUnmergedLocalId() {
+    // Its own small log, not InventedCensus's — every local id that log mints is merged, which is
+    // the "prints no such row" case the two pinned tests above already cover.
+    List<LoggedAssertion> log =
+        List.of(
+            InventedCensus.node(InventedCensus.WREN, NodeKind.PERSON, InventedCensus.WREN_LABEL),
+            InventedCensus.minted(LOCAL_ONLY, "A Local Thing, Never Merged"));
+    LogProjection projection = LogProjection.of(new InventedCensus.FakeAssertionLog().with(log));
+    Fold fold = Fold.of(log, KindMapper::rederive);
+    KnownListInput known =
+        new KnownListInput("local.csv", List.of(InventedCensus.WREN, LOCAL_ONLY));
+    Census census =
+        new Census(
+            NodeCensus.of(projection),
+            EdgeCensus.of(projection),
+            ClaimCensus.of(log, projection, fold),
+            TasteCensus.of(Map.of(), fold, projection),
+            DegreeCensus.of(projection),
+            BridgeCensus.of(projection),
+            ConceptClassCensus.of(projection),
+            Optional.of(KnownListCensus.of(known, Expanded.in(log), projection, fold, Map.of())));
+
+    List<String> lines = CensusReport.lines(census);
+
+    assertThat(rowValue(lines, "in the graph"))
+        .as("both ids the file names, once each")
+        .isEqualTo(2);
+    assertThat(rowValue(lines, "local")).as("the one that is local").isEqualTo(1);
+    assertThat(rawLine(lines, "in the graph"))
+        .as("`in the graph` is nested one level (NESTED — four spaces)")
+        .startsWith("    in the graph");
+    assertThat(rawLine(lines, "local"))
+        .as("`local` is nested one level deeper (DEEPER — six spaces), under `in the graph`")
+        .startsWith("      local");
+    assertThat(lines)
+        .as("no promotion in this fixture, so both sub-sections read the same population")
+        .filteredOn(line -> line.strip().equals(rawLine(lines, "local").strip()))
+        .hasSize(2);
+  }
+
+  /** The row whose stripped, label-only text equals this exactly — not a prefix match. */
+  private static String rawLine(List<String> lines, String label) {
+    return lines.stream()
+        .filter(line -> matchesLabel(line, label))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("no '" + label + "' row in: " + lines));
+  }
+
+  private static int rowValue(List<String> lines, String label) {
+    String row = rawLine(lines, label);
+    String[] parts = row.strip().split(" {2,}");
+    return Integer.parseInt(parts[1]);
+  }
+
+  /**
+   * True when the line's label — everything before the first run of two or more spaces — equals
+   * {@code label} exactly. The two-or-more-space split is what tells "local" apart from "local
+   * entities minted", whose words are separated by single spaces and so survive the split intact.
+   */
+  private static boolean matchesLabel(String line, String label) {
+    String[] parts = line.strip().split(" {2,}");
+    return parts.length == 2 && parts[0].equals(label);
   }
 }
