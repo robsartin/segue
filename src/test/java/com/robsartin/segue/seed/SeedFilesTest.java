@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.robsartin.segue.support.Outcome;
+import com.robsartin.segue.support.ResolutionFiles;
 import com.robsartin.segue.support.ResolutionRow;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -130,8 +131,8 @@ class SeedFilesTest {
   @DisplayName("the first write creates a header and the second does not repeat it")
   void appendsUnderOneHeader() throws IOException {
     Path out = dir.resolve("mapping.csv");
-    SeedFiles.append(out, List.of(row("Velvet Ossuary", "Q090000201")));
-    SeedFiles.append(out, List.of(row("Ashgrove", "Q090000202")));
+    ResolutionFiles.append(out, List.of(row("Velvet Ossuary", "Q090000201")));
+    ResolutionFiles.append(out, List.of(row("Ashgrove", "Q090000202")));
 
     assertThat(Files.readAllLines(out))
         .hasSize(3)
@@ -143,7 +144,7 @@ class SeedFilesTest {
   @DisplayName("a value carrying a comma or a quote survives the round trip")
   void quotesWhatNeedsQuoting() throws IOException {
     Path out = dir.resolve("mapping.csv");
-    SeedFiles.append(
+    ResolutionFiles.append(
         out,
         List.of(
             new ResolutionRow(
@@ -155,7 +156,7 @@ class SeedFilesTest {
                 Outcome.ACCEPTED,
                 "name, kind and occupation agree")));
 
-    assertThat(SeedFiles.readRows(out))
+    assertThat(ResolutionFiles.readRows(out))
         .singleElement()
         .satisfies(
             read -> {
@@ -170,10 +171,10 @@ class SeedFilesTest {
   void resumesFromBothOutputFiles() throws IOException {
     Path mapping = dir.resolve("mapping.csv");
     Path review = dir.resolve("review.csv");
-    SeedFiles.append(mapping, List.of(row("The Velvet Ossuary", "Q090000204")));
-    SeedFiles.append(review, List.of(row("Ashgrove", null)));
+    ResolutionFiles.append(mapping, List.of(row("The Velvet Ossuary", "Q090000204")));
+    ResolutionFiles.append(review, List.of(row("Ashgrove", null)));
 
-    var done = SeedFiles.alreadyResolved(List.of(mapping, review));
+    var done = ResolutionFiles.alreadyResolved(List.of(mapping, review));
 
     // Keyed by the folded name, so the run that wrote "The Velvet Ossuary" also covers the
     // row spelled "Velvet Ossuary".
@@ -183,7 +184,7 @@ class SeedFilesTest {
   @Test
   @DisplayName("nothing done yet is not an error")
   void resumingFromNothing() {
-    assertThat(SeedFiles.alreadyResolved(List.of(dir.resolve("absent.csv")))).isEmpty();
+    assertThat(ResolutionFiles.alreadyResolved(List.of(dir.resolve("absent.csv")))).isEmpty();
   }
 
   private static ResolutionRow row(String name, String qid) {

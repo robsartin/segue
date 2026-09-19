@@ -1,5 +1,6 @@
 package com.robsartin.segue.seed;
 
+import com.robsartin.segue.support.ResolutionFiles;
 import com.robsartin.segue.support.ResolutionRow;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -45,7 +46,7 @@ public final class SeedRun {
   public SeedSummary run(List<SeedRow> rows) {
     Objects.requireNonNull(rows, "rows");
     List<NameGroup> groups = NameGroup.of(rows);
-    Set<String> done = SeedFiles.alreadyResolved(List.of(mapping, review));
+    Set<String> done = ResolutionFiles.alreadyResolved(List.of(mapping, review));
     List<NameGroup> outstanding =
         groups.stream().filter(group -> !done.contains(group.key())).toList();
     log.info(
@@ -72,8 +73,8 @@ public final class SeedRun {
           (decision.accepted() ? acceptedRows : reviewRows).add(rowFor(row, decision));
         }
       }
-      SeedFiles.append(mapping, acceptedRows);
-      SeedFiles.append(review, reviewRows);
+      ResolutionFiles.append(mapping, acceptedRows);
+      ResolutionFiles.append(review, reviewRows);
       log.info(
           "resolved {} of {} acts",
           Math.min(from + chunkSize, outstanding.size()),
