@@ -62,6 +62,14 @@ import java.util.stream.Collectors;
  */
 public final class OwnRun {
 
+  /**
+   * The last line of every run that appended, single or batch, and ADR 24's contract in one
+   * sentence: the log is read at boot, not watched.
+   */
+  static final String APPENDED =
+      "appended. The running graph is rebuilt from the log at the next boot (ADR 24), so a"
+          + " server that is up does not see this claim until it restarts";
+
   private final AssertionLog log;
   private final Clock clock;
 
@@ -94,9 +102,7 @@ public final class OwnRun {
       return claim;
     }
     IngestService.claim(log, claim);
-    notes.accept(
-        "appended. The running graph is rebuilt from the log at the next boot (ADR 24), so a"
-            + " server that is up does not see this claim until it restarts");
+    notes.accept(APPENDED);
     return claim;
   }
 
@@ -212,9 +218,7 @@ public final class OwnRun {
       notes.accept("appended " + ids.get(i));
       ResolutionFiles.append(batch.mapping(), List.of(mappingRow(rows.get(i), ids.get(i))));
     }
-    notes.accept(
-        "appended. The running graph is rebuilt from the log at the next boot (ADR 24), so a"
-            + " server that is up does not see this claim until it restarts");
+    notes.accept(APPENDED);
     return List.copyOf(claims);
   }
 
