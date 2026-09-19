@@ -75,6 +75,43 @@ class ResolutionFilesTest {
     assertThat(ResolutionFiles.alreadyResolved(List.of(dir.resolve("absent.csv")))).isEmpty();
   }
 
+  @Test
+  @DisplayName("should read a row the claim tool wrote when its outcome is MINTED")
+  void shouldReadAMintedRowWhenTheClaimToolWroteOne() throws Exception {
+    Path mapping = dir.resolve("mapping.csv");
+    Files.writeString(
+        mapping,
+        "name,kind,status,qid,label,confidence,reason\n"
+            + "Velvet Ossuary,musician,ACCEPTED,Q0903301,Velvet Ossuary,ACCEPTED,agreed\n"
+            + "Ashgrove Rounders,musician,,Q001,Ashgrove Rounders,MINTED,minted by the owner\n");
+
+    List<ResolutionRow> rows = ResolutionFiles.readRows(mapping);
+
+    assertThat(rows).hasSize(2);
+    assertThat(rows.get(1).confidence().name()).isEqualTo("MINTED");
+    assertThat(ResolutionFiles.alreadyResolved(List.of(mapping)))
+        .contains(NameFold.fold("Ashgrove Rounders"));
+  }
+
+  @Test
+  @DisplayName("should round-trip a minted row when it is appended and read back")
+  void shouldRoundTripAMintedRowWhenItIsAppendedAndReadBack() {
+    Path mapping = dir.resolve("mapping.csv");
+    ResolutionRow minted =
+        new ResolutionRow(
+            "Ashgrove Rounders",
+            "musician",
+            "",
+            "Q001",
+            "Ashgrove Rounders",
+            Outcome.MINTED,
+            "minted by the owner — no Wikidata candidate under any spelling (ADR 59)");
+
+    ResolutionFiles.append(mapping, List.of(minted));
+
+    assertThat(ResolutionFiles.readRows(mapping)).containsExactly(minted);
+  }
+
   private static ResolutionRow row(String name, String qid) {
     return new ResolutionRow(
         name, "musician", "APPROVED", qid, "label", Outcome.ACCEPTED, "because");
