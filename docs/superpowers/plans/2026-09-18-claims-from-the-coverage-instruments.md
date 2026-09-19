@@ -2346,7 +2346,7 @@ $HOME/.segue/segue.db`; never a tilde; single quotes around any value with a spa
   **Only `UNRESOLVED` rows are minted.** A `REVIEW` row carries a plausible candidate the
   adjudicator could not choose between, and minting one would put a second entity in the graph for
   something Wikidata already has — the one mistake this tool cannot take back, because the log is
-  append-only and never edited and the repair is a retraction plus a merge. The report says how many
+  append-only (ADR 19) and never edited and the repair is a retraction plus a merge. The report says how many
   `REVIEW` rows it passed over, so the number is never silent.
 
   **A name the mapping already carries is skipped, folded rather than literal.** `support.NameFold`
@@ -2394,7 +2394,7 @@ $HOME/.segue/segue.db`; never a tilde; single quotes around any value with a spa
   ```
 
   The file is a header and one edge per row, with `#` comments so you can annotate a file that is
-  personal data:
+  personal data ([ADR 33](adr/0033-taste-layer-separation.md), issue #37):
 
   ```
   from,to,type
@@ -2408,7 +2408,8 @@ $HOME/.segue/segue.db`; never a tilde; single quotes around any value with a spa
   **Any refused row refuses the whole file, before any append.** A row with fewer than three fields,
   an id that is not qid-shaped, a code outside the vocabulary, an endpoint the projection does not
   hold and a local id you have already merged away are all whole-file refusals, each naming the line
-  number. The reason is that there is no edge-level retraction: a wrong edge is undone only by
+  number. The reason is that there is no edge-level retraction
+  ([ADR 44](adr/0044-retraction-as-a-new-claim.md)): a wrong edge is undone only by
   retracting one of its endpoints, which takes that entity's other edges with it. Half a file is the one outcome worth refusing outright.
 
   **A row the log already carries as an owner edge is skipped**, with endpoints folded through the
@@ -2529,7 +2530,8 @@ $HOME/.segue/segue.db`; never a tilde; single quotes around any value with a spa
   number of decisions. Minting an entity and then joining it up is still two commands, and the
   second sees the first because it replays the log.
 
-  **All-or-nothing is a consequence of there being no edge-level retraction.** A wrong edge is undone
+  **All-or-nothing is a consequence of there being no edge-level retraction**
+  ([ADR 44](0044-retraction-as-a-new-claim.md)). A wrong edge is undone
   only by retracting one of its endpoints, which takes that entity's other edges with it — so a file half-applied is strictly worse than one refused. The
   batch mint refuses a list kind the table does not register for the same reason: such a file is not
   one the seed tool wrote, and nothing else in it can be trusted either.
@@ -2556,7 +2558,7 @@ $HOME/.segue/segue.db`; never a tilde; single quotes around any value with a spa
     guessed one is the one kind of structure that must never be laundered into that tier.
   - **Minting `REVIEW` rows too.** Each carries a plausible candidate; minting one puts a second
     entity in the graph for something Wikidata already has, and the repair is a retraction plus a
-    merge on an append-only log.
+    merge on an append-only log (ADR 19).
   - **Refusing, rather than skipping, a row the mapping already carries.** A re-run over the same
     review file is the ordinary case after a partial run, and refusing it would make the safe thing
     the awkward one.
