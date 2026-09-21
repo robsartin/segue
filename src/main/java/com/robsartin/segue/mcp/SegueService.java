@@ -4,12 +4,13 @@ import com.robsartin.segue.domain.AffinityRecord;
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.Candidate;
 import com.robsartin.segue.domain.EdgeRecord;
-import com.robsartin.segue.domain.NodeAssertion;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.PathRanking;
 import com.robsartin.segue.domain.PathResult;
 import com.robsartin.segue.domain.RatingScale;
+import com.robsartin.segue.expansion.AdditionOutcome;
+import com.robsartin.segue.expansion.EntityAddition;
 import com.robsartin.segue.expansion.EntityExpansion;
 import com.robsartin.segue.expansion.ExpansionOutcome;
 import com.robsartin.segue.ingest.IngestService;
@@ -76,6 +77,7 @@ public final class SegueService {
   private final AffinityStore affinity;
   private final Clock clock;
   private final EntityExpansion expansion;
+  private final EntityAddition addition;
 
   public SegueService(
       EntityResolver resolver,
@@ -93,6 +95,8 @@ public final class SegueService {
     // Built here rather than injected: every collaborator it needs is already a field, and a
     // seventh constructor parameter would move thirty-odd call sites for nothing. #284.
     this.expansion = new EntityExpansion(this.resolver, this.graph, this.ingest, this.adapters);
+    // The same argument one step earlier in the same story (#328).
+    this.addition = new EntityAddition(this.resolver, this.ingest);
   }
 
   /** Candidates for a free-text query, best match first. Writes nothing. */
@@ -113,26 +117,63 @@ public final class SegueService {
   /**
    * Fetch one entity's identity from the resolver and record it. Recording is an upsert, so a
    * second call with the same qid is idempotent — it refreshes the node rather than duplicating it.
+   *
+   * <p><b>The fetch-and-record itself is {@link EntityAddition}'s</b> (#328): the promotion
+   * expander's {@code --add} run needs it and does not need a {@code ToolResult}. What stays here
+   * is the shaping — the four sentences this method has always returned, byte for byte, and the one
+   * that is new.
+   *
+   * <p><b>The new one is the minted id.</b> Before #328 this method checked {@code Q\d+} and then
+   * fetched, so a qid the owner minted went to Wikidata and came back {@code no such entity} — a
+   * true-sounding sentence about the wrong thing, and a round trip spent to learn what ADR 58's
+   * grammar already says. The rule refuses it before the resolver is asked, and this is the
+   * sentence for it.
    */
   public ToolResult<NodeView> addEntity(String qid) {
     Objects.requireNonNull(qid, "qid");
-    if (!QID.matcher(qid).matches()) {
-      return error("not a QID: " + qid);
-    }
-    Optional<NodeAssertion> fetched;
-    try {
-      fetched = resolver.fetch(qid);
-    } catch (WikidataUnavailableException e) {
-      log.warn("addEntity({}) source unavailable: {}", qid, e.getMessage());
-      return error("wikidata unavailable: " + e.getMessage());
-    }
-    if (fetched.isEmpty()) {
-      return error("no such entity: " + qid);
-    }
-    NodeAssertion assertion = fetched.get();
-    ingest.record(assertion);
-    return ToolResult.ok(
-        "added " + qid + " (" + assertion.label() + ")", ViewMapper.toNodeView(assertion.toNode()));
+    return switch (addition.add(qid)) {
+      case AdditionOutcome.Added added ->
+          ToolResult.ok(
+              "added " + added.qid() + " (" + added.node().label() + ")",
+              ViewMapper.toNodeView(added.node().toNode()));
+      case AdditionOutcome.Refused refused -> {
+        if (refused.reason() == AdditionOutcome.Reason.SOURCE_UNAVAILABLE) {
+          // #328 review, minor 5. EntityAddition itself logs nothing for this outage (it has a
+          // second, terminal-facing caller that may never name an entity), but this arm is the
+          // MCP tool's own — its returned sentence already names the qid (ADR 27) — so the log
+          // line here may carry diagnostics, just never the qid itself: detail() is the source's
+          // own words, and WikidataClient's non-transient-HTTP-status message embeds the request
+          // URI, which for a fetch always carries "ids=<qid>" (WikidataEntityResolver.entity).
+          log.warn("addEntity() source unavailable: {}", withoutRequestUri(refused.detail()));
+        }
+        yield error(refusalSentence(refused));
+      }
+    };
+  }
+
+  /**
+   * {@link AdditionOutcome.Refused#detail()}, minus the one clause it can carry a qid in.
+   *
+   * <p>Only {@code WikidataClient.get}'s non-transient-status message names a qid: it appends
+   * {@code " for " + uri}. Cutting from that clause on is enough — nothing before it interpolates
+   * anything but the status code.
+   */
+  private static String withoutRequestUri(String detail) {
+    int forClause = detail.indexOf(" for ");
+    return forClause < 0 ? detail : detail.substring(0, forClause);
+  }
+
+  /** The four sentences this method has always returned, byte for byte, and the fifth (#328). */
+  private static String refusalSentence(AdditionOutcome.Refused refused) {
+    return switch (refused.reason()) {
+      case NOT_A_QID -> "not a QID: " + refused.qid();
+      case LOCAL_ENTITY ->
+          "local entity: "
+              + refused.qid()
+              + " — no source to add it from, because the owner minted it";
+      case SOURCE_UNAVAILABLE -> "wikidata unavailable: " + refused.detail();
+      case NO_SUCH_ENTITY -> "no such entity: " + refused.qid();
+    };
   }
 
   /**
@@ -158,12 +199,17 @@ public final class SegueService {
   }
 
   /**
-   * The three sentences this method has always returned, byte for byte.
+   * The three sentences this method has always returned, byte for byte, plus a fourth added on
+   * #328.
    *
    * <p>{@link ExpansionOutcome.Refused} carries a reason and no number, deliberately — it is read
    * by a second caller that renders a tally label rather than a sentence. The one sentence that
    * quotes a number quotes the caller's own argument, and this is the caller, so {@code
    * maxNewEdges} is passed in rather than travelling on the outcome.
+   *
+   * <p>{@code NO_SUCH_ENTITY} is handled here even though {@link EntityExpansion#expand} never
+   * returns it (#328) — {@link ExpansionOutcome.Reason} is one enum, and an unhandled constant is a
+   * compile error, not a judgement about which caller can see it.
    */
   private static String refusalSentence(ExpansionOutcome.Refused refused, int maxNewEdges) {
     return switch (refused.reason()) {
@@ -173,6 +219,8 @@ public final class SegueService {
               + refused.qid()
               + " — no source to expand from, because the owner minted it";
       case BOUND_NOT_POSITIVE -> "maxNewEdges must be positive, got " + maxNewEdges;
+      case NO_SUCH_ENTITY ->
+          "no such entity: " + refused.qid() + " — nothing could be added for it";
     };
   }
 

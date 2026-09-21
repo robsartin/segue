@@ -3,6 +3,10 @@ package com.robsartin.segue.mcp;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.robsartin.segue.domain.AffinityRecord;
 import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.Candidate;
@@ -212,6 +216,50 @@ class SegueServiceTest {
 
     assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.ERROR);
     assertThat(result.detail()).containsIgnoringCase("unavailable");
+  }
+
+  @Test
+  @DisplayName("addEntity refuses a local entity naming the minting, and never asks the source")
+  void addEntityLocalEntityReturnsError() {
+    ToolResult<NodeView> result = service().addEntity(MINTED);
+
+    assertThat(result.outcome()).isEqualTo(ToolResult.Outcome.ERROR);
+    assertThat(result.detail()).contains("local entity:").contains("the owner minted it");
+    assertThat(resolver.fetchCallCount()).isZero();
+  }
+
+  @Test
+  @DisplayName("addEntity logs an outage's HTTP detail without the entity id it can carry")
+  void addEntitySourceUnavailableLogsDetailWithoutTheQid() {
+    resolver.fetchThrows(
+        new WikidataUnavailableException(
+            "Wikidata returned HTTP 404 for"
+                + " https://www.wikidata.org/w/api.php?action=wbgetentities&ids=Q01&format=json"));
+    Logger segueServiceLogger = (Logger) org.slf4j.LoggerFactory.getLogger(SegueService.class);
+    Level originalLevel = segueServiceLogger.getLevel();
+    ListAppender<ILoggingEvent> captured = new ListAppender<>();
+    captured.start();
+    segueServiceLogger.setLevel(Level.TRACE);
+    segueServiceLogger.addAppender(captured);
+    try {
+      service().addEntity("Q01");
+
+      assertThat(captured.list)
+          .as("the outage really was logged, or the assertions below are vacuous")
+          .isNotEmpty();
+      List<String> messages =
+          captured.list.stream().map(ILoggingEvent::getFormattedMessage).toList();
+      assertThat(messages)
+          .as("the status is worth an operator's look")
+          .anyMatch(m -> m.contains("404"));
+      Pattern qidLike = Pattern.compile("\\bQ\\d+\\b");
+      assertThat(messages)
+          .as("no logged message names the entity")
+          .noneMatch(m -> qidLike.matcher(m).find());
+    } finally {
+      segueServiceLogger.detachAppender(captured);
+      segueServiceLogger.setLevel(originalLevel);
+    }
   }
 
   // ---- expandEntity -----------------------------------------------------

@@ -3,6 +3,7 @@ package com.robsartin.segue.seed;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.wikidata.KindMapper;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -101,5 +102,92 @@ class ExpectationsTest {
 
     assertThat(expectation.acceptsKind(NodeKind.EVENT)).isTrue();
     assertThat(expectation.checksOccupation()).isFalse();
+  }
+
+  @Test
+  @DisplayName("a book is a work of a written class")
+  void shouldExpectAWorkOfAWrittenClassWhenTheKindIsBook() {
+    // tv-show's own class check is pinned by its own test,
+    // shouldExpectAWorkOfASeriesShapedClassWhenTheKindIsTvShow, rather than re-asserted here.
+    Expectation expectation = Expectations.forKind("book");
+
+    assertThat(expectation.acceptsKind(NodeKind.WORK)).isTrue();
+    assertThat(expectation.acceptsKind(NodeKind.PERSON))
+        .as("an unrecognised kind constrains nothing, so this is also the test that it IS known")
+        .isFalse();
+    assertThat(expectation.checksClass()).isTrue();
+    assertThat(expectation.classes())
+        .as("the ids live in KindMapper and are cited, never restated")
+        .containsExactlyInAnyOrder(
+            KindMapper.BOOK, KindMapper.LITERARY_WORK, KindMapper.WRITTEN_WORK);
+  }
+
+  @Test
+  @DisplayName("one row's kind carries its classes through the union the resolver asks for")
+  void shouldCarryTheClassesThroughWhenTheOnlyRoleIsBook() {
+    // NameGroup.expectation() calls forKinds for every group, including a group of one row, so
+    // this — not forKind — is the path a book row is judged by.
+    Expectation expectation = Expectations.forKinds(List.of("book"));
+
+    assertThat(expectation.checksClass()).isTrue();
+    assertThat(expectation.classes()).isEqualTo(Expectations.forKind("book").classes());
+  }
+
+  @Test
+  @DisplayName("a name listed as both a book and an author checks no class")
+  void shouldCheckNoClassWhenAnotherRoleConstrainsNone() {
+    // The permissive rule the occupation union already follows, for the same reason: the author
+    // half resolves to a PERSON, which states none of the written classes, so intersecting would
+    // refuse the very row the union exists to serve.
+    Expectation expectation = Expectations.forKinds(List.of("book", "author"));
+
+    assertThat(expectation.acceptsKind(NodeKind.PERSON)).isTrue();
+    assertThat(expectation.acceptsKind(NodeKind.WORK)).isTrue();
+    assertThat(expectation.checksClass()).isFalse();
+  }
+
+  @Test
+  @DisplayName("a film is a work of a film-shaped class")
+  void shouldExpectAWorkOfAFilmShapedClassWhenTheKindIsFilm() {
+    // tv-show's class tightening is pinned by its own test,
+    // shouldExpectAWorkOfASeriesShapedClassWhenTheKindIsTvShow, which also confirms film is
+    // untouched by it, the converse of this test.
+    Expectation expectation = Expectations.forKind("film");
+
+    assertThat(expectation.acceptsKind(NodeKind.WORK)).isTrue();
+    assertThat(expectation.acceptsKind(NodeKind.PERSON))
+        .as("an unrecognised kind constrains nothing, so this is also the test that it IS known")
+        .isFalse();
+    assertThat(expectation.checksClass()).isTrue();
+    assertThat(expectation.classes())
+        .as("the ids live in KindMapper and are cited, never restated")
+        .containsExactlyInAnyOrder(
+            KindMapper.FILM,
+            KindMapper.ANIMATED_FILM,
+            KindMapper.SHORT_FILM,
+            KindMapper.TELEVISION_FILM,
+            KindMapper.ANIMATED_SHORT_FILM);
+  }
+
+  @Test
+  @DisplayName(
+      "tv-show is tightened to series-shaped classes, correcting its pre-#333 registration")
+  void shouldExpectAWorkOfASeriesShapedClassWhenTheKindIsTvShow() {
+    Expectation expectation = Expectations.forKind("tv-show");
+
+    assertThat(expectation.acceptsKind(NodeKind.WORK)).isTrue();
+    assertThat(expectation.checksClass())
+        .as("tv-show used to check no class at all; this is the correction issue #338 makes")
+        .isTrue();
+    assertThat(expectation.classes())
+        .as("the ids live in KindMapper and are cited, never restated")
+        .containsExactlyInAnyOrder(
+            KindMapper.TELEVISION_SERIES,
+            KindMapper.MINISERIES,
+            KindMapper.TELEVISION_PROGRAM,
+            KindMapper.TELEVISION_SPECIAL);
+    assertThat(Expectations.forKind("film").checksClass())
+        .as("film, registered in the prior commit, is untouched by this one")
+        .isTrue();
   }
 }

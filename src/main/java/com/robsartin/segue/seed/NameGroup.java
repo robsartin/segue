@@ -1,5 +1,6 @@
 package com.robsartin.segue.seed;
 
+import com.robsartin.segue.support.NameFold;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -34,7 +35,7 @@ public record NameGroup(String key, List<SeedRow> rows) {
     Objects.requireNonNull(rows, "rows");
     Map<String, List<SeedRow>> byKey = new LinkedHashMap<>();
     for (SeedRow row : rows) {
-      byKey.computeIfAbsent(Names.fold(row.name()), key -> new ArrayList<>()).add(row);
+      byKey.computeIfAbsent(NameFold.fold(row.name()), key -> new ArrayList<>()).add(row);
     }
     return byKey.entrySet().stream()
         .map(entry -> new NameGroup(entry.getKey(), entry.getValue()))

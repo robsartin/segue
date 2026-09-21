@@ -39,7 +39,7 @@ class WikidataFactsTest {
       """;
 
   @Test
-  @DisplayName("one call carries label, aliases, sitelink count, kind and occupations")
+  @DisplayName("one call carries label, aliases, sitelink count, kind, classes and occupations")
   void readsEverythingTheDecisionNeeds() {
     try (StubWikidataServer stub = new StubWikidataServer()) {
       stub.enqueueBody(TWO_ENTITIES);
@@ -53,6 +53,9 @@ class WikidataFactsTest {
       assertThat(person.aliases()).containsExactly("Maggie Vale");
       assertThat(person.sitelinks()).isEqualTo(2);
       assertThat(person.kind()).isEqualTo(NodeKind.PERSON);
+      assertThat(person.classes())
+          .as("the raw P31, kept beside the kind the mapper folded it into")
+          .containsExactly("Q5");
       assertThat(person.occupations()).containsExactly("Q855091", "Q639669");
 
       CandidateFacts band = byQid.get("Q090000102");

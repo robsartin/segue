@@ -778,3 +778,201 @@ with no promotions composed in: rejected above, for the reason given there.
 tests, and the verification of this *document* is the full gate over an otherwise unchanged tree:
 `AdrIndexTest`, `AdrCitationsTest`, `DocumentationLinksTest` for the relative links above, and
 `javadoc -Werror` inside `./gradlew check`.
+
+**Amendment (2026-09-14, issue #326): one clause in the paragraph above is overtaken — an entity a
+`--second-hop` run expanded is not always covered by `Expanded` afterwards.**
+
+Nothing above is withdrawn, no decision above is edited, and this ADR keeps `Accepted`. The
+2026-09-13 amendment's *Fixed at the start, and why re-runs need no state* paragraph says "an entity
+this run expanded is covered by `Expanded` on the next read of the log", as an unconditional fact.
+The census and run on issue #323 (2026-09-14) show it holds only when the expansion recorded a
+reference `Expanded.seedOf` reads, and not when it recorded only a MusicBrainz-backed edge or a
+Wikidata forward claim with no id — the same residual
+[ADR 63](0063-a-read-only-census-of-the-graph.md)'s 2026-09-14 amendment for #326 records on this
+population's own census rows. That amendment is the decision; this entry records which clause here
+it overtakes.
+
+**Nothing here is unit-testable on its own, and that is said out loud rather than left implied.** No
+behaviour changed and no test was written for behaviour. The verification of this *document* is the
+full gate over an otherwise unchanged tree: `AdrIndexTest`, `AdrCitationsTest`,
+`DocumentationLinksTest` for the relative link above, and `javadoc -Werror` inside `./gradlew check`.
+
+**Amendment (2026-09-15, issue #328): a `--known` run takes `--add`, and adds what the file names
+that the graph holds no node for before expanding it.**
+
+Nothing above is withdrawn, no decision above is edited, and this ADR keeps `Accepted`. The
+2026-09-12 amendment for #313 shipped `--known` and said, of an id the graph holds no node for,
+that it "is refused, not dropped" — "the first coverage gap there is, and it is reported rather
+than filtered away". That stays the default and stays true of every run that does not ask for
+otherwise. What changes is that a run may now be asked to close that gap instead of reporting it.
+`ExpandCli.USAGE` is the authority on the flags' current text, and `ExpansionReport` on the
+block's.
+
+**The switch.** `--add`, given beside `--known` and nowhere else. The population is composed
+exactly as a `--known` run composes it — the file's ids through the merge fold, minus those
+`domain.Expanded` covers — and the remainder then splits: an id the graph holds a node for is
+expanded as before, and an id it holds none for is added first and expanded second, in the same
+pass and in the file's order. Not given, every run behaves exactly as it did.
+
+**One rule, in `expansion`, and why it went there.** The fetch-and-record was the MCP facade's:
+check the shape, ask the resolver, record the node claim through `IngestService`, which upserts.
+It is now `expansion.EntityAddition`, and `SegueService.addEntity` reads it. This is #284's
+argument one step earlier in the same story — two callers, one body, and the second caller needed
+the rule and not a tool result. It could not stay in `mcp`, because
+`ArchitectureTest.theExpanderOpensNothingElse` forbids the expander that package outright; it
+could not go to `domain`, which names no port; and a copy in `expand` is how two tools come to
+answer one question differently, which this repository has already measured once.
+
+**No fence moves, and that is checked rather than asserted.**
+`ArchitectureTest.onlyTheClientAndTheExpanderExpandAnEntity` already bars every package but the
+two callers, the wiring and `expansion` itself from reaching into `expansion`, so the new class
+joins that fence by living there. `IngestService.record` is still the only write the expander can
+make, so `theExpanderWritesThroughIngestAlone` holds unchanged, and no dev-tool package list
+gains or loses a name.
+
+**[ADR 26](0026-mcp-tool-surface.md) and [ADR 19](0019-assertion-log-source-of-truth.md) are
+untouched, and this says so out loud.** The tool surface is still six tools: nothing was added to
+it, nothing was removed from it, and `add_entity` returns the same result for the same input with
+one exception named below. The single writer is still `IngestService`: the new rule appends
+through it and reaches neither the log nor the graph directly, which is the same relationship the
+expansion has had since #284.
+
+**The one behaviour of `add_entity` that did change**, recorded here rather than left to be
+discovered: the rule refuses a qid the owner minted before the resolver is asked. Before this
+issue the tool checked only `Q` followed by digits and then fetched, so such an id went to
+Wikidata and came back as "no such entity" — a round trip spent to learn what ADR 58's grammar
+already fixes, and an answer about the wrong thing. It now returns a refusal that names the
+minting, in the shape the expansion's own local-entity refusal already uses.
+
+**What the block says.** One row under `promotions`, `added`, counting entities a run recorded
+before expanding them; one row in the dry run's preflight, `to add`, counting the ones it would;
+and one more constant in the refusal reasons, for an id no source has an entity at, labelled
+distinctly from the id the graph merely has not got yet. **Both new rows print only when they are
+not zero**, and a run that was not given the switch cannot make either of them non-zero, so every
+block already pasted into an issue is byte-identical — the byte-identity the 2026-09-12 amendment
+kept for the same reason, and ADR 65's 2026-09-06 amendment before it. `considered` is still the
+population the run was handed, so `considered == expanded + refused + failed` is untouched:
+`added` is a count of a step, not a fourth member of that partition, and an entity that was added
+and then expanded is counted under both.
+
+**The `#` clause says the switch was given, and not how many it added.** That number is a row,
+and the clause's own rule — the one the 2026-09-11 and 2026-09-12 amendments each argue for — is
+that it carries what no row states. The population value the clause is rendered from is also
+composed before the first entity is visited and is rendered into the dry-run block as well, where
+nothing has been added yet. What a pasted block could not otherwise tell is that the switch was
+given at all, precisely because both new rows are suppressed when they are zero, and that is what
+the clause now says.
+
+**Refused where no file names the population.** `--add` with `--rated-since` and `--add` with
+`--second-hop` are each refused in the words the existing pairwise refusals use, and `--add`
+without `--known` is refused in its own: both of those populations are drawn from the graph — one
+is `KnownList.promoted`, the other a ring read out of the fold's own nodes — so nothing in either
+can be missing. A run naming both `--known` and `--rated-since` beside `--add` is still refused in
+the sentence already on record, so a script written against it still reads.
+
+**Idempotent, for the reason a `--known` run is.** Adding is `IngestService.record`, which
+upserts: a second `--add` run over the same file re-records nothing it does not have to, and an
+entity added on the first run has a node on the second, so it is expanded rather than added. An
+entity whose expansion recorded nothing seed-shaped stays in the population and is refreshed,
+which is the floor this ADR's 2026-09-12 amendment for #315 and its 2026-09-14 amendment for #326
+already describe; nothing here changes that floor or claims to.
+
+**Alternatives rejected.**
+
+- **A separate bulk-add dev tool.** Single responsibility, and rejected on the same evidence the
+  2026-09-12 amendment rejected a separate known-list tool: an eleventh tool would be this one's
+  replay, block, dry run, fences and chapter under a new name, with one step different, and the
+  owner would run two things where one pass does both.
+- **Adding through the MCP tools by hand.** Hundreds of calls, no dry run, no aggregates block to
+  paste, and no record of what was done. It is also, as far as anything under version control
+  says, how the touring acts were first added — which is the argument for writing the mechanism
+  down rather than repeating it.
+- **Adding on every `--known` run, with no switch.** Rejected: a file carrying a typo'd or stale
+  id would then create a node for it, silently, on a tool that writes the log. The switch keeps
+  "refuse what the graph lacks" the default, which is what the 2026-09-12 amendment chose.
+- **Treating the added rows as known without rating them.** Rejected: the owner chose to rate
+  first, and the promotion rule
+  ([ADR 48](0048-a-high-rating-counts-as-something-you-have.md)) already turns a high rating into
+  membership, so a second membership rule would be two answers to one question.
+- **Merging the rejected rows into the touring file.** Rejected: that is the alternative above
+  reached from the other side — it would make them known to every tool at once — and it would put
+  the file's provenance beyond the export that produced it.
+
+**Nothing here is unit-testable on its own, and that is said out loud rather than left implied.**
+This entry records a decision whose code landed with its own tests: the extracted rule's five
+outcomes against an in-process stand-in for the API, with the minted id's refusal shown firing on
+a planted control and the request counter proving no source was asked; the MCP facade's existing
+offline cases unedited as the control that the tool's words did not move; the parser's three
+refusals and the older sentence still winning, each seen red; the two new rows seen red and then
+pinned, beside the unchanged golden block; and the composition seen red on one fixture run twice,
+once with the switch and once without. The verification of the *document* is the full gate over an
+otherwise unchanged tree: `AdrIndexTest`, `AdrCitationsTest`, `DocumentationLinksTest` for the
+relative links above, and `javadoc -Werror` inside `./gradlew check`.
+
+**Amendment (2026-09-19, issue #344): a `--known` run's population excludes a local id, exactly as
+`--second-hop`'s already does from `domain.SecondHop`'s own change for the same issue, and the
+`local entity` refusal this ADR's earlier amendments describe is reachable from `--rated-since`
+alone.**
+
+Nothing above is edited and this ADR keeps `Accepted`. `ExpandCli`'s `--known` population was the
+file's ids, on their canonical side, that `domain.Expanded` does not cover; it now also excludes an
+id the graph holds a node for that `LocalEntity.isLocal` answers true for, composed in the same
+filter and before either the dry run's preflight or the run's loop ever sees the population — the
+same exclusion [ADR 63](0063-a-read-only-census-of-the-graph.md)'s amendment for this issue gives
+the census's `never expanded` row, so the two tools read one rule again rather than two that happen
+to agree on today's fixtures. **The shape alone never excludes.** An id `LocalEntity.isLocal`
+answers true for that the graph holds no node for — a hand-edited known-list row, or one written
+against another database — stays in the population exactly as it did before this amendment: no
+source will ever answer for it either, but the graph is what says whether it is one of the owner's
+own, not the shape by itself.
+
+**Before this issue, a `--known` run over a file naming a minted id visited it anyway** — nothing
+excluded a local id from the population, so it reached `EntityExpansion.expand`, which has refused
+`LOCAL_ENTITY` since issue #92 and refuses it still, before any adapter is asked. The round trip
+cost nothing over the network (the refusal fires first), but it spent a `refused` line and a pass of
+the loop learning what `LocalEntity.isLocal` already knew at the moment the population was composed.
+`domain.SecondHop.toExpandBeside`'s own change for this issue closes the same gap on the population
+`--second-hop` composes, so a `local entity` refusal can no longer arise from either of the two
+file-driven runs.
+
+**It can still arise from the third population, and that is unchanged.** A run given neither
+`--known` nor `--second-hop` composes its population from `KnownList.promoted` over the ratings map
+alone — narrowed by `--rated-since` when one is given — and nothing filters that population by
+shape: a rating is a claim about the owner's own local entity exactly as it is about a Wikidata one,
+and excluding it there would refuse to expand something the owner asked this tool to visit rather
+than telling him it cannot be done. The refusal still fires, on the same call, for the same reason.
+
+**The runbook's `--known --add` derive step is true again.** `named` minus `in the graph` remains
+what a `--add` run would TRY — that arithmetic never involved `never expanded` — because the only id
+this amendment excludes is one the graph already holds; an id shaped like the owner's own that the
+graph holds no node for is not excluded, so it stays in that difference exactly as a Wikidata id
+with no node does, and reaches the run's own `unknown entity` refusal rather than the addition
+itself. `never expanded` is now, once more, what an `--add` run's own `--known` pass would then
+expand: before this issue a minted id already in the graph sat under `never expanded` and inflated a
+number the sentence promised was the next step's spend, when no `--add` run would ever visit it.
+Excluding it from the row is what makes that sentence true rather than merely close.
+
+**Alternatives rejected.**
+
+- **Filtering at `EntityExpansion.expand` alone, and leaving the population composition unchanged.**
+  Rejected: the refusal there already exists and was never the gap — the population naming the id
+  at all is. A caller that composes a population still has to know not to count it, or the dry run's
+  `considered` keeps naming an entity no real run will ever expand.
+- **A `--known` refusal reason distinct from `LOCAL_ENTITY`.** Rejected: the two runs would then
+  give an operator two different words for one fact — the id is the owner's own and no source will
+  ever answer for it — which is the confusion issue #328's own addition-refusal reasons were
+  written to avoid repeating.
+- **Excluding a local id from `--rated-since`'s population too, for symmetry.** Rejected: this
+  population is not drawn from the graph the way the other two are — it is composed from ratings —
+  and a rating on a local entity is exactly as real a claim as a rating on anything else. Refusing to
+  even attempt it would hide the one honest answer this tool has for that population, which is the
+  refusal itself.
+
+**Nothing here is unit-testable on its own but for the exclusion and the refusal's remaining path,
+and those are**: `ExpandCliTest` carries a `--known --dry-run` case over a file naming a local id,
+seen red before the exclusion and green after, and a `--rated-since` case carrying the refusal this
+amendment says still fires — the same case an earlier `--second-hop` fixture used to carry, moved
+here because `--second-hop` can no longer produce it. The verification of this *document* is the
+full gate over an otherwise unchanged tree: `AdrIndexTest`, `AdrCitationsTest`,
+`DocumentationLinksTest` for the relative link above, and `javadoc -Werror` inside `./gradlew
+check`.

@@ -3,9 +3,11 @@ package com.robsartin.segue.expand;
 import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.Expanded;
 import com.robsartin.segue.domain.KnownList;
+import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.RatingAge;
 import com.robsartin.segue.domain.SecondHop;
+import com.robsartin.segue.expansion.EntityAddition;
 import com.robsartin.segue.expansion.EntityExpansion;
 import com.robsartin.segue.expansion.ExpansionSources;
 import com.robsartin.segue.ingest.GraphProjector;
@@ -68,6 +70,15 @@ import org.slf4j.LoggerFactory;
  * run, this one <b>does</b> read ratings: the population it composes with is the recommender's own
  * notion of known, promotions and all. {@code --second-hop} is exclusive with both {@code --known}
  * and {@code --rated-since} — all three name a different population, and the block names one.
+ *
+ * <p><b>It adds what the file names that the graph lacks, and only when {@code --add} asks.</b> The
+ * population is composed exactly as a {@code --known} run composes it; what changes is that an id
+ * in it the graph holds no node for is added through {@code expansion.EntityAddition} and then
+ * expanded, rather than refused as an unknown entity. {@code --add} needs {@code --known}, refused
+ * without it and refused with either of the other two populations too, because both are drawn from
+ * the graph and nothing in them can be missing — only a file can name a missing entity. The
+ * addition still reaches the graph through {@code IngestService.record} alone, this package's only
+ * write (#328, ADR 19).
  */
 public final class ExpandCli {
 
@@ -75,7 +86,8 @@ public final class ExpandCli {
 
   private static final String USAGE =
       "usage: --db <segue.db> [--max-new-edges <n>] [--dry-run] [--rated-since <ISO-8601 instant,"
-          + " e.g. 2026-09-06T15:00:00Z>] [--known <file of QIDs>] [--second-hop <file of QIDs>]";
+          + " e.g. 2026-09-06T15:00:00Z>] [--known <file of QIDs>] [--add] [--second-hop <file of"
+          + " QIDs>]";
 
   private ExpandCli() {}
 
@@ -86,6 +98,8 @@ public final class ExpandCli {
    * @param maxNewEdges the bound handed to every entity's expansion, defaulting to {@link
    *     ExpandContext#defaults()}
    * @param dryRun report what would be visited and touch no network and no log
+   * @param add compose additions from the known-list file alongside the population, or false for
+   *     none. Requires {@link #known}, because only a file can name an entity the graph lacks
    * @param ratedSince the instant to filter promotions by, or empty for no filter
    * @param known the known-list file whose never-expanded entities are the population, or empty for
    *     the promotions. Never read here: the guide's examples are parsed with an invented home
@@ -96,6 +110,7 @@ public final class ExpandCli {
       Path database,
       int maxNewEdges,
       boolean dryRun,
+      boolean add,
       Optional<Instant> ratedSince,
       Optional<Path> known,
       Optional<Path> secondHop) {}
@@ -104,11 +119,16 @@ public final class ExpandCli {
   static Options parse(String[] args, String envDatabase, String userHome) {
     Map<String, String> values = new LinkedHashMap<>();
     boolean dryRun = false;
+    boolean add = false;
 
     for (int i = 0; i < args.length; i++) {
       String flag = args[i];
       if ("--dry-run".equals(flag)) {
         dryRun = true;
+        continue;
+      }
+      if ("--add".equals(flag)) {
+        add = true;
         continue;
       }
       String value = valueOf(args, i, flag);
@@ -166,6 +186,19 @@ public final class ExpandCli {
       throw usage(
           "--second-hop and --rated-since name different populations — give one or neither");
     }
+    if (add && ratedSince != null) {
+      // Both of the graph-side populations are, by construction, entities the graph holds a node
+      // for — one is KnownList.promoted and the other is a ring read out of the fold's own nodes
+      // map — so nothing in either can be missing, and --add would have nothing to do. Only a
+      // file can name an entity the graph lacks (#328).
+      throw usage("--add and --rated-since name different populations — give one or neither");
+    }
+    if (add && secondHop != null) {
+      throw usage("--add and --second-hop name different populations — give one or neither");
+    }
+    if (add && known == null) {
+      throw usage("--add needs --known — only a file can name an entity the graph lacks");
+    }
 
     if (!values.isEmpty()) {
       throw usage("unknown option " + values.keySet().iterator().next());
@@ -175,6 +208,7 @@ public final class ExpandCli {
         database,
         maxNewEdges,
         dryRun,
+        add,
         Optional.ofNullable(ratedSince),
         Optional.ofNullable(known),
         Optional.ofNullable(secondHop));
@@ -262,9 +296,24 @@ public final class ExpandCli {
         KnownListInput known = KnownListInput.read(options.known().get());
         List<String> named = merges.canonical(known.qids());
         Expanded expanded = Expanded.in(assertions.readAll()).onTheCanonicalSide(merges);
-        population = named.stream().filter(qid -> !expanded.covers(qid)).toList();
+        // #344. The exclusion is of a local id the graph HOLDS a node for, never of the shape
+        // alone: a hand-edited row, or one written against another database, can name a local id
+        // the graph has never minted, and no source will ever answer for it either — but it is
+        // not one of the owner's own entities until the graph says so. "Holds" is asked the same
+        // way ExpandRun.dryRun already asks it for --add's own `to add` bucket (graph.node(qid)),
+        // so the two cannot come to disagree about what the graph has.
+        population =
+            named.stream()
+                .filter(qid -> !(LocalEntity.isLocal(qid) && graph.node(qid).isPresent()))
+                .filter(qid -> !expanded.covers(qid))
+                .toList();
+        // #328. options.add() carried onto the population value: a --known run is the only
+        // population --add can name, and the clause is composed here, before the run, exactly as
+        // KnownNeverExpanded's own javadoc says it must be.
         covered =
-            Optional.of(new KnownNeverExpanded(known.name(), named.size() - population.size()));
+            Optional.of(
+                new KnownNeverExpanded(
+                    known.name(), named.size() - population.size(), options.add()));
         log.info("{} known-list entity(s) to visit", population.size());
       } else if (options.secondHop().isPresent()) {
         // The population is composed ONCE, here, and nothing in the run re-reads it: a run that
@@ -333,7 +382,10 @@ public final class ExpandCli {
       EntityExpansion expansion =
           new EntityExpansion(resolver, graph, ingest, ExpansionSources.both(resolver, clock));
 
-      ExpandRun run = new ExpandRun(expansion, graph);
+      ExpandRun run =
+          options.add()
+              ? new ExpandRun(expansion, graph, new EntityAddition(resolver, ingest))
+              : new ExpandRun(expansion, graph);
       // The long arity when a filter was applied and the short one when none was, so both keep a
       // production caller rather than one of them being reachable from tests alone.
       if (options.dryRun()) {

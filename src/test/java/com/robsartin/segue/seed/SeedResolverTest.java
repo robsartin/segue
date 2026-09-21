@@ -2,6 +2,7 @@ package com.robsartin.segue.seed;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.robsartin.segue.support.Outcome;
 import com.robsartin.segue.wikidata.StubWikidataServer;
 import com.robsartin.segue.wikidata.WikidataClient;
 import com.robsartin.segue.wikidata.WikidataEntityResolver;

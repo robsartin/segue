@@ -523,3 +523,129 @@ nothing.
 tests, and the verification of this *document* is the full gate over an otherwise unchanged tree:
 `AdrIndexTest`, `AdrCitationsTest`, `DocumentationLinksTest` for the relative links above, and
 `javadoc -Werror` inside `./gradlew check`.
+
+**Amendment (2026-09-14, issue #326): the three rows the 2026-09-13 amendment for #319 added carry
+`never expanded`'s residual as a floor on two of them and a ceiling on the third, and this records
+what the first `--second-hop` run measured.**
+
+Nothing above is edited and this ADR keeps `Accepted`. `with someone to expand beside`, `with no
+one` and `distinct to expand` are read off `domain.SecondHop.toExpandBeside`, which excludes a
+neighbour only once `Expanded.covers` it — the same call, and the same rule, the `never expanded`
+row and the 2026-09-12 amendments for #311, #313 and #315 above already govern. A `--second-hop` run
+expands exactly the neighbours the `file and promotions` sub-section's `distinct to expand` row
+names, so the question this amendment answers is the one the amendment for #315 above already
+answered for `--known`, asked of a different population: does expanding a neighbour make `Expanded`
+cover it afterwards?
+
+**Not always, and the census and run on issue #323 (2026-09-14) is where that was measured.** A
+neighbour whose expansion recorded only a MusicBrainz-backed edge, or a Wikidata forward claim
+carrying no statement id, leaves no reference `Expanded.seedOf` reads — the same residual the
+2026-09-12 amendment for #311 above already grouped into a small family of residuals that all err
+the same conservative way, met here on a population `--known` never visits. The run on #323 visited
+every neighbour `distinct to expand` named for that population and recorded something for each of
+them, and the row printed afterwards did not reach zero.
+
+**So `distinct to expand` and `with someone to expand beside` sit at a floor, and `with no one` at a
+ceiling, once every entity `distinct to expand` names has been visited by a `--second-hop` run that
+reported `added nothing`, `refused`, `failed`, `neighbours skipped` and `endpoints refused` all
+zero, and named no source under `unavailable`** — six cells, not a countdown on any one of them.
+Clean on all six, every visited entity's Wikidata answer was recorded in full, so what `distinct to
+expand` and `with someone to expand beside` still count named no seed-shaped reference and a re-run
+repeats them without moving either row; a residual neighbour keeps its act counted there and out of
+`with no one`, which is why `with no one` cannot rise to what full coverage would reach. A `refused`
+that is entirely `local entity` — `ExpansionReport`'s label for the owner's own minted stand-ins,
+which no source will ever answer for — is permanent on its own and does not withhold this guarantee.
+The developer guide's `--second-hop` chapter is the authority on the procedure this puts in the
+operator's hands, and it is not restated here.
+
+**Alternatives rejected.**
+
+- **A visited-marker row in the log.** Declined already, on #313 and #315: the reverse pass already
+  records each neighbour it discovers as a node claim carrying that neighbour's own bare qid, and a
+  rule phrased "the reference names this entity" would read every discovered neighbour as having
+  expanded itself — `Expanded`'s own class javadoc names this as the trap its shape is written to
+  avoid.
+- **Reading the MusicBrainz adapter's own references.** `MusicBrainzSourceAdapter.toAssertion`
+  builds `sourceRef` as `artist/<seedMbid>#<type>:<targetMbid>` — the seed's MBID is always the
+  first field, so the reference does name which end was the seed. What it cannot do is name that
+  MBID as a qid: the fold holds no map back from a MusicBrainz MBID to a Wikidata qid —
+  `MusicBrainzIdentity` (`expansion.WikidataMusicBrainzIdentity` in the shipped wiring) answers
+  `mbidFor` and `identitiesFor` at expansion time, and nothing stores what either call returned.
+  Direction (`forward` or `backward`) affects which assertion endpoint — `from` or `to` — the seed
+  sits on, not what `sourceRef` names.
+- **A "visited" count in the census.** Nothing in the log carries it. The log records what an
+  expansion asserted, not that it ran, and the residual above is exactly the case where it asserted
+  something that carries no reference this rule reads — the same gap a visited marker would need a
+  new claim type to close, declined for its own reason by the 2026-09-12 amendment above for #315.
+
+**Nothing about the rows, the rule or the sections changes.** `domain.SecondHop`, `KnownListCensus`
+and `CensusReport` emit exactly what they emitted before; the only edit under `src/main` this issue
+makes is one javadoc sentence on `KnownListCensus.Population`'s `distinctToExpand`.
+[ADR 66](0066-expand-every-promotion-from-a-dev-tool.md)'s 2026-09-14 amendment corrects the one
+sentence there this reading overtakes.
+
+**Nothing here is unit-testable on its own, and that is said out loud rather than left implied.** No
+behaviour changed and no test was written for behaviour. The verification of this *document* is the
+full gate over an otherwise unchanged tree: `AdrIndexTest`, `AdrCitationsTest`,
+`DocumentationLinksTest` for the relative link above, and `javadoc -Werror` inside `./gradlew check`.
+
+**Amendment (2026-09-19, issue #344): a minted local id is no longer counted as a never-expanded
+shortfall, on either the row or the three rows that inherit its floor, and the known-list section
+gains one row that says how many of an entity's own were counted at all.**
+
+Nothing above is edited and this ADR keeps `Accepted`. `KnownListCensus.Population` gains `local` —
+the population's ids the fold holds a node for that `LocalEntity.isLocal` answers true for, on the
+canonical side exactly as every other count here is: a local id merged onto a canonical is counted
+as the canonical, never as local, because the canonical is what a source can answer for and the
+local id no longer is what the population names. `neverExpanded` and its by-kind rows now exclude a
+local id for the reason the 2026-09-12 amendment for #315 above already gave the row's own floor:
+`domain.Expanded` reads a seed out of Wikidata's own reference shapes, and no source will ever write
+one against an id Wikidata's own grammar refuses to allocate, on ADR 59's own decision. Before this
+issue such an id sat under `never expanded` forever, counted as a shortfall a further `--known` run
+could still close by finding a source. It never could; it is now counted where it belongs.
+
+`CensusReport` prints `local` nested one level under `in the graph`, in each sub-section, only when
+it is not zero — the print-when-non-zero choice issue #328 already made for `added` and `to add`,
+kept for the same reason: a file naming no local id prints the block byte for byte as before, and
+every block already pasted into an issue stays readable against this one.
+
+**The three second-hop rows move with it, from the one rule `SecondHop.toExpandBeside` already
+is.** A local neighbour beside an isolated act is now excluded from that rule outright —
+`domain.SecondHop`'s own change for this issue — so it is counted under neither `with someone to
+expand beside` nor `distinct to expand`, and an isolated act whose only unexpanded neighbour was a
+local one now counts under `with no one` instead. `distinctToExpand`'s own javadoc carried a clause
+that a `refused` reading of `local entity` from a `--second-hop` run is permanent and does not
+withhold the six-cell guarantee the 2026-09-14 amendment for #326 above describes; that clause is
+now vacuous rather than wrong — a `--second-hop` run can no longer produce that refusal at all,
+since the population it visits never contains a local neighbour to begin with — and the sentence is
+removed rather than left describing a case that cannot occur.
+
+**Alternatives rejected.**
+
+- **Counting a local id under `never expanded` and noting it in prose alone.** Rejected: the row's
+  own name is the claim, and the developer guide already reads the row as a floor a further
+  `--known` run could close (the 2026-09-12 amendment for #315 above). A number that cannot close is
+  not that floor, and a footnote does not change what the row says by itself when pasted without
+  one.
+- **Printing `local` unconditionally, zero or not.** Rejected on the same precedent issue #328 gave
+  `added` and `to add`: every block already pasted into an issue would gain a new zero row, which is
+  the byte-identity break this project has twice now declined to make.
+- **A separate top-level section for local entities, beside `claims`' `local entities minted`.**
+  Rejected: that row already counts every local entity the log has ever minted, whether or not it is
+  on this file, and duplicating the count under a new heading answers a different question — which
+  of *this file's* entities are local — under a name that invites confusing the two.
+- **One shared predicate — on `domain.Expanded`, or a filter shared by the census and the
+  expander — in place of three readers each citing `LocalEntity.isLocal` on their own.** Rejected:
+  `Expanded` answers who a source has been asked about, and reading an owner claim as covering
+  nothing is [ADR 59](0059-owner-claims-as-a-third-layer.md)'s own decision, not this issue's to
+  restate — folding "local" into it would make one word mean two things. The census's `local` row,
+  `ExpandCli`'s `--known` population and `SecondHop.toExpandBeside` compose three different
+  populations already, and a fourth type built to hold the rule would still have to be read by all
+  three call sites; citing `LocalEntity.isLocal` directly, its one statement, is the same sharing
+  with no fourth type to keep in step.
+
+**Nothing here is unit-testable on its own but for the counting rule and the row itself, and those
+are**: `SecondHopTest`, `KnownListCensusTest` and `CensusReportTest` carry the new cases, each seen
+red before the change that turns it green. The verification of this *document* is the full gate
+over an otherwise unchanged tree: `AdrIndexTest`, `AdrCitationsTest`, `DocumentationLinksTest` for
+the relative links above, and `javadoc -Werror` inside `./gradlew check`.

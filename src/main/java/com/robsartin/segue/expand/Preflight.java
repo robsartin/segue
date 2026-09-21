@@ -13,5 +13,10 @@ package com.robsartin.segue.expand;
  *     the rest
  * @param minted those {@link com.robsartin.segue.domain.LocalEntity#isLocal} answers true for,
  *     which {@code LOCAL_ENTITY} would refuse
+ * @param toAdd those the run would add before expanding — not {@link
+ *     com.robsartin.segue.domain.LocalEntity#isLocal} and with no node — which is zero on every run
+ *     that was not given {@code --add}, because only such a run adds anything. Kept disjoint from
+ *     {@link #minted} by {@link ExpandRun#dryRun}'s same first-check rule, so an {@code --add} run
+ *     closes exactly: {@code considered == inTheGraph + minted + toAdd}
  */
-public record Preflight(int considered, int inTheGraph, int minted) {}
+public record Preflight(int considered, int inTheGraph, int minted, int toAdd) {}

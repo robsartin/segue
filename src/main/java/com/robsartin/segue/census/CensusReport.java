@@ -184,6 +184,12 @@ public final class CensusReport {
   private static void rows(List<Line> body, KnownListCensus.Population population) {
     body.add(nested("named", population.named()));
     body.add(nested("in the graph", population.inTheGraph()));
+    // Nested one level under `in the graph`, the row it breaks down, and printed only when it is
+    // not zero — the print-when-non-zero precedent #328 set for `added` and `to add`, kept for the
+    // same reason: a file naming no local id must print this block byte for byte as it always has.
+    if (population.local() != 0) {
+      body.add(deeper("local", population.local()));
+    }
     body.add(nested("never expanded", population.neverExpanded()));
     // The number is read off the constant the walk itself is bounded by, never spelled out a
     // second time: move Recommendations.MAX_HOPS and this row says the new number rather than

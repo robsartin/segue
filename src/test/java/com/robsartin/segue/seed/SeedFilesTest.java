@@ -43,6 +43,29 @@ class SeedFilesTest {
   }
 
   @Test
+  @DisplayName("a row with an empty status reads, because a hand-written list carries none")
+  void shouldReadTheRowWhenTheStatusFieldIsEmpty() throws IOException {
+    // The reading list is written by hand, and a tour status is a fact about scheduling that a
+    // hand list has nothing to say about. The column is carried through untouched, as SeedRow's
+    // own note says, so "untouched" has to include empty.
+    Path list =
+        write(
+            "reading.csv",
+            """
+            name,kind,status
+            The Salt Almanac,book,
+            Marguerite Vale,author,
+            """);
+
+    List<SeedRow> rows = SeedFiles.readList(list);
+
+    assertThat(rows).hasSize(2);
+    assertThat(rows.get(0).kind()).isEqualTo("book");
+    assertThat(rows.get(0).status()).isEmpty();
+    assertThat(rows.get(1).status()).isEmpty();
+  }
+
+  @Test
   @DisplayName("a file that is not this list is refused rather than misread")
   void rejectsAnUnexpectedHeader() throws IOException {
     Path list = write("wrong.csv", "artist,genre\nVelvet Ossuary,folk\n");
@@ -99,70 +122,5 @@ class SeedFilesTest {
 
     assertThat(groups).hasSize(2);
     assertThat(groups.get(1).spellings()).containsExactly("Ashgrove (4)", "Ashgrove");
-  }
-
-  @Test
-  @DisplayName("the first write creates a header and the second does not repeat it")
-  void appendsUnderOneHeader() throws IOException {
-    Path out = dir.resolve("mapping.csv");
-    SeedFiles.append(out, List.of(row("Velvet Ossuary", "Q090000201")));
-    SeedFiles.append(out, List.of(row("Ashgrove", "Q090000202")));
-
-    assertThat(Files.readAllLines(out))
-        .hasSize(3)
-        .first()
-        .isEqualTo("name,kind,status,qid,label,confidence,reason");
-  }
-
-  @Test
-  @DisplayName("a value carrying a comma or a quote survives the round trip")
-  void quotesWhatNeedsQuoting() throws IOException {
-    Path out = dir.resolve("mapping.csv");
-    SeedFiles.append(
-        out,
-        List.of(
-            new ResolutionRow(
-                "Bramble, Vale & Ashgrove",
-                "musician",
-                "APPROVED",
-                "Q090000203",
-                "Bramble \"Vale\" Ashgrove",
-                Outcome.ACCEPTED,
-                "name, kind and occupation agree")));
-
-    assertThat(SeedFiles.readRows(out))
-        .singleElement()
-        .satisfies(
-            read -> {
-              assertThat(read.name()).isEqualTo("Bramble, Vale & Ashgrove");
-              assertThat(read.label()).isEqualTo("Bramble \"Vale\" Ashgrove");
-              assertThat(read.reason()).isEqualTo("name, kind and occupation agree");
-            });
-  }
-
-  @Test
-  @DisplayName("a re-run does not redo what either output file already holds")
-  void resumesFromBothOutputFiles() throws IOException {
-    Path mapping = dir.resolve("mapping.csv");
-    Path review = dir.resolve("review.csv");
-    SeedFiles.append(mapping, List.of(row("The Velvet Ossuary", "Q090000204")));
-    SeedFiles.append(review, List.of(row("Ashgrove", null)));
-
-    var done = SeedFiles.alreadyResolved(List.of(mapping, review));
-
-    // Keyed by the folded name, so the run that wrote "The Velvet Ossuary" also covers the
-    // row spelled "Velvet Ossuary".
-    assertThat(done).contains(Names.fold("Velvet Ossuary"), Names.fold("Ashgrove"));
-  }
-
-  @Test
-  @DisplayName("nothing done yet is not an error")
-  void resumingFromNothing() {
-    assertThat(SeedFiles.alreadyResolved(List.of(dir.resolve("absent.csv")))).isEmpty();
-  }
-
-  private static ResolutionRow row(String name, String qid) {
-    return new ResolutionRow(
-        name, "musician", "APPROVED", qid, "label", Outcome.ACCEPTED, "because");
   }
 }

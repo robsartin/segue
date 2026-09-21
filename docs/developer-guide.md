@@ -33,6 +33,7 @@ Everything here was checked against the source in `src/main/java/com/robsartin/s
 - [Claiming something no source has](#claiming-something-no-source-has)
 - [A supervised first run](#a-supervised-first-run)
 - [Expanding every promotion](#expanding-every-promotion)
+- [What Wikidata lacks](#what-wikidata-lacks)
 - [How to read an ADR against the code](#how-to-read-an-adr-against-the-code)
 
 ## What segue is, in one pass
@@ -302,9 +303,11 @@ graph TD
   musicbrainz --> port
   musicbrainz --> domain
   port --> domain
+  support --> domain
   seed --> port
   seed --> domain
   seed --> wikidata
+  seed --> support
   export --> port
   export --> domain
   export --> ingest
@@ -377,16 +380,20 @@ one that had to declare its identity seam rather than import the adapter that co
 `KindMapper.rederive`, which is what makes a mapper improvement reach nodes the graph already holds
 ([ADR 42](adr/0042-store-p31-and-rederive-kind-at-projection.md)). `mcp` depends on `ingest`, `port`, `domain`
 and `support`, plus its own dotted edge to `wikidata` (explained below). `app` depends on almost
-everything, because wiring is its job. `support` depends on nothing, and the packages that use it
-are the ones the diagram below draws an edge to it from — that half is derivation-checked by
+everything, because wiring is its job. `support` depends on `domain` — `ListKinds` alone, for the
+`NodeKind` set the owner-claim tool's batch mint reads a review row's list kind into (#342) — and
+otherwise on nothing, and the packages that use `support` are the ones the diagram below draws an
+edge to it from — that half is derivation-checked by
 `DeveloperGuideEnumerationsTest.shouldDrawEveryImportEdgeWhenTheGuideDiagramsTheLayering`, so read
 the edges rather than a count in this sentence, which nothing checks. Today they are:
 `mcp` (`UuidV7`), `export` and `rate` (`ClassLabels`), `export`, `ratings`, `recommend`, `evaluate`
 and `rate` (`QidList`), `export`, `ratings`, `recommend` and `rate` (`DefaultDatabase` — issue #179's
-one resolution for the four dev tools that keep a default), and `retract`, `own` and `expand`
+one resolution for the four dev tools that keep a default), `retract`, `own` and `expand`
 (`RequiredDatabase` — the sentence those three refuse with, since #179 gave the first two no default at all;
 it resolves the path it quotes back by calling `DefaultDatabase` itself, so the rule has one home
-and the two claim tools depend on neither a default nor the class that computes one). One thing a reader might expect and will
+and the two claim tools depend on neither a default nor the class that computes one), and `seed`
+and `own` (`ResolutionFiles`, `ResolutionRow`, `NameFold`, `Outcome` and `ListKinds` — the review
+and mapping shape, its name fold and the list-kind table, shared since #342). One thing a reader might expect and will
 not find: `app` does not import `jena` at
 all — the reference engine is reachable only from tests. **This paragraph used to name a second,
 that `app` imports nothing from `domain`; that stopped being true in ADR 54**, because
@@ -516,8 +523,8 @@ line is drawn there.
 | `wikidata` | The first source: resolution, expansion, and the two mapping passes. Plain Java, no Spring. | `port`, `domain` |
 | `musicbrainz` | The second source ([ADR 54](adr/0054-musicbrainz-as-the-second-source.md)): `MusicBrainzClient` over `ws/2`, `MusicBrainzSourceAdapter`, and `MusicBrainzIdentity` — the MBID-to-QID seam it declares and may not implement, because an adapter may not import another adapter. Expansion only; no `EntityResolver`. Plain Java, no Spring. | `port`, `domain` |
 | `ingest` | `IngestService` (the only write path), `GraphProjector` (boot replay) and `LogProjection`, the fold of the whole log that `export`, `census` and `expand` all read ([#319](https://github.com/robsartin/segue/issues/319)). | `port`, `domain`, `wikidata` (`KindMapper` only, [ADR 42](adr/0042-store-p31-and-rederive-kind-at-projection.md)) |
-| `support` | Cross-cutting plain-Java helpers with no project dependencies — `UuidV7` (request correlation), `QidList` (the QID-file reader `export`, `ratings`, `recommend`, `evaluate` and `rate` share), `KnownListInput` (the basename-and-ids reading of that file `census` and `expand` share, so the block each prints names a basename and never a path — issues #311 and #313), `ClassLabels` (the offline `P31` label table `export` and `rate` share; it moved here from `export` when `rate` needed it), `DefaultDatabase` (the one `--db`/`SEGUE_DB`/`${user.home}` resolution `export`, `ratings`, `recommend` and `rate` share — issue #179; the live list is whoever calls `resolve`, so grep rather than trust these four names), and `RequiredDatabase` (the refusal `retract` and `own` give when `--db` was not typed; it calls `DefaultDatabase` for the path it quotes back and hands out a `String`, never a `Path`, so neither claim tool can take a default from it). | nothing |
-| `expansion` | One expansion: the source adapters, the bounds of ADR 49, the refusals of ADR 55 and ADR 59, and the partial-result facts both callers report in their own words. Also `ExpansionSources`, the one statement of the order the two sources are asked in, and `WikidataMusicBrainzIdentity`, the P434 bridge — the package that sees two adapters at once, since two entry points need it and only one of them may see Spring. Reached by `mcp`, by `expand` and by `app`, which wires all three, and by nothing else — `onlyTheClientAndTheExpanderExpandAnEntity`. | `port`, `domain`, `ingest`, `wikidata`, `musicbrainz` |
+| `support` | Cross-cutting plain-Java helpers — the criterion is that more than one dev-side tool reads the same thing, not freedom from project dependencies; #342 is why that clause changed, see below — `UuidV7` (request correlation), `QidList` (the QID-file reader `export`, `ratings`, `recommend`, `evaluate` and `rate` share), `KnownListInput` (the basename-and-ids reading of that file `census` and `expand` share, so the block each prints names a basename and never a path — issues #311 and #313), `ClassLabels` (the offline `P31` label table `export` and `rate` share; it moved here from `export` when `rate` needed it), `DefaultDatabase` (the one `--db`/`SEGUE_DB`/`${user.home}` resolution `export`, `ratings`, `recommend` and `rate` share — issue #179; the live list is whoever calls `resolve`, so grep rather than trust these four names), `RequiredDatabase` (the refusal `retract` and `own` give when `--db` was not typed; it calls `DefaultDatabase` for the path it quotes back and hands out a `String`, never a `Path`, so neither claim tool can take a default from it), and — since #342 — the mapping-and-review shape `seed` and `own` now both read: `ResolutionRow` and `ResolutionFiles` (the seven-column reader, appender and "already resolved" fold), `Outcome` (the confidence a row carries, `MINTED` among them — [ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)'s 2026-09-18 amendment), `NameFold` (the one fold both tools use to skip a name already answered under another spelling), and `ListKinds` (which `NodeKind`s a list's `kind` column may turn out to be — the one class in this package with a `domain` import, because a node kind is a `domain` type; [ADR 59](adr/0059-owner-claims-as-a-third-layer.md)'s 2026-09-18 amendment). | `domain` (`ListKinds` alone) |
+| `expansion` | One expansion: the source adapters, the bounds of ADR 49, the refusals of ADR 55 and ADR 59, and the partial-result facts both callers report in their own words. Also `ExpansionSources`, the one statement of the order the two sources are asked in, and `WikidataMusicBrainzIdentity`, the P434 bridge — the package that sees two adapters at once, since two entry points need it and only one of them may see Spring. Also `EntityAddition`, the fetch-and-record the `add_entity` MCP tool and the expander's `--add` run share, so one rule decides what adding an entity means (#328). Reached by `mcp`, by `expand` and by `app`, which wires all three, and by nothing else — `onlyTheClientAndTheExpanderExpandAnEntity`. | `port`, `domain`, `ingest`, `wikidata`, `musicbrainz` |
 | `mcp` | The tool classes, `SegueService`, the view records, `CorrelationId`. Spring-aware. | `ingest`, `port`, `domain`, `support` |
 | `app` | Entry point, all bean wiring, `application.yaml`, transport profiles. Spring-aware. Its `sourceAdapters` bean is one line calling `ExpansionSources.both`, and the P434 bridge it used to hold moved to `expansion` in #284, because a plain-Java dev tool needs the bridge and may not depend on Spring. | everything it wires |
 | `seed` | The bulk seeding tool ([ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)): a name list to `name → QID`, run as `./gradlew resolveNames`. Plain Java, never opens a store. | `port`, `domain`, `wikidata` |
@@ -529,7 +536,7 @@ line is drawn there.
 | `rate` | The rating deck ([ADR 46](adr/0046-the-rating-deck.md)): a loopback page on 127.0.0.1:8090 dealing one unrated entity per keystroke, run as `./gradlew rate`. Plain Java, offline, and the only dev tool that writes a rating. Composes its known list through the same `KnownList.promoted` `recommend` does ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)), passes the same `KnownList.suppressed` to its sweep, and deals revisions over `KnownList.revisitable` ([ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md)). | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `recommend`, `support` |
 | `census` | The graph census: nodes by kind, edges by type, source and corroboration, the claim rows and what retraction and merge did to them, the taste layer by score, degree quantiles against `Recommendations.MIN_CANDIDATE_DEGREE`, what MusicBrainz reached, and the classes its `CONCEPT` nodes state. Run as `./gradlew graphCensus`. An optional `--known <file>` adds a `known list` section: how much of that file, and of the file composed with your promotions, the graph holds, has expanded, and connects up; `--isolated <file>` (requires `--known`) writes the with-promotions population's isolated members — qid, label, kind and how many unexpanded people or groups are beside each — to that file, which is personal data and sits outside the block's paste guarantee. Plain Java, read-only, offline, and the whole output is aggregates and class ids — no label, no note, no entity id, and the known-list file's own basename on that section's heading is the only text in the block that came off the command line rather than out of the data — so it is safe to paste. `--db` is required, and `SEGUE_DB` does not satisfy it. | `port`, `domain`, `sqlite`, `support`, `ingest`, `wikidata` |
 | `evaluate` | The recommender's evaluation harness ([ADR 65](adr/0065-an-offline-evaluation-harness-for-the-recommender.md)): holds out a deterministic slice of the entities you rated highly, reads every fold of that split, runs the shipped candidate sweep from what is left over a fixed grid of scorers and degree floors, and reports where the held-out entities and the ones you rated down land. Run as `./gradlew evaluate`. Plain Java, read-only, offline, and the whole output is aggregates — no label, no id, no note, no rating — so it is safe to paste. `--db` is required, and `SEGUE_DB` does not satisfy it. | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `recommend`, `support` |
-| `expand` | The promotion expander ([ADR 66](adr/0066-expand-every-promotion-from-a-dev-tool.md), #284), run as `./gradlew expandPromotions`: expands the neighbourhood of every entity rated at or above `KnownList.PROMOTION_RATING`, one at a time, through the shared `expansion.EntityExpansion`, and reports what happened as one block of aggregates safe to paste — no label, no note, no entity id, on any line. `ExpandRun.dryRun` counts what a real run would visit — entities the projection holds a node for, and entities `LocalEntity.isLocal` answers true for — without touching an adapter or the log. The tenth dev tool, and the only one that both WRITES and FETCHES: it replays the log into a throwaway `TinkerGraphStore`, appends through `IngestService`, and reaches the live Wikidata API, the Query Service and MusicBrainz. Since #307 it takes an optional `--rated-since <instant>`, which narrows those promotions to the ones whose rating was last written on or after it; since #313 it takes an optional `--known <file>` **instead of the promotions**, covering the entities that file names — folded onto their canonical side — that no row in the log cites as an expansion's seed, by `domain.Expanded`, the rule `graphCensus --known` counts by; since #319 it also takes an optional `--second-hop <file>` **instead of either**, visiting the unexpanded people and groups beside every act on that file the graph cannot place, by `domain.SecondHop`, the rule `graphCensus --known`'s `no known neighbour` row and `--isolated` file both read too. `--rated-since`, `--known` and `--second-hop` each name a different population, and every pair of them is refused together. `--db` is required, and `SEGUE_DB` does not satisfy it. | `port`, `support`, `domain`, `expansion`, `sqlite`, `tinker`, `ingest`, `wikidata` |
+| `expand` | The promotion expander ([ADR 66](adr/0066-expand-every-promotion-from-a-dev-tool.md), #284), run as `./gradlew expandPromotions`: expands the neighbourhood of every entity rated at or above `KnownList.PROMOTION_RATING`, one at a time, through the shared `expansion.EntityExpansion`, and reports what happened as one block of aggregates safe to paste — no label, no note, no entity id, on any line. `ExpandRun.dryRun` counts what a real run would visit — entities the projection holds a node for, and entities `LocalEntity.isLocal` answers true for — without touching an adapter or the log. The tenth dev tool, and the only one that both WRITES and FETCHES: it replays the log into a throwaway `TinkerGraphStore`, appends through `IngestService`, and reaches the live Wikidata API, the Query Service and MusicBrainz. Since #307 it takes an optional `--rated-since <instant>`, which narrows those promotions to the ones whose rating was last written on or after it; since #313 it takes an optional `--known <file>` **instead of the promotions**, covering the entities that file names — folded onto their canonical side — that no row in the log cites as an expansion's seed, by `domain.Expanded`, the rule `graphCensus --known` counts by; since #319 it also takes an optional `--second-hop <file>` **instead of either**, visiting the unexpanded people and groups beside every act on that file the graph cannot place, by `domain.SecondHop`, the rule `graphCensus --known`'s `no known neighbour` row and `--isolated` file both read too. `--rated-since`, `--known` and `--second-hop` each name a different population, and every pair of them is refused together. Since #328 a `--known` run also takes `--add`, which adds an id that file names and the graph holds no node for — through `expansion.EntityAddition`, the rule `add_entity` reads too — and then expands it in the same pass; `--add` is refused without `--known` and with either of the other two populations. `--db` is required, and `SEGUE_DB` does not satisfy it. | `port`, `support`, `domain`, `expansion`, `sqlite`, `tinker`, `ingest`, `wikidata` |
 
 ### Which rules a machine enforces
 
@@ -873,7 +880,11 @@ sequenceDiagram
 
 **What the diagram shows.** An `expand_entity` tool call reaches `SegueService`, which hands the
 whole expansion to `EntityExpansion` — the shared body the promotion expander runs too (#284) — and
-words whatever comes back. The expansion refuses immediately if the seed is not already in the graph.
+words whatever comes back. An `add_entity` call takes the other of the two shared rules,
+`EntityAddition`: it checks the id's shape, refuses one the owner minted before any source is
+asked, fetches the entity's identity, and records it through `IngestService` — the same body the
+promotion expander's `--add` run uses, so the two cannot come to disagree about what adding an
+entity means (#328). The expansion refuses immediately if the seed is not already in the graph.
 For each source adapter supporting the seed's kind, the Wikidata adapter runs the forward pass
 (`ClaimMapper` over the entity fetched from the Action API) and then the reverse pass
 (`ReverseClaims`, one SPARQL query to the Query Service), dropping fallback-only forward claims once
@@ -1335,11 +1346,16 @@ resume file rather than a conversation. ADR 40 is the decision.
 ./gradlew resolveNames --args="--list $HOME/names.csv"
 ```
 
-The list is three columns — `name,kind,status`. Output is a mapping file and a review file beside
-it, plus a summary in the log. **None of those files may enter this repository.** A list of who
-someone listens to, reads and watches is the personal data ADR 33 governs, this repository is
-public, and `*.csv` is gitignored beside `*.db`. Every name in a test, a fixture or a document here
-is invented, and that is not a style choice.
+The list is three columns — `name,kind,status`. The `kind` column says what the row is — a role a
+person plays (`author`), a sort of group (`orchestra`), or, since #333, a work (`book`);
+`seed.Expectations` holds the whole list and is the authority on it, and a value it has never seen
+constrains nothing rather than rejecting everything. A hand-written list, such as a reading list,
+has no tour status to give, so it is written with the status field left empty — the trailing comma
+is still needed, since the reader refuses a row with fewer than three fields. Output is a mapping
+file and a review file beside it, plus a summary in the log. **None of those files may enter this
+repository.** A list of who someone listens to, reads and watches is the personal data ADR 33
+governs, this repository is public, and `*.csv` is gitignored beside `*.db`. Every name in a test,
+a fixture or a document here is invented, and that is not a style choice.
 
 ### How it decides
 
@@ -1350,13 +1366,18 @@ suffix, a stripped honorific — is tried only if the literal one did not settle
 fallback is a guess about what the user meant.
 
 Auto-accept needs three independent signals to agree: the name (label or alias, with a label match
-outranking an alias match), the kind (`P31` for the `NodeKind`, and `P106` for a person's
-occupation), and a sitelink margin over the runner-up. Anything else goes to review with the reason
-and the best candidate, so a person can accept or correct a line without repeating the search.
+outranking an alias match), the kind (`P31` for the `NodeKind`, `P106` for a person's occupation,
+and, for the kinds `seed.Expectations` registers with a class set, the raw `P31` again — `WORK` is
+albums, films and episodes as well as books, so one of those kinds names the classes it will take
+and an edition or an adaptation is refused on them), and a sitelink margin over the runner-up.
+Anything else goes to review with the reason and the best candidate, so a person can accept or
+correct a line without repeating the search.
 
 `P106` here is a **resolver filter, not an edge**. Issue #32 kept it out of the graph vocabulary
 because "novelist" is a 36,000-item hub; reading it to choose between six humans with one name
-creates no edge.
+creates no edge. `P31` read this way is the same: the graph already stores an entity's classes and
+re-derives its kind from them, and reading them again to choose between a book and the film of the
+book adds nothing to the graph either.
 
 ### Two things this is not allowed to do
 
@@ -1864,6 +1885,19 @@ next, and how to tell that another run would reach nothing (the run on #313;
 [ADR 63](adr/0063-a-read-only-census-of-the-graph.md)'s and
 [ADR 66](adr/0066-expand-every-promotion-from-a-dev-tool.md)'s 2026-09-12 amendments for #315).
 
+**`local` is nested one level under `in the graph`, and only prints when it is not zero.** It
+counts the file's own ids, after the merge fold, that the graph holds a node for and that
+`LocalEntity.isLocal` answers true for — the owner's own minted entities, on ADR 59's shape — and
+the print-when-non-zero choice is the one
+[ADR 63](adr/0063-a-read-only-census-of-the-graph.md)'s 2026-09-19 amendment for #344 records, the
+same one issue #328 already made for `added` and `to add`: a file naming no local id prints the
+block byte for byte as it always has. `never expanded` excludes every id counted here — no source
+will ever write a seed reference against an id Wikidata will never allocate, so it was never a
+shortfall a further `--known` run could close, and counting it there overstated the floor.
+`expand.ExpandCli`'s `--known` population excludes the same ids for the same reason
+([ADR 66](adr/0066-expand-every-promotion-from-a-dev-tool.md)'s 2026-09-19 amendment for #344), so
+the row and the population the tool visits agree again.
+
 **`no known neighbour` breaks into three nested rows, in each sub-section.** `with someone to
 expand beside` and `with no one` partition the row above them, so the two add up to it. `distinct to
 expand` prints under both `file` and `file and promotions`, but only in the `file and promotions`
@@ -1871,7 +1905,15 @@ row is it what a `--second-hop` run would visit — the distinct people and grou
 the first of those two, counted before any run, over the same population the run itself composes.
 The labels name no kind on purpose —
 `domain.SecondHop.WORTH_EXPANDING` is the one statement of which kinds count, and the labels cite it
-rather than restating it.
+rather than restating it. **The same residual holds all three short of what a complete expansion
+would leave them at, but not the same way**: a neighbour a `--second-hop` run visited and expanded,
+but whose recorded reference `Expanded.seedOf` cannot read a seed out of, keeps its act counted
+under `with someone to expand beside` and out of `with no one` — so `with someone to expand beside`
+and `distinct to expand` sit at a floor they cannot fall below, and `with no one` sits at a ceiling
+it cannot rise past.
+[Expanding every promotion](#expanding-every-promotion) says how to tell a `--second-hop` run has
+reached it
+([ADR 63](adr/0063-a-read-only-census-of-the-graph.md)'s 2026-09-14 amendment for #326).
 
 ### Why the output is safe to paste
 
@@ -2554,9 +2596,10 @@ of, so the useful thing is the routes that reached it. Those come from `Routes.b
 same `PathRanking.rank`. The third is not shared. `SegueService.findPaths` hands the ranked routes
 to `ViewMapper.toPathViews` and returns structured `PathView` records; the deck calls
 `PathResult.render()`, whose only two callers in `src/main` are dev-side — `RecommendationReport`
-and `Deck.routeLines`. The route *set* differs too: `Recommendations.MAX_HOPS` is 2 where `find_paths`
-defaults to 4, and `bestFor` keeps only the top-ranked route per reaching entity. No card shape
-carries a note field; there is nowhere on a `Card` to put one, in any of the three.
+and `Deck.routeLines`. The route *set* differs too: the deck walks to `Recommendations.MAX_HOPS`,
+while `find_paths` falls back to `GraphTools.DEFAULT_MAX_HOPS` when a caller omits `maxHops`, and
+the two are set independently; `bestFor` keeps only the top-ranked route per reaching entity. No
+card shape carries a note field; there is nowhere on a `Card` to put one, in any of the three.
 
 ### No session file: the deck is "everything unrated", recomputed every run
 
@@ -2705,6 +2748,106 @@ mechanism is a reserved source id — `Provenance.owner` carries `owner` rather 
 id, and `EdgeRecord.corroboration()` filters it out before counting distinct sources, so an edge a
 source asserted and you also claimed corroborates once and not twice. It is deliberately not
 prefixed `llm:`, so `PathRanking` does not demote it either.
+
+### Minting a whole review file: `mint --review … --mapping …`
+
+The seed tool's review file carries the rows Wikidata had nothing for: an entity the graph lacks
+entirely, under any spelling that was tried. Minting those one at a time is the typing this
+project exists to remove, so `mint` takes the pair of files instead.
+
+```bash
+# what would this mint, and under which ids? Nothing is written.
+./gradlew ownClaim --args="mint --db $HOME/.segue/segue.db --review $HOME/lists/reading-review.csv --mapping $HOME/lists/reading-qids.csv --dry-run"
+
+# do it — the mapping gains one MINTED row per mint, carrying the id it allocated
+./gradlew ownClaim --args="mint --db $HOME/.segue/segue.db --review $HOME/lists/reading-review.csv --mapping $HOME/lists/reading-qids.csv"
+```
+
+**Only `UNRESOLVED` rows are minted.** A `REVIEW` row carries a plausible candidate the
+adjudicator could not choose between, and minting one would put a second entity in the graph for
+something Wikidata already has — the one mistake this tool cannot take back, because the log is
+append-only (ADR 19) and never edited and the repair is a retraction plus a merge. The report says how many
+`REVIEW` rows it passed over, so the number is never silent.
+
+**A name the mapping already carries is skipped, folded rather than literal.** `support.NameFold`
+is the same fold the seed tool uses, so a row the first run minted under one spelling is not
+minted again under another. That is what makes a second run over the same review file safe.
+
+**A list kind that folds to two node kinds is yours to type.** `musician` and `comedian` are as
+often a band as a person — `support.ListKinds` is the authority on which kinds those are — and
+nothing in a review file says which. Those rows are skipped with the single-`mint` command
+printed out, `--kind` left as a choice for you to fill in.
+
+**A list kind the table does not register refuses the whole run**, before anything is appended and
+before anything is reported, naming the row. `support.ListKinds` holds every kind `resolveNames`
+writes, so a row carrying another one means the file is not one the seed tool wrote, and nothing
+else in it can be trusted to be what it looks like.
+
+**Ids are allocated in sequence from one read of the log**, each one the smallest `Q00…` number no
+row has ever named once this run's earlier mints are counted as named — the same membership rule
+[a single mint uses](#a-mint-costs-an-id-and-the-id-is-never-handed-back), applied across a batch.
+
+**The report is whole before the first append; the two appends are then interleaved per row** —
+the claim, then its mapping row. A failure between the two leaves at most one mint without its
+mapping row, and the report names the id it appended so you can write that row by hand. The
+mapping row is the seven-column shape with `MINTED` in the confidence column and the reason
+`minted by the owner — no Wikidata candidate under any spelling (ADR 59)`.
+
+**The mapping is where a local id lives for `--known`.** `support.QidList` reads the first
+comma-separated field on a line that is exactly a QID, and a local `Q00…` id is one — so a minted
+entity joins the `--known` population the moment its mapping row is written, with nothing else to
+do. `graphCensus --known <mapping>` counts it under `in the graph` and, since it is one of the
+owner's own, under `local` too — never under `never expanded`, and `expandPromotions --known`
+never visits it
+([ADR 63](adr/0063-a-read-only-census-of-the-graph.md)'s and
+[ADR 66](adr/0066-expand-every-promotion-from-a-dev-tool.md)'s 2026-09-19 amendments for #344).
+
+### Claiming a file of edges: `assert --file …`
+
+An entity nothing else connects to is a node and not a segue. The `--isolated` file from
+`graphCensus` is a list of exactly those, and joining each one up by hand is a command per edge,
+so `assert` takes a file.
+
+```bash
+# both labels on every line, read from the projection. Nothing is written.
+./gradlew ownClaim --args="assert --db $HOME/.segue/segue.db --file $HOME/lists/claims.csv --dry-run"
+
+# do it — every row, in file order
+./gradlew ownClaim --args="assert --db $HOME/.segue/segue.db --file $HOME/lists/claims.csv"
+```
+
+The file is a header and one edge per row, with `#` comments so you can annotate a file that is
+personal data ([ADR 33](adr/0033-taste-layer-separation.md), issue #37):
+
+```
+from,to,type
+# the book's author, which nothing in the graph states
+Q00903301,Q0903301,AUTHORED
+```
+
+Two ids that look like qids — a local `Q00…` id is allowed on either side — and one `EdgeTypes`
+code. There is no quoting, because every field is an id or a code.
+
+**Any refused row refuses the whole file, before any append.** A row with fewer than three fields,
+an id that is not qid-shaped, or a code outside the vocabulary is a file-shape refusal and names
+the line; an endpoint the projection does not hold, or a local id you have already merged away, is
+a projection refusal and names the qid instead. The reason is that there is no edge-level retraction
+([ADR 44](adr/0044-retraction-as-a-new-claim.md)): a wrong edge is undone only by
+retracting one of its endpoints, which takes that entity's other edges with it. Half a file is the one outcome worth refusing outright.
+
+**A row the log already carries as an owner edge is skipped**, with endpoints folded through the
+same `Equivalences` rule the projections use: an edge logged against a local id folds to its
+canonical, so a row naming the canonical id is recognised as the same edge. Both folds collapse two
+identical owner edges to one, so the second row would add noise to a log nobody may edit and
+nothing to the graph.
+
+**The corroboration sentence is said once, at the end.** It is one fact about every owner edge in
+the run, and repeating it per row would bury the labels the report exists to show.
+
+**One kind of claim per run still holds.** This is many owner edges, never a mint and an edge
+together: [ADR 59](adr/0059-owner-claims-as-a-third-layer.md)'s rule is about the kind of claim,
+not the number of rows. Minting something and then joining it up is still two commands, and the
+second sees the first because it replays the log.
 
 ### A merge is said, not done — and it lands in two places at two times
 
@@ -3124,7 +3267,9 @@ This run changes no code. What it produces is issues, and these are the ones to 
 - **Anything a tool printed that you had to stop and think about.** A refusal that did not tell you
   what to type next is a defect in the sentence, not in you.
 - **Anything this chapter got wrong.** It was written against the code and checked against the
-  parsers, and it has never been run. The first run is what makes it true.
+  parsers, then run once by the owner under issue #249; issue #259 carried what that run found
+  back into the chapter. A later run that disagrees with it now is a finding to file, not a
+  reason to distrust the chapter.
 
 ## Expanding every promotion
 
@@ -3409,7 +3554,13 @@ own three rows, but only the `file and promotions` sub-section's `distinct to ex
 `--second-hop` run would visit, counted before any run — the same `SecondHop.toExpand()` the run
 itself visits, over the same with-promotions population. An act under `with no one` is one nothing
 here can help: either its ring is fully fetched already, or its ring is works and places rather than
-people and groups.
+people and groups. **The three do not all move the same way.** `SecondHop.toExpandBeside` excludes a
+neighbour only once `Expanded` already covers it, and a neighbour a run visited and expanded without
+leaving a reference `Expanded` reads keeps its act counted under `with someone to expand beside` and
+out of `with no one` — so `with someone to expand beside` and `distinct to expand` sit at a floor
+they cannot fall below, and `with no one` sits at a ceiling it cannot rise past — the same rule and
+the same residual
+([ADR 63](adr/0063-a-read-only-census-of-the-graph.md)'s 2026-09-14 amendment for #326).
 
 **The file is personal data.** Write it outside the working tree, and never attach it to an issue.
 `*.txt` is gitignored beside `*.csv` and `*.db`, but the protection is where the file lives, not
@@ -3432,14 +3583,161 @@ because that composition is the recommender's own notion of known
 where a `--known` run does not** — the same read the no-flag run already makes, logged as a count and
 nothing else about them.
 
-Take the census again, with the same file, and compare it against the one you took first:
-`no known neighbour` should be down, `distinct to expand` should be down, and `nodes` and `edges`
-should be up. **A smaller run is a later run** — the dry run's `considered` is the only bound, and
-there is no `--limit`.
+Take the census again, with the same file, and compare it against the one you took first: `nodes`
+and `edges` should be up.
+
+**When to stop running this at all.** Read the run's own block before you take that second census.
+Check six cells: `added nothing`, `refused` and `failed` in `promotions`, `neighbours skipped` and
+`endpoints refused` under `shortfalls`, and no source named under `unavailable`. `added nothing` is
+summed over every source, so a neighbour whose Wikidata answer was nothing but whose MusicBrainz
+answer still recorded an edge is not under it; and `EntityExpansion.expand` catches a per-neighbour
+`WikidataUnavailableException` and an `UnknownEndpointException` on the append and folds each into
+`neighbours skipped` or `endpoints refused`, never into `unavailable`. So all six have to read zero
+before the block says every visited entity's Wikidata answer was recorded in full, and only then is
+whatever `distinct to expand` still counts afterwards known to be Wikidata-thin rather than merely
+unlucky on one source or one neighbour: `SecondHop.toExpandBeside` excludes a neighbour only once
+`Expanded` covers it, the same rule and the same residual the `--known` variant's stopping rule
+above reads — a neighbour this run recorded only a MusicBrainz-backed edge or a Wikidata forward
+claim with no id for leaves no seed reference and stays counted for good
+([ADR 63](adr/0063-a-read-only-census-of-the-graph.md)'s 2026-09-14 amendment for #326). **A
+`refused` reading `local entity` can no longer come from this run at all** — `SecondHop.toExpandBeside`
+now excludes the owner's own minted ids from what it offers before this run ever sees one
+([ADR 63](adr/0063-a-read-only-census-of-the-graph.md)'s and
+[ADR 66](adr/0066-expand-every-promotion-from-a-dev-tool.md)'s 2026-09-19 amendments for #344); that
+refusal can still fire on the no-flag and `--rated-since` runs below, where a rated entity can still
+be one of the owner's own. Stop there; a second run visits the same neighbours, calls the same
+public APIs and moves neither `distinct to expand` nor `with someone to expand beside`. **When any
+of the checklist's six cells is not zero**, that guarantee does not hold, and the `--known`
+variant's own rule applies instead: compare this dry run's `considered` against the previous
+`--second-hop` dry run's, over the same file — a fall means the last run reached something and
+another is worth taking, and an unchanged count means the rest is thin only once a run reporting
+all six cells clean has read it. There is still no `--limit`: the dry run's `considered` is the only
+bound.
 
 This chapter's own reading is a census, not an evaluation. Whether growing the pool this way is
 enough to warrant the next entry under the recommender's own calibration rule is decided there, not
 here: [the second-reading design](superpowers/specs/2026-09-04-second-reading-rule-design.md).
+
+### Adding what your list names that the graph has never held: `--known --add`
+
+The three chapters above all expand something the graph already holds. This one covers the
+entities it does not: the rows the original names list carried that Setlist Scout rejected as
+non-touring — the authors, thinkers and comedians `seed.SeedRow`'s note on `status` calls the
+relations this graph is short of. The seed tool resolves each of those rows to an id of its own,
+on a run over just the rows this chapter wants
+([ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)), and stops there, because nothing in this
+repository adds entities in bulk. `--add`, given beside `--known`, adds an id the file names that
+the graph holds no node for — the same fetch-and-record the `add_entity` MCP tool does, through
+the shared `expansion.EntityAddition` — and then expands it, in the same pass and in the file's
+order. Without `--add` that id is refused as an unknown entity, exactly as it always has been.
+
+`--add` is refused without `--known`, and with `--rated-since` or `--second-hop`: both of those
+populations are drawn from the graph, so nothing in them can be missing, and only a file can name
+an entity the graph lacks.
+
+**Step 0 applies unchanged**, and so does everything this chapter says about a single writer.
+
+**1. Derive the file.** The list is whatever names the owner holds for the domain, in the seed
+tool's own `name,kind,status` shape ([Bulk seeding](#bulk-seeding)). If it comes from a Setlist
+Scout export, reshape it first: the export's `category` column is the seed tool's `kind`, and only
+the rows whose `status` is the one you want belong in the reshaped file — `REJECTED` for the
+non-touring names this chapter is about. **A Setlist Scout export carries no id**, so nothing
+about it is a qid `QidList` or `--known` can read yet; resolving it is what this step is for.
+
+```bash
+./gradlew resolveNames --args="--list $HOME/rejected-names.csv --mapping $HOME/rejected.csv"
+```
+
+The run writes the mapping at `--mapping` and, beside the *list* rather than the mapping, a
+review file, plus a summary in the log, exactly as the seed tool always does. **Read the review
+file before anything past this step**: it is names, never pasted here, and each line is accepted
+or corrected by hand — only what lands in the mapping is what the rest of this chapter reads.
+`QidList` reads the mapping exactly as it reads a bare list — the first comma-separated field
+that is exactly a qid.
+
+**Why this is not a grep over an already-resolved mapping.** If the touring and non-touring rows
+had been resolved together in one run, the mapping's own `status`-`REJECTED` rows would already
+carry ids, and `QidList` reads the first field that is exactly a qid regardless of `status` — so
+a row like that is already on the known population the moment the mapping exists, with nothing
+left here to derive. What makes this a step at all is filtering *before* the resolution run: an
+export naming no id names nothing `QidList` can read, and `resolveNames` is what supplies one.
+**The file is personal data**: a list of who someone reads and watches is what
+[ADR 33](adr/0033-taste-layer-separation.md) governs, `*.csv` is gitignored beside `*.db`, and
+the protection is where the file lives rather than what git ignores (issue #37).
+
+**2. The census over it**, before anything is written:
+
+```bash
+./gradlew graphCensus --args="--db $HOME/.segue/segue.db --known $HOME/rejected.csv"
+```
+
+`named` minus `in the graph` is what a `--add` run would add; `never expanded` is what it would
+then expand. Both are readings to compare against, not numbers to drive to zero — the same rule
+the `--known` chapter states in full.
+
+**3. The dry run, and then the run:**
+
+```bash
+./gradlew expandPromotions --args="--db $HOME/.segue/segue.db --dry-run --known $HOME/rejected.csv --add"
+```
+
+```bash
+./gradlew expandPromotions --args="--db $HOME/.segue/segue.db --known $HOME/rejected.csv --add"
+```
+
+**What the two blocks say that no other run's do.** The dry run gains a `to add` row, and
+`considered` is then exactly `in the graph` plus `minted` plus `to add` — read step 2's `named`
+minus `in the graph` against this run's `minted` plus `to add` and they should agree: an id shaped
+like one of the owner's own lands under `minted` here, never under `to add`, whatever the graph
+currently holds for it, and a disagreement beyond that is a defect in one of them. The real block
+gains an `added` row under `promotions`, counting entities this run
+recorded before expanding them, and `refused, by reason` may gain `no such entity` — an id your
+file names that Wikidata has no entity at, which is a different fault from `unknown entity` and
+is worth a look at the mapping row it came from. **Both rows print only when they are not zero**,
+so a run that added nothing prints the block it always printed; the `#` clause under the header
+is what says `--add` was given at all. An outage while adding is a `failed`, like any other
+failure, and a later run reaches it.
+
+**4. The census again**, with the same file, and compare it against step 2's:
+
+```bash
+./gradlew graphCensus --args="--db $HOME/.segue/segue.db --known $HOME/rejected.csv"
+```
+
+`named` is unchanged, `in the graph` is up by at least what `added` said — expanding one added
+entity can record a node for a neighbour the file also names before this run's own loop reaches
+that neighbour's row — and `never expanded` falls by at most what the run expanded: an entity
+Wikidata states nothing about in the vocabulary segue registers stays in the count however many
+times it is expanded, exactly as [What the two sub-sections mean](#what-the-two-sub-sections-mean)
+already says of the row in general.
+
+**5. A deck session with this file as the deck's own `--known`:**
+
+```bash
+./gradlew rate --args="--known $HOME/rejected.csv --db $HOME/.segue/segue.db"
+```
+
+The deck deals what its file names that is in the graph and unrated, degree first, with a
+candidate every fifth card as it always does. **The deck's `--known` is a statement about what to
+deal, and it is per session**: it does not make this file the recommender's list, and no other
+tool learns about it.
+
+**6. Everything else keeps the touring file.** `recommend`, `graphCensus --known` and the
+evaluation harness all keep taking the list they always took. Whichever of these new rows you
+rated at or above `KnownList.PROMOTION_RATING` is on that list already, by the promotion rule
+([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)) — which is why there is no
+second membership rule here and no merging of the two files.
+
+**7. The next reading** follows on the recommender's normal rule, with its own note, after the
+deck session: the graph moved and the taste layer moved, so the note says which observations it
+allows.
+
+**When to stop.** The same rule the `--known` chapter gives, read over this file: compare one
+dry run's `considered` against the previous one's. What is new here is that `to add` should fall
+to zero after the first `--add` run and stay there — an entity that was added has a node, so the
+next dry run counts it under `in the graph`. A `to add` that does **not** fall is a run that
+could not reach Wikidata or a file that keeps growing, and the `failed` row and the
+`unavailable` sub-heading of the previous real run are what tell the two apart.
 
 ### What to file from what you saw
 
@@ -3463,10 +3761,59 @@ This run changes no code. What it produces is issues, and these are the ones to 
 - **Anything a tool printed that you had to stop and think about.** A refusal that did not tell you
   what to type next is a defect in the sentence, not in you.
 - **Anything this chapter got wrong.** It was written against the code and checked against the
-  parser, and it has been run — the expander's first run over the promotions (#284) and the first
-  `--known` run (#313) among them. Each of those two sent something back: #293 corrected a label out
-  of the first, and #315 corrected what this chapter says about the `--known` variant's stopping
-  rule. The next run is what keeps it true.
+  parser, and it has been run — the expander's first run over the promotions (#284), the first
+  `--known` run (#313) and the first `--second-hop` run (#319) among them. Each of those runs sent
+  something back: #293 corrected a label out of the first, #315 corrected what this chapter says
+  about the `--known` variant's stopping rule, and #326 corrected what it says about the
+  `--second-hop` variant's. The next run is what keeps it true.
+
+## What Wikidata lacks
+
+Two populations the coverage instruments name, claimed end to end. The first is the seed tool's
+review file: rows that resolved to nothing in Wikidata, so the graph lacks the entity entirely and
+both a mint and at least one edge are needed. The second is `graphCensus --isolated`'s `with no
+one` acts: in the graph, every neighbour expanded, connected to nothing you know — an edge and no
+mint.
+
+**0. Quit the client, and confirm nothing is holding the database.** Every writing run starts here,
+for the reason [the supervised first run](#0-quit-the-client-and-confirm-nothing-is-holding-the-database)
+gives: two writers on one SQLite file is not a configuration this project supports.
+
+**1. Mint the review file's unresolved rows.** Dry run first, and read the labels — the failure
+being guarded is a name that is not the entity you think it is.
+
+```bash
+./gradlew ownClaim --args="mint --db $HOME/.segue/segue.db --review $HOME/lists/reading-review.csv --mapping $HOME/lists/reading-qids.csv --dry-run"
+```
+
+Then the run, the same line without `--dry-run`. The mapping now carries the local ids, and
+`graphCensus --known <mapping>` counts them.
+
+**2. Write the claims file.** One row per edge: from a minted id, or from a `with no one` act's
+qid — the `--isolated` file puts each qid beside its label — to something the graph already holds,
+with a code from `EdgeTypes`. Comment the rows you want to remember the reason for.
+
+**3. Claim them.** Dry run first, read **both** labels on every line, then the run.
+
+```bash
+./gradlew ownClaim --args="assert --db $HOME/.segue/segue.db --file $HOME/lists/claims.csv --dry-run"
+```
+
+**4. The second population is step 3 again**, over the isolated file's acts. No mint: they are
+already in the graph.
+
+**5. A deck session with the mapping as its own `--known`.** A minted entity is dealt like any
+other in-graph unrated one, and a rating at or above `KnownList.PROMOTION_RATING` promotes it.
+
+**6. The census after**, and the reading that follows on the normal rule.
+
+**7. When Wikidata catches up**, `merge --local Q00… --canonical Q…`, as
+[A merge is said, not done](#a-merge-is-said-not-done--and-it-lands-in-two-places-at-two-times)
+already describes. The mapping keeps the local id and the fold resolves it.
+
+**8. Undoing.** `retractEntity` on the local id takes its node, its edges and its mapping row's
+meaning with it. The mapping row itself is yours to delete: nothing in this project edits a file
+the owner wrote.
 
 ## How to read an ADR against the code
 

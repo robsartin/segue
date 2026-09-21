@@ -1,6 +1,8 @@
 package com.robsartin.segue.expand;
 
 import com.robsartin.segue.domain.LocalEntity;
+import com.robsartin.segue.expansion.AdditionOutcome;
+import com.robsartin.segue.expansion.EntityAddition;
 import com.robsartin.segue.expansion.EntityExpansion;
 import com.robsartin.segue.expansion.ExpansionOutcome;
 import com.robsartin.segue.port.GraphStore;
@@ -30,6 +32,11 @@ import org.slf4j.LoggerFactory;
  * unreachable source and a truncation are all reported outcomes of an expansion that completed,
  * exactly as {@link EntityExpansion#expand} already treats them one level down, and retrying would
  * need a policy this tool does not own — the adapters' own clients already retry with backoff.
+ * <b>The same guard wraps the add call this run makes before expanding, for the same reason</b>
+ * (#328 review): {@link EntityAddition#add} catches a source outage itself, but not a write that
+ * fails for a reason that has nothing to do with the claim — a busy SQLite file, say — and without
+ * a second catch here that throw would propagate out of this method exactly as an unguarded
+ * expansion once did.
  *
  * <p><b>No progress line and no log line this class writes ever carries a qid.</b> A line per
  * promotion, over every promotion, in qid order, is the owner's whole promoted population
@@ -54,6 +61,14 @@ import org.slf4j.LoggerFactory;
  * {@code KnownList.promoted} and the merges or from the known-list file and {@code Expanded}; a
  * second place that knows how to drop an entity would be a second answer to the same question
  * (#307, #313).
+ *
+ * <p><b>Adding is the one thing this class does before expanding, and it never composes or filters
+ * the population.</b> When this run holds an {@link EntityAddition} (#328), an id in the population
+ * the graph holds no node for is added through it and then expanded in the same pass, in the
+ * population's own order, rather than refused as {@code UNKNOWN_ENTITY}. A minted id is never
+ * offered to the rule — {@link LocalEntity#isLocal} is checked first, so it reaches the ordinary
+ * refusal it always has. The refusal line for an addition carries the reason constant and no qid,
+ * for the reason this class already gives above.
  */
 public final class ExpandRun {
 
@@ -61,10 +76,29 @@ public final class ExpandRun {
 
   private final EntityExpansion expansion;
   private final GraphStore graph;
+  private final Optional<EntityAddition> addition;
 
+  /**
+   * A run that expands what it is handed and adds nothing — every population but {@code --add}'s.
+   */
   public ExpandRun(EntityExpansion expansion, GraphStore graph) {
+    this(expansion, graph, null);
+  }
+
+  /**
+   * A run that may also add.
+   *
+   * <p><b>A constructor and not a parameter on the four methods</b> (#328): whether this run adds
+   * is a property of the run, not of one call, and threading it through both {@code dryRun}
+   * overloads and both {@code run} overloads would change four signatures — and their call sites —
+   * to say one thing.
+   *
+   * @param addition the rule this run adds with, or null for a run that adds nothing
+   */
+  public ExpandRun(EntityExpansion expansion, GraphStore graph, EntityAddition addition) {
     this.expansion = Objects.requireNonNull(expansion, "expansion");
     this.graph = Objects.requireNonNull(graph, "graph");
+    this.addition = Optional.ofNullable(addition);
   }
 
   /** Count what a real run would visit, without visiting it, and with no filter applied. */
@@ -89,14 +123,21 @@ public final class ExpandRun {
     Objects.requireNonNull(lines, "lines");
     int inTheGraph = 0;
     int minted = 0;
+    int toAdd = 0;
     for (String qid : promotions) {
       if (LocalEntity.isLocal(qid)) {
         minted++;
       } else if (graph.node(qid).isPresent()) {
         inTheGraph++;
+      } else if (addition.isPresent()) {
+        // #328. Only counted when this run holds an addition, so a run without --add produces
+        // the byte-identical block it always has. The isLocal check above still comes first, so
+        // a minted id the graph holds no node for lands in `minted` and never here — which is
+        // what makes considered == inTheGraph + minted + toAdd an identity rather than a hope.
+        toAdd++;
       }
     }
-    Preflight preflight = new Preflight(promotions.size(), inTheGraph, minted);
+    Preflight preflight = new Preflight(promotions.size(), inTheGraph, minted, toAdd);
     ExpansionReport.dryRunLines(preflight, covered).forEach(lines);
     return preflight;
   }
@@ -121,6 +162,7 @@ public final class ExpandRun {
     Objects.requireNonNull(covered, "covered");
     Objects.requireNonNull(lines, "lines");
 
+    int added = 0;
     int expanded = 0;
     int addedNothing = 0;
     int failed = 0;
@@ -136,6 +178,57 @@ public final class ExpandRun {
 
     for (int i = 0; i < promotions.size(); i++) {
       String qid = promotions.get(i);
+      // #328. The only place this run departs from "expand what you are handed": an id the file
+      // names that the graph holds no node for is added first, and then expanded, in the same
+      // pass and in the population's own order. A minted id is never offered to the rule — it
+      // always fails LocalEntity.isLocal, so asking would spend a refusal to learn what the shape
+      // says, and it would also break the dry run's arithmetic, where `minted` and `to add` are
+      // kept disjoint by exactly this check. The expansion below refuses it as it always has.
+      if (addition.isPresent() && !LocalEntity.isLocal(qid) && graph.node(qid).isEmpty()) {
+        AdditionOutcome outcome;
+        try {
+          outcome = addition.get().add(qid);
+        } catch (RuntimeException thrown) {
+          // #328 review, important 1. EntityAddition.add catches WikidataUnavailableException
+          // itself and returns a Refused outcome for it, but the write below that — the
+          // ingest.record call, and specifically the log append — is not caught anywhere
+          // below this line. One entity's write failing (a busy SQLite file, say) is no more
+          // the run than one entity's EXPANSION throwing is — see the catch two blocks down
+          // and the class javadoc — so it gets the same treatment: counted, logged without a
+          // qid, and the loop carries on to the next promotion.
+          failed++;
+          log.warn(
+              "addition {} of {} threw: {}",
+              i + 1,
+              promotions.size(),
+              thrown.getClass().getSimpleName());
+          lines.accept(progress(i, promotions.size(), "failed"));
+          continue;
+        }
+        if (outcome instanceof AdditionOutcome.Refused refused) {
+          switch (refused.reason()) {
+            case NO_SUCH_ENTITY -> {
+              refusalsByReason.merge(ExpansionOutcome.Reason.NO_SUCH_ENTITY, 1, Integer::sum);
+              lines.accept(
+                  progress(
+                      i, promotions.size(), "refused: " + ExpansionOutcome.Reason.NO_SUCH_ENTITY));
+            }
+            // An outage on the add is a failure exactly as an outage during an expansion is:
+            // nothing is wrong with the id, and a later run will reach it. NOT_A_QID and
+            // LOCAL_ENTITY cannot arise from this tool's populations — QidList yields only
+            // Q\d+, and the guard above takes every minted id — but the switch is exhaustive
+            // rather than defaulted, because a reason this run cannot name is a defect in this
+            // run and not a row in somebody's block.
+            case SOURCE_UNAVAILABLE, NOT_A_QID, LOCAL_ENTITY -> {
+              failed++;
+              log.warn("addition {} of {} refused: {}", i + 1, promotions.size(), refused.reason());
+              lines.accept(progress(i, promotions.size(), "failed"));
+            }
+          }
+          continue;
+        }
+        added++;
+      }
       ExpansionOutcome outcome;
       try {
         outcome = expansion.expand(qid, maxNewEdges);
@@ -187,6 +280,7 @@ public final class ExpandRun {
     ExpansionTally tally =
         new ExpansionTally(
             promotions.size(),
+            added,
             expanded,
             addedNothing,
             failed,

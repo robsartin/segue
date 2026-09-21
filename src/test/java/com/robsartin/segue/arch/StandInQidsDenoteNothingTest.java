@@ -919,8 +919,10 @@ class StandInQidsDenoteNothingTest {
           entry(
               "Q21191270",
               real(
-                  "class id — mapped by ClassLabels and KindMapper",
-                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"))),
+                  "class id — mapped by ClassLabels and KindMapper, deliberately left unnamed"
+                      + " there",
+                  code("src/test/java/com/robsartin/segue/wikidata/KindMapperTest.java"),
+                  code("src/test/java/com/robsartin/segue/seed/AdjudicatorTest.java"))),
           entry(
               "Q23418635",
               real(

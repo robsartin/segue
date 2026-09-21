@@ -4,6 +4,7 @@ import com.robsartin.segue.domain.Equivalences;
 import com.robsartin.segue.domain.Expanded;
 import com.robsartin.segue.domain.Fold;
 import com.robsartin.segue.domain.KnownList;
+import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.NodeKind;
 import com.robsartin.segue.domain.NodeRecord;
 import com.robsartin.segue.domain.Recommendations;
@@ -67,11 +68,18 @@ public record KnownListCensus(String file, Population fromFile, Population withP
    *
    * @param named distinct entities in the population, after the merge fold
    * @param inTheGraph of those, the ones the fold holds a node for
-   * @param neverExpanded in the graph, and no row cites them as a seed — {@link Expanded}'s answer.
-   *     Once a {@code --known} expansion run that reported no failure and no unavailable source has
-   *     visited everything this counts, what is left is entities Wikidata states nothing about in
-   *     the vocabulary this project registers, so read it as a floor rather than a queue that
-   *     empties (the run on #313, #315)
+   * @param local of those, the ones {@link com.robsartin.segue.domain.LocalEntity#isLocal} answers
+   *     true for — minted by the owner (ADR 59) and not merged onto a canonical id; a merged local
+   *     id is counted as its canonical side, never here, matching every other count in this record.
+   *     No source will ever answer for one, so it is excluded from {@code neverExpanded} and its
+   *     by-kind row below rather than counted as a shortfall a further {@code --known} run could
+   *     close (#344)
+   * @param neverExpanded {@link Expanded}'s answer: in the graph, not local, and no row cites them
+   *     as a seed. Once a {@code --known} expansion run that reported no failure and no unavailable
+   *     source has visited everything this counts, what is left is entities Wikidata states nothing
+   *     about in the vocabulary this project registers, so read it as a floor rather than a queue
+   *     that empties (the run on #313, #315). A local id never inflates this floor (#344): it was
+   *     never a shortfall a source could close
    * @param noKnownNeighbourWithinMaxHops in the graph, and no other member of this population
    *     within {@link Recommendations#MAX_HOPS} — the recommender's own route limit, read by
    *     reference here and named after it rather than after its current value, so that moving the
@@ -84,16 +92,29 @@ public record KnownListCensus(String file, Population fromFile, Population withP
    * @param distinctToExpand the distinct people and groups to expand across every isolated member
    *     of this population, counted before any run. Only on the with-promotions population is this
    *     the spend a {@code --second-hop} run would make, since that is the population the run
-   *     itself composes (#319)
+   *     itself composes (#319).
+   *     <p>{@code neighbours skipped} and {@code endpoints refused} join {@code added nothing},
+   *     {@code refused} and {@code failed} in the developer guide's six-cell stopping rule, each
+   *     zero and no source under {@code unavailable}.
+   *     <p>{@link com.robsartin.segue.domain.SecondHop#toExpandBeside} excludes the owner's own
+   *     minted neighbours from what it offers before this row is ever composed. A {@code refused}
+   *     reading {@code local entity} can therefore no longer arise from a {@code --second-hop} run
+   *     at all (#344)
+   *     <p>Once a run clears all six and has visited everything this counts, what is left is
+   *     neighbours carrying no seed {@link Expanded} reads — the same floor {@link #neverExpanded}
+   *     is, inherited because {@link SecondHop#toExpandBeside} excludes a neighbour only once
+   *     {@link Expanded#covers} it too (#326)
    * @param inTheGraphByKind the same in-graph count per kind, all six emitted in {@code NodeKind}
    *     declaration order. {@code NodeCensus} gives the reason it is an {@code EnumMap} rather than
    *     {@code Map.copyOf}: that factory's order is salted per JVM, and ADR 43's byte-identical
    *     contract is what this order serves
-   * @param neverExpandedByKind the same, for the ones nothing has expanded
+   * @param neverExpandedByKind the same, for the ones nothing has expanded and that are not local
+   *     (#344)
    */
   public record Population(
       int named,
       int inTheGraph,
+      int local,
       int neverExpanded,
       int noKnownNeighbourWithinMaxHops,
       int isolatedWithSomeoneToExpand,
@@ -216,6 +237,7 @@ public record KnownListCensus(String file, Population fromFile, Population withP
     Map<NodeKind, Integer> inTheGraphByKind = zeroed();
     Map<NodeKind, Integer> neverExpandedByKind = zeroed();
     int inTheGraph = 0;
+    int local = 0;
     int neverExpanded = 0;
     for (String qid : population) {
       NodeRecord node = projection.nodes().get(qid);
@@ -224,7 +246,9 @@ public record KnownListCensus(String file, Population fromFile, Population withP
       }
       inTheGraph++;
       inTheGraphByKind.merge(node.kind(), 1, Integer::sum);
-      if (!expanded.covers(qid)) {
+      if (LocalEntity.isLocal(qid)) {
+        local++;
+      } else if (!expanded.covers(qid)) {
         neverExpanded++;
         neverExpandedByKind.merge(node.kind(), 1, Integer::sum);
       }
@@ -239,6 +263,7 @@ public record KnownListCensus(String file, Population fromFile, Population withP
     return new Population(
         population.size(),
         inTheGraph,
+        local,
         neverExpanded,
         isolated.size(),
         withSomeone,

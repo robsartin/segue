@@ -1,6 +1,8 @@
 package com.robsartin.segue.seed;
 
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.support.ListKinds;
+import com.robsartin.segue.wikidata.KindMapper;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
@@ -143,6 +145,53 @@ public final class Expectations {
   private static final Set<String> BROADCASTING =
       Set.of("Q2722764", "Q947873", "Q44508716", "Q1930187", "Q15077007", "Q15143191", "Q901");
 
+  /**
+   * The classes a work has to state for a {@code book} row to resolve to it.
+   *
+   * <p>Drawn from what {@code KindMapper} already maps to {@code WORK} and cited from it, so the
+   * three ids have one home. Nothing is added to that table: a class it does not map is not a
+   * {@code WORK}, so it could not pass the kind check either, and widening the mapper would change
+   * every projection (ADR 42) — a different decision from this one.
+   *
+   * <p><b>"Version, edition or translation" is deliberately outside this set.</b> The mapper makes
+   * it a {@code WORK}, and a title matches a printing as readily as it matches the work, so a row
+   * that finds only an edition fails the class check and goes to review — where a person can point
+   * it at the work — instead of resolving to a printing of the thing the owner meant.
+   */
+  private static final Set<String> WRITTEN =
+      Set.of(KindMapper.BOOK, KindMapper.LITERARY_WORK, KindMapper.WRITTEN_WORK);
+
+  /**
+   * The classes a work has to state for a {@code film} row to resolve to it.
+   *
+   * <p>Drawn from what {@code KindMapper} already maps to {@code WORK} and cited from it, for the
+   * same reason {@link #WRITTEN} is (issue #333). Nothing is added to that table.
+   */
+  private static final Set<String> FILM =
+      Set.of(
+          KindMapper.FILM,
+          KindMapper.ANIMATED_FILM,
+          KindMapper.SHORT_FILM,
+          KindMapper.TELEVISION_FILM,
+          KindMapper.ANIMATED_SHORT_FILM);
+
+  /**
+   * The classes a work has to state for a {@code tv-show} row to resolve to it.
+   *
+   * <p>Registered here for the first time (issue #338). Before this, {@code tv-show} checked no
+   * class at all and accepted any {@code WORK} under a matching title — a film, an episode, an
+   * unclassified work. This is a correction of that pre-#333 registration, not a new decision: the
+   * same signal #333 gave {@code book}, applied to the other {@code WORK} kind that needed it.
+   * Drawn from what {@code KindMapper} already maps to {@code WORK} and cited from it, for the same
+   * reason {@link #WRITTEN} and {@link #FILM} are.
+   */
+  private static final Set<String> TELEVISION =
+      Set.of(
+          KindMapper.TELEVISION_SERIES,
+          KindMapper.MINISERIES,
+          KindMapper.TELEVISION_PROGRAM,
+          KindMapper.TELEVISION_SPECIAL);
+
   private static Set<String> union(Set<String> first, Set<String> second) {
     Set<String> out = new LinkedHashSet<>(first);
     out.addAll(second);
@@ -154,34 +203,58 @@ public final class Expectations {
   static {
     // A musician on this list is as often a band as a person, so both kinds are allowed and the
     // occupation check only bites on the ones that turn out to be human.
-    put("musician", EnumSet.of(NodeKind.PERSON, NodeKind.GROUP), MUSIC);
-    put("composer", EnumSet.of(NodeKind.PERSON), MUSIC);
-    put("conductor", EnumSet.of(NodeKind.PERSON), MUSIC);
-    put("comedian", EnumSet.of(NodeKind.PERSON, NodeKind.GROUP), COMEDY);
-    put("author", EnumSet.of(NodeKind.PERSON), WRITING);
-    put("actor", EnumSet.of(NodeKind.PERSON), ACTING);
-    put("director", EnumSet.of(NodeKind.PERSON), DIRECTING);
-    put("broadcaster", EnumSet.of(NodeKind.PERSON), BROADCASTING);
+    put("musician", MUSIC, Set.of());
+    put("composer", MUSIC, Set.of());
+    put("conductor", MUSIC, Set.of());
+    put("comedian", COMEDY, Set.of());
+    put("author", WRITING, Set.of());
+    put("actor", ACTING, Set.of());
+    put("director", DIRECTING, Set.of());
+    put("broadcaster", BROADCASTING, Set.of());
     // Groups: no occupation exists to check, so the kind is the whole test.
-    put("a-cappella", EnumSet.of(NodeKind.GROUP), Set.of());
-    put("tribute", EnumSet.of(NodeKind.GROUP), Set.of());
-    put("orchestra", EnumSet.of(NodeKind.GROUP), Set.of());
-    put("choir", EnumSet.of(NodeKind.GROUP), Set.of());
-    put("ensemble", EnumSet.of(NodeKind.GROUP), Set.of());
-    put("org", EnumSet.of(NodeKind.GROUP), Set.of());
-    put("tv-show", EnumSet.of(NodeKind.WORK), Set.of());
+    put("a-cappella", Set.of(), Set.of());
+    put("tribute", Set.of(), Set.of());
+    put("orchestra", Set.of(), Set.of());
+    put("choir", Set.of(), Set.of());
+    put("ensemble", Set.of(), Set.of());
+    put("org", Set.of(), Set.of());
+    // A WORK kind that names classes (TELEVISION), like film and book below. Issue #338.
+    put("tv-show", Set.of(), TELEVISION);
+    // Another WORK kind that names classes (FILM), beside book below and tv-show above. Issue #338.
+    put("film", Set.of(), FILM);
+    // The third WORK kind that names classes (WRITTEN), beside film and tv-show above. A book row
+    // is a WORK, and WORK alone is albums, films and episodes too — the kind check alone cannot
+    // separate a book from the film of the book. Issue #333.
+    put("book", Set.of(), WRITTEN);
     // A fictional character has no NodeKind of its own — ADR 21 has six and none of them is
     // "character" — so it lands in CONCEPT, which is what an unmapped P31 always becomes.
-    put("character", EnumSet.of(NodeKind.CONCEPT), Set.of());
+    put("character", Set.of(), Set.of());
     // No usable occupation vocabulary, so these constrain the kind and nothing else.
-    put("public-figure", EnumSet.of(NodeKind.PERSON), Set.of());
-    put("puppeteer", EnumSet.of(NodeKind.PERSON), Set.of());
+    put("public-figure", Set.of(), Set.of());
+    put("puppeteer", Set.of(), Set.of());
+
+    // One copy of "which list kinds exist", in support.ListKinds (#342). This fails class
+    // initialisation rather than letting a kind registered in one table and not the other reach
+    // a run: the batch mint refuses a kind ListKinds does not hold, and an expectation for a
+    // kind this table alone knows would never be consulted.
+    if (!BY_KIND.keySet().equals(ListKinds.registered())) {
+      throw new IllegalStateException(
+          "the expectations and support.ListKinds disagree about which list kinds exist: "
+              + BY_KIND.keySet()
+              + " against "
+              + ListKinds.registered());
+    }
   }
 
   private Expectations() {}
 
-  private static void put(String kind, Set<NodeKind> kinds, Set<String> occupations) {
-    Expectation prior = BY_KIND.put(kind, new Expectation(kinds, occupations));
+  private static void put(String kind, Set<String> occupations, Set<String> classes) {
+    Set<NodeKind> kinds = ListKinds.nodeKinds(kind);
+    if (kinds.isEmpty()) {
+      throw new IllegalStateException(
+          "the list kind " + kind + " is not registered in support.ListKinds");
+    }
+    Expectation prior = BY_KIND.put(kind, new Expectation(kinds, occupations, classes));
     if (prior != null) {
       throw new IllegalStateException("two expectations claim the kind " + kind);
     }
@@ -206,12 +279,18 @@ public final class Expectations {
    * people, so either role's vocabulary satisfies it. If any role is unrecognised the union
    * constrains no occupation at all — the alternative would let a known role narrow a name whose
    * other role this table cannot judge.
+   *
+   * <p>The class set follows the same rule for the same reason. A name listed as both a book and an
+   * author is one title and one person, and a person states none of the written classes — so a role
+   * that names no class widens the union to all of them rather than narrowing it to none.
    */
   public static Expectation forKinds(Collection<String> kinds) {
     Objects.requireNonNull(kinds, "kinds");
     Set<NodeKind> nodeKinds = EnumSet.noneOf(NodeKind.class);
     Set<String> occupations = new LinkedHashSet<>();
+    Set<String> classes = new LinkedHashSet<>();
     boolean anyUnconstrained = false;
+    boolean anyUnconstrainedClass = false;
     for (String kind : kinds) {
       Expectation expectation = forKind(kind);
       nodeKinds.addAll(expectation.kinds());
@@ -220,11 +299,19 @@ public final class Expectations {
       } else {
         anyUnconstrained = true;
       }
+      if (expectation.checksClass()) {
+        classes.addAll(expectation.classes());
+      } else {
+        anyUnconstrainedClass = true;
+      }
     }
-    return new Expectation(nodeKinds, anyUnconstrained ? Set.of() : occupations);
+    return new Expectation(
+        nodeKinds,
+        anyUnconstrained ? Set.of() : occupations,
+        anyUnconstrainedClass ? Set.of() : classes);
   }
 
   private static Expectation unconstrained() {
-    return new Expectation(ANY_KIND, Set.of());
+    return new Expectation(ANY_KIND, Set.of(), Set.of());
   }
 }

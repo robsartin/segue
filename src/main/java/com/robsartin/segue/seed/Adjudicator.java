@@ -1,6 +1,8 @@
 package com.robsartin.segue.seed;
 
 import com.robsartin.segue.domain.NodeKind;
+import com.robsartin.segue.support.NameFold;
+import com.robsartin.segue.support.Outcome;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -20,11 +22,14 @@ import java.util.Objects;
  *   <li><b>The name.</b> The queried spelling must equal the entity's own label or one of its
  *       recorded aliases, folded. Search relevance alone is not evidence: the top hit for a band's
  *       name is regularly a film, a crater or a surname.
- *   <li><b>The kind, and for a person the occupation.</b> {@code P31} separates a person from a
- *       band from a film. It does not separate a musician from a minister — every human is {@code
- *       Q5} — so for a {@code PERSON} the input list's {@code kind} column is checked against
- *       {@code P106}. This is the signal that stops a confident wrong answer, which is the only
- *       kind of wrong answer that matters here.
+ *   <li><b>The kind, plus occupation for a person and class where one applies.</b> {@code P31}
+ *       separates a person from a band from a film. It does not separate a musician from a minister
+ *       — every human is {@code Q5} — so for a {@code PERSON} the input list's {@code kind} column
+ *       is checked against {@code P106}. It does not separate a book from the film of the book
+ *       either, because both fold to {@code WORK}, so a kind that names classes is checked against
+ *       the raw {@code P31} as well — {@link Expectations} is the authority on which kinds do. This
+ *       is the signal that stops a confident wrong answer, which is the only kind of wrong answer
+ *       that matters here.
  *   <li><b>The margin.</b> Two entities can both match the name exactly and both fit the kind.
  *       Unless one is markedly better known than the other, there is nothing to choose between them
  *       and a person should look.
@@ -82,7 +87,9 @@ public final class Adjudicator {
     // CALLED this, the alias matches are set aside rather than outranked — otherwise the famous
     // one wins the sitelink margin every time.
     List<CandidateFacts> byLabel =
-        fitting.stream().filter(c -> Names.fold(c.label()).equals(Names.fold(query))).toList();
+        fitting.stream()
+            .filter(c -> NameFold.fold(c.label()).equals(NameFold.fold(query)))
+            .toList();
     if (!byLabel.isEmpty()) {
       fitting = byLabel;
     }
@@ -92,7 +99,8 @@ public final class Adjudicator {
           Outcome.REVIEW,
           closest.qid(),
           closest.label(),
-          "name matches but the kind or occupation does not: " + describeMismatch(named));
+          "name matches but the kind, class or occupation does not: "
+              + describeMismatch(expectation, named));
     }
 
     List<CandidateFacts> ranked =
@@ -126,13 +134,13 @@ public final class Adjudicator {
 
   /** Candidates Wikidata itself calls by this name, whether as its label or as an alias. */
   private static List<CandidateFacts> byName(String query, List<CandidateFacts> candidates) {
-    String key = Names.fold(query);
+    String key = NameFold.fold(query);
     boolean aliasesCount = key.length() >= MINIMUM_ALIAS_LENGTH;
     List<CandidateFacts> named = new ArrayList<>();
     for (CandidateFacts candidate : candidates) {
-      if (Names.fold(candidate.label()).equals(key)
+      if (NameFold.fold(candidate.label()).equals(key)
           || (aliasesCount
-              && candidate.aliases().stream().map(Names::fold).anyMatch(key::equals))) {
+              && candidate.aliases().stream().map(NameFold::fold).anyMatch(key::equals))) {
         named.add(candidate);
       }
     }
@@ -144,22 +152,34 @@ public final class Adjudicator {
    *
    * <p>The occupation half applies to people only. A band has no {@code P106}, so requiring one
    * would reject every band, and a television series has none either.
+   *
+   * <p>The class half applies to whatever names one. {@code WORK} covers albums, films, episodes
+   * and books alike, so a kind that says which classes it will take — {@link Expectations} is the
+   * authority on which ones do — is checked HERE, inside the filter, rather than after the ranking:
+   * an edition or an adaptation is regularly the better known of the two, and a check that ran
+   * after the margin would be a check the margin had already lost.
    */
   private static boolean fits(Expectation expectation, CandidateFacts candidate) {
     if (!expectation.acceptsKind(candidate.kind())) {
+      return false;
+    }
+    if (!expectation.acceptsClass(candidate.classes())) {
       return false;
     }
     return candidate.kind() != NodeKind.PERSON
         || expectation.acceptsOccupation(candidate.occupations());
   }
 
-  private static String describeMismatch(List<CandidateFacts> named) {
+  private static String describeMismatch(Expectation expectation, List<CandidateFacts> named) {
     StringBuilder out = new StringBuilder();
     for (CandidateFacts candidate : named) {
       if (!out.isEmpty()) {
         out.append("; ");
       }
       out.append(candidate.describe()).append(" is ").append(candidate.kind());
+      if (expectation.checksClass()) {
+        out.append(" of classes ").append(candidate.classes());
+      }
       if (candidate.kind() == NodeKind.PERSON) {
         out.append(" with occupations ").append(candidate.occupations());
       }

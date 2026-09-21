@@ -2,6 +2,7 @@ package com.robsartin.segue.seed;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.robsartin.segue.support.ResolutionFiles;
 import com.robsartin.segue.wikidata.StubWikidataServer;
 import com.robsartin.segue.wikidata.WikidataClient;
 import com.robsartin.segue.wikidata.WikidataEntityResolver;
@@ -64,10 +65,10 @@ class SeedRunTest {
       assertThat(summary.review()).isEqualTo(1);
 
       // Two spellings of one act each get their own mapping row, both carrying the one QID.
-      assertThat(SeedFiles.readRows(dir.resolve("mapping.csv")))
+      assertThat(ResolutionFiles.readRows(dir.resolve("mapping.csv")))
           .hasSize(2)
           .allSatisfy(row -> assertThat(row.qid()).isEqualTo("Q090000401"));
-      assertThat(SeedFiles.readRows(dir.resolve("review.csv"))).hasSize(1);
+      assertThat(ResolutionFiles.readRows(dir.resolve("review.csv"))).hasSize(1);
     }
   }
 
@@ -86,7 +87,7 @@ class SeedRunTest {
       assertThat(stub.requestCount()).isEqualTo(afterFirstRun);
       assertThat(summary.skipped()).isEqualTo(1);
       assertThat(summary.accepted()).isZero();
-      assertThat(SeedFiles.readRows(dir.resolve("mapping.csv"))).hasSize(1);
+      assertThat(ResolutionFiles.readRows(dir.resolve("mapping.csv"))).hasSize(1);
     }
   }
 

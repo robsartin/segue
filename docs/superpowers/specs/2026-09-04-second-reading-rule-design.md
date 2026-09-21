@@ -593,3 +593,55 @@ stands under the rule, the amendment says it stands and names the cells. If a ch
 clause 3, fifteen points at the shipped floor and dominance over the floors where the shipped
 scorer has hits, the rule selects it and the amendment says so in the rule's words. A near miss
 stands, as always.
+
+## Note added 2026-09-15, before the fourteenth reading (issue #330)
+
+The fourteenth reading follows two changes on 2026-09-15, in this order: the first
+`expandPromotions --known --add` run, over the owner's non-touring list of authors and comedians
+(issue #328; the run's block and the census before and after it are on issue #330), and then a deck
+session dealt from that same file. It is taken with the instant the tenth reading set,
+`2026-09-08T02:13:42Z`. This note is committed before the reading exists, so the rule's ordering
+property survives a fourteenth time.
+
+**No clause changes**, and the notes above apply as written. "The shipped scorer" is what
+`Recommendations.DEFAULT_SCORER` holds, `resource-allocation`; the shipped floor is unchanged. The
+rule reads the shipped row's whole-population `in pool` and `hits`; the half cells decide nothing.
+
+**Both layers moved, and the taste layer moved on a different population than before.** The run
+added and expanded entities the graph had never held, a thousand-odd nodes with them, almost all
+Wikidata-backed; the deck session then rated entities off that file, which is not the touring
+list the deck was dealt from before, together with the candidates it deals every fifth card. So
+the eligible population is not the thirteenth's: it grows by whichever of the session's ratings
+sit at or above the promotion threshold and are reachable from the known list, and no cell is
+comparable row for row. This is the twelfth's order of change, where the ratings moved, with the
+graph moving as well. The old half is the tenth's, eleventh's, twelfth's and thirteenth's old half
+unchanged; the new half is the thirteenth's new half plus whatever the session promoted, read as
+before as the deck's own dealing read back. If the eligible count nevertheless equals the
+thirteenth's, the session promoted nothing the graph reaches, and the amendment says so and sets
+the shipped row's cells beside the thirteenth's row for row.
+
+**The observations allowed, deciding nothing.** The shipped setting's whole-population rate set
+beside the thirteenth's as a rate and not as cells; the two halves' rates, with the caveat on the
+new half; and the `adamic-adar` setting's rate beside the shipped one at the shipped floor, with
+clause 3 alone deciding what a gap means. Nothing per entity; nothing about which acts the
+session rated or where they sit in the graph; and no claim that a rated author or comedian is
+"reachable" or "isolated", which is the census's question and not this reading's.
+
+**The sentences, written before the table is seen.** The session's promotions, if any, are the
+first known entities from outside the concert list, and their neighbourhoods are the run's own
+additions; the sweep from the touring list reaches little of that ring, and the sweep from the new
+promotions reaches only what the run recorded. So the expected effect on the rate is small either
+way. If the shipped rate stayed within a few points of the thirteenth's, the amendment says the run
+and the session together did not move the reading. If it rose by more than a few points, the
+amendment says that part of the rise is the deck reading itself back — the session's entities came
+off a deck dealt from the shipped scorer's reach — and part may be the new ring, and draws no
+inference about the scorer from either. If it fell by more than a few points, the amendment says
+so and offers no explanation the aggregates do not support. If `in pool` rose at a floor while
+`hits` held, the amendment says the new entities were reachable without placing in a top five, and
+nothing more.
+
+**The two sentences of the rule, written before the table is seen.** If the shipped setting
+stands under the rule, the amendment says it stands and names the cells. If a challenger clears
+clause 3, fifteen points at the shipped floor and dominance over the floors where the shipped
+scorer has hits, the rule selects it and the amendment says so in the rule's words. A near miss
+stands, as always.

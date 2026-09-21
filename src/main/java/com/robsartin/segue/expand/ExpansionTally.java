@@ -14,6 +14,10 @@ import java.util.Objects;
  *
  * @param considered every entity the run was handed — the promotions, or the known-list population
  *     when {@code --known} was given (#313)
+ * @param added entities this run recorded a node claim for before expanding them, which is zero on
+ *     every run that was not given {@code --add}. Not a fourth member of the {@code expanded},
+ *     {@code refused} or {@code failed} partition: an entity that was added and then expanded is
+ *     counted under both, so untouched: {@code considered == expanded + refused + failed}
  * @param expanded entities {@link ExpansionOutcome.Expanded}, whether or not they added anything
  * @param addedNothing of those, the ones where {@code nodesAdded == 0 && edgesAdded == 0}
  * @param failed entities whose adapter call threw, counted and logged without a qid — see {@link
@@ -37,6 +41,7 @@ import java.util.Objects;
  */
 public record ExpansionTally(
     int considered,
+    int added,
     int expanded,
     int addedNothing,
     int failed,
