@@ -14,7 +14,11 @@ concurrency:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest: GitHub moves that label to Ubuntu 26 beginning October 19, 2026, and
+    # this job installs Graphviz and Chrome with apt and fails on a missing browser or Graphviz
+    # (SEGUE_REQUIRE_*). Moving to a newer image is a dated decision made after a trial run, not
+    # something that happens to CI on a Monday (issue #357).
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
 
