@@ -163,6 +163,7 @@ covers building, testing and extending segue in detail.
 | [The retry-precondition measurement](docs/retry-precondition-evidence.md) | The sixty-run trace study behind ADR 46's retry precondition |
 | [The retry pool-flush evidence](docs/retry-pool-flush-evidence.md) | Round 2: the eighty-one-run trace study behind ADR 46's second retry amendment |
 | [The loopback-only flush measurement](docs/loopback-only-evidence.md) | Round 3: what the flush does once the test browser can reach nothing but loopback |
+| [Wardley map](docs/wardley-map.html) | Where each component sits on the evolution axis, and what is left to write for daily use (open it in a browser) |
 
 ### Why the bake-off has its own page
 

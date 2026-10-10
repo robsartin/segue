@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Segue Wardley Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Public+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one wide map in its own scroll box, status legend above, ordered work list below. */
+:root {
+  --bg:#f4f6f8; --fg:#1b2430; --muted:#566272; --line:#a9b4c1; --panel:#ffffff; --band:#e9eef3;
+  --new-bg:#fde3db; --new-br:#c2391b;
+  --ext-bg:#fcefc8; --ext-br:#9a6a00;
+  --built-bg:#dcefe2; --built-br:#2f7a4a;
+  --wire-bg:#dbe7fa; --wire-br:#2b61b8;
+  --later-br:#7d8999;
+  --xtr-bg:#eceff3; --xtr-br:#8b97a6;
+  --f-body:'Public Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --f-mono:'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg:#11161c; --fg:#e6ebf1; --muted:#9ba7b6; --line:#3b4654; --panel:#18202a; --band:#151c24;
+  --new-bg:#4b2218; --new-br:#ff8d70;
+  --ext-bg:#4a3a0e; --ext-br:#e8b93d;
+  --built-bg:#17382a; --built-br:#62c488;
+  --wire-bg:#17325c; --wire-br:#86b0f2;
+  --later-br:#76828f;
+  --xtr-bg:#222a34; --xtr-br:#728090;
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg:#11161c; --fg:#e6ebf1; --muted:#9ba7b6; --line:#3b4654; --panel:#18202a; --band:#151c24;
+  --new-bg:#4b2218; --new-br:#ff8d70;
+  --ext-bg:#4a3a0e; --ext-br:#e8b93d;
+  --built-bg:#17382a; --built-br:#62c488;
+  --wire-bg:#17325c; --wire-br:#86b0f2;
+  --later-br:#76828f;
+  --xtr-bg:#222a34; --xtr-br:#728090;
+  color-scheme: dark; }
+body { background:var(--bg); color:var(--fg); font:15px/1.55 var(--f-body); padding-inline:16px; padding-block:28px 48px; }
+.wrap { max-width:1120px; margin-inline:auto; display:flex; flex-direction:column; gap:28px; }
+.eyebrow { font:500 11px var(--f-mono); letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:0 0 6px; }
+h1 { font:700 30px/1.15 var(--f-body); margin:0 0 8px; text-wrap:balance; }
+.lede { margin:0; max-width:65ch; color:var(--muted); }
+.legend { display:flex; flex-wrap:wrap; gap:8px 18px; margin:0; padding:0; list-style:none; font-size:13px; }
+.legend li { display:flex; align-items:center; gap:8px; min-width:0; }
+.sw { width:18px; height:14px; border-radius:3px; border:2px solid; flex:none; }
+.sw.new { background:var(--new-bg); border-color:var(--new-br); }
+.sw.ext { background:var(--ext-bg); border-color:var(--ext-br); }
+.sw.wire { background:var(--wire-bg); border-color:var(--wire-br); }
+.sw.built { background:var(--built-bg); border-color:var(--built-br); }
+.sw.xtr { background:var(--xtr-bg); border-color:var(--xtr-br); }
+.sw.later { background:transparent; border-color:var(--later-br); border-style:dashed; }
+.scroll { overflow-x:auto; background:var(--panel); border:1px solid var(--line); border-radius:8px; }
+figure { margin:0; display:flex; flex-direction:column; gap:10px; }
+.scroll svg { display:block; min-width:900px; width:100%; height:auto; }
+figcaption { font-size:13px; color:var(--muted); max-width:80ch; }
+svg text { font-family:var(--f-body); }
+.band { fill:var(--band); }
+.div { stroke:var(--line); stroke-width:1; stroke-dasharray:3 5; }
+.ax { stroke:var(--line); stroke-width:1.2; }
+.axl { font-size:13px; font-weight:600; fill:var(--fg); }
+.axs { font-size:11px; fill:var(--muted); }
+.edge { stroke:var(--line); stroke-width:1.4; fill:none; }
+.edge.dashed { stroke-dasharray:4 4; }
+.n { stroke-width:2; }
+.s-need { fill:var(--panel); stroke:var(--fg); }
+.s-new { fill:var(--new-bg); stroke:var(--new-br); stroke-width:2.5; }
+.s-ext { fill:var(--ext-bg); stroke:var(--ext-br); }
+.s-wire { fill:var(--wire-bg); stroke:var(--wire-br); }
+.s-built { fill:var(--built-bg); stroke:var(--built-br); stroke-width:1.5; }
+.s-xtr { fill:var(--xtr-bg); stroke:var(--xtr-br); stroke-width:1.5; }
+.s-later { fill:var(--panel); stroke:var(--later-br); stroke-dasharray:5 4; stroke-width:1.5; }
+.lbl { font-size:12px; font-weight:600; fill:var(--fg); }
+.tag { font:400 9.5px var(--f-mono); letter-spacing:.02em; fill:var(--muted); }
+h2 { font:700 19px/1.2 var(--f-body); margin:0 0 12px; }
+ol.work { margin:0; padding:0; list-style:none; counter-reset:w; display:flex; flex-direction:column; gap:14px; max-width:78ch; }
+ol.work li { counter-increment:w; display:grid; grid-template-columns:28px 1fr; gap:4px 12px; min-width:0; }
+ol.work li::before { content:counter(w); font:500 13px var(--f-mono); color:var(--muted); padding-top:2px; }
+ol.work b { font-weight:600; }
+ol.work p { margin:2px 0 0; color:var(--muted); font-size:14px; }
+.pill { font:500 10px var(--f-mono); letter-spacing:.04em; text-transform:uppercase; padding:1px 6px; border-radius:3px; border:1.5px solid; margin-left:6px; vertical-align:1px; }
+.pill.new { color:var(--new-br); border-color:var(--new-br); }
+.pill.ext { color:var(--ext-br); border-color:var(--ext-br); }
+.pill.wire { color:var(--wire-br); border-color:var(--wire-br); }
+.note { font-size:13px; color:var(--muted); max-width:78ch; margin:0; }
+
+</style>
+<main class="wrap">
+<header>
+  <p class="eyebrow">Segue · interest graph</p>
+  <h1>Segue Wardley map</h1>
+  <p class="lede">What exists, what to extend and what to write so you can explore your interests with Claude every day. Based on the repo as of its last commit on September 21, 2026.</p>
+</header>
+<ul class="legend" aria-label="Legend">
+  <li><span class="sw new"></span>Write new</li>
+  <li><span class="sw ext"></span>Extend what exists</li>
+  <li><span class="sw wire"></span>Wire up (code exists elsewhere)</li>
+  <li><span class="sw built"></span>Built</li>
+  <li><span class="sw xtr"></span>External service</li>
+  <li><span class="sw later"></span>Later</li>
+</ul>
+<figure>
+  <div class="scroll"><svg viewBox="0 0 1120 660" role="img" aria-label="Wardley map of Segue. Three components to write (guided exploration, interest model, Apple Music ingest), three to extend (MCP tools, recommender, entity resolution), one to wire up (concert shows from setlist-scout), six already built, two external, one deferred." xmlns="http://www.w3.org/2000/svg"><rect class="band" x="120" y="24" width="240" height="568"/><text class="axl" x="240" y="614" text-anchor="middle">Genesis</text><text class="axs" x="240" y="630" text-anchor="middle">novel, unproven</text><text class="axl" x="480" y="614" text-anchor="middle">Custom-built</text><text class="axs" x="480" y="630" text-anchor="middle">written for this</text><rect class="band" x="600" y="24" width="240" height="568"/><text class="axl" x="720" y="614" text-anchor="middle">Product</text><text class="axs" x="720" y="630" text-anchor="middle">buy or adopt</text><text class="axl" x="960" y="614" text-anchor="middle">Commodity</text><text class="axs" x="960" y="630" text-anchor="middle">utility</text><line class="div" x1="360" y1="24" x2="360" y2="592"/><line class="div" x1="600" y1="24" x2="600" y2="592"/><line class="div" x1="840" y1="24" x2="840" y2="592"/><line class="ax" x1="120" y1="592" x2="1080" y2="592"/><text class="axs" x="1080" y="648" text-anchor="end">evolution →</text><line class="ax" x1="70" y1="50" x2="70" y2="572"/><text class="axs" transform="translate(52 60) rotate(-90)" text-anchor="end">visible to you</text><text class="axs" transform="translate(52 570) rotate(-90)" text-anchor="start">invisible</text><line class="edge" x1="600.0" y1="90.0" x2="216.0" y2="127.0"/><line class="edge" x1="600.0" y1="90.0" x2="446.4" y2="127.0"/><line class="edge" x1="600.0" y1="90.0" x2="638.4" y2="127.0"/><line class="edge" x1="216.0" y1="173.0" x2="350.4" y2="207.0"/><line class="edge" x1="350.4" y1="253.0" x2="369.6" y2="287.0"/><line class="edge" x1="350.4" y1="253.0" x2="561.6" y2="287.0"/><line class="edge" x1="446.4" y1="173.0" x2="561.6" y2="287.0"/><line class="edge" x1="638.4" y1="173.0" x2="561.6" y2="287.0"/><line class="edge" x1="638.4" y1="173.0" x2="830.4" y2="207.0"/><line class="edge" x1="369.6" y1="333.0" x2="523.2" y2="367.0"/><line class="edge" x1="291.6" y1="310" x2="255.6" y2="310"/><line class="edge" x1="447.6" y1="310" x2="483.6" y2="310"/><line class="edge" x1="177.6" y1="333.0" x2="292.8" y2="367.0"/><line class="edge" x1="292.8" y1="413.0" x2="312.0" y2="447.0"/><line class="edge" x1="292.8" y1="413.0" x2="792.0" y2="447.0"/><line class="edge" x1="523.2" y1="413.0" x2="523.2" y2="447.0"/><line class="edge dashed" x1="734.4" y1="413.0" x2="523.2" y2="447.0"/><line class="edge" x1="312.0" y1="493.0" x2="600.0" y2="527.0"/><line class="edge" x1="523.2" y1="493.0" x2="600.0" y2="527.0"/><line class="edge" x1="523.2" y1="493.0" x2="868.8" y2="527.0"/><g><rect class="n s-need" x="495.0" y="50.0" width="210" height="40" rx="6"/><text class="lbl" x="600.0" y="74" text-anchor="middle">Discover things I’d like</text></g><g><rect class="n s-new" x="138.0" y="127.0" width="156" height="46" rx="6"/><text class="lbl" x="216.0" y="147" text-anchor="middle">Guided exploration</text><text class="tag" x="216.0" y="162" text-anchor="middle">write · Claude picks next</text></g><g><rect class="n s-built" x="368.4" y="127.0" width="156" height="46" rx="6"/><text class="lbl" x="446.4" y="147" text-anchor="middle">Rating deck</text><text class="tag" x="446.4" y="162" text-anchor="middle">built</text></g><g><rect class="n s-wire" x="560.4" y="127.0" width="156" height="46" rx="6"/><text class="lbl" x="638.4" y="147" text-anchor="middle">Concert shows</text><text class="tag" x="638.4" y="162" text-anchor="middle">wire up · setlist-scout</text></g><g><rect class="n s-ext" x="272.4" y="207.0" width="156" height="46" rx="6"/><text class="lbl" x="350.4" y="227" text-anchor="middle">MCP tools</text><text class="tag" x="350.4" y="242" text-anchor="middle">extend · add a 7th</text></g><g><rect class="n s-xtr" x="752.4" y="207.0" width="156" height="46" rx="6"/><text class="lbl" x="830.4" y="227" text-anchor="middle">Show listings</text><text class="tag" x="830.4" y="242" text-anchor="middle">external APIs</text></g><g><rect class="n s-new" x="99.6" y="287.0" width="156" height="46" rx="6"/><text class="lbl" x="177.6" y="307" text-anchor="middle">Interest model</text><text class="tag" x="177.6" y="322" text-anchor="middle">write · rating + signals</text></g><g><rect class="n s-ext" x="291.6" y="287.0" width="156" height="46" rx="6"/><text class="lbl" x="369.6" y="307" text-anchor="middle">Recommender</text><text class="tag" x="369.6" y="322" text-anchor="middle">extend · expose it</text></g><g><rect class="n s-built" x="483.6" y="287.0" width="156" height="46" rx="6"/><text class="lbl" x="561.6" y="307" text-anchor="middle">Ratings (affinity)</text><text class="tag" x="561.6" y="322" text-anchor="middle">built</text></g><g><rect class="n s-new" x="214.8" y="367.0" width="156" height="46" rx="6"/><text class="lbl" x="292.8" y="387" text-anchor="middle">Apple Music ingest</text><text class="tag" x="292.8" y="402" text-anchor="middle">write · from artists.py</text></g><g><rect class="n s-built" x="445.2" y="367.0" width="156" height="46" rx="6"/><text class="lbl" x="523.2" y="387" text-anchor="middle">Paths + routes</text><text class="tag" x="523.2" y="402" text-anchor="middle">built</text></g><g><rect class="n s-later" x="656.4" y="367.0" width="156" height="46" rx="6"/><text class="lbl" x="734.4" y="387" text-anchor="middle">Spotify, Goodreads…</text><text class="tag" x="734.4" y="402" text-anchor="middle">later</text></g><g><rect class="n s-ext" x="234.0" y="447.0" width="156" height="46" rx="6"/><text class="lbl" x="312.0" y="467" text-anchor="middle">Entity resolution</text><text class="tag" x="312.0" y="482" text-anchor="middle">extend · names to QIDs</text></g><g><rect class="n s-built" x="445.2" y="447.0" width="156" height="46" rx="6"/><text class="lbl" x="523.2" y="467" text-anchor="middle">Source adapter SPI</text><text class="tag" x="523.2" y="482" text-anchor="middle">built</text></g><g><rect class="n s-xtr" x="714.0" y="447.0" width="156" height="46" rx="6"/><text class="lbl" x="792.0" y="467" text-anchor="middle">Apple Music library</text><text class="tag" x="792.0" y="482" text-anchor="middle">external</text></g><g><rect class="n s-built" x="522.0" y="527.0" width="156" height="46" rx="6"/><text class="lbl" x="600.0" y="547" text-anchor="middle">Assertion log</text><text class="tag" x="600.0" y="562" text-anchor="middle">built · SQLite</text></g><g><rect class="n s-built" x="790.8" y="527.0" width="156" height="46" rx="6"/><text class="lbl" x="868.8" y="547" text-anchor="middle">Wikidata, MusicBrainz</text><text class="tag" x="868.8" y="562" text-anchor="middle">built</text></g></svg></div>
+  <figcaption>Top is closest to you, bottom is infrastructure. Lines mean "depends on". Later sources: Spotify, Goodreads, Netflix, Amazon, Bandcamp, Discogs, IMDb, Apple and Google Photos. Evolution positions are my judgement, not measurements.</figcaption>
+</figure>
+<section>
+  <h2>What to write, in order</h2>
+  <ol class="work">
+    <li><div><b>Apple Music ingest</b><span class="pill new">write</span>
+      <p>Promote <code>artists.py</code> into a repeatable export: artist, play count, loved and favorited. Resolve the names to QIDs through the existing seed tool, and keep the data on your machine. Issue #350.</p></div></li>
+    <li><div><b>Interest model</b><span class="pill new">write</span>
+      <p>Blend your explicit ratings with the Apple Music signals into one confidence per entity, with the rating winning where you gave one. Likely amends ADRs 33 and 48. The evaluation harness can check it against ratings you already have. Issue #351.</p></div></li>
+    <li><div><b>A seventh MCP tool for what to explore next</b><span class="pill ext">extend</span>
+      <p>Needs a new ADR superseding the "no seventh tool" decisions (26 and 45). Return candidates highest confidence first, each with its cited routes. Ratings stay readable by Claude; notes still never reach it. Issue #352.</p></div></li>
+    <li><div><b>The guided loop</b><span class="pill new">write</span>
+      <p>The user-guide section and prompt that make Claude ask for the next candidates, expand one, explain it by its routes, and offer to record your rating. This is what turns the tools into the daily habit. Issue #353.</p></div></li>
+    <li><div><b>setlist-scout wiring</b><span class="pill wire">wire up</span>
+      <p>Today it reads a hand-kept seed list. Segue writes it a names-only list of the artists you rate highly, one way. Showing its listings as a reason to explore a band comes later. Issue #354.</p></div></li>
+  </ol>
+</section>
+<p class="note">Entity resolution is marked "extend" because the seed tool already resolves lists by title and kind, and Apple Music ingest will lean on it. Whether it copes with Apple Music's artist spellings is untested.</p>
+</main>
+
+
+</html>
