@@ -575,7 +575,8 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `theRatingsToolOpensNothingElse` | `ratings` depending on `tinker`, `jena`, `ingest`, `mcp`, `app`, `java.net`, `javax.net` or every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`, so a new tool joins every fence at once) | [ADR 43](adr/0043-listing-your-own-ratings.md) |
 | `theSignalsToolOpensNothingElse` | `signals` depending on `tinker`, `jena`, `ingest`, `mcp`, `app`, `wikidata`, `musicbrainz`, `java.net`, `javax.net` or every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`) — `seed` included, so no second resolver can grow there | [ADR 67](adr/0067-listening-signals-in-their-own-table.md) |
 | `theSignalsToolTouchesOnlyTheSignalTable` | `signals` depending on `AffinityStore`, `AffinityRecord`, `AssertionLog`, `GraphStore` or `IngestService` — a signal is written as neither a rating nor an assertion | [ADR 67](adr/0067-listening-signals-in-their-own-table.md) |
-| `onlyTheSignalsToolReadsSignals` | any class outside `signals`, `sqlite`, `port` and `domain` depending on `Signal` or `SignalStore` — a raw count reaches no MCP tool, recommender or deck without widening this rule on purpose | [ADR 67](adr/0067-listening-signals-in-their-own-table.md) |
+| `onlyTheSignalsToolReadsSignals` | any class outside `signals`, `sqlite`, `port`, `domain` and `recommend` depending on `Signal` or `SignalStore` — a raw count reaches no MCP tool, recommender or deck without widening this rule on purpose | [ADR 67](adr/0067-listening-signals-in-their-own-table.md) |
+| `theRecommenderNeverNamesASignal` | any class in `recommend` depending on `Signal` — the recommender may open the table, and receives a confidence and an evidence kind, never the count they were reduced from | [ADR 33](adr/0033-taste-layer-separation.md) |
 | `onlyTheRatingsToolReadsEveryRating` | calling `AffinityStore.readAll` from outside `ratings` — the bulk read exists for the owner's dev tool and for nothing on the MCP surface | [ADR 16](adr/0016-privacy-and-data-handling.md), [ADR 39](adr/0039-affinity-capture-and-read.md), [ADR 43](adr/0043-listing-your-own-ratings.md) |
 | `theRetractionToolWritesOnlyRetractions` | `retract` calling the three world-fact writes, either taste-layer write (`AffinityStore.put`, `updateRating`) or `AffinityStore.readAll` — it appends a retraction through `IngestService` and writes nothing else, least of all a rating | [ADR 44](adr/0044-retraction-as-a-new-claim.md) |
 | `theRetractionToolOpensNothingElse` | `retract` depending on `GraphStore` **as a type**, on `AffinityStore`, or on `tinker`, `jena`, `mcp`, `app`, `java.net`, `javax.net` or every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`, so a new tool joins every fence at once) — a retraction has no graph half, so the tool must not be able to hold one | [ADR 44](adr/0044-retraction-as-a-new-claim.md) |
@@ -1781,8 +1782,11 @@ Re-running with a newer export replaces the old counts for that source and leave
 alone. The block holds counts and a basename — never an artist, an entity or a play count — and
 every file in the recipe is personal data that stays out of the repository.
 
-Nothing reads the table yet: turning a signal into a confidence is the interest model (#351), and no
-raw count goes through any MCP surface.
+`recommend` reads the table and reduces each entity to a confidence and an evidence kind
+(`domain.Interest`, #351): a rating where there is one, otherwise the strongest bucket the signals
+earn, otherwise neutral. A signal only reweights an entity the known list already holds and never
+promotes one ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)'s amendment), and no
+raw count goes through any MCP surface or past `RecommendCli`.
 
 ### Why this is not `list_affinity`
 

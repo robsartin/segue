@@ -90,8 +90,9 @@ is committed because it is code; its output is not, and `*.csv` is gitignored.
   on a first real run. That number decides whether entity resolution needs work before the interest
   model, and it is recorded as a count — never the names
   ([ADR 51](0051-what-an-adr-may-quote.md)).
-- Nothing reads the table yet except `signals` itself. That is deliberate: #351 defines the
-  blended confidence, and the third fence above is where it will have to be widened, on purpose.
+- Nothing read the table when this was written except `signals` itself, and #351 then widened the
+  third fence by exactly one package: `recommend` may open the table and may not name a `Signal`
+  (`theRecommenderNeverNamesASignal`), because it reduces the rows to an `Interest` at once.
 - A signal the owner no longer wants has no un-import; the table can be emptied with one `DELETE`,
   as ADR 33 says of affinity.
 - The script is unverified from this repository's CI, which has no Music app. It is a script
