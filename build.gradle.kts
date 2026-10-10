@@ -295,6 +295,21 @@ tasks.register<JavaExec>("listRatings") {
     outputs.upToDateWhen { false }
 }
 
+tasks.register<JavaExec>("importSignals") {
+    group = "application"
+    description =
+        "Stores what a listening source says about the owner (#350): either writes the name list " +
+            "resolveNames reads, or joins the export to its answers and writes the signal table. " +
+            "Offline; the output is personal data (ADR 33). Example: ./gradlew importSignals " +
+            "--args=\"--signals \$HOME/music.csv --names-out \$HOME/music-names.csv\""
+    mainClass.set("com.robsartin.segue.signals.SignalsCli")
+    classpath = sourceSets["main"].runtimeClasspath
+    // sqlite-jdbc loads a native library, the same grant tasks.test makes.
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
+    // Never up-to-date: the export changes under it, and Gradle has no way to know.
+    outputs.upToDateWhen { false }
+}
+
 tasks.register<JavaExec>("recommend") {
     group = "application"
     description =
