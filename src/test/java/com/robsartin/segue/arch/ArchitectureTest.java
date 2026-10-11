@@ -1016,12 +1016,33 @@ class ArchitectureTest {
   static final ArchRule onlyTheSignalsToolReadsSignals =
       noClasses()
           .that()
-          .resideOutsideOfPackages("..signals..", "..sqlite..", "..port..", "..domain..")
+          .resideOutsideOfPackages(
+              "..signals..", "..sqlite..", "..port..", "..domain..", "..recommend..")
           .should()
           .dependOnClassesThat(JavaClass.Predicates.belongToAnyOf(Signal.class, SignalStore.class))
           .because(
               "#350: a play count is personal data (ADR 33) and no MCP tool, recommender or deck"
                   + " reads one — #351 decides what a derived confidence may do");
+
+  /**
+   * #351: the recommender reads signals and cannot name one.
+   *
+   * <p>{@code RecommendCli} opens the signal table and hands the rows straight to {@code
+   * Interests.byQid}, which reduces them to a confidence and an evidence kind. Everything below it
+   * takes regard as a function, so a play count never travels further than that one expression. The
+   * shape is {@link #theRecommenderReadsRatingsAndNeverNotes}'s: the store may be read, the record
+   * that carries the personal part may not be named.
+   */
+  @ArchTest
+  static final ArchRule theRecommenderNeverNamesASignal =
+      noClasses()
+          .that()
+          .resideInAPackage("..recommend..")
+          .should()
+          .dependOnClassesThat(JavaClass.Predicates.belongToAnyOf(Signal.class))
+          .because(
+              "#351: a play count is personal data (ADR 33) — the recommender receives a confidence"
+                  + " and an evidence kind, and never the count they were reduced from");
 
   /**
    * ADR 43, and the reason ADR 39's refusal survives: nothing but the dev tool may read every

@@ -223,3 +223,34 @@ this side.
 
 Nothing in the decision above is edited. Its second bullet is corrected here, in an amendment,
 rather than rewritten where it stands.
+
+**Amendment (2026-10-10, issue #351): an inferred signal is a third thing, and it is not a rating.**
+
+[ADR 67](0067-listening-signals-in-their-own-table.md) gave a listening source's observations of the
+owner their own table. This says what the recommender may do with them, and what it may not.
+
+- **An inferred signal is evidence about the owner, reported by a source.** Like a rating it carries
+  no provenance and is never corroborated, and it never reaches the graph or the log. Unlike a
+  rating it is not something the owner said.
+- **It is never a rating and is never written back as one.** No tool turns a play count into a row
+  in `affinity`, so the table that is the only record of what the owner said stays that and nothing
+  else.
+- **An explicit rating always wins.** `Interest.of` gives a rated entity its rating's confidence
+  whatever the signals say, so a signal never raises a 1 or a 2. A count says what was played, not
+  what was wanted.
+- **A signal only raises an unrated entity, and only to a band strictly below a 4.** The evidence
+  kind is part of the weight: a candidate reached by several inferred-only entities does not
+  outrank one reached by fewer rated ones on inference alone.
+- **The raw count reaches nothing a model can read.** `Interest` holds a confidence and an evidence
+  kind and no count. `onlyTheSignalsToolReadsSignals` and `theRecommenderNeverNamesASignal` hold
+  the rest at the call site, as [ADR 43](0043-listing-your-own-ratings.md)'s fences hold the note.
+  If a confidence and its evidence kind are ever shown on an MCP surface (#352) that is a decision
+  about those two fields, not about the count.
+
+The thresholds that bucket a count and the confidence each bucket earns are named constants on
+`Interest`, so the evaluation harness can move them. **They are judgements, not measurements**, and
+nothing here has met a real listening history: the blend is demonstrated on invented signals only,
+as [ADR 45](0045-recommend-by-normalised-lift-with-routes.md)'s weighting was before it met real
+ratings.
+
+Nothing in the decision above is edited.
