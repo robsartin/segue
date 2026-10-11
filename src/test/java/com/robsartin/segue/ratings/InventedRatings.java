@@ -1,6 +1,7 @@
 package com.robsartin.segue.ratings;
 
 import com.robsartin.segue.domain.AffinityRecord;
+import com.robsartin.segue.domain.AssertionRecord;
 import com.robsartin.segue.domain.LocalEntity;
 import com.robsartin.segue.domain.LoggedAssertion;
 import com.robsartin.segue.domain.NodeAssertion;
@@ -96,6 +97,16 @@ final class InventedRatings {
   /** A node claim, the way the log holds one. */
   static NodeAssertion node(String qid, String label) {
     return new NodeAssertion(qid, NodeKind.WORK, label, SOURCE);
+  }
+
+  /** A source's claim that a performer performed a work, stored performer to work (#354). */
+  static AssertionRecord performed(String performer, String work) {
+    return new AssertionRecord(performer, work, "PERFORMED", null, null, SOURCE);
+  }
+
+  /** A node claim of a chosen kind, the way the log holds one (#354). */
+  static NodeAssertion node(String qid, NodeKind kind, String label) {
+    return new NodeAssertion(qid, kind, label, SOURCE);
   }
 
   /** The owner's own claim that something exists, the way the log holds one (#92). */

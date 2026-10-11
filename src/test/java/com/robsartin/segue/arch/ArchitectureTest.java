@@ -17,6 +17,7 @@ import com.robsartin.segue.domain.OwnerEdge;
 import com.robsartin.segue.domain.Provenance;
 import com.robsartin.segue.domain.Retractions;
 import com.robsartin.segue.domain.SameAs;
+import com.robsartin.segue.domain.Signal;
 import com.robsartin.segue.expansion.EntityExpansion;
 import com.robsartin.segue.ingest.GraphProjector;
 import com.robsartin.segue.ingest.IngestService;
@@ -25,6 +26,7 @@ import com.robsartin.segue.musicbrainz.BridgedIdentity;
 import com.robsartin.segue.port.AffinityStore;
 import com.robsartin.segue.port.AssertionLog;
 import com.robsartin.segue.port.GraphStore;
+import com.robsartin.segue.port.SignalStore;
 import com.robsartin.segue.support.DefaultDatabase;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.AccessTarget;
@@ -162,7 +164,8 @@ class ArchitectureTest {
           "ratings",
           "recommend",
           "retract",
-          "seed");
+          "seed",
+          "signals");
 
   /**
    * Every dev-tool package except the ones named, as {@code ..x..} patterns, then {@code
@@ -948,6 +951,98 @@ class ArchitectureTest {
               "ADR 43: the ratings tool reads the affinity table and the log's node claims, offline"
                   + " — it needs no engine, no projection and no network, and cannot become an MCP"
                   + " tool by accident");
+
+  /**
+   * #350: the signals tool opens one store and nothing else.
+   *
+   * <p>It joins an export to the answers {@code resolveNames} already wrote and stores what
+   * resolved, so it needs the signal table and two CSV files. It holds no graph, no log and no
+   * ratings: a signal is not an assertion and is not a rating, and a tool that could reach either
+   * would be one careless line from writing a play count somewhere it must never be. Every sibling
+   * is banned, {@code seed} included, so it cannot grow a second answer to "who is this artist". No
+   * network either, for {@link #theRatingsToolOpensNothingElse}'s reason: a listing of personal
+   * data is a pure function of local files.
+   */
+  @ArchTest
+  static final ArchRule theSignalsToolOpensNothingElse =
+      noClasses()
+          .that()
+          .resideInAPackage("..signals..")
+          .should()
+          .dependOnClassesThat()
+          .resideInAnyPackage(
+              otherDevToolsAnd(
+                  List.of("signals"),
+                  "..tinker..",
+                  "..jena..",
+                  "..ingest..",
+                  "..mcp..",
+                  "..app..",
+                  "..wikidata..",
+                  "..musicbrainz..",
+                  "java.net..",
+                  "javax.net.."))
+          .because(
+              "#350: the signals tool stores what resolveNames already answered, offline — no"
+                  + " engine, no projection, no resolver and no network");
+
+  /** #350: the signals tool reaches neither the log, the graph nor the taste layer. */
+  @ArchTest
+  static final ArchRule theSignalsToolTouchesOnlyTheSignalTable =
+      noClasses()
+          .that()
+          .resideInAPackage("..signals..")
+          .should()
+          .dependOnClassesThat(
+              JavaClass.Predicates.belongToAnyOf(
+                  AffinityStore.class,
+                  AffinityRecord.class,
+                  AssertionLog.class,
+                  GraphStore.class,
+                  IngestService.class))
+          .because(
+              "#350: a signal is a claim about the owner that is neither an assertion nor a rating"
+                  + " (ADR 33) — it never reaches the log, the graph or the ratings");
+
+  /**
+   * #350: only the signals tool and the table behind it name a signal.
+   *
+   * <p>Raw counts are personal data and do not go through any MCP surface; only a confidence and
+   * its evidence kind may (#351). This is the call-site fence ADR 43 uses for the ratings: a {@code
+   * mcp}, {@code recommend} or {@code rate} class that wanted a play count has to fail here first,
+   * which is where the decision to let it is made, rather than in a review.
+   */
+  @ArchTest
+  static final ArchRule onlyTheSignalsToolReadsSignals =
+      noClasses()
+          .that()
+          .resideOutsideOfPackages(
+              "..signals..", "..sqlite..", "..port..", "..domain..", "..recommend..")
+          .should()
+          .dependOnClassesThat(JavaClass.Predicates.belongToAnyOf(Signal.class, SignalStore.class))
+          .because(
+              "#350: a play count is personal data (ADR 33) and no MCP tool, recommender or deck"
+                  + " reads one — #351 decides what a derived confidence may do");
+
+  /**
+   * #351: the recommender reads signals and cannot name one.
+   *
+   * <p>{@code RecommendCli} opens the signal table and hands the rows straight to {@code
+   * Interests.byQid}, which reduces them to a confidence and an evidence kind. Everything below it
+   * takes regard as a function, so a play count never travels further than that one expression. The
+   * shape is {@link #theRecommenderReadsRatingsAndNeverNotes}'s: the store may be read, the record
+   * that carries the personal part may not be named.
+   */
+  @ArchTest
+  static final ArchRule theRecommenderNeverNamesASignal =
+      noClasses()
+          .that()
+          .resideInAPackage("..recommend..")
+          .should()
+          .dependOnClassesThat(JavaClass.Predicates.belongToAnyOf(Signal.class))
+          .because(
+              "#351: a play count is personal data (ADR 33) — the recommender receives a confidence"
+                  + " and an evidence kind, and never the count they were reduced from");
 
   /**
    * ADR 43, and the reason ADR 39's refusal survives: nothing but the dev tool may read every
@@ -1878,7 +1973,8 @@ class ArchitectureTest {
           .dependOnClassesThat(WORLD_FACT_TYPES)
           .because(
               "ADR 33: affinity carries no provenance and no corroboration, and note_affinity is"
-                  + " the only writer of the taste layer — it never writes to the graph or the log");
+                  + " the only writer of the taste layer — it never writes to the graph or the"
+                  + " log");
 
   /**
    * ADR 33, from the other side: ingest and the graph adapters must not learn that taste exists.

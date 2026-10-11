@@ -147,6 +147,28 @@ public final class Recommendations {
   }
 
   /**
+   * The same weighting, from a blended {@link Interest} per entity rather than a bare rating
+   * (#351): a rated entity weighs exactly what {@link #regardFor(Map)} gives it, an entity inferred
+   * from listening weighs a little over neutral and always less than a 4, and everything else is
+   * neutral.
+   *
+   * <p>Like {@link #regardFor(Map)} it degenerates to {@link #EQUAL_REGARD} when there is nothing
+   * to weigh by, so an empty signal table and an empty ratings table change nothing.
+   *
+   * @param interests qid to interest, for the entities something is known about. Copied
+   */
+  public static ToDoubleFunction<String> regardForInterest(Map<String, Interest> interests) {
+    Map<String, Interest> settled = Map.copyOf(Objects.requireNonNull(interests, "interests"));
+    if (settled.isEmpty()) {
+      return EQUAL_REGARD;
+    }
+    return qid -> {
+      Interest interest = settled.get(qid);
+      return interest == null ? 1.0 : interest.regard();
+    };
+  }
+
+  /**
    * Best first, then bounded.
    *
    * <p>The tiebreak is the qid rather than the label, so that two runs over an unchanged graph

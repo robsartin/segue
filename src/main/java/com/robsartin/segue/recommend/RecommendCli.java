@@ -1,6 +1,8 @@
 package com.robsartin.segue.recommend;
 
 import com.robsartin.segue.domain.Equivalences;
+import com.robsartin.segue.domain.Interest;
+import com.robsartin.segue.domain.Interests;
 import com.robsartin.segue.domain.Recommendations;
 import com.robsartin.segue.domain.Scorer;
 import com.robsartin.segue.ingest.GraphProjector;
@@ -8,6 +10,7 @@ import com.robsartin.segue.ingest.Replay;
 import com.robsartin.segue.port.IdentityMerge;
 import com.robsartin.segue.sqlite.SqliteAffinityStore;
 import com.robsartin.segue.sqlite.SqliteAssertionLog;
+import com.robsartin.segue.sqlite.SqliteSignalStore;
 import com.robsartin.segue.support.DefaultDatabase;
 import com.robsartin.segue.tinker.TinkerGraphStore;
 import com.robsartin.segue.wikidata.RecognitionInstitutions;
@@ -207,6 +210,7 @@ public final class RecommendCli {
 
     try (SqliteAssertionLog assertions = new SqliteAssertionLog(options.database());
         SqliteAffinityStore affinity = new SqliteAffinityStore(options.database());
+        SqliteSignalStore signals = new SqliteSignalStore(options.database());
         TinkerGraphStore graph = new TinkerGraphStore()) {
       Replay replay = GraphProjector.replay(assertions, graph, IdentityMerge.NONE);
       log.info("replayed {} assertion(s) from {}", replay.applied(), options.database());
@@ -234,10 +238,18 @@ public final class RecommendCli {
       Map<String, Integer> ratings = merges.resolve(affinity.readRatings());
       log.info("weighting by {} rating(s)", ratings.size());
 
+      // The blend (#351): a rating where there is one, the listening signals where there is not.
+      // The raw rows are read and reduced to a confidence in one expression, and nothing past this
+      // line holds a count — theRecommenderNeverNamesASignal is what keeps it that way. A signal
+      // only ever reweights an entity the known-list already holds; it does not promote one, which
+      // is ADR 48's rule for ratings alone. An empty table changes nothing.
+      Map<String, Interest> interests =
+          Interests.byQid(ratings, signals.readAll(), merges::canonical);
+
       new RecommendRun(
               graph,
               RecognitionInstitutions::isRecognitionInstitution,
-              Recommendations.regardFor(ratings),
+              Recommendations.regardForInterest(interests),
               ratings,
               merges)
           .run(options, RecommendCli::note);
