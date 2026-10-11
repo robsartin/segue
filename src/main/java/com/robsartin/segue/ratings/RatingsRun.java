@@ -102,10 +102,15 @@ public final class RatingsRun {
         recorded.stream()
             .map(AffinityRecord::qid)
             .collect(Collectors.toCollection(LinkedHashSet::new));
-    List<String> promotions =
+    List<String> allPromotions =
         options.names() == null
             ? List.of()
             : Promotions.offTheKnownList(scores(recorded), Equivalences.in(logged), fromFile);
+    List<String> promotions = allPromotions;
+    if (options.actsOnly()) {
+      Set<String> acts = Acts.in(logged);
+      promotions = allPromotions.stream().filter(acts::contains).toList();
+    }
 
     // The union, and the reason is a promotion this listing has no row for: where a local id was
     // rated and merged onto a canonical id with no row of its own, Equivalences.resolve moves the
@@ -150,6 +155,11 @@ public final class RatingsRun {
         unnamed = NamesFile.write(promotions, labels, names);
       }
       notes.accept(promotions.size() + " promotion(s) off the known list, written as name(s)");
+      if (options.actsOnly()) {
+        notes.accept(
+            (allPromotions.size() - promotions.size())
+                + " promotion(s) left out because the log does not say they are acts");
+      }
       if (unnamed > 0) {
         notes.accept(
             unnamed

@@ -1744,6 +1744,18 @@ error. `--out` is optional alongside them and unchanged when it is given, so one
 files. The promotion set is composed by `KnownList.promoted` and resolved through your merges first,
 which is what stops this tool disagreeing with `recommend` and `rate` about who is promoted.
 
+A rated book or film is a promotion like any other, and not something that plays a venue. Add
+`--acts-only` (#354) to keep only the promotions the log says are acts — an entity whose latest node
+claim is a group, or one that performed a work (`PERFORMED`). A promotion the log cannot place is
+left out rather than guessed, and the run says how many:
+
+```bash
+# the same, without the books and films
+./gradlew listRatings --args="--promotions-off $HOME/filtered-qids.csv --names $HOME/promotions.txt --acts-only"
+```
+
+`--acts-only` filters the names file and needs `--names`.
+
 One name per line, the label the graph holds, sorted. A promotion the graph has no claim about is
 written as its **qid** rather than dropped: losing something you said yes to out of the file that
 exists to carry it would leave a count as the only trace. The log says how many there were.
