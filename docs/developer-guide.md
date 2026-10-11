@@ -263,6 +263,7 @@ graph TD
   seed["seed<br/>SeedCli, SeedResolver, Adjudicator"]
   export["export<br/>ViewSelector, DotWriter, GraphMlWriter"]
   ratings["ratings<br/>RatingsCli, RatingsRun, RatingsTable"]
+  signals["signals<br/>SignalsCli, SignalsRun, SignalsFile"]
   retract["retract<br/>RetractCli, RetractRun"]
   recommend["recommend<br/>RecommendCli, CandidateSweep, Routes"]
   rate["rate<br/>RateCli, RateRun, Deck, RateServer, Card"]
@@ -319,6 +320,10 @@ graph TD
   ratings --> domain
   ratings --> sqlite
   ratings --> support
+  signals --> port
+  signals --> domain
+  signals --> sqlite
+  signals --> support
   retract --> port
   retract --> domain
   retract --> ingest
@@ -400,7 +405,7 @@ that `app` imports nothing from `domain`; that stopped being true in ADR 54**, b
 `WikidataMusicBrainzIdentity` validates a seed QID with `Qid.looksLikeAQid` before putting it in a
 SPARQL query, so the bridge in `app` holds one `domain` type.
 
-`seed`, `export`, `ratings`, `retract`, `recommend`, `rate`, `own`, `census`, `evaluate` and `expand` are the ten dev-side tools. None is
+`seed`, `export`, `ratings`, `retract`, `recommend`, `rate`, `own`, `census`, `evaluate`, `expand` and `signals` are the eleven dev-side tools. None is
 reachable from the application — nothing imports any of them, and each is entered through its own
 `main` behind a Gradle `JavaExec` task — and their arrows are the interesting part, because each
 has a different relationship with the data and a different fence to match.
@@ -414,6 +419,11 @@ has a different relationship with the data and a different fence to match.
 - **`ratings` reaches `sqlite` and nothing else**, because it needs the least: a bulk read of the
   `affinity` table and the node claims in the log, no traversal and no projection
   ([ADR 43](adr/0043-listing-your-own-ratings.md)).
+- **`signals` reaches `sqlite` and nothing else, and resolves nothing.** It joins a listening
+  source's export to the mapping and review files `resolveNames` already wrote and stores what
+  resolved in the `signal` table, which holds no provenance and is neither an assertion nor a rating.
+  It may not touch the log, the graph, the taste layer or any sibling, `seed` included
+  ([ADR 67](adr/0067-listening-signals-in-their-own-table.md)).
 - **`retract` reaches `sqlite` and `ingest`, and was the first to write a world-fact claim.**
   It appends one `Retraction` through `IngestService` and may not hold a `GraphStore` at all — a
   retraction has no graph half ([ADR 44](adr/0044-retraction-as-a-new-claim.md)).
@@ -530,6 +540,7 @@ line is drawn there.
 | `seed` | The bulk seeding tool ([ADR 40](adr/0040-bulk-seeding-as-a-dev-tool.md)): a name list to `name → QID`, run as `./gradlew resolveNames`. Plain Java, never opens a store. | `port`, `domain`, `wikidata` |
 | `export` | The graph exporter ([ADR 41](adr/0041-graph-exporter-views-and-formats.md)): `ViewSelector` and the two writers, run as `./gradlew exportGraph`. Plain Java, read-only. | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `support` |
 | `ratings` | The taste-layer reader ([ADR 43](adr/0043-listing-your-own-ratings.md)): every rating with its label, note and `updated_at`, run as `./gradlew listRatings`. Plain Java, read-only, offline. | `port`, `domain`, `sqlite`, `support` |
+| `signals` | The listening-signals tool ([ADR 67](adr/0067-listening-signals-in-their-own-table.md), #350): joins an export of play counts and loved flags to the answers `resolveNames` wrote and stores what resolved in its own `signal` table, run as `./gradlew importSignals`. Plain Java, offline, resolves nothing itself, and holds no log, graph or ratings — a signal is neither an assertion nor a rating. | `port`, `domain`, `sqlite`, `support` |
 | `retract` | The retraction tool ([ADR 44](adr/0044-retraction-as-a-new-claim.md)): appends one `Retraction` claim so the projection stops showing an entity and its edges, run as `./gradlew retractEntity`. Plain Java, offline, and the only dev tool that writes a world-fact claim. Since #179 it has no default database: `--db` is required, and `SEGUE_DB` does not satisfy it ([ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md)). | `port`, `domain`, `ingest`, `sqlite`, `support` |
 | `recommend` | The recommender ([ADR 45](adr/0045-recommend-by-normalised-lift-with-routes.md)): ranks entities absent from the known-list by how much more of that list reaches them than their size predicts, and explains each with real routes. Run as `./gradlew recommend`. The list is the supplied `--known` file plus everything rated 4 or 5 that the file does not name, through `KnownList.promoted` ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)) — so a highly rated entity stops being offered back — and since [ADR 50](adr/0050-suppress-a-candidate-you-have-rejected.md) the sweep also takes `KnownList.suppressed` as a separate set, so an entity rated 2 or below stops being offered back too. Plain Java, read-only, offline, and since issue #85 it weights every candidate by the owner's ratings — `Recommendations.regardFor` over `AffinityStore.readRatings`, the note-free half of the taste layer. (This row said it "cannot see the taste layer at all" until the final review of issue #101; that was already false on `main`.) | `port`, `domain`, `ingest`, `sqlite`, `tinker`, `wikidata`, `support` |
 | `own` | The owner-claim tool (issue [#92](https://github.com/robsartin/segue/issues/92)): mints a local entity Wikidata does not model, asserts an edge between two ids, or merges a local id into the QID it turned out to be — one operation per run, as `./gradlew ownClaim`. Plain Java, offline, and the second dev tool that writes a world-fact claim; it appends through `IngestService.claim` and holds no graph, so the projection catches up at the next boot. Deliberately not an MCP tool: an owner claim is exempt from the corroboration count, so a model must not be able to make one. Since #179 it has no default database: `--db` is required, `SEGUE_DB` does not satisfy it, and `./gradlew own` still resolves to `:ownClaim` — it refuses rather than reporting an unknown task ([ADR 60](adr/0060-the-claim-tools-require-an-explicit-database.md)). | `port`, `domain`, `ingest`, `sqlite`, `support` |
@@ -562,6 +573,10 @@ file to read if this table and it ever disagree. Its rules run over `src/main` o
 | `theCensusOpensNothingElse` | `census` depending on `tinker`, `jena`, `ingest`, `mcp`, `app`, the whole `musicbrainz` package, `java.net`, `javax.net`, or any class of this project's that reaches a network. `wikidata` is not banned, for the exporter's reason — `KindMapper.rederive` is a static table. `ingest` is banned as a package with one class carved out of it — `LogProjection`, which moved there in [#319](https://github.com/robsartin/segue/issues/319) so the promotion expander could read the fold without opening a dev-tool package; `GraphProjector`, `Replay` and `IngestService` are all still refused | [ADR 63](adr/0063-a-read-only-census-of-the-graph.md) |
 | `theRatingsToolOnlyReads` | `ratings` calling the three world-fact writes **or either taste-layer write, `AffinityStore.put` and `updateRating`** — the only rule anywhere guarding the rating write | [ADR 43](adr/0043-listing-your-own-ratings.md) |
 | `theRatingsToolOpensNothingElse` | `ratings` depending on `tinker`, `jena`, `ingest`, `mcp`, `app`, `java.net`, `javax.net` or every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`, so a new tool joins every fence at once) | [ADR 43](adr/0043-listing-your-own-ratings.md) |
+| `theSignalsToolOpensNothingElse` | `signals` depending on `tinker`, `jena`, `ingest`, `mcp`, `app`, `wikidata`, `musicbrainz`, `java.net`, `javax.net` or every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`) — `seed` included, so no second resolver can grow there | [ADR 67](adr/0067-listening-signals-in-their-own-table.md) |
+| `theSignalsToolTouchesOnlyTheSignalTable` | `signals` depending on `AffinityStore`, `AffinityRecord`, `AssertionLog`, `GraphStore` or `IngestService` — a signal is written as neither a rating nor an assertion | [ADR 67](adr/0067-listening-signals-in-their-own-table.md) |
+| `onlyTheSignalsToolReadsSignals` | any class outside `signals`, `sqlite`, `port`, `domain` and `recommend` depending on `Signal` or `SignalStore` — a raw count reaches no MCP tool, recommender or deck without widening this rule on purpose | [ADR 67](adr/0067-listening-signals-in-their-own-table.md) |
+| `theRecommenderNeverNamesASignal` | any class in `recommend` depending on `Signal` — the recommender may open the table, and receives a confidence and an evidence kind, never the count they were reduced from | [ADR 33](adr/0033-taste-layer-separation.md) |
 | `onlyTheRatingsToolReadsEveryRating` | calling `AffinityStore.readAll` from outside `ratings` — the bulk read exists for the owner's dev tool and for nothing on the MCP surface | [ADR 16](adr/0016-privacy-and-data-handling.md), [ADR 39](adr/0039-affinity-capture-and-read.md), [ADR 43](adr/0043-listing-your-own-ratings.md) |
 | `theRetractionToolWritesOnlyRetractions` | `retract` calling the three world-fact writes, either taste-layer write (`AffinityStore.put`, `updateRating`) or `AffinityStore.readAll` — it appends a retraction through `IngestService` and writes nothing else, least of all a rating | [ADR 44](adr/0044-retraction-as-a-new-claim.md) |
 | `theRetractionToolOpensNothingElse` | `retract` depending on `GraphStore` **as a type**, on `AffinityStore`, or on `tinker`, `jena`, `mcp`, `app`, `java.net`, `javax.net` or every other dev tool (`ArchitectureTest.DEV_TOOL_PACKAGES`, so a new tool joins every fence at once) — a retraction has no graph half, so the tool must not be able to hold one | [ADR 44](adr/0044-retraction-as-a-new-claim.md) |
@@ -1730,6 +1745,18 @@ error. `--out` is optional alongside them and unchanged when it is given, so one
 files. The promotion set is composed by `KnownList.promoted` and resolved through your merges first,
 which is what stops this tool disagreeing with `recommend` and `rate` about who is promoted.
 
+A rated book or film is a promotion like any other, and not something that plays a venue. Add
+`--acts-only` (#354) to keep only the promotions the log says are acts — an entity whose latest node
+claim is a group, or one that performed a work (`PERFORMED`). A promotion the log cannot place is
+left out rather than guessed, and the run says how many:
+
+```bash
+# the same, without the books and films
+./gradlew listRatings --args="--promotions-off $HOME/filtered-qids.csv --names $HOME/promotions.txt --acts-only"
+```
+
+`--acts-only` filters the names file and needs `--names`.
+
 One name per line, the label the graph holds, sorted. A promotion the graph has no claim about is
 written as its **qid** rather than dropped: losing something you said yes to out of the file that
 exists to carry it would leave a count as the only trace. The log says how many there were.
@@ -1739,6 +1766,39 @@ The first line is a `#` comment naming the file as personal data and counting th
 #177 there) skips lines beginning with `#`, so the header is ignored on upload rather than something
 you need to strip before pasting — check that repository if it has been a while, since nothing on
 this side can tell you if it changes. Then upload it on Setlist Scout's artists page.
+
+### Listening signals: what you actually play
+
+`ratings` holds what you said; the Music app knows what you do. `importSignals` ([ADR 67](adr/0067-listening-signals-in-their-own-table.md), issue #350) brings play counts and the
+loved and favorited flags into their own `signal` table, one row per entity and source. It resolves
+nothing itself: the names go through `resolveNames` and the tool reads the answers.
+
+```bash
+# 1. on the Mac that has the Music app: a CSV of artist,play_count,loved,favorited
+scripts/export-apple-music.sh > $HOME/music.csv
+
+# 2. write the name list resolveNames reads (opens no store)
+./gradlew importSignals --args="--signals $HOME/music.csv --names-out $HOME/music-names.csv"
+
+# 3. resolve it, as for any list (ADR 40); it writes music-names-qids.csv and music-names-review.csv
+./gradlew resolveNames --args="--list $HOME/music-names.csv"
+
+# 4. store what resolved
+./gradlew importSignals --args="--signals $HOME/music.csv --mapping $HOME/music-names-qids.csv --review $HOME/music-names-review.csv"
+```
+
+Step 4 prints a coverage block: rows read, resolved, minted, left in the review file, not answered by
+either file, and entities written. Names left in review can be minted as local entities like any
+other row ([ADR 59](adr/0059-owner-claims-as-a-third-layer.md)), and re-running step 4 picks them up.
+Re-running with a newer export replaces the old counts for that source and leaves other sources
+alone. The block holds counts and a basename — never an artist, an entity or a play count — and
+every file in the recipe is personal data that stays out of the repository.
+
+`recommend` reads the table and reduces each entity to a confidence and an evidence kind
+(`domain.Interest`, #351): a rating where there is one, otherwise the strongest bucket the signals
+earn, otherwise neutral. A signal only reweights an entity the known list already holds and never
+promotes one ([ADR 48](adr/0048-a-high-rating-counts-as-something-you-have.md)'s amendment), and no
+raw count goes through any MCP surface or past `RecommendCli`.
 
 ### Why this is not `list_affinity`
 

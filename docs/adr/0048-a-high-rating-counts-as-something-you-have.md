@@ -259,3 +259,17 @@ database. It is not repeatable and is not in the repository — the ratings are 
 `AffinityWeightedRecommendationTest` demonstrates ADR 45's weighting. Re-running against a later
 snapshot will name different entities; what should hold is the two-mechanism shape, and the finding
 that reordering rather than discovery is what this lever produces.
+
+**Amendment (2026-10-10, issue #351): a signal is not a promotion.**
+
+[ADR 33](0033-taste-layer-separation.md)'s amendment of the same date defines an inferred signal.
+This records the one consequence for the known-list: **promotion is by rating alone.** An entity
+the owner has played heavily or loved in a listening source, and never rated, is *not* appended to
+the known-list and is still offered as a candidate. A signal only reweights an entity the list
+already holds, through `Recommendations.regardForInterest`; it never changes which entities are on
+it. The reason is the one this ADR gives for its threshold being a judgement: promotion removes an
+entity from the candidate pool, and removing something because a play counter crossed a number is a
+larger act than weighting it. An inference that is wrong should cost a slightly different ranking,
+not a missing recommendation.
+
+Nothing in the decision above is edited.
