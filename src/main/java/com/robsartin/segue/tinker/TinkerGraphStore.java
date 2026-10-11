@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Optional;
 import org.apache.tinkerpop.gremlin.process.traversal.P;
 import org.apache.tinkerpop.gremlin.process.traversal.Path;
+import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__;
 import org.apache.tinkerpop.gremlin.structure.Edge;
@@ -74,10 +75,16 @@ public final class TinkerGraphStore implements GraphStore {
 
   @Override
   public void upsertNode(NodeRecord node) {
-    g.V()
-        .has(ENTITY, P_QID, node.qid())
-        .fold()
-        .coalesce(__.unfold(), __.addV(ENTITY).property(P_QID, node.qid()))
+    // javac warns about the generic array it builds for coalesce's varargs. The two traversals are
+    // only read, never stored into it, so the warning is suppressed on this one declaration and
+    // nowhere wider: a future unchecked cast elsewhere in this method must still warn (#356).
+    @SuppressWarnings("unchecked")
+    GraphTraversal<Vertex, Vertex> vertex =
+        g.V()
+            .has(ENTITY, P_QID, node.qid())
+            .fold()
+            .coalesce(__.unfold(), __.addV(ENTITY).property(P_QID, node.qid()));
+    vertex
         .property(P_KIND, node.kind().name())
         .property(P_NAME, node.label())
         // Written on every upsert, empty included: upsert is last-writer-wins (ADR 19), so a
