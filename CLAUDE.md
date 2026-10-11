@@ -28,6 +28,7 @@ than a seventh MCP tool.
 ./gradlew listRatings --args="--sort recent --out $HOME/ratings.txt"   # ADR 43; read-only; the OUTPUT IS PERSONAL DATA
 ./gradlew retractEntity --args="--qid Q12345 --reason 'wrong entity' --dry-run"   # ADR 44; appends a retraction; --dry-run reports and writes nothing
 ./gradlew recommend --args="--known $HOME/known.csv --out $HOME/next.txt"   # ADR 45; read-only; ranks what you do NOT have, with routes; the OUTPUT IS PERSONAL DATA; the list is that file PLUS what you rated 4-5 (ADR 48), and anything you rated 1-2 is excluded outright (ADR 50)
+./gradlew importSignals --args="--signals $HOME/music.csv --names-out $HOME/music-names.csv"   # ADR 67; Music-app play counts into their own table; resolves via resolveNames' files, never itself; the files are PERSONAL DATA
 ./gradlew rate --args="--known $HOME/known.csv"   # ADR 46; loopback page at 127.0.0.1:8090; WRITES ratings only, no un-rate
 ```
 
@@ -125,6 +126,11 @@ recommend/ The recommender (ADR 45): ranks entities ABSENT from the known-list b
           does not name, so a highly rated entity stops being recommended back; and since ADR 50
           CandidateSweep.over takes KnownList.suppressed (rated <= 2) as a SEPARATE set, so a
           rejected candidate stops being offered back too.
+signals/  The listening-signals tool (ADR 67): joins an export of play counts and loved flags to the
+          mapping and review files `resolveNames` wrote, and stores what resolved in the `signal`
+          table behind `SignalStore` — beside affinity, never in the log, never a rating. Dev-side,
+          plain Java, offline, NOT an MCP tool; resolves nothing itself and holds no log, graph or
+          ratings (three ArchUnit rules). The export is `scripts/export-apple-music.sh`.
 rate/     The rating deck (ADR 46): a loopback page on 127.0.0.1:8090 that deals one
           entity per keystroke — known entities by degree, a recommend candidate every fifth
           card — `1`-`5` rates and advances, `s`/space skips, `b` goes back. Run as `./gradlew
