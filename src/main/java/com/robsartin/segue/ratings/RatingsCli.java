@@ -58,7 +58,7 @@ public final class RatingsCli {
       "usage: --out <file> [--sort <"
           + SortOrder.names()
           + ">, default rating] [--db <segue.db>]"
-          + " [--promotions-off <known.csv> --names <file>]";
+          + " [--promotions-off <known.csv> --names <file> [--acts-only]]";
 
   private RatingsCli() {}
 
@@ -75,8 +75,16 @@ public final class RatingsCli {
    *     {@code recommend} and {@code evaluate} read it ({@code QidList}); null with {@code names}
    * @param names where the promotions off that file go, one name per line; null with {@code
    *     promotionsOff}
+   * @param actsOnly write only promotions the log says are acts (#354): groups and performers, so a
+   *     rated book or film stays out of a concert-search upload; needs {@code names}
    */
-  public record Options(Path database, Path out, SortOrder sort, Path promotionsOff, Path names) {
+  public record Options(
+      Path database, Path out, SortOrder sort, Path promotionsOff, Path names, boolean actsOnly) {
+
+    /** The shape before #354, with every promotion written. */
+    public Options(Path database, Path out, SortOrder sort, Path promotionsOff, Path names) {
+      this(database, out, sort, promotionsOff, names, false);
+    }
 
     public Options {
       Objects.requireNonNull(database, "database");
@@ -90,6 +98,10 @@ public final class RatingsCli {
       if (out == null && names == null) {
         throw new IllegalArgumentException("nothing to write: give --out, --names, or both");
       }
+      if (actsOnly && names == null) {
+        throw new IllegalArgumentException(
+            "--acts-only filters the names file, so it needs --names");
+      }
     }
   }
 
@@ -100,9 +112,14 @@ public final class RatingsCli {
     Path promotionsOff = null;
     Path names = null;
     SortOrder sort = SortOrder.RATING;
+    boolean actsOnly = false;
 
     for (int i = 0; i < args.length; i++) {
       String flag = args[i];
+      if ("--acts-only".equals(flag)) {
+        actsOnly = true;
+        continue;
+      }
       String value = valueOf(args, i, flag);
       i++;
       switch (flag) {
@@ -122,13 +139,21 @@ public final class RatingsCli {
     if (names != null && promotionsOff == null) {
       throw usage("--names needs --promotions-off <known.csv> to measure against");
     }
+    if (actsOnly && names == null) {
+      throw usage("--acts-only filters the names file, so it needs --names");
+    }
     // --out stays required when it is the only output there is: a listing must never go to a path
     // nobody chose (ADR 43). The names export names its own path, so it satisfies the same rule.
     if (out == null && names == null) {
       throw usage("--out is required");
     }
     return new Options(
-        DefaultDatabase.resolve(db, envDatabase, userHome), out, sort, promotionsOff, names);
+        DefaultDatabase.resolve(db, envDatabase, userHome),
+        out,
+        sort,
+        promotionsOff,
+        names,
+        actsOnly);
   }
 
   private static String valueOf(String[] args, int i, String flag) {
