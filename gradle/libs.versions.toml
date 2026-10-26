@@ -9,7 +9,7 @@ googleJavaFormat = "1.36.1"
 jacoco = "0.8.15"
 spotless = "8.10.3"
 springBoot = "4.1.1"
-springAi = "2.0.1"
+springAi = "2.0.2"
 jspecify = "1.0.1"
 
 [libraries]
