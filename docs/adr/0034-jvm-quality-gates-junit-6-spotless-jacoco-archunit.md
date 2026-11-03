@@ -134,3 +134,56 @@ number behind. And checking the roughly 110 `{@code MainClass.member}` citations
 classes, alongside the test citations above, was rejected for this issue: now that `javadoc` gates,
 those can become real `{@link}` tags and be checked by the compiler itself, which is a better
 guarantee than a test can give; converting them is a separate piece of work, not this one's.
+
+---
+
+**Amendment (2026-11-03, issue #374): the six versions in the Decision are a reading taken on the
+day this ADR was accepted, and `gradle/libs.versions.toml` is the authority for what the build is
+on.**
+
+ADR 35, one number later, states the rule this ADR broke: *"versions live in `libs.versions.toml`
+or a BOM and never in prose."* The Decision above names six of them in prose, and the 2026-11-01
+drift sweep found that two of the six — Spotless's and ArchUnit's — no longer match the catalogue.
+That the other four still matched on that date is luck rather than a difference in kind: all six
+are copies of a number the build reads from somewhere else, and a copy only goes stale when the
+original moves.
+
+**Nothing above is edited, and nothing is deleted.** ADR 1 makes an accepted decision immutable,
+and the six numbers are a true record of what this project started on — which is the fact worth
+keeping. What changes is how to read them: **as a point-in-time snapshot, not as a statement about
+the build today.** The versions the build actually resolves live in `gradle/libs.versions.toml`
+and are deliberately not restated here, because a second dated reading is the same defect with a
+newer date on it.
+
+**The decision itself is untouched.** Spotless with google-java-format, JUnit 6 with AssertJ,
+integration tests against a real SQLite file rather than a container, one live smoke test excluded
+from CI, JaCoCo holding ADR 10's thresholds, and ArchUnit on `archunit-junit6` — those are the
+gates, and which patch release each tool is on was never what was being decided. The deviation
+from the toolkit baseline this ADR records is about majors and mechanisms, and neither has moved.
+
+**What checks it from here on.** `AdrVersionQuotesTest`
+(`src/test/java/com/robsartin/segue/arch/AdrVersionQuotesTest.java`) reads every `*.md` in
+`docs/adr/` and the catalogue on every build, and reds on any quoted tool version the catalogue
+disagrees with that it does not already name as a snapshot. As with ADR 1's amendments on
+`AdrIndexTest` and `AdrCitationsTest`, this ADR does not restate what it allows — the test is the
+list. Two properties are worth stating because they are what make it a guard rather than a second
+copy of the problem: its allowlist holds **this ADR's own quoted numbers and never the
+catalogue's**, so no live version lives in a test either; and the four quotes above that still
+agree are **not** allowlisted, so the next bump past any of them reds the build, and the repair is
+an amendment like this one rather than an edit. The catalogue is declared as an input of
+`tasks.test` in the same change, because without it a bump to a tool that is not on the test
+classpath leaves the suite `UP-TO-DATE` and the drift unseen — measured, not assumed; the
+reasoning is in `build.gradle.kts` beside the declaration.
+
+**Why not simply delete the versions.** The 2026-11-01 sweep's summary recommends exactly that —
+"delete the quoted versions from ADR 34 … citing the files instead". Right instinct, wrong
+instrument: deleting them edits an accepted decision, which ADR 1 refuses, and it discards the
+record of what the project started on. [ADR 51](0051-what-an-adr-may-quote.md) has already argued
+this case for this repository about names rather than numbers — an edit cannot take anything back,
+and it costs the truthful timeline to buy comfort. Two other repairs were weighed and lost.
+**Restating the current values here with the date they were read** is what ADR 1's own amendments
+do for measurements that nothing regenerates, and it is wrong for this one: a version in the
+catalogue *is* regenerable, by reading the file, so a dated copy buys nothing and starts the clock
+on the next drift. **Superseding this ADR with one that names no versions** is heavier than the
+defect — the gates it decides are all still in force, and a supersession would have to restate
+every one of them to retire six numbers.

@@ -161,6 +161,19 @@ tasks.test {
         .file("build.gradle.kts")
         .withPropertyName("buildScript")
         .withPathSensitivity(PathSensitivity.RELATIVE)
+    // AdrVersionQuotesTest compares every tool version quoted in docs/adr against this file
+    // (issue #374), and `test` is blind to it for the same reason again — with one caveat worth
+    // writing down, because it is why a narrower declaration would have looked sufficient. A
+    // catalogue alias that names a TEST dependency does invalidate `test` on its own: measured,
+    // bumping `jacoco` re-ran the suite without this line, because the JaCoCo agent is part of
+    // the task's own inputs. An alias that does not reach the test classpath does not: measured,
+    // with `googleJavaFormat` bumped past the version ADR 34 quotes — a disagreement this guard
+    // exists to red on — `./gradlew test` printed `Task :test UP-TO-DATE` and BUILD SUCCESSFUL.
+    // So the declaration is the whole file, not the aliases that happen to be on the classpath.
+    inputs
+        .file("gradle/libs.versions.toml")
+        .withPropertyName("versionCatalogue")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
     useJUnitPlatform {
         // Excluded from the normal gate: it needs the network and can fail for reasons
         // that have nothing to do with this code. Run it deliberately, via ./gradlew liveTest.

@@ -254,3 +254,47 @@ as [ADR 45](0045-recommend-by-normalised-lift-with-routes.md)'s weighting was be
 ratings.
 
 Nothing in the decision above is edited.
+
+**Amendment (2026-11-03, issue #374): the rule body the issue-#101 amendment quotes is a snapshot
+of that day, and `ArchitectureTest` is the rule.**
+
+That amendment quotes `onlyTheRecommenderReadsEveryRating` verbatim — it "now reads
+`resideOutsideOfPackages("..recommend..", "..rate..")`" — and that was true when it was written.
+The rule has since been widened three more times. This is the history, which cannot go stale,
+rather than the roster, which can:
+
+| Package admitted | Issue | Where the decision is recorded |
+|---|---|---|
+| `..census..` | #227 | [ADR 63](0063-a-read-only-census-of-the-graph.md) |
+| `..evaluate..` | #239 | [ADR 65](0065-an-offline-evaluation-harness-for-the-recommender.md) |
+| `..expand..` | #284 | [ADR 66](0066-expand-every-promotion-from-a-dev-tool.md) |
+
+**`ArchitectureTest` is the rule, not this ADR.**
+[ADR 32](0032-layering-and-archunit.md) says the same thing about its own table — "`ArchitectureTest`
+is the list, not this table" — and that ADR is clean today for precisely that reason while this
+paragraph was not. `src/test/java/com/robsartin/segue/arch/ArchitectureTest.java` holds the rule and
+is the authority on which packages it admits; the javadoc beside it carries the argument for each
+widening and names the issue that made it. Which packages are admitted *today* is deliberately not
+written here, because that is the sentence that went stale. The quoted body above is not edited —
+ADR 1 forbids it, and read as a snapshot it is a true record of where the fence stood on
+2026-08-28.
+
+**Each of the three widenings was itself recorded, which is the part worth checking rather than
+counting.** The paragraph above says, citing `theRecommenderReadsRatingsAndNeverNotes`' javadoc,
+that widening the taste layer's readership "stays an ADR-level decision". All three were checked
+against that standard for this issue and all three hold: ADR 63 widens the note-free bulk read to
+`census` in a section of its Decision that says in terms that the paragraph *is* that decision;
+ADR 65 names `evaluate` as the fourth reader and says the same in its own words, and records why
+that widening had to land in the same commit as the CLI; ADR 66 records admitting `expand` rather
+than taking a fifth copy of the rule, and gives the reason. **None of the three is an unrecorded
+widening of this fence.** What drifted is this document's copy of the rule body, and nothing else
+— which is why the repair is a citation rather than a decision.
+
+**"The widening is one method" is still true of the widening it describes**, and was never a claim
+about the taste layer's bulk-read surface as a whole. `readRatings` remains the single method this
+rule fences, and the note-carrying reads are still the listing tool's. A *second* bulk read of the
+affinity table has since arrived under a rule of its own, recorded in ADR 65's 2026-09-06 amendment
+(issue #276) and in ADR 66 — and which packages that one admits is `ArchitectureTest`'s to state,
+for the same reason as above.
+
+Nothing in the decision above is edited.
