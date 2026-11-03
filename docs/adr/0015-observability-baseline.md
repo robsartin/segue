@@ -47,3 +47,18 @@ When a project adopts observability, it covers the three pillars:
   detail.
 - Instrumentation is ongoing work, and log/metric hygiene (no PII, bounded cardinality)
   must be maintained.
+
+**Amendment (2026-11-03, issue #372): segue adopted half of this opt-in concern, on purpose.**
+
+This ADR says the concern is opt-in and that the mechanics live in the relevant interaction ADR.
+For segue that ADR is [17](0017-observability-in-spring-boot.md), and its 2026-08-26 amendment
+(issues #28 and #29) took two of these four pillars off the table with reasons, and named what
+would put them back. Those reasons are not restated here; one argument in two documents is the
+drift this amendment exists to prevent.
+
+- **Structured logs** and **correlation** are built as specified —
+  [ADR 30](0030-structured-logging.md) and [ADR 29](0029-request-correlation.md).
+- **Metrics exposed for scraping via a vendor-neutral facade** and **distributed tracing on
+  OpenTelemetry** are not built, and are not pending work. Nothing in the tree declares
+  OpenTelemetry, an OTLP exporter or a Prometheus endpoint, and no meter registry is exported;
+  Micrometer's observation API is present transitively and publishes nothing, as ADR 17 records.
