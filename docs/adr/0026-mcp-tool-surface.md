@@ -25,12 +25,16 @@ Six tools, no more:
 
 | Tool | Effect |
 |---|---|
-| `search_entities(query, kind?, limit?)` | candidates with QIDs and disambiguation; writes nothing |
+| `search_entities(query, kind?, limit?)` † | candidates with QIDs and disambiguation; writes nothing |
 | `add_entity(qid)` | upsert, returns id |
 | `expand_entity(qid, maxNewEdges?)` | runs adapters, returns new edges |
 | `get_entity(qid)` | node plus neighbours grouped by edge type, plus this entity's affinity if it has been rated |
 | `find_paths(fromQid, toQid, maxHops?)` | ranked routes with per-hop citations |
 | `note_affinity(qid, rating, note?)` | taste layer, its own table |
+
+† `kind` is accepted and never applied — it does not filter, and every candidate comes back
+with a placeholder kind. See the 2026-11-03 amendment at the end of this file for why, and
+for what is true instead.
 
 **Amendment (2026-08-25, increment-4a final review).** This table is the target
 end-state across increments, not what increment 4a ships. `note_affinity` lands
@@ -146,3 +150,66 @@ seventh dev-side tool, in the shape of `rate`, `recommend` and `listRatings`.
 withdrawn; what has changed is that the first bullet's condition can no longer be cited as a reason
 the tool does not exist, because it does — just not here. Whether `assert_edge` should ever reach
 this surface is left open in ADR 59, which declines it on a different ground than this ADR did.
+
+**Amendment (2026-11-03, issue #371): `search_entities` accepts `kind` and never applies it. This
+table was right about the name and silent about the behaviour.**
+
+The issue-#46 amendment above went through this table fixing every parameter *name* a caller must
+type, on the argument that a tool signature is a wire contract. It left `kind` correctly named and
+undescribed — and `kind` is inert. `WikidataEntityResolver.search` neither sends it to
+`wbsearchentities` nor filters the candidates with it, and the comment there explaining why ends
+"See ADR 26", citing this file for a decision this file did not contain; the 2026-11-01 drift sweep
+found it by grepping `docs/adr/` and coming back empty. The MCP tool does tell its caller — the
+`@McpToolParam` description on `EntityTools.searchEntities` and the tool description it refers to,
+held in place by `ToolSurfaceTest.searchEntitiesDescriptionDisclaimsTheKindFilter`. But a decision
+that lives only in a parameter description is one the next maintainer can "finish" without ever
+meeting an argument against it. This amendment records the decision the code already implements. It
+changes no behaviour.
+
+**The decision.** `search_entities` keeps `kind`, and the Wikidata resolver does not apply it.
+`wbsearchentities` returns no P31, so an entity's kind is not knowable at search time without one
+extra round trip per hit; every candidate is therefore reported as `CONCEPT`, which is a
+placeholder and not a classification. The kind is settled later, by the resolver's `fetch` — it
+reads P31 there, and ADR 42 keeps the raw classes beside the derived kind so a projection can
+re-derive it. A candidate's kind field is evidence of nothing, and the description field is what
+disambiguates a search hit.
+
+**What this avoids is a specific failure, not an inconvenience.** A filter that cannot see the kind
+matches nothing, so it returns an empty list — and an empty list from a search reads as "there is
+no such entity", not as "this filter cannot work". That is the worst-placed false negative on the
+surface: search is what a model consults *before* deciding whether to add an entity at all, so the
+entity silently never enters the graph and nobody gets an error to notice. An unfiltered list that
+is longer than the caller wanted is the caller's to narrow, with a description on every row to
+narrow it by. An empty one is nobody's.
+
+**Alternatives considered, and why each lost.**
+
+- **Make the filter real, by fetching P31 for every candidate.** This is the one route that would
+  change this decision rather than record it, so it is first. It is buildable today and it buys a
+  true filter — at one `wbgetentities` round trip per hit, on the one tool that is meant to be
+  cheap and read-only, for a list whose whole purpose is to let a person choose one row and discard
+  the rest. The cost lands on every search to serve the minority of calls that pass a `kind`, and a
+  search slow enough to notice is one a model routes around. It also makes the candidate list look
+  classified when nothing has been stored or attributed, which is the thing ADR 42 separates. If a
+  resolver ever gets a search endpoint that returns the type in the hit, this trade changes and the
+  decision is re-made here first.
+- **Filter post-hoc on what `wbsearchentities` does return** — the label, description and alias
+  text. Free, no round trip, and a guess dressed as a filter: those descriptions are free prose
+  written by editors in whatever words they chose, so matching "human" or "band" against them drops
+  hits that are correct and keeps hits that are not. It fails quietly in both directions, which is
+  worse than the empty list, because the result still looks like an answer.
+- **Remove `kind` from the tool surface entirely.** The tidy-looking option — do not publish a
+  parameter that does nothing. It loses on exactly the ground the #46 amendment used to keep the
+  real names: the published input schema is a wire contract, and a caller that sends `kind` to a
+  tool that no longer declares it gets a protocol error instead of an unfiltered list, which is a
+  worse answer than the one it gets today. The argument is also narrower than the parameter:
+  `EntityResolver.search` is the SPI of ADR 25, and a source whose search endpoint does report a
+  type could honour `kind` without any of the cost above, so the port keeps it and this resolver
+  declines it.
+- **Leave it to the tool description, and record nothing here.** Zero work, and it is precisely
+  what produced this issue. A tool description tells a caller what happens; it does not tell a
+  maintainer why, and it is not where this project keeps decisions.
+
+**Consequence.** The honest reading of the table's `kind?` is now "accepted, ignored, and marked as
+ignored". If a resolver arrives that can filter by kind without paying per hit, that is a change to
+this decision — made here, and then in the tool description and `ToolSurfaceTest` together.
