@@ -39,6 +39,9 @@
 - [34. JVM quality gates: JUnit 6, Spotless, JaCoCo, ArchUnit](0034-jvm-quality-gates-junit-6-spotless-jacoco-archunit.md) — _Accepted_
   ADR 10 set the JVM quality baseline from the shared toolkit pack, written before this repository existed.
   Related: [10. Enforce JVM quality gates and layered tests](0010-jvm-quality-and-tests.md)
+- [69. Pin the toolchain to JDK 25, and keep compiling at release 21](0069-toolchain-jdk-25-release-21.md) — _Accepted_
+  ADR 11 requires a current Java LTS set via the Gradle toolchain and names 21, but the first toolchain this project ever had was pinned at 25 and the superseding decision was never written.
+  Related: [11. Java language conventions](0011-java-conventions.md), [9. Build JVM projects with Gradle](0009-jvm-build-with-gradle.md)
 
 ## Framework
 
