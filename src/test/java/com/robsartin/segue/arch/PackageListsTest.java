@@ -2,6 +2,7 @@ package com.robsartin.segue.arch;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.robsartin.segue.port.SourceAdapter;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.domain.JavaMethod;
@@ -20,16 +21,18 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * The tree names the dev-tool and adapter packages; {@code ArchitectureTest}'s two constants are
- * held to it here — issue #165.
+ * The tree names the dev-tool, adapter and source packages; every one of {@code ArchitectureTest}'s
+ * package constants is held to it here — issue #165, and issue #370 for the third.
  *
  * <p>Before this class, {@link ArchitectureTest#DEV_TOOL_PACKAGES} and {@link
  * ArchitectureTest#ADAPTER_PACKAGES} were the source of truth for every sibling fence that reads
- * them, so a package the constant did not name was fenced by nothing. #165 measured it: a new dev
- * tool planted under {@code src/main}, reaching {@code export}, {@code recommend} and {@code
- * IngestService}, left every one of {@code ArchitectureTest}'s rules green. Comparing the guide to
- * the constant (issue #145) cannot close that either — a document against a document, both stale
- * together. The set has to come from the tree, and that is what these tests derive.
+ * them, so a package the constant did not name was fenced by nothing. {@link
+ * ArchitectureTest#SOURCE_ADAPTER_PACKAGES} was derived from the day it was written, for the same
+ * reason read forwards rather than backwards. #165 measured it: a new dev tool planted under {@code
+ * src/main}, reaching {@code export}, {@code recommend} and {@code IngestService}, left every one
+ * of {@code ArchitectureTest}'s rules green. Comparing the guide to the constant (issue #145)
+ * cannot close that either — a document against a document, both stale together. The set has to
+ * come from the tree, and that is what these tests derive.
  *
  * <p>The constants stay: they are the readable list twenty javadocs and the guide cite, and editing
  * one is a deliberate act. They are simply no longer the authority. A new dev-tool package, or a
@@ -114,6 +117,19 @@ class PackageListsTest {
                 + " port itself, against ArchitectureTest.ADAPTER_PACKAGES — the one list"
                 + " adaptersDoNotDependOnEachOther and adaptersDoNotDependUpward both read")
         .isEqualTo(new TreeSet<>(ArchitectureTest.ADAPTER_PACKAGES));
+  }
+
+  @Test
+  @DisplayName("the SourceAdapter implementors name exactly the source packages the constant lists")
+  void shouldNameEverySourceAdapterPackageWhenAClassImplementsTheSourcePort() {
+    assertThat(sourcesFromSourceAdapterImplementors())
+        .as(
+            "src/main, every class assignable to port.SourceAdapter, by package, against"
+                + " ArchitectureTest.SOURCE_ADAPTER_PACKAGES — the list"
+                + " onlyTheSharedExpansionPackageBridgesSources counts with (ADR 68). A third"
+                + " source the constant does not name would narrow that rule to the two it was"
+                + " written against, and nothing else would say so")
+        .isEqualTo(new TreeSet<>(ArchitectureTest.SOURCE_ADAPTER_PACKAGES));
   }
 
   // --- derivation from the tree -------------------------------------------------------------
@@ -264,6 +280,35 @@ class PackageListsTest {
         topLevelPackage(candidate).filter(p -> !p.equals("port")).ifPresent(packages::add);
       }
     }
+    return packages;
+  }
+
+  /**
+   * The packages holding a class assignable to {@code port.SourceAdapter}, minus {@code port}
+   * itself.
+   *
+   * <p>A narrower question than {@link #adaptersFromPortImplementors()} asks, and deliberately so:
+   * a storage adapter implements a port too, and two of those in one class is what every dev tool
+   * that opens a database does. ADR 68's rule counts sources.
+   */
+  static Set<String> sourcesFromSourceAdapterImplementors() {
+    JavaClass port = CLASSES.get(SourceAdapter.class);
+    assertThat(port.isInterface())
+        .as("%s is the port a source implements", SourceAdapter.class.getName())
+        .isTrue();
+
+    Set<String> packages = new TreeSet<>();
+    for (JavaClass candidate : CLASSES) {
+      if (candidate.getAllRawInterfaces().contains(port)) {
+        topLevelPackage(candidate).filter(p -> !p.equals("port")).ifPresent(packages::add);
+      }
+    }
+    assertThat(packages)
+        .as(
+            "packages implementing %s — finding none would make the assertion above vacuously"
+                + " agree with an empty constant",
+            SourceAdapter.class.getName())
+        .isNotEmpty();
     return packages;
   }
 
