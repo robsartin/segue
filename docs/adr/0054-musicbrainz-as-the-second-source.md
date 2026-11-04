@@ -437,3 +437,17 @@ ADR 32 is not amended: `expansion` sees two adapters and a handful of other pack
 everything, and ADR 32 says of itself that `ArchitectureTest` is the list rather than its own table.
 The table row above reading `app/WikidataMusicBrainzIdentity` now names `expansion` in the tree; the
 row is left as it was written, and this paragraph is the correction.
+
+**Amendment (2026-11-03, issue #370): the amendment above cites the wrong ADR for the move it
+reports.**
+
+Nothing above is withdrawn, no text above is edited, and this ADR keeps `Accepted`.
+
+The 2026-09-07 amendment's second sentence names
+[ADR 66](0066-expand-every-promotion-from-a-dev-tool.md) as recording the decision it reports. It
+does not: ADR 66's Context asserts in the present tense that the bridge lives in `app`, and its
+Decision never mentions the bridge.
+[ADR 68](0068-expansion-sees-both-sources.md) records it, and also records the reasoning that
+amendment gives for [ADR 32](0032-layering-and-archunit.md) not being amended — which was, until
+#370, stated only in that paragraph and in a javadoc comment. Every other claim the 2026-09-07
+amendment makes is accurate and stands.
