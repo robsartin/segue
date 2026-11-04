@@ -42,3 +42,13 @@ On top of the JVM baseline:
 - Bumping the LTS target later is a deliberate, superseding decision.
 - google-java-format's style is not configurable, so teams give up tuning formatting to
   local preference.
+
+**Amendment (2026-11-03, issue #373): the language-level clause above is superseded by
+[ADR 69](0069-toolchain-jdk-25-release-21.md). That clause alone — the rest of this ADR stands.**
+
+The Gradle toolchain has been pinned at 25, not the 21 this ADR names, since the commit that first
+added a toolchain block at all; the superseding decision this ADR's Consequences demand went
+unwritten until the 2026-11-01 drift sweep found it. ADR 69 records the choice, the alternatives
+and the operational consequence, and explains why this file keeps `status: Accepted` and an
+unchanged front matter: `supersedes`/`superseded-by` name whole ADRs, and the google-java-format,
+ArchUnit and prefer-modern-Java clauses above are untouched and still binding.
