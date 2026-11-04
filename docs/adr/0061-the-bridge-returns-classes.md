@@ -218,3 +218,23 @@ call.
 `WikidataMusicBrainzIdentity` is still the only implementation of `MusicBrainzIdentity` there is, and
 every other clause of the Decision — the described-identity shape, the guard, the label check, the
 factory-only construction, the stamped source ids — is unchanged and unamended.
+
+**Amendment (2026-11-03, issue #370): the amendment above cites an ADR that does not contain the
+decision it reports.**
+
+Nothing above is withdrawn, no text above is edited, and this ADR keeps `Accepted`.
+
+The 2026-09-07 amendment is right about the tree and wrong about where to read the decision. It
+names [ADR 66](0066-expand-every-promotion-from-a-dev-tool.md), whose Context still says in the
+present tense that the bridge lives in `app` and whose Decision moves `EntityExpansion` and never
+mentions the bridge. [ADR 68](0068-expansion-sees-both-sources.md) records the move, states the
+rule for which packages may see more than one source, and settles — in an ADR rather than in a
+javadoc comment — that [ADR 32](0032-layering-and-archunit.md) is not amended by it. Read ADR 68
+wherever the amendment above says ADR 66.
+
+One sentence in this ADR's original Decision is worth naming while a reader is here, because ADR
+68 turns on it. *"`app` is the only package allowed to see two adapters at once"* is a gloss on ADR
+32, not a quotation of it; ADR 32 grants `app` permission to depend on everything and says nothing
+about who else may depend on two things. The gloss is what went stale, and ADR 68 is where that is
+worked through. The 2026-09-07 amendment has already withdrawn the sentence's force; this note only
+says which half of it was never true.
