@@ -21,7 +21,10 @@ public interface EntityResolver {
   /**
    * Candidates for a free-text query, best match first.
    *
-   * @param kind narrow to one kind, or null for any
+   * @param kind narrow to one kind, or null for any. A source that cannot see an entity's kind at
+   *     search time ignores this rather than filtering on a kind it is guessing at — see ADR 26's
+   *     2026-11-03 amendment, which is why the Wikidata resolver accepts it and declines to apply
+   *     it.
    */
   List<Candidate> search(String query, NodeKind kind, int limit);
 

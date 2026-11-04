@@ -68,8 +68,10 @@ public final class WikidataEntityResolver implements EntityResolver {
       // therefore reported as CONCEPT and the `kind` argument is deliberately NOT applied:
       // a filter that cannot see the kind would return an empty list, which reads as "no such
       // entity" rather than "cannot filter". The description is what disambiguates a search
-      // hit; kind is settled by fetch(). See ADR 26 — the MCP search_entities tool inherits
-      // this, and should say so in its tool description rather than implying a working filter.
+      // hit; kind is settled by fetch(). Recorded as ADR 26's 2026-11-03 amendment (issue
+      // #371), which rejects the alternatives: fetching P31 per candidate, filtering on the
+      // description text, and dropping the parameter. The MCP search_entities tool inherits
+      // this and says so in its own tool description.
       out.add(new Candidate(qid, label, description, NodeKind.CONCEPT));
     }
     return List.copyOf(out);
