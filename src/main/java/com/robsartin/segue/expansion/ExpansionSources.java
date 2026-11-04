@@ -26,9 +26,10 @@ import java.util.Objects;
  * whole point of the seam.</b> The bridge crosses MBID to QID through Wikidata's P434, and it lives
  * beside this class because {@code musicbrainz} may not import {@code wikidata} and {@code
  * wikidata} may not import {@code musicbrainz} — both directions are ArchUnit rules. So the one
- * class that knows about both sits in the package the callers share; see {@link
- * WikidataMusicBrainzIdentity}'s javadoc, and
- * docs/adr/0066-expand-every-promotion-from-a-dev-tool.md.
+ * class that knows about both sits in the package the callers share — and nothing outside this
+ * package and {@code app} may, which {@code
+ * ArchitectureTest.onlyTheSharedExpansionPackageBridgesSources} is what holds. See {@link
+ * WikidataMusicBrainzIdentity}'s javadoc, and docs/adr/0068-expansion-sees-both-sources.md.
  *
  * <p><b>One {@link MusicBrainzClient} per run, and that is what makes a batch throttled.</b> The
  * client reserves its own request slots, so the rate limit applies across every entity a caller

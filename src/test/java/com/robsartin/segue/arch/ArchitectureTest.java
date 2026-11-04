@@ -39,7 +39,10 @@ import com.tngtech.archunit.core.domain.properties.HasName;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
+import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
+import com.tngtech.archunit.lang.ConditionEvents;
+import com.tngtech.archunit.lang.SimpleConditionEvent;
 import com.tngtech.archunit.lang.conditions.ArchConditions;
 import com.tngtech.archunit.library.dependencies.SliceAssignment;
 import com.tngtech.archunit.library.dependencies.SliceIdentifier;
@@ -50,6 +53,7 @@ import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Stream;
 
 /**
@@ -126,6 +130,64 @@ class ArchitectureTest {
   /** {@code ..jena..}-style patterns over {@link #ADAPTER_PACKAGES}, for the package predicates. */
   private static String[] adapterPackagePatterns() {
     return ADAPTER_PACKAGES.stream().map(p -> ".." + p + "..").toArray(String[]::new);
+  }
+
+  /** The root every package in this project hangs off, for the package walk below. */
+  private static final String BASE = "com.robsartin.segue";
+
+  /**
+   * ADR 68's sources — the adapters that answer for one, in one place, and again the readable list
+   * rather than the source of truth.
+   *
+   * <p><b>The tree is the source: the packages holding a class assignable to {@code
+   * port.SourceAdapter}.</b> {@code PackageListsTest} derives that set and asserts this list equals
+   * it in both directions, so a third source arriving without an entry here reds rather than
+   * silently narrowing {@link #onlyTheSharedExpansionPackageBridgesSources} to the two sources it
+   * was written against. That is issue #165's lesson applied to a second list before it costs
+   * anything rather than after.
+   *
+   * <p><b>This is a strict subset of {@link #ADAPTER_PACKAGES}, and the difference is the
+   * point.</b> {@code sqlite}, {@code tinker} and {@code jena} implement a port too, and every dev
+   * tool that opens a database depends on two of them at once — ordinary, and fenced elsewhere.
+   * Bridging two <em>sources</em> is the thing ADR 54 priced and ADR 68 confines.
+   */
+  static final List<String> SOURCE_ADAPTER_PACKAGES = List.of("musicbrainz", "wikidata");
+
+  /** The entries of {@link #SOURCE_ADAPTER_PACKAGES} a class depends on, by simple package name. */
+  private static Set<String> sourcesSeenBy(JavaClass javaClass) {
+    Set<String> seen = new TreeSet<>();
+    for (Dependency dependency : javaClass.getDirectDependenciesFromSelf()) {
+      String target = dependency.getTargetClass().getPackageName();
+      for (String source : SOURCE_ADAPTER_PACKAGES) {
+        String root = BASE + "." + source;
+        if (target.equals(root) || target.startsWith(root + ".")) {
+          seen.add(source);
+        }
+      }
+    }
+    return seen;
+  }
+
+  /**
+   * Seeing more than one source at once — the shape {@code dependOnClassesThat} cannot express.
+   *
+   * <p>A {@code DescribedPredicate} on the object side is handed one target class at a time and has
+   * no way to ask what else the origin depends on, which is the same limitation {@link
+   * #adaptersDoNotDependOnEachOther} records for siblinghood. Counting is a condition's job, so
+   * this is one: it reads the origin's own direct dependencies and reports how many distinct
+   * sources they reach. An event is added for every class tested, satisfied or not, so that {@code
+   * noClasses(...).should(...)} has something to invert in both directions.
+   */
+  private static ArchCondition<JavaClass> dependOnMoreThanOneSource() {
+    return new ArchCondition<>("depend on more than one of " + SOURCE_ADAPTER_PACKAGES) {
+      @Override
+      public void check(JavaClass item, ConditionEvents events) {
+        Set<String> seen = sourcesSeenBy(item);
+        events.add(
+            new SimpleConditionEvent(
+                item, seen.size() > 1, "%s depends on %s".formatted(item.getName(), seen)));
+      }
+    };
   }
 
   /**
@@ -241,10 +303,11 @@ class ArchitectureTest {
    * could never be asked again. {@code musicbrainz} declares {@code MusicBrainzIdentity} and
    * something outside supplies it — {@code expansion}, which holds the bridge and the wiring the
    * two entry points share, and is therefore the package that sees both adapters at once (#284, ADR
-   * 66). It was {@code app} until then. ADR 32 is untouched by that move and is not amended: its
-   * sentence is about depending on <em>everything</em>, {@code expansion} depends on two adapters
-   * and three other packages, and ADR 32 itself says "{@code ArchitectureTest} is the list, not
-   * this table." This rule is unchanged in every respect — {@code expansion} is not an adapter
+   * 68). It was {@code app} until then. ADR 68 is where that move is recorded, together with the
+   * ruling that ADR 32 needs no amendment for it; until issue #370 the only statement of either was
+   * this paragraph, citing an ADR that did not contain the decision. {@link
+   * #onlyTheSharedExpansionPackageBridgesSources} is the fence that now holds the privilege where
+   * ADR 68 put it. This rule is unchanged in every respect — {@code expansion} is not an adapter
    * package, so the slice assignment never compared it.
    */
   @ArchTest
@@ -269,6 +332,48 @@ class ArchitectureTest {
           .dependOnClassesThat()
           .resideInAnyPackage("..ingest..", "..mcp..", "..app..", "..seed..")
           .because("ADR 32: adapters are the bottom of the dependency graph");
+
+  /**
+   * ADR 68: one package crosses between the sources, and the rest of the tree sees one at a time.
+   *
+   * <p><b>What this defends is a question, not a layer.</b> {@link #adaptersDoNotDependOnEachOther}
+   * stops a source reaching its sibling, and the moment it does, something outside has to supply
+   * the crossing — {@code musicbrainz} declares {@code MusicBrainzIdentity} and cannot implement
+   * it. ADR 54 priced that crossing once, while answering what a second source costs. A second
+   * class elsewhere quietly doing the same crossing would break no rule above, and it would make
+   * that price unaskable: a third source's cost would again depend on which of the first two it
+   * happened to need. The failure mode is not a layering violation, it is an architectural fact
+   * going undetected because nothing counted.
+   *
+   * <p><b>It also makes the move itself visible.</b> The bridge left {@code app} for {@code
+   * expansion} in #284 and the only record of it was a javadoc — its neighbour above — citing an
+   * ADR that did not contain the decision (issue #370). ADR 68 records it now, and this rule is
+   * what makes a third placement red rather than wait for the next drift sweep.
+   *
+   * <p><b>Two packages are outside the fence, for two different reasons.</b> {@code expansion} is
+   * the decision: it holds the bridge because two entry points need it and only one of them may see
+   * Spring. {@code app} is ADR 32's standing permission to depend on everything, and this rule does
+   * not narrow it — ADR 68 records why ADR 32 needs no amendment, and that {@code app} reaching one
+   * source today is a fact about the tree rather than a rule. Naming {@code app} in the exemption
+   * rather than leaving it to be discovered is what keeps the two from contradicting each other.
+   *
+   * <p><b>What it does not cover.</b> It is per class, not per package, which is the honest reading
+   * of "sees both at once" and is why {@code mcp} and {@code ingest} may each depend on {@code
+   * wikidata} as they do today. Two classes in one package seeing one source each would pass; that
+   * split would be a deliberate act, and {@link #SOURCE_ADAPTER_PACKAGES} names what it was
+   * evading.
+   */
+  @ArchTest
+  static final ArchRule onlyTheSharedExpansionPackageBridgesSources =
+      noClasses()
+          .that()
+          .resideOutsideOfPackages("..expansion..", "..app..")
+          .should(dependOnMoreThanOneSource())
+          .because(
+              "ADR 68: the MBID-to-QID crossing takes one class that sees both sources, and ADR"
+                  + " 54's question — what a third source costs — stays askable only while it is"
+                  + " the only one. expansion holds it because two entry points need it; app is"
+                  + " exempt because ADR 32 permits app to depend on everything");
 
   /**
    * ADR 40: the bulk seeding tool resolves names and reports; it never opens a store.

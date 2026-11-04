@@ -976,3 +976,25 @@ here because `--second-hop` can no longer produce it. The verification of this *
 full gate over an otherwise unchanged tree: `AdrIndexTest`, `AdrCitationsTest`,
 `DocumentationLinksTest` for the relative link above, and `javadoc -Werror` inside `./gradlew
 check`.
+
+**Amendment (2026-11-03, issue #370): this ADR did not move the identity bridge, and two other ADRs
+cite it as though it had.**
+
+Nothing above is withdrawn, no text above is edited, and this ADR keeps `Accepted`.
+
+The Context paragraph above says the second source "has only ever been reached one interactive call
+at a time, because the identity bridge that makes it usable lives in `app`, which every dev tool's
+fence bans." That was true when it was written and it is the motivation for everything that
+follows. The work this ADR records is what moved the bridge — but the Decision below it moves
+`EntityExpansion` and never says so, so the sentence reads in the present tense against a tree it
+stopped describing on the day this ADR landed.
+
+That gap is not harmless, because [ADR 61](0061-the-bridge-returns-classes.md)'s and
+[ADR 54](0054-musicbrainz-as-the-second-source.md)'s amendments of 2026-09-07 both cite *this* ADR
+as where the move is recorded, as did `ArchitectureTest`'s sibling-rule javadoc. A reader following
+any of those three arrives at a Context that tells them the opposite.
+[ADR 68](0068-expansion-sees-both-sources.md) records the decision, and the three citations now
+point there.
+
+Everything this ADR did decide is unaffected: the tenth dev-side tool, the extraction of
+`EntityExpansion`, the aggregates it prints, and every amendment above.
